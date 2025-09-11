@@ -1,0 +1,7 @@
+{
+  "name": "Artea POS - Offline Cashier",
+  "description": "An offline-first, PWA-ready Point of Sale (POS) application for small food and beverage businesses named Artea POS. It features product management, transaction processing, reporting, and data backup/restore capabilities, all designed with a mobile-first interface.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

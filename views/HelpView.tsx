@@ -136,7 +136,7 @@ const HelpView: React.FC = () => {
                     </a>
                      <a href="https://t.me/aiprojek_community" target="_blank" rel="noopener noreferrer">
                         <Button variant="secondary">
-                            <Icon name="telegram" className="w-5 h-5" />
+                            <Icon name="chat" className="w-5 h-5" />
                             <span>Diskusi</span>
                         </Button>
                     </a>

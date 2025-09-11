@@ -17,12 +17,12 @@ const CartItem: React.FC<CartItemProps> = ({ item }) => {
 
   if (item.isReward) {
       return (
-         <div className="flex items-center justify-between py-3 bg-sky-500/10 border-l-4 border-sky-500 px-2 rounded-md">
+         <div className="flex items-center justify-between py-3 bg-[#347758]/10 border-l-4 border-[#347758] px-2 rounded-md">
             <div className="flex-1">
-                <p className="font-semibold text-sky-300 flex items-center gap-2"><Icon name="award" className="w-4 h-4" />{item.name}</p>
+                <p className="font-semibold text-[#7ac0a0] flex items-center gap-2"><Icon name="award" className="w-4 h-4" />{item.name}</p>
                 <p className="text-sm text-slate-400">{item.price === 0 ? 'GRATIS' : 'Diskon'}</p>
             </div>
-            <div className="w-24 text-right font-medium text-sky-400">{CURRENCY_FORMATTER.format(item.price * item.quantity)}</div>
+            <div className="w-24 text-right font-medium text-[#52a37c]">{CURRENCY_FORMATTER.format(item.price * item.quantity)}</div>
             <button onClick={removeRewardFromCart} className="ml-3 text-slate-500 hover:text-red-500">
                 <Icon name="trash" className="w-5 h-5" />
             </button>

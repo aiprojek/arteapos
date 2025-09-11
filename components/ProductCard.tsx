@@ -16,7 +16,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onClick, availabilit
     <button
       onClick={onClick}
       disabled={!available}
-      className="bg-slate-800 rounded-lg shadow-lg overflow-hidden text-left flex flex-col group transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-900 relative disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+      className="bg-slate-800 rounded-lg shadow-lg overflow-hidden text-left flex flex-col group transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#347758] focus:ring-offset-2 focus:ring-offset-slate-900 relative disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
     >
       {!available && (
         <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10">
@@ -33,7 +33,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onClick, availabilit
         <ProductPlaceholder productName={product.name} className="w-full h-32" />
       )}
       <div className="p-3 flex flex-col flex-grow">
-        <h3 className="font-semibold text-slate-100 group-hover:text-sky-400 transition-colors flex-grow">{product.name}</h3>
+        <h3 className="font-semibold text-slate-100 group-hover:text-[#52a37c] transition-colors flex-grow">{product.name}</h3>
         <p className="text-sm text-slate-400">{CURRENCY_FORMATTER.format(product.price)}</p>
       </div>
     </button>

@@ -31,7 +31,7 @@ const Nav: React.FC<{
       onClick={() => handleNavigation(view)}
       className={`flex flex-row items-center justify-start gap-2 p-3 w-full text-sm rounded-lg transition-colors ${
         activeView === view
-          ? 'bg-sky-500 text-white'
+          ? 'bg-[#347758] text-white'
           : 'text-slate-400 hover:bg-slate-700 hover:text-slate-100'
       }`}
     >
@@ -43,7 +43,7 @@ const Nav: React.FC<{
   return (
     <>
       <div className="flex items-center gap-2 px-2 pb-4">
-        <Icon name="logo" className="w-8 h-8 text-sky-400" />
+        <Icon name="logo" className="w-8 h-8 text-[#52a37c]" />
         <h1 className="text-xl font-bold text-white">Artea POS</h1>
       </div>
       <NavItem view="pos" label="Kasir" icon="cash" />

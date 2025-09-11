@@ -42,8 +42,8 @@ const AlertModal: React.FC<AlertModalProps> = ({
               <Icon name="trash" className="h-6 w-6 text-red-400" />
           </div>
       }
-       return <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-sky-900/50 sm:mx-0 sm:h-10 sm:w-10">
-          <Icon name="logo" className="h-6 w-6 text-sky-400" />
+       return <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-[#1a3c2d]/50 sm:mx-0 sm:h-10 sm:w-10">
+          <Icon name="logo" className="h-6 w-6 text-[#52a37c]" />
       </div>
   }
 

@@ -22,6 +22,25 @@ Proyek ini bersifat _open-source_ dengan tujuan menyediakan alternatif aplikasi 
 
 ---
 
+### Kolaborasi Manusia & AI dalam Pengembangan
+
+Proyek Artea POS adalah sebuah studi kasus tentang sinergi antara pengembang manusia dan kecerdasan buatan (AI). Pengembangan aplikasi ini dipercepat secara signifikan melalui model kolaborasi berikut:
+
+-   **Peran Pengembang Manusia (AI Projek):**
+    -   **Konseptor & Pemilik Proyek:** Memberikan ide awal, visi, dan tujuan utama dari aplikasi Artea POS.
+    -   **Product Manager:** Menentukan fitur-fitur yang harus ada, alur kerja pengguna (UX flow), dan memberikan arahan spesifik melalui serangkaian _prompt_ (perintah).
+    -   **Penguji & Quality Assurance:** Melakukan pengujian fungsional secara menyeluruh, menemukan bug, dan meminta perbaikan untuk memastikan kualitas dan stabilitas aplikasi.
+    -   **Pengambil Keputusan Akhir:** Membuat keputusan final terkait desain, fungsionalitas, dan arah pengembangan proyek.
+
+-   **Peran Asisten AI (Google Gemini):**
+    -   **Frontend Engineer:** Menulis sebagian besar kode React, TypeScript, dan Tailwind CSS berdasarkan spesifikasi dan perintah yang diberikan.
+    -   **UI/UX Implementer:** Menerjemahkan konsep desain dan fungsionalitas menjadi komponen antarmuka pengguna yang responsif dan interaktif.
+    -   **Problem Solver:** Memberikan solusi teknis, memperbaiki bug, dan melakukan _refactoring_ kode sesuai arahan untuk meningkatkan efisiensi dan keterbacaan.
+
+Model kerja ini memungkinkan siklus pengembangan yang sangat cepat, di mana ide dan arahan dari manusia dapat langsung diwujudkan menjadi kode fungsional oleh AI.
+
+---
+
 ### ➡️ [Coba Demo Langsung](https://arteapos.pages.dev)
 
 ---
@@ -154,7 +173,7 @@ Proyek ini dilisensikan di bawah [GNU General Public License v3.0](./LICENSE).
 
 ## ❤️ Dukungan & Komunitas
 
-Aplikasi ini tersedia gratis dan proyek ini dikelola secara independen dan terbuka untuk kolaborasi.
+Aplikasi ini tersedia secara gratis, apa adanya, open-source, dan terbuka untuk kolaborasi.
 
 -   [Donasi](https://lynk.id/aiprojek/s/bvBJvdA)
 -   Memberi bintang ⭐ pada repositori [GitHub](https://github.com/aiprojek/arteapos) ini.

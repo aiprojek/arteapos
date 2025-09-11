@@ -66,7 +66,7 @@ const HeldCartsTabs: React.FC<{
                     onClick={() => onSwitch(null)} 
                     className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors
                         ${activeHeldCartId === null 
-                            ? 'bg-sky-500 text-white font-semibold' 
+                            ? 'bg-[#347758] text-white font-semibold' 
                             : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`
                     }
                 >
@@ -79,7 +79,7 @@ const HeldCartsTabs: React.FC<{
                         onClick={() => onSwitch(cart.id)}
                         className={`flex-shrink-0 px-3 py-1.5 text-sm rounded-lg transition-colors
                              ${activeHeldCartId === cart.id 
-                                ? 'bg-sky-500 text-white font-semibold' 
+                                ? 'bg-[#347758] text-white font-semibold' 
                                 : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`
                         }
                     >
@@ -165,7 +165,7 @@ const PaymentModal: React.FC<{
             <div className="space-y-4">
                 <div className="text-center bg-slate-900 p-4 rounded-lg">
                     <p className="text-slate-400">Total Tagihan</p>
-                    <p className="text-4xl font-bold text-sky-400">{CURRENCY_FORMATTER.format(total)}</p>
+                    <p className="text-4xl font-bold text-[#52a37c]">{CURRENCY_FORMATTER.format(total)}</p>
                 </div>
 
                 {selectedCustomer ? (
@@ -456,7 +456,7 @@ const POSView: React.FC = () => {
                             placeholder="Cari produk..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-sky-500 focus:border-sky-500"
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-[#347758] focus:border-[#347758]"
                         />
                          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     </div>
@@ -470,17 +470,17 @@ const POSView: React.FC = () => {
                     </Button>
                 </div>
                 <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-2 -mx-4 px-4">
-                    <button onClick={() => setActiveCategory('Semua')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full ${activeCategory === 'Semua' ? 'bg-sky-500 text-white' : 'bg-slate-700 text-slate-300'}`}>Semua</button>
+                    <button onClick={() => setActiveCategory('Semua')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full ${activeCategory === 'Semua' ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>Semua</button>
                     
-                    <button onClick={() => setActiveCategory('__FAVORITES__')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full flex items-center gap-1 transition-colors ${activeCategory === '__FAVORITES__' ? 'bg-sky-500 text-white' : 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/40'}`}>
+                    <button onClick={() => setActiveCategory('__FAVORITES__')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full flex items-center gap-1 transition-colors ${activeCategory === '__FAVORITES__' ? 'bg-[#347758] text-white' : 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/40'}`}>
                         ⭐ Favorit
                     </button>
-                     <button onClick={() => setActiveCategory('__BEST_SELLING__')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full flex items-center gap-1 transition-colors ${activeCategory === '__BEST_SELLING__' ? 'bg-sky-500 text-white' : 'bg-orange-500/20 text-orange-300 hover:bg-orange-500/40'}`}>
+                     <button onClick={() => setActiveCategory('__BEST_SELLING__')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full flex items-center gap-1 transition-colors ${activeCategory === '__BEST_SELLING__' ? 'bg-[#347758] text-white' : 'bg-orange-500/20 text-orange-300 hover:bg-orange-500/40'}`}>
                         🔥 Terlaris
                     </button>
 
                     {categories.map(cat => (
-                        <button key={cat} onClick={() => setActiveCategory(cat)} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full ${activeCategory === cat ? 'bg-sky-500 text-white' : 'bg-slate-700 text-slate-300'}`}>{cat}</button>
+                        <button key={cat} onClick={() => setActiveCategory(cat)} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full ${activeCategory === cat ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>{cat}</button>
                     ))}
                 </div>
                 <div className="flex-1 overflow-y-auto pr-2 -mr-2">

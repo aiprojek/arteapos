@@ -75,7 +75,7 @@ const LoginView: React.FC = () => {
     const KeypadButton: React.FC<{ value: string, onClick: () => void, children?: React.ReactNode }> = ({ value, onClick, children }) => (
         <button
             onClick={onClick}
-            className="w-20 h-20 bg-slate-700 rounded-full text-2xl font-semibold text-white flex items-center justify-center transition-colors hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="w-20 h-20 bg-slate-700 rounded-full text-2xl font-semibold text-white flex items-center justify-center transition-colors hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-[#347758]"
         >
             {children || value}
         </button>
@@ -84,19 +84,19 @@ const LoginView: React.FC = () => {
     const ProfileSelectionScreen = () => (
         <div className="w-full max-w-md text-center">
             <div onClick={handleLogoClick} className="inline-block cursor-pointer p-2" title="Ketuk 5x untuk reset PIN darurat">
-                <Icon name="logo" className="w-16 h-16 text-sky-400 mx-auto" />
+                <Icon name="logo" className="w-16 h-16 text-[#52a37c] mx-auto" />
             </div>
             <h1 className="text-2xl font-bold text-white mb-2 mt-4">Pilih Profil Anda</h1>
             <p className="text-slate-400 mb-8">Siapa yang akan menggunakan kasir?</p>
             
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto">
                 {users.map(user => (
-                    <button key={user.id} onClick={() => setSelectedUser(user)} className="bg-slate-800 rounded-lg p-4 flex flex-col items-center justify-center gap-2 group hover:bg-sky-500 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-sky-500">
-                        <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center group-hover:bg-sky-400">
+                    <button key={user.id} onClick={() => setSelectedUser(user)} className="bg-slate-800 rounded-lg p-4 flex flex-col items-center justify-center gap-2 group hover:bg-[#347758] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-[#347758]">
+                        <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center group-hover:bg-[#52a37c]">
                             <Icon name="users" className="w-8 h-8 text-slate-400 group-hover:text-white" />
                         </div>
                         <p className="font-bold text-white truncate w-full">{user.name}</p>
-                        <p className="text-xs text-slate-400 capitalize group-hover:text-sky-100">{user.role}</p>
+                        <p className="text-xs text-slate-400 capitalize group-hover:text-green-100">{user.role}</p>
                     </button>
                 ))}
             </div>
@@ -117,7 +117,7 @@ const LoginView: React.FC = () => {
 
             <div className="flex justify-center items-center gap-3 h-12 mb-4">
                 {Array(4).fill(0).map((_, i) => (
-                    <div key={i} className={`w-4 h-4 rounded-full transition-colors ${i < pin.length ? 'bg-sky-400' : 'bg-slate-700'}`}></div>
+                    <div key={i} className={`w-4 h-4 rounded-full transition-colors ${i < pin.length ? 'bg-[#52a37c]' : 'bg-slate-700'}`}></div>
                 ))}
             </div>
             
@@ -141,7 +141,7 @@ const LoginView: React.FC = () => {
             <button
                 onClick={handleLogin}
                 disabled={pin.length !== 4}
-                className="w-full mt-6 bg-sky-500 text-white font-bold py-3 rounded-lg transition-opacity hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full mt-6 bg-[#347758] text-white font-bold py-3 rounded-lg transition-opacity hover:bg-[#2a6046] disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 Login
             </button>

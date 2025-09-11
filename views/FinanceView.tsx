@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import type { Expense, Supplier, Purchase, PurchaseItem, PurchaseStatus, RawMaterial, Transaction, PaymentMethod, ExpenseStatus, Customer } from '../types';
@@ -143,7 +144,7 @@ const CashFlowTab: React.FC = () => {
                                     <button
                                         key={f}
                                         onClick={() => handleFilterChange(f)}
-                                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter === f ? 'bg-sky-500 text-white' : 'text-slate-200 hover:bg-slate-600'}`}
+                                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter === f ? 'bg-[#347758] text-white' : 'text-slate-200 hover:bg-slate-600'}`}
                                     >
                                         {filterLabels[f]}
                                     </button>
@@ -184,7 +185,7 @@ const CashFlowTab: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <StatCard title="Total Pemasukan" value={data.totalIncome} className="border-l-4 border-green-500" />
                 <StatCard title="Total Pengeluaran" value={data.totalExpenses} className="border-l-4 border-red-500" />
-                <StatCard title="Arus Kas Bersih" value={data.netCashFlow} className={`border-l-4 ${data.netCashFlow >= 0 ? 'border-sky-500' : 'border-yellow-500'}`} />
+                <StatCard title="Arus Kas Bersih" value={data.netCashFlow} className={`border-l-4 ${data.netCashFlow >= 0 ? 'border-[#347758]' : 'border-yellow-500'}`} />
             </div>
             <div className="bg-slate-800 rounded-lg shadow-md">
                  <h3 className="text-lg font-bold text-white p-4">Riwayat Arus Kas</h3>
@@ -249,13 +250,13 @@ const DebtReceivablesTab: React.FC = () => {
     return (
         <div className="space-y-6">
              <div className="flex bg-slate-700 p-1 rounded-lg overflow-x-auto">
-                <button onClick={() => setSubTab('receivables')} className={`flex-shrink-0 whitespace-nowrap px-4 py-1 text-sm rounded-md transition-colors ${subTab === 'receivables' ? 'bg-sky-500 text-white' : 'text-slate-300'}`}>
+                <button onClick={() => setSubTab('receivables')} className={`flex-shrink-0 whitespace-nowrap px-4 py-1 text-sm rounded-md transition-colors ${subTab === 'receivables' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>
                     Piutang Pelanggan
                 </button>
-                <button onClick={() => setSubTab('payables')} className={`flex-shrink-0 whitespace-nowrap px-4 py-1 text-sm rounded-md transition-colors ${subTab === 'payables' ? 'bg-sky-500 text-white' : 'text-slate-300'}`}>
+                <button onClick={() => setSubTab('payables')} className={`flex-shrink-0 whitespace-nowrap px-4 py-1 text-sm rounded-md transition-colors ${subTab === 'payables' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>
                     Utang Pemasok
                 </button>
-                 <button onClick={() => setSubTab('expense_payables')} className={`flex-shrink-0 whitespace-nowrap px-4 py-1 text-sm rounded-md transition-colors ${subTab === 'expense_payables' ? 'bg-sky-500 text-white' : 'text-slate-300'}`}>
+                 <button onClick={() => setSubTab('expense_payables')} className={`flex-shrink-0 whitespace-nowrap px-4 py-1 text-sm rounded-md transition-colors ${subTab === 'expense_payables' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>
                     Utang Pengeluaran
                 </button>
             </div>
@@ -447,7 +448,7 @@ const CustomersTab: React.FC = () => {
                         placeholder="Cari pelanggan..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-sky-500 focus:border-sky-500"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-[#347758] focus:border-[#347758]"
                     />
                     <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 </div>
@@ -475,7 +476,7 @@ const CustomersTab: React.FC = () => {
                                 <td className="p-3 text-right font-bold text-yellow-400">{c.points}</td>
                                 <td className="p-3">
                                     <div className="flex gap-2">
-                                        <button onClick={() => {setEditingCustomer(c); setModalOpen(true)}} className="text-sky-400 hover:text-sky-300"><Icon name="edit" /></button>
+                                        <button onClick={() => {setEditingCustomer(c); setModalOpen(true)}} className="text-[#52a37c] hover:text-[#7ac0a0]"><Icon name="edit" /></button>
                                         <button onClick={() => deleteCustomer(c.id)} className="text-red-500 hover:text-red-400"><Icon name="trash" /></button>
                                     </div>
                                 </td>
@@ -573,7 +574,7 @@ const FinanceView: React.FC = () => {
 
 
     const SubTabButton: React.FC<{tab: FinanceSubTab, label: string}> = ({tab, label}) => (
-        <button onClick={() => setActiveTab(tab)} className={`whitespace-nowrap px-4 py-2 text-sm font-medium rounded-t-lg transition-colors border-b-2 ${activeTab === tab ? 'text-sky-400 border-sky-400' : 'text-slate-400 border-transparent hover:text-white'}`}>
+        <button onClick={() => setActiveTab(tab)} className={`whitespace-nowrap px-4 py-2 text-sm font-medium rounded-t-lg transition-colors border-b-2 ${activeTab === tab ? 'text-[#52a37c] border-[#52a37c]' : 'text-slate-400 border-transparent hover:text-white'}`}>
             {label}
         </button>
     );
@@ -628,7 +629,7 @@ const FinanceView: React.FC = () => {
                                         <td className="p-3"><ExpenseStatusBadge status={e.status} /></td>
                                         <td className="p-3">
                                             <div className="flex gap-2">
-                                                <button onClick={() => {setEditingExpense(e); setExpenseModalOpen(true);}} className="text-sky-400 hover:text-sky-300"><Icon name="edit" /></button>
+                                                <button onClick={() => {setEditingExpense(e); setExpenseModalOpen(true);}} className="text-[#52a37c] hover:text-[#7ac0a0]"><Icon name="edit" /></button>
                                                 <button onClick={() => handleDeleteExpense(e.id)} className="text-red-500 hover:text-red-400"><Icon name="trash" /></button>
                                             </div>
                                         </td>
@@ -654,10 +655,10 @@ const FinanceView: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className="flex bg-slate-800 p-1 rounded-lg">
-                <button onClick={() => setMainView('finance')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${mainView === 'finance' ? 'bg-sky-500 text-white' : 'text-slate-300 hover:bg-slate-700'}`}>
+                <button onClick={() => setMainView('finance')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${mainView === 'finance' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-700'}`}>
                     Keuangan
                 </button>
-                 <button onClick={() => setMainView('customers')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${mainView === 'customers' ? 'bg-sky-500 text-white' : 'text-slate-300 hover:bg-slate-700'}`}>
+                 <button onClick={() => setMainView('customers')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${mainView === 'customers' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-700'}`}>
                     Pelanggan
                 </button>
             </div>
@@ -697,11 +698,11 @@ const PurchasesAndSuppliersTab: React.FC<{
         <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div className="flex bg-slate-700 p-1 rounded-lg w-full sm:w-auto">
-                    <button onClick={() => setSubTab('purchases')} className={`flex-1 text-center sm:flex-none px-3 py-1 text-sm rounded-md transition-colors ${subTab === 'purchases' ? 'bg-sky-500 text-white' : 'text-slate-300'}`}>
+                    <button onClick={() => setSubTab('purchases')} className={`flex-1 text-center sm:flex-none px-3 py-1 text-sm rounded-md transition-colors ${subTab === 'purchases' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>
                         <span className="sm:hidden">Pembelian</span>
                         <span className="hidden sm:inline">Daftar Pembelian</span>
                     </button>
-                    <button onClick={() => setSubTab('suppliers')} className={`flex-1 text-center sm:flex-none px-3 py-1 text-sm rounded-md transition-colors ${subTab === 'suppliers' ? 'bg-sky-500 text-white' : 'text-slate-300'}`}>
+                    <button onClick={() => setSubTab('suppliers')} className={`flex-1 text-center sm:flex-none px-3 py-1 text-sm rounded-md transition-colors ${subTab === 'suppliers' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>
                         <span className="sm:hidden">Pemasok</span>
                         <span className="hidden sm:inline">Daftar Pemasok</span>
                     </button>
@@ -756,7 +757,7 @@ const PurchasesAndSuppliersTab: React.FC<{
                                     <td className="p-3 text-slate-300">{s.contact || '-'}</td>
                                     <td className="p-3">
                                         <div className="flex gap-2">
-                                            <button onClick={() => props.onEditSupplier(s)} className="text-sky-400 hover:text-sky-300"><Icon name="edit" /></button>
+                                            <button onClick={() => props.onEditSupplier(s)} className="text-[#52a37c] hover:text-[#7ac0a0]"><Icon name="edit" /></button>
                                             <button onClick={() => props.onDeleteSupplier(s.id)} className="text-red-500 hover:text-red-400"><Icon name="trash" /></button>
                                         </div>
                                     </td>
@@ -936,66 +937,109 @@ const PurchaseModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (da
 }
 
 const PayDebtModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (amount: number) => void, purchase: Purchase}> = ({isOpen, onClose, onSave, purchase}) => {
-    const [amount, setAmount] = useState<number | string>('');
+    const [amount, setAmount] = useState('');
     const remaining = purchase.totalAmount - purchase.amountPaid;
 
-    useEffect(() => {
-        if(isOpen) setAmount('');
-    }, [isOpen]);
+    const handleSubmit = () => {
+        const payAmount = parseFloat(amount);
+        if (!isNaN(payAmount) && payAmount > 0) {
+            onSave(payAmount);
+        }
+    };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSave(parseFloat(String(amount)) || 0);
-    }
+    useEffect(() => {
+        if (!isOpen) {
+            setAmount('');
+        }
+    }, [isOpen]);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`Bayar Utang ke ${purchase.supplierName}`}>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="text-center bg-slate-900 p-3 rounded-lg">
-                    <p className="text-slate-400">Sisa Utang</p>
-                    <p className="text-2xl font-bold text-red-400">{CURRENCY_FORMATTER.format(remaining)}</p>
+            <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-2 text-center">
+                    <div className="bg-slate-700 p-2 rounded-lg">
+                        <p className="text-slate-400 text-xs">Total Utang</p>
+                        <p className="text-lg font-bold text-red-400">{CURRENCY_FORMATTER.format(remaining)}</p>
+                    </div>
+                    <div className="bg-slate-700 p-2 rounded-lg">
+                        <p className="text-slate-400 text-xs">Total Tagihan</p>
+                        <p className="text-lg font-bold text-slate-200">{CURRENCY_FORMATTER.format(purchase.totalAmount)}</p>
+                    </div>
                 </div>
-                <input type="number" placeholder="Jumlah Pembayaran" value={amount} onChange={e => setAmount(e.target.value)} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg" />
-                <Button type="button" size="sm" variant="secondary" onClick={() => setAmount(remaining)}>Bayar Lunas</Button>
-                <div className="flex justify-end gap-3 pt-2">
+
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Jumlah Pembayaran</label>
+                    <input
+                        type="number"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0"
+                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg"
+                        autoFocus
+                    />
+                    <button onClick={() => setAmount(remaining.toString())} className="text-xs text-sky-400 hover:text-sky-300 mt-2">Bayar Lunas</button>
+                </div>
+                
+                <div className="flex justify-end gap-3 pt-4">
                     <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
-                    <Button type="submit">Simpan Pembayaran</Button>
+                    <Button type="button" onClick={handleSubmit} disabled={!amount}>Simpan Pembayaran</Button>
                 </div>
-            </form>
+            </div>
         </Modal>
     );
-}
+};
 
 const PayExpenseDebtModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (amount: number) => void, expense: Expense}> = ({isOpen, onClose, onSave, expense}) => {
-    const [amount, setAmount] = useState<number | string>('');
+    const [amount, setAmount] = useState('');
     const remaining = expense.amount - expense.amountPaid;
 
-    useEffect(() => {
-        if(isOpen) setAmount('');
-    }, [isOpen]);
+    const handleSubmit = () => {
+        const payAmount = parseFloat(amount);
+        if (!isNaN(payAmount) && payAmount > 0) {
+            onSave(payAmount);
+        }
+    };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSave(parseFloat(String(amount)) || 0);
-    }
+    useEffect(() => {
+        if (!isOpen) {
+            setAmount('');
+        }
+    }, [isOpen]);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`Bayar Utang: ${expense.description}`}>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="text-center bg-slate-900 p-3 rounded-lg">
-                    <p className="text-slate-400">Sisa Utang</p>
-                    <p className="text-2xl font-bold text-red-400">{CURRENCY_FORMATTER.format(remaining)}</p>
+            <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-2 text-center">
+                    <div className="bg-slate-700 p-2 rounded-lg">
+                        <p className="text-slate-400 text-xs">Total Utang</p>
+                        <p className="text-lg font-bold text-red-400">{CURRENCY_FORMATTER.format(remaining)}</p>
+                    </div>
+                    <div className="bg-slate-700 p-2 rounded-lg">
+                        <p className="text-slate-400 text-xs">Total Tagihan</p>
+                        <p className="text-lg font-bold text-slate-200">{CURRENCY_FORMATTER.format(expense.amount)}</p>
+                    </div>
                 </div>
-                <input type="number" placeholder="Jumlah Pembayaran" value={amount} onChange={e => setAmount(e.target.value)} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg" />
-                <Button type="button" size="sm" variant="secondary" onClick={() => setAmount(remaining)}>Bayar Lunas</Button>
-                <div className="flex justify-end gap-3 pt-2">
+
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Jumlah Pembayaran</label>
+                    <input
+                        type="number"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0"
+                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg"
+                        autoFocus
+                    />
+                    <button onClick={() => setAmount(remaining.toString())} className="text-xs text-sky-400 hover:text-sky-300 mt-2">Bayar Lunas</button>
+                </div>
+                
+                <div className="flex justify-end gap-3 pt-4">
                     <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
-                    <Button type="submit">Simpan Pembayaran</Button>
+                    <Button type="button" onClick={handleSubmit} disabled={!amount}>Simpan Pembayaran</Button>
                 </div>
-            </form>
+            </div>
         </Modal>
     );
-}
-
+};
 
 export default FinanceView;

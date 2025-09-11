@@ -273,7 +273,7 @@ const ReportsView: React.FC = () => {
         return Array.from(categoryMap.entries()).map(([name, value]) => ({ name, value }));
     }, [filteredTransactions]);
 
-    const PIE_COLORS = ['#0ea5e9', '#6366f1', '#ec4899', '#f97316', '#10b981', '#facc15'];
+    const PIE_COLORS = ['#347758', '#6366f1', '#ec4899', '#f97316', '#10b981', '#facc15'];
     
     const exportReport = () => {
         const headers = 'Transaction ID,Date,Time,Total,Items,Cashier';
@@ -321,10 +321,10 @@ const ReportsView: React.FC = () => {
                      <div className="flex gap-2 items-center flex-wrap justify-end">
                         {sessionSettings.enabled && (
                             <div className="flex bg-slate-700 p-1 rounded-lg">
-                                <button onClick={() => setReportScope('session')} className={`px-3 py-1 text-sm rounded-md transition-colors ${reportScope === 'session' ? 'bg-sky-500 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>
+                                <button onClick={() => setReportScope('session')} className={`px-3 py-1 text-sm rounded-md transition-colors ${reportScope === 'session' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-600'}`}>
                                     Sesi Saat Ini
                                 </button>
-                                <button onClick={() => setReportScope('historical')} className={`px-3 py-1 text-sm rounded-md transition-colors ${reportScope === 'historical' ? 'bg-sky-500 text-white' : 'text-slate-300 hover:bg-slate-600'}`}>
+                                <button onClick={() => setReportScope('historical')} className={`px-3 py-1 text-sm rounded-md transition-colors ${reportScope === 'historical' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-600'}`}>
                                     Semua Laporan
                                 </button>
                             </div>
@@ -342,7 +342,7 @@ const ReportsView: React.FC = () => {
                                             <button 
                                                 key={f} 
                                                 onClick={() => handleFilterChange(f)}
-                                                className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter === f ? 'bg-sky-500 text-white' : 'text-slate-200 hover:bg-slate-600'}`}
+                                                className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter === f ? 'bg-[#347758] text-white' : 'text-slate-200 hover:bg-slate-600'}`}
                                             >
                                                 {filterLabels[f]}
                                             </button>
@@ -401,7 +401,7 @@ const ReportsView: React.FC = () => {
                     <>
                         <StatCard title="Modal Awal" value={CURRENCY_FORMATTER.format(session.startingCash)} />
                         <StatCard title="Penjualan Sesi" value={CURRENCY_FORMATTER.format(reportData.totalSales)} />
-                        <StatCard title="Uang di Laci Seharusnya" value={CURRENCY_FORMATTER.format(session.startingCash + reportData.totalSales)} className="bg-sky-500/20" />
+                        <StatCard title="Uang di Laci Seharusnya" value={CURRENCY_FORMATTER.format(session.startingCash + reportData.totalSales)} className="bg-[#347758]/20" />
                         {inventorySettings.enabled && <StatCard title="Laba Sesi" value={CURRENCY_FORMATTER.format(reportData.totalProfit)} />}
                     </>
                 ) : (
@@ -463,7 +463,7 @@ const ReportsView: React.FC = () => {
                                     <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
                                     <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `Rp${Number(value) / 1000}k`} />
                                     <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }} formatter={(value: number) => [CURRENCY_FORMATTER.format(value), 'Total']} />
-                                    <Bar dataKey="total" fill="#0ea5e9" />
+                                    <Bar dataKey="total" fill="#347758" />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>

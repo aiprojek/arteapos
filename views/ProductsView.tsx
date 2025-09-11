@@ -101,9 +101,9 @@ const CategoryInput: React.FC<{
             <label className="block text-sm font-medium text-slate-300 mb-1">Kategori</label>
             <div className="flex flex-wrap gap-2 bg-slate-900 border border-slate-600 rounded-lg p-2">
                 {value.map(cat => (
-                    <div key={cat} className="flex items-center gap-1 bg-sky-500/20 text-sky-300 text-sm font-medium px-2 py-1 rounded-full">
+                    <div key={cat} className="flex items-center gap-1 bg-[#347758]/20 text-[#7ac0a0] text-sm font-medium px-2 py-1 rounded-full">
                         {cat}
-                        <button type="button" onClick={() => removeCategory(cat)} className="text-sky-200 hover:text-white">
+                        <button type="button" onClick={() => removeCategory(cat)} className="text-[#a0d9bf] hover:text-white">
                             <Icon name="close" className="w-3 h-3"/>
                         </button>
                     </div>
@@ -296,7 +296,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 </div>
                 <div className="pt-7">
                      <label className="flex items-center space-x-2 cursor-pointer" title="Tandai sebagai produk favorit">
-                        <input type="checkbox" name="isFavorite" checked={formData.isFavorite} onChange={handleChange} className="h-5 w-5 rounded bg-slate-900 border-slate-600 text-sky-500 focus:ring-sky-500" />
+                        <input type="checkbox" name="isFavorite" checked={formData.isFavorite} onChange={handleChange} className="h-5 w-5 rounded bg-slate-900 border-slate-600 text-[#347758] focus:ring-[#347758]" />
                          <span className="text-slate-300">Favorit</span>
                      </label>
                 </div>
@@ -377,7 +377,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                     </div>
                     <div className="pt-7">
                         <label className="flex items-center space-x-2 cursor-pointer">
-                            <input type="checkbox" name="trackStock" checked={formData.trackStock} onChange={handleChange} className="h-5 w-5 rounded bg-slate-900 border-slate-600 text-sky-500 focus:ring-sky-500" />
+                            <input type="checkbox" name="trackStock" checked={formData.trackStock} onChange={handleChange} className="h-5 w-5 rounded bg-slate-900 border-slate-600 text-[#347758] focus:ring-[#347758]" />
                             <span className="text-slate-300">Lacak Stok</span>
                         </label>
                     </div>
@@ -448,7 +448,7 @@ const RestockModal: React.FC<{
                     </div>
                      <div className="bg-slate-900 p-2 rounded-lg">
                         <p className="text-slate-400 text-xs">Stok Baru Akan Menjadi</p>
-                        <p className="text-lg font-bold text-sky-400">{newStock}</p>
+                        <p className="text-lg font-bold text-[#52a37c]">{newStock}</p>
                     </div>
                 </div>
                 <div>
@@ -574,7 +574,7 @@ const ProductsView: React.FC = () => {
                                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"></path></svg>
                                             </button>
                                         )}
-                                        <button onClick={() => handleOpenModal(product)} className="text-sky-400 hover:text-sky-300" title="Edit Produk">
+                                        <button onClick={() => handleOpenModal(product)} className="text-[#52a37c] hover:text-[#7ac0a0]" title="Edit Produk">
                                             <Icon name="edit" className="w-5 h-5" />
                                         </button>
                                         <button onClick={() => deleteProduct(product.id)} className="text-red-500 hover:text-red-400" title="Hapus Produk">

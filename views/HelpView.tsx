@@ -5,7 +5,7 @@ import Button from '../components/Button';
 const HelpSection: React.FC<{ title: string; icon: 'info-circle' | 'star-fill' | 'book'; children: React.ReactNode }> = ({ title, icon, children }) => (
     <section className="bg-slate-800/50 p-6 rounded-xl border border-slate-700/80 shadow-lg">
         <h2 className="flex items-center gap-3 text-2xl font-bold text-white mb-4 border-b border-slate-700 pb-3">
-            <Icon name={icon} className="w-6 h-6 text-sky-400" />
+            <Icon name={icon} className="w-6 h-6 text-[#52a37c]" />
             <span>{title}</span>
         </h2>
         <div className="prose prose-slate prose-invert max-w-none space-y-4 text-slate-300">
@@ -27,7 +27,7 @@ const HelpView: React.FC = () => {
     return (
         <div className="max-w-4xl mx-auto space-y-8 pb-10">
             <div className="text-center py-4">
-                <Icon name="logo" className="w-20 h-20 text-sky-400 mx-auto" />
+                <Icon name="logo" className="w-20 h-20 text-[#52a37c] mx-auto" />
                 <h1 className="text-4xl font-bold text-white mt-4">Artea POS - Info & Bantuan</h1>
                 <p className="text-slate-400 mt-2 text-lg">Panduan lengkap Anda untuk menggunakan aplikasi kasir.</p>
             </div>
@@ -37,10 +37,10 @@ const HelpView: React.FC = () => {
                     <strong>Artea POS</strong> adalah aplikasi Point of Sale (POS) atau kasir offline-first yang dirancang untuk usaha kecil dan menengah di bidang makanan dan minuman. Aplikasi ini sepenuhnya berjalan di browser Anda tanpa memerlukan koneksi internet untuk operasional sehari-hari, memastikan bisnis Anda tetap berjalan lancar kapan saja.
                 </p>
                 <div className="text-sm bg-slate-900/70 p-4 rounded-lg border border-slate-700 space-y-2">
-                    <p><strong>Pengembang:</strong> <a href="https://aiprojek01.my.id" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline font-semibold">AI Projek</a></p>
-                    <p><strong>Lisensi:</strong> <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline font-semibold">GNU General Public License v3.0</a></p>
+                    <p><strong>Pengembang:</strong> <a href="https://aiprojek01.my.id" target="_blank" rel="noopener noreferrer" className="text-[#52a37c] hover:underline font-semibold">AI Projek</a></p>
+                    <p><strong>Lisensi:</strong> <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener noreferrer" className="text-[#52a37c] hover:underline font-semibold">GNU General Public License v3.0</a></p>
                 </div>
-                <div className="mt-4 p-4 bg-sky-900/30 border border-sky-500/30 rounded-lg text-sky-200 text-sm">
+                <div className="mt-4 p-4 bg-[#1a3c2d]/30 border border-[#347758]/30 rounded-lg text-[#a0d9bf] text-sm">
                     <p className="font-semibold mb-1 text-white">Catatan dari Pengembang:</p>
                     <p>Tujuan awal dibuatnya aplikasi ini adalah untuk membantu merapikan administrasi di kedai kami yang bernama <a href="https://artea.pages.dev" target="_blank" rel="noopener noreferrer" className="font-bold text-white hover:underline">Artea</a>. Jadi, harap maklum jika fiturnya belum selengkap aplikasi kasir komersial. Dengan dipublikasikannya aplikasi ini, kami berharap bisa bermanfaat bagi yang membutuhkan dan dapat berkembang bersama melalui kolaborasi komunitas.</p>
                 </div>
@@ -63,7 +63,7 @@ const HelpView: React.FC = () => {
             <HelpSection title="Panduan Penggunaan" icon="book">
                 <div className="space-y-6">
                     <div>
-                        <h4 className="text-lg font-semibold text-sky-300 mb-2">1. Pengaturan Awal</h4>
+                        <h4 className="text-lg font-semibold text-[#7ac0a0] mb-2">1. Pengaturan Awal</h4>
                         <ol className="list-decimal list-inside space-y-2 pl-2">
                             <li>Buka halaman <strong>Pengaturan</strong>. Di sini Anda bisa mengatur nama toko, mengaktifkan fitur inventaris, dan lainnya.</li>
                             <li>Buka halaman <strong>Produk</strong>, lalu klik "Tambah Produk" untuk memasukkan semua item yang Anda jual. Lengkapi detail seperti nama, harga, dan kategori.</li>
@@ -73,7 +73,7 @@ const HelpView: React.FC = () => {
                     </div>
 
                     <div>
-                        <h4 className="text-lg font-semibold text-sky-300 mb-2">2. Melakukan Transaksi</h4>
+                        <h4 className="text-lg font-semibold text-[#7ac0a0] mb-2">2. Melakukan Transaksi</h4>
                         <ol className="list-decimal list-inside space-y-2 pl-2">
                             <li>Di halaman <strong>Kasir</strong>, ketuk produk yang ingin dibeli pelanggan untuk menambahkannya ke keranjang.</li>
                             <li>Ubah jumlah item di keranjang dengan tombol <strong>+</strong> atau <strong>-</strong>.</li>
@@ -85,7 +85,7 @@ const HelpView: React.FC = () => {
                     </div>
 
                      <div>
-                        <h4 className="text-lg font-semibold text-sky-300 mb-2">3. Manajemen Keuangan</h4>
+                        <h4 className="text-lg font-semibold text-[#7ac0a0] mb-2">3. Manajemen Keuangan</h4>
                         <ol className="list-decimal list-inside space-y-2 pl-2">
                              <li>Buka halaman <strong>Keuangan</strong>.</li>
                              <li>Pilih tab <strong>Pengeluaran</strong> untuk mencatat biaya operasional seperti listrik atau gaji.</li>
@@ -95,7 +95,7 @@ const HelpView: React.FC = () => {
                     </div>
 
                      <div>
-                        <h4 className="text-lg font-semibold text-sky-300 mb-2">4. Melihat Laporan</h4>
+                        <h4 className="text-lg font-semibold text-[#7ac0a0] mb-2">4. Melihat Laporan</h4>
                         <ol className="list-decimal list-inside space-y-2 pl-2">
                              <li>Buka halaman <strong>Laporan</strong>.</li>
                              <li>Gunakan filter di bagian atas untuk memilih periode laporan yang ingin Anda lihat (hari ini, minggu ini, dll.).</li>
@@ -103,7 +103,7 @@ const HelpView: React.FC = () => {
                         </ol>
                     </div>
                      <div>
-                        <h4 className="text-lg font-semibold text-sky-300 mb-2">5. Backup Data Anda! (PENTING)</h4>
+                        <h4 className="text-lg font-semibold text-[#7ac0a0] mb-2">5. Backup Data Anda! (PENTING)</h4>
                         <p className="!mt-0 !mb-2">
                             Karena semua data disimpan di browser Anda, sangat penting untuk melakukan backup secara berkala.
                         </p>
@@ -119,7 +119,7 @@ const HelpView: React.FC = () => {
 
             <footer className="text-center pt-8 border-t border-slate-700">
                 <p className="text-slate-400 mb-6">
-                    Aplikasi ini gratis dan bersifat open-source. Proyek ini dikelola secara independen dan terbuka untuk kolaborasi.
+                    Aplikasi ini tersedia secara gratis dan apa adanya, bersifat open-source, dan terbuka untuk kolaborasi.
                 </p>
                 <div className="flex justify-center items-center gap-4 flex-wrap">
                     <a href="https://lynk.id/aiprojek/s/bvBJvdA" target="_blank" rel="noopener noreferrer">

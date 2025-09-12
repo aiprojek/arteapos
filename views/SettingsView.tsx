@@ -222,7 +222,7 @@ const ToggleSwitch: React.FC<{
                 className="sr-only peer"
             />
             {/* Background */}
-            <div className="w-11 h-6 bg-slate-700 rounded-full transition-colors peer-checked:bg-sky-600"></div>
+            <div className="w-11 h-6 bg-slate-700 rounded-full transition-colors peer-checked:bg-[#347758]"></div>
             {/* Dot */}
             <div className="absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-transform transform peer-checked:translate-x-full"></div>
         </div>

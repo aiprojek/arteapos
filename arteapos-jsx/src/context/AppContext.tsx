@@ -566,6 +566,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                 status,
             };
             
+            // FIX: Update stock for both raw materials and products based on purchase items.
             let updatedRawMaterials = [...prev.rawMaterials];
             let updatedProducts = [...prev.products];
             let updatedStockAdjustments = [...(prev.stockAdjustments || [])];

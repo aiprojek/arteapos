@@ -1,7 +1,6 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
-import type { Expense, Supplier, Purchase, PurchaseItem, PurchaseStatus, RawMaterial, Transaction, PaymentMethod, ExpenseStatus, Customer } from '../types';
+import type { Expense, Supplier, Purchase, PurchaseItem, PurchaseStatus, RawMaterial, Transaction, PaymentMethod, ExpenseStatus, Customer, Product } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Icon from '../components/Icon';
@@ -496,7 +495,7 @@ const CustomersTab: React.FC = () => {
 const FinanceView: React.FC = () => {
     const [mainView, setMainView] = useState<'finance' | 'customers'>('finance');
     const [activeTab, setActiveTab] = useState<FinanceSubTab>('cashflow');
-    const { expenses, addExpense, updateExpense, deleteExpense, showAlert, addPaymentToExpense } = useAppContext();
+    const { products, expenses, addExpense, updateExpense, deleteExpense, showAlert, addPaymentToExpense } = useAppContext();
     const { suppliers, addSupplier, updateSupplier, deleteSupplier } = useAppContext();
     const { purchases, addPurchase, addPaymentToPurchase, rawMaterials } = useAppContext();
 
@@ -565,8 +564,8 @@ const FinanceView: React.FC = () => {
     const handleOpenPurchaseModal = () => {
         if (suppliers.length === 0) {
             showAlert({type: 'alert', title: 'Pemasok Kosong', message: 'Harap tambahkan data pemasok terlebih dahulu.'});
-        } else if (rawMaterials.length === 0) {
-            showAlert({type: 'alert', title: 'Bahan Baku Kosong', message: 'Harap tambahkan bahan baku di halaman "Bahan Baku" (di menu "Produk") sebelum mencatat pembelian.'});
+        } else if (rawMaterials.length === 0 && products.length === 0) {
+            showAlert({type: 'alert', title: 'Item Kosong', message: 'Harap tambahkan bahan baku atau produk terlebih dahulu sebelum mencatat pembelian.'});
         } else {
             setPurchaseModalOpen(true);
         }
@@ -668,7 +667,7 @@ const FinanceView: React.FC = () => {
             {/* Modals */}
             <ExpenseModal isOpen={isExpenseModalOpen} onClose={() => setExpenseModalOpen(false)} onSave={handleSaveExpense} expense={editingExpense} />
             <SupplierModal isOpen={isSupplierModalOpen} onClose={() => setSupplierModalOpen(false)} onSave={handleSaveSupplier} supplier={editingSupplier} />
-            <PurchaseModal isOpen={isPurchaseModalOpen} onClose={() => setPurchaseModalOpen(false)} onSave={handleSavePurchase} suppliers={suppliers} rawMaterials={rawMaterials} />
+            <PurchaseModal isOpen={isPurchaseModalOpen} onClose={() => setPurchaseModalOpen(false)} onSave={handleSavePurchase} suppliers={suppliers} rawMaterials={rawMaterials} products={products} />
             {payingPurchase && <PayDebtModal isOpen={!!payingPurchase} onClose={() => setPayingPurchase(null)} onSave={handlePayPurchaseDebt} purchase={payingPurchase} />}
             {payingExpense && <PayExpenseDebtModal isOpen={!!payingExpense} onClose={() => setPayingExpense(null)} onSave={handlePayExpenseDebt} expense={payingExpense} />}
         </div>
@@ -850,30 +849,71 @@ const SupplierModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (da
     )
 }
 
-const PurchaseModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (data: Omit<Purchase, 'id' | 'status' | 'supplierName' | 'totalAmount'>) => void, suppliers: Supplier[], rawMaterials: RawMaterial[]}> = (props) => {
+const PurchaseModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (data: Omit<Purchase, 'id' | 'status' | 'supplierName' | 'totalAmount'>) => void, suppliers: Supplier[], rawMaterials: RawMaterial[], products: Product[]}> = (props) => {
     const [form, setForm] = useState<{supplierId: string, items: PurchaseItem[], amountPaid: number, date: string}>({supplierId: props.suppliers[0]?.id || '', items: [], amountPaid: 0, date: new Date().toISOString().split('T')[0]});
     
     useEffect(() => {
-        if(props.isOpen && props.rawMaterials.length > 0) {
-            setForm({supplierId: props.suppliers[0]?.id || '', items: [{rawMaterialId: props.rawMaterials[0]?.id || '', quantity: 0, price: 0}], amountPaid: 0, date: new Date().toISOString().split('T')[0]});
-        } else if (props.isOpen) {
-            setForm({supplierId: props.suppliers[0]?.id || '', items: [], amountPaid: 0, date: new Date().toISOString().split('T')[0]});
-        }
-    }, [props.isOpen, props.suppliers, props.rawMaterials]);
+        if(props.isOpen) {
+            const initialItem: PurchaseItem[] = (props.rawMaterials.length > 0)
+                ? [{ itemType: 'raw_material', rawMaterialId: props.rawMaterials[0].id, quantity: 0, price: 0 }]
+                : (props.products.length > 0)
+                    ? [{ itemType: 'product', productId: props.products[0].id, quantity: 0, price: 0 }]
+                    : [];
 
-    const handleItemChange = (index: number, field: keyof PurchaseItem, value: string | number) => {
+            setForm({
+                supplierId: props.suppliers[0]?.id || '',
+                items: initialItem,
+                amountPaid: 0,
+                date: new Date().toISOString().split('T')[0]
+            });
+        }
+    }, [props.isOpen, props.suppliers, props.rawMaterials, props.products]);
+
+    const handleItemChange = (index: number, field: keyof PurchaseItem, value: any) => {
         const newItems = [...form.items];
-        (newItems[index] as any)[field] = value;
-        setForm({...form, items: newItems});
+        const currentItem = { ...newItems[index] };
+
+        (currentItem as any)[field] = value;
+
+        if (field === 'itemType') {
+            if (value === 'raw_material') {
+                delete currentItem.productId;
+                currentItem.rawMaterialId = props.rawMaterials[0]?.id;
+            } else { // product
+                delete currentItem.rawMaterialId;
+                currentItem.productId = props.products[0]?.id;
+            }
+        }
+
+        newItems[index] = currentItem;
+        setForm({ ...form, items: newItems });
     };
-    const addItem = () => setForm({...form, items: [...form.items, {rawMaterialId: props.rawMaterials[0]?.id, quantity: 0, price: 0}]});
+    
+    const addItem = () => {
+        const lastItemType = form.items[form.items.length - 1]?.itemType || 'raw_material';
+        let newItem: PurchaseItem;
+    
+        if (lastItemType === 'raw_material' && props.rawMaterials.length > 0) {
+            newItem = { itemType: 'raw_material', rawMaterialId: props.rawMaterials[0].id, quantity: 0, price: 0 };
+        } else if (props.products.length > 0) {
+            newItem = { itemType: 'product', productId: props.products[0].id, quantity: 0, price: 0 };
+        } else {
+            return; 
+        }
+        setForm({ ...form, items: [...form.items, newItem] });
+    };
+
     const removeItem = (index: number) => setForm({...form, items: form.items.filter((_, i) => i !== index)});
     
     const total = useMemo(() => form.items.reduce((sum, i) => sum + (i.price * i.quantity), 0), [form.items]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        props.onSave(form);
+        const purchaseData = {
+            ...form,
+            items: form.items.filter(item => item.quantity > 0 && item.price >= 0) // Filter out empty items
+        };
+        props.onSave(purchaseData);
     };
 
     return (
@@ -890,29 +930,43 @@ const PurchaseModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (da
                     </select>
                 </div>
                 
-                {props.rawMaterials.length === 0 ? (
+                {(props.rawMaterials.length === 0 && props.products.length === 0) ? (
                     <div className="text-center p-4 bg-slate-900 rounded-lg border border-yellow-500/30">
-                        <p className="font-semibold text-yellow-400">Tidak Ada Bahan Baku</p>
+                        <p className="font-semibold text-yellow-400">Tidak Ada Item</p>
                         <p className="text-sm text-slate-400 mt-1">
-                            Anda harus menambahkan bahan baku terlebih dahulu di halaman "Bahan Baku" sebelum dapat mencatat item pembelian.
+                            Anda harus menambahkan bahan baku atau produk terlebih dahulu sebelum mencatat item pembelian.
                         </p>
                     </div>
                 ) : (
                     <>
-                        <div className="space-y-2 max-h-48 overflow-y-auto p-1">
+                        <div className="space-y-3 max-h-48 overflow-y-auto p-1">
                              <div className="grid grid-cols-[1fr,80px,112px,32px] gap-2 px-2 text-xs text-slate-400 font-semibold mb-1">
-                                <div><label>Nama Item</label></div>
+                                <div><label>Item Pembelian</label></div>
                                 <div><label>Jumlah</label></div>
                                 <div><label>Harga/Unit</label></div>
                             </div>
                             {form.items.map((item, index) => (
-                                <div key={index} className="grid grid-cols-[1fr,80px,112px,32px] gap-2 items-center bg-slate-900 p-2 rounded-md">
-                                    <select value={item.rawMaterialId} onChange={e => handleItemChange(index, 'rawMaterialId', e.target.value)} className="flex-1 bg-slate-700 p-1.5 rounded text-sm w-full">
-                                        {props.rawMaterials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                    </select>
-                                    <input type="number" placeholder="Jml" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)} className="w-full bg-slate-700 p-1.5 rounded text-sm" />
-                                    <input type="number" placeholder="Harga/unit" value={item.price} onChange={e => handleItemChange(index, 'price', parseFloat(e.target.value) || 0)} className="w-full bg-slate-700 p-1.5 rounded text-sm" />
-                                    <Button type="button" size="sm" variant="danger" onClick={() => removeItem(index)}><Icon name="trash" className="w-4 h-4" /></Button>
+                                <div key={index} className="bg-slate-900 p-2 rounded-md space-y-2">
+                                     <div className="flex gap-2 text-sm">
+                                        <button type="button" onClick={() => handleItemChange(index, 'itemType', 'raw_material')} className={`px-2 py-0.5 rounded-md ${item.itemType === 'raw_material' ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>Bahan Baku</button>
+                                        <button type="button" onClick={() => handleItemChange(index, 'itemType', 'product')} className={`px-2 py-0.5 rounded-md ${item.itemType === 'product' ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>Produk</button>
+                                    </div>
+                                    <div className="grid grid-cols-[1fr,80px,112px,32px] gap-2 items-center">
+                                        <select 
+                                            value={item.itemType === 'raw_material' ? item.rawMaterialId : item.productId} 
+                                            onChange={e => handleItemChange(index, item.itemType === 'raw_material' ? 'rawMaterialId' : 'productId', e.target.value)} 
+                                            className="flex-1 bg-slate-700 p-1.5 rounded text-sm w-full"
+                                        >
+                                            {item.itemType === 'raw_material' ? (
+                                                props.rawMaterials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)
+                                            ) : (
+                                                props.products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+                                            )}
+                                        </select>
+                                        <input type="number" placeholder="Jml" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)} className="w-full bg-slate-700 p-1.5 rounded text-sm" />
+                                        <input type="number" placeholder="Harga/unit" value={item.price} onChange={e => handleItemChange(index, 'price', parseFloat(e.target.value) || 0)} className="w-full bg-slate-700 p-1.5 rounded text-sm" />
+                                        <Button type="button" size="sm" variant="danger" onClick={() => removeItem(index)}><Icon name="trash" className="w-4 h-4" /></Button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -929,7 +983,7 @@ const PurchaseModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (da
                 </div>
                 <div className="flex justify-end gap-3 pt-2">
                     <Button type="button" variant="secondary" onClick={props.onClose}>Batal</Button>
-                    <Button type="submit" disabled={props.rawMaterials.length === 0}>Simpan Pembelian</Button>
+                    <Button type="submit" disabled={props.rawMaterials.length === 0 && props.products.length === 0}>Simpan Pembelian</Button>
                 </div>
             </form>
         </Modal>

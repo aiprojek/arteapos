@@ -121,6 +121,7 @@ export interface Supplier {
   contact?: string;
 }
 
+// FIX: Updated PurchaseItem to support both raw materials and products.
 export interface PurchaseItem {
     itemType: 'raw_material' | 'product';
     rawMaterialId?: string;

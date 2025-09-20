@@ -264,7 +264,8 @@ const ReportsView: React.FC = () => {
                 // FIX: A product's category is a string array (string[]).
                 // The previous code incorrectly tried to use the array as a map key.
                 // This now iterates over each category for a product.
-                const categories = (item.category && item.category.length > 0) ? item.category : ['Uncategorized'];
+                // Added Array.isArray for extra safety.
+                const categories = (item.category && Array.isArray(item.category) && item.category.length > 0) ? item.category : ['Uncategorized'];
                 categories.forEach(cat => {
                     categoryMap.set(cat, (categoryMap.get(cat) || 0) + (item.price * item.quantity));
                 });

@@ -15,8 +15,6 @@ interface ReceiptModalProps {
 
 const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transaction }) => {
   const { receiptSettings, showAlert } = useAppContext();
-  // FIX: Removed `cacheBust` property as it's not supported by the underlying
-  // html2canvas library and was causing a type error.
   const [receiptRef, { isLoading: isProcessing, error: imageError, getImage }] = useToImage<HTMLDivElement>({
     quality: 0.95,
     backgroundColor: '#ffffff',
@@ -74,6 +72,7 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
       }
     `;
 
+    // FIX: Added Tailwind CSS script to the print window to ensure styles are applied correctly.
     printWindow.document.write(`
       <html>
         <head>
@@ -81,10 +80,9 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
           <script src="https://cdn.tailwindcss.com"></script>
           <style>${styles}</style>
         </head>
-        <body>
+        <body style="font-family: monospace;">
           ${receiptElement.outerHTML}
           <script>
-            // Add a small delay to allow Tailwind's JIT compiler to process classes
             setTimeout(() => {
                 window.print();
                 window.onafterprint = () => window.close();

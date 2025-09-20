@@ -29,6 +29,7 @@ const exportExpensesCSV = (expenses: Expense[]) => {
     downloadCSV(csvContent, 'expenses_report.csv');
 };
 
+// FIX: Updated `exportPurchasesCSV` to handle both products and raw materials.
 const exportPurchasesCSV = (purchases: Purchase[], rawMaterials: RawMaterial[], products: Product[]) => {
     const materialMap = new Map(rawMaterials.map(m => [m.id, m.name]));
     const productMap = new Map(products.map(p => [p.id, p.name]));
@@ -210,6 +211,7 @@ export const dataService = {
     // Browser will download these files sequentially
     if (data.transactions.length > 0) exportTransactionsCSV(data.transactions);
     if (data.expenses.length > 0) exportExpensesCSV(data.expenses);
+    // FIX: Pass products data to `exportPurchasesCSV` for correct item name resolution.
     if (data.purchases.length > 0) exportPurchasesCSV(data.purchases, data.rawMaterials, data.products);
     if (data.customers.length > 0) exportCustomersCSV(data.customers);
     if (data.stockAdjustments.length > 0) exportStockAdjustmentsCSV(data.stockAdjustments);

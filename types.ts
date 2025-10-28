@@ -1,13 +1,37 @@
+export interface Addon {
+  id: string;
+  name: string;
+  price: number;
+}
+
 export interface RawMaterial {
   id: string;
   name: string;
   stock: number;
   unit: string; // e.g., 'gram', 'ml', 'pcs'
+  costPerUnit?: number; // Cost per single unit (e.g., cost per gram)
 }
 
 export interface RecipeItem {
   rawMaterialId: string;
   quantity: number;
+}
+
+export interface Discount {
+  type: 'percentage' | 'amount';
+  value: number;
+  name?: string; // Optional: "Promo Lebaran"
+  discountId?: string; // Link to the definition
+}
+
+export interface DiscountDefinition {
+  id: string;
+  name: string;
+  type: 'percentage' | 'amount';
+  value: number;
+  startDate?: string; // ISO string
+  endDate?: string; // ISO string
+  isActive: boolean;
 }
 
 export interface Product {
@@ -22,12 +46,16 @@ export interface Product {
   recipe?: RecipeItem[];
   isFavorite?: boolean;
   barcode?: string;
+  addons?: Addon[];
 }
 
 export interface CartItem extends Product {
+  cartItemId: string; // Unique identifier for this specific item in the cart
   quantity: number;
   isReward?: boolean; // To identify reward items
   rewardId?: string; // To link to the reward definition
+  discount?: Discount;
+  selectedAddons?: Addon[];
 }
 
 // New Type for Held Carts Feature
@@ -58,6 +86,8 @@ export type PaymentStatus = 'paid' | 'unpaid' | 'partial';
 export interface Transaction {
   id: string;
   items: CartItem[];
+  subtotal: number;
+  cartDiscount?: Discount;
   total: number;
   amountPaid: number;
   paymentStatus: PaymentStatus;
@@ -80,6 +110,7 @@ export interface ReceiptSettings {
     shopName: string;
     address: string;
     footerMessage: string;
+    enableKitchenPrinter?: boolean;
 }
 
 export interface InventorySettings {
@@ -196,7 +227,6 @@ export interface MembershipSettings {
   rewards: Reward[];
 }
 
-
 export interface AppData {
   products: Product[];
   categories: string[];
@@ -213,7 +243,8 @@ export interface AppData {
   stockAdjustments: StockAdjustment[];
   customers: Customer[];
   membershipSettings: MembershipSettings;
+  discountDefinitions: DiscountDefinition[];
   heldCarts?: HeldCart[]; // New data for held carts
 }
 
-export type View = 'pos' | 'products' | 'raw-materials' | 'reports' | 'settings' | 'finance' | 'help';
+export type View = 'dashboard' | 'pos' | 'products' | 'raw-materials' | 'reports' | 'settings' | 'finance' | 'help';

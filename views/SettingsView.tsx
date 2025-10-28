@@ -4,7 +4,7 @@ import { dataService } from '../services/dataService';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
 import Modal from '../components/Modal';
-import type { AppData, ReceiptSettings, InventorySettings, User, AuthSettings, MembershipSettings, PointRule, Reward, SessionSettings } from '../types';
+import type { AppData, ReceiptSettings, InventorySettings, User, AuthSettings, MembershipSettings, PointRule, Reward, SessionSettings, DiscountDefinition } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 
 const SettingsCard: React.FC<{title: string, description: string, children: React.ReactNode}> = ({title, description, children}) => (
@@ -180,6 +180,10 @@ const ReceiptSettingsForm: React.FC = () => {
         setSettings({ ...settings, [e.target.name]: e.target.value });
     };
 
+    const handleToggleChange = (key: keyof ReceiptSettings, value: boolean) => {
+        setSettings({ ...settings, [key]: value });
+    }
+
     const handleSave = () => {
         updateReceiptSettings(settings);
         setSaved(true);
@@ -200,6 +204,16 @@ const ReceiptSettingsForm: React.FC = () => {
                 <label className="block text-sm font-medium text-slate-300 mb-1">Pesan Footer</label>
                 <input type="text" name="footerMessage" value={settings.footerMessage} onChange={handleChange} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
             </div>
+            <div className="pt-4 border-t border-slate-700">
+                <ToggleSwitch
+                    checked={settings.enableKitchenPrinter ?? false}
+                    onChange={(checked) => handleToggleChange('enableKitchenPrinter', checked)}
+                    label="Aktifkan Cetak Catatan Dapur Otomatis"
+                />
+                <p className="text-xs text-slate-500 mt-2 ml-9">
+                    Jika diaktifkan, dialog cetak untuk catatan dapur akan otomatis muncul setelah setiap transaksi berhasil.
+                </p>
+            </div>
             <div className="flex justify-end items-center gap-4">
                 {saved && <span className="text-sm text-green-400">Tersimpan!</span>}
                 <Button onClick={handleSave} variant="primary">Simpan Pengaturan Struk</Button>
@@ -212,19 +226,21 @@ const ToggleSwitch: React.FC<{
     checked: boolean;
     onChange: (checked: boolean) => void;
     label: string;
-}> = ({ checked, onChange, label }) => (
-    <label className="flex items-center cursor-pointer">
+    disabled?: boolean;
+}> = ({ checked, onChange, label, disabled = false }) => (
+    <label className={`flex items-center ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
         <div className="relative">
             <input 
                 type="checkbox" 
                 checked={checked} 
                 onChange={(e) => onChange(e.target.checked)} 
                 className="sr-only peer"
+                disabled={disabled}
             />
             {/* Background */}
-            <div className="w-11 h-6 bg-slate-700 rounded-full transition-colors peer-checked:bg-[#347758]"></div>
+            <div className={`w-11 h-6 bg-slate-700 rounded-full transition-colors peer-checked:bg-[#347758] ${disabled ? 'opacity-50' : ''}`}></div>
             {/* Dot */}
-            <div className="absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-transform transform peer-checked:translate-x-full"></div>
+            <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-transform transform peer-checked:translate-x-full ${disabled ? 'opacity-50' : ''}`}></div>
         </div>
         <span className="ml-3 text-sm font-medium text-slate-300">{label}</span>
     </label>
@@ -518,16 +534,156 @@ const RewardModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (data
     )
 }
 
+const DiscountFormModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (discount: Omit<DiscountDefinition, 'id'> | DiscountDefinition) => void;
+    discount: DiscountDefinition | null;
+}> = ({ isOpen, onClose, onSave, discount }) => {
+    const [form, setForm] = useState({
+        name: '',
+        type: 'percentage' as 'percentage' | 'amount',
+        value: '',
+        startDate: '',
+        endDate: '',
+        isActive: true,
+    });
+
+    useEffect(() => {
+        if (isOpen) {
+            if (discount) {
+                setForm({
+                    name: discount.name,
+                    type: discount.type,
+                    value: String(discount.value),
+                    startDate: discount.startDate ? new Date(discount.startDate).toISOString().split('T')[0] : '',
+                    endDate: discount.endDate ? new Date(discount.endDate).toISOString().split('T')[0] : '',
+                    isActive: discount.isActive,
+                });
+            } else {
+                setForm({
+                    name: '',
+                    type: 'percentage',
+                    value: '',
+                    startDate: '',
+                    endDate: '',
+                    isActive: true,
+                });
+            }
+        }
+    }, [discount, isOpen]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const discountData = {
+            name: form.name,
+            type: form.type,
+            value: parseFloat(form.value) || 0,
+            startDate: form.startDate ? new Date(form.startDate).toISOString() : undefined,
+            endDate: form.endDate ? new Date(form.endDate).toISOString() : undefined,
+            isActive: form.isActive,
+        };
+        if (discount?.id) {
+            onSave({ ...discountData, id: discount.id });
+        } else {
+            onSave(discountData);
+        }
+    };
+    
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={discount ? 'Edit Diskon' : 'Tambah Diskon Baru'}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Nama Diskon (cth: Promo Gajian)" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <div className="flex bg-slate-700 p-1 rounded-lg">
+                    <button type="button" onClick={() => setForm({...form, type: 'percentage'})} className={`flex-1 py-1 text-sm rounded-md transition-colors ${form.type === 'percentage' ? 'bg-[#347758] text-white font-semibold' : 'text-slate-300'}`}>Persentase (%)</button>
+                    <button type="button" onClick={() => setForm({...form, type: 'amount'})} className={`flex-1 py-1 text-sm rounded-md transition-colors ${form.type === 'amount' ? 'bg-[#347758] text-white font-semibold' : 'text-slate-300'}`}>Jumlah (Rp)</button>
+                </div>
+                <input type="number" value={form.value} onChange={e => setForm({...form, value: e.target.value})} placeholder={form.type === 'percentage' ? 'cth: 15' : 'cth: 10000'} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-xs text-slate-400">Tanggal Mulai (Opsional)</label>
+                        <input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} className="w-full bg-slate-700 p-2 rounded-md"/>
+                    </div>
+                     <div>
+                        <label className="text-xs text-slate-400">Tanggal Selesai (Opsional)</label>
+                        <input type="date" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})} className="w-full bg-slate-700 p-2 rounded-md"/>
+                    </div>
+                </div>
+                <ToggleSwitch checked={form.isActive} onChange={c => setForm({...form, isActive: c})} label="Aktifkan Diskon Ini" />
+                <div className="flex justify-end gap-3 pt-2">
+                    <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
+                    <Button type="submit">Simpan</Button>
+                </div>
+            </form>
+        </Modal>
+    )
+}
+
+const DiscountManagement: React.FC = () => {
+    const { discountDefinitions, addDiscountDefinition, updateDiscountDefinition, deleteDiscountDefinition, showAlert } = useAppContext();
+    const [isModalOpen, setModalOpen] = useState(false);
+    const [editingDiscount, setEditingDiscount] = useState<DiscountDefinition | null>(null);
+
+    const handleSave = (data: Omit<DiscountDefinition, 'id'> | DiscountDefinition) => {
+        if ('id' in data) {
+            updateDiscountDefinition(data);
+        } else {
+            addDiscountDefinition(data);
+        }
+        setModalOpen(false);
+    };
+
+    const handleDelete = (id: string) => {
+        showAlert({
+            type: 'confirm',
+            title: 'Hapus Diskon?',
+            message: 'Anda yakin ingin menghapus diskon ini secara permanen?',
+            confirmVariant: 'danger',
+            onConfirm: () => deleteDiscountDefinition(id),
+        });
+    };
+
+    return (
+        <div>
+            <div className="flex justify-end mb-4">
+                <Button onClick={() => { setEditingDiscount(null); setModalOpen(true); }}>
+                    <Icon name="plus" className="w-5 h-5"/> Tambah Diskon
+                </Button>
+            </div>
+            <div className="space-y-2">
+                {discountDefinitions.map(d => (
+                    <div key={d.id} className={`flex justify-between items-center bg-slate-900 p-3 rounded-md ${!d.isActive ? 'opacity-50' : ''}`}>
+                        <div>
+                            <p className="font-semibold text-white">{d.name}</p>
+                            <p className="text-sm text-slate-400">
+                                {d.type === 'percentage' ? `${d.value}%` : CURRENCY_FORMATTER.format(d.value)}
+                                <span className="mx-2">|</span>
+                                {d.isActive ? <span className="text-green-400">Aktif</span> : <span className="text-slate-500">Nonaktif</span>}
+                            </p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => { setEditingDiscount(d); setModalOpen(true); }} className="text-sky-400 hover:text-sky-300"><Icon name="edit" /></button>
+                            <button onClick={() => handleDelete(d.id)} className="text-red-500 hover:text-red-400"><Icon name="trash" /></button>
+                        </div>
+                    </div>
+                ))}
+                {(discountDefinitions || []).length === 0 && <p className="text-center text-slate-500 py-4">Belum ada diskon yang dibuat.</p>}
+            </div>
+            <DiscountFormModal isOpen={isModalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} discount={editingDiscount} />
+        </div>
+    );
+};
 
 
 const SettingsView: React.FC = () => {
-    const { products, categories, rawMaterials, transactions, receiptSettings, inventorySettings, authSettings, users, expenses, suppliers, purchases, stockAdjustments, customers, membershipSettings, restoreData, bulkAddProducts, updateInventorySettings, updateAuthSettings, currentUser, session, endSession, sessionSettings, updateSessionSettings, showAlert, updateMembershipSettings, heldCarts } = useAppContext();
+    // FIX: Destructured `discountDefinitions` from `useAppContext` and added it to the objects for `handleBackup` and `handleExportAllReports` to satisfy the `AppData` type requirement.
+    const { products, categories, rawMaterials, transactions, receiptSettings, inventorySettings, authSettings, users, expenses, suppliers, purchases, stockAdjustments, customers, membershipSettings, restoreData, bulkAddProducts, updateInventorySettings, updateAuthSettings, currentUser, session, endSession, sessionSettings, updateSessionSettings, showAlert, updateMembershipSettings, heldCarts, discountDefinitions } = useAppContext();
     const restoreInputRef = useRef<HTMLInputElement>(null);
     const importProductsInputRef = useRef<HTMLInputElement>(null);
     const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
     const handleBackup = () => {
-        dataService.exportData({ products, categories, rawMaterials, transactions, receiptSettings, inventorySettings, users, authSettings, sessionSettings, expenses, suppliers, purchases, stockAdjustments, customers, membershipSettings, heldCarts });
+        dataService.exportData({ products, categories, rawMaterials, transactions, receiptSettings, inventorySettings, users, authSettings, sessionSettings, expenses, suppliers, purchases, stockAdjustments, customers, membershipSettings, discountDefinitions, heldCarts });
         setMessage({ type: 'success', text: 'Data backup berhasil diunduh.' });
     };
 
@@ -587,24 +743,31 @@ const SettingsView: React.FC = () => {
         updateAuthSettings({ ...authSettings, enabled });
     }
 
-    const handleSessionToggle = (key: keyof SessionSettings, enabled: boolean) => {
-         if (key === 'enabled' && !enabled && session) {
-            showAlert({
-                type: 'confirm',
-                title: 'Nonaktifkan Sesi Penjualan?',
-                message: 'Menonaktifkan fitur ini akan mengakhiri sesi yang sedang berjalan. Lanjutkan?',
-                onConfirm: () => {
-                    endSession();
-                    updateSessionSettings({ ...sessionSettings, [key]: enabled });
-                }
-            });
-        } else {
-            updateSessionSettings({ ...sessionSettings, [key]: enabled });
+    const handleSessionToggle = (key: keyof SessionSettings, value: boolean) => {
+        let newSettings = { ...sessionSettings, [key]: value };
+
+        if (key === 'enabled' && !value) {
+            if (session) {
+                showAlert({
+                    type: 'confirm',
+                    title: 'Nonaktifkan Sesi Penjualan?',
+                    message: 'Menonaktifkan fitur ini akan mengakhiri sesi yang sedang berjalan dan menonaktifkan fitur simpan pesanan. Lanjutkan?',
+                    onConfirm: () => {
+                        endSession();
+                        updateSessionSettings({ enabled: false, enableCartHolding: false });
+                    }
+                });
+                return;
+            } else {
+                newSettings.enableCartHolding = false;
+            }
         }
-    }
+        
+        updateSessionSettings(newSettings);
+    };
     
     const handleExportAllReports = () => {
-        const allData = { products, categories, rawMaterials, transactions, receiptSettings, inventorySettings, users, authSettings, sessionSettings, expenses, suppliers, purchases, stockAdjustments, customers, membershipSettings, heldCarts };
+        const allData = { products, categories, rawMaterials, transactions, receiptSettings, inventorySettings, users, authSettings, sessionSettings, expenses, suppliers, purchases, stockAdjustments, customers, membershipSettings, discountDefinitions, heldCarts };
         dataService.exportAllReportsCSV(allData);
         setMessage({ type: 'success', text: 'Semua laporan berhasil diunduh.' });
     };
@@ -653,6 +816,10 @@ const SettingsView: React.FC = () => {
                         {membershipSettings.enabled && <MembershipManagement />}
                     </SettingsCard>
 
+                    <SettingsCard title="Manajemen Diskon" description="Buat dan kelola diskon yang dapat digunakan kembali untuk item atau seluruh keranjang.">
+                        <DiscountManagement />
+                    </SettingsCard>
+
                     <SettingsCard title="Manajemen Kategori Produk" description="Kelola semua kategori produk di satu tempat. Kategori ini akan muncul sebagai saran saat menambahkan atau mengedit produk.">
                         <CategoryManagement />
                     </SettingsCard>
@@ -660,22 +827,26 @@ const SettingsView: React.FC = () => {
                     <SettingsCard title="Manajemen Sesi Penjualan & Kasir" description="Aktifkan fitur-fitur lanjutan untuk alur kerja kasir dan pelaporan harian.">
                         <ToggleSwitch
                             checked={sessionSettings.enabled}
-                            onChange={(enabled) => handleSessionToggle('enabled', enabled)}
+                            onChange={(value) => handleSessionToggle('enabled', value)}
                             label={sessionSettings.enabled ? 'Sesi Penjualan Aktif' : 'Sesi Penjualan Nonaktif'}
                         />
                         <p className="text-xs text-slate-500 mt-2">
                             Jika diaktifkan, halaman Laporan akan meminta Anda untuk memulai dan mengakhiri sesi penjualan harian untuk rekon kas.
                         </p>
-                        <div className="pt-4 border-t border-slate-700">
-                             <ToggleSwitch
-                                checked={sessionSettings.enableCartHolding ?? false}
-                                onChange={(enabled) => handleSessionToggle('enableCartHolding', enabled)}
-                                label="Aktifkan Fitur Simpan Pesanan (Tab)"
-                            />
-                            <p className="text-xs text-slate-500 mt-2">
-                                Memungkinkan kasir menyimpan beberapa pesanan yang sedang berjalan dan beralih di antara pesanan tersebut. Berguna untuk kafe atau restoran.
-                            </p>
-                        </div>
+                        {sessionSettings.enabled && (
+                            <>
+                                <div className="pt-4 border-t border-slate-700">
+                                    <ToggleSwitch
+                                        checked={sessionSettings.enableCartHolding ?? false}
+                                        onChange={(enabled) => handleSessionToggle('enableCartHolding', enabled)}
+                                        label="Aktifkan Fitur Simpan Pesanan"
+                                    />
+                                    <p className="text-xs text-slate-500 mt-2">
+                                        Memungkinkan kasir menyimpan beberapa pesanan yang sedang berjalan.
+                                    </p>
+                                </div>
+                            </>
+                        )}
                     </SettingsCard>
 
 
@@ -702,7 +873,7 @@ const SettingsView: React.FC = () => {
                          </div>
                     </SettingsCard>
                     
-                    <SettingsCard title="Pengaturan Struk" description="Sesuaikan informasi yang ditampilkan pada struk pelanggan Anda.">
+                    <SettingsCard title="Pengaturan Struk & Cetak" description="Sesuaikan informasi yang ditampilkan pada struk pelanggan dan opsi cetak lainnya.">
                         <ReceiptSettingsForm />
                     </SettingsCard>
                     

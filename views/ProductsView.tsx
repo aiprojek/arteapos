@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
-import type { Product, RecipeItem } from '../types';
+import type { Product, RecipeItem, Addon } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Icon from '../components/Icon';
@@ -148,7 +148,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
     const { inventorySettings, rawMaterials, showAlert } = useAppContext();
     const [formData, setFormData] = useState({
         name: '', price: '', category: [] as string[], imageUrl: '', costPrice: '',
-        stock: '', trackStock: false, recipe: [] as RecipeItem[], isFavorite: false, barcode: ''
+        stock: '', trackStock: false, recipe: [] as RecipeItem[], isFavorite: false, barcode: '', addons: [] as Addon[]
     });
     const [imageSource, setImageSource] = useState<ImageSource>('none');
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -167,6 +167,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 recipe: product.recipe || [],
                 isFavorite: product.isFavorite || false,
                 barcode: product.barcode || '',
+                addons: product.addons || [],
             });
             const hasImage = !!product.imageUrl;
             const isUrl = hasImage && product.imageUrl!.startsWith('http');
@@ -176,10 +177,10 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
             else setImageSource('none');
         } else {
             // Reset form for a new product
-            setFormData({ name: '', price: '', category: [], imageUrl: '', costPrice: '', stock: '', trackStock: false, recipe: [], isFavorite: false, barcode: '' });
+            setFormData({ name: '', price: '', category: [], imageUrl: '', costPrice: '', stock: '', trackStock: false, recipe: [], isFavorite: false, barcode: '', addons: [] });
             setImageSource('none');
         }
-    }, [product?.id]);
+    }, [product]);
     
      useEffect(() => {
         if (barcodeRef.current && formData.barcode) {
@@ -257,6 +258,21 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
         setFormData(prev => ({ ...prev, recipe: prev.recipe.filter((_, i) => i !== index) }));
     };
 
+    const handleAddonChange = (index: number, field: keyof Addon, value: string | number) => {
+        const updatedAddons = [...formData.addons];
+        updatedAddons[index] = { ...updatedAddons[index], [field]: value };
+        setFormData(prev => ({ ...prev, addons: updatedAddons }));
+    };
+
+    const addAddonItem = () => {
+        setFormData(prev => ({ ...prev, addons: [...prev.addons, { id: Date.now().toString(), name: '', price: 0 }] }));
+    };
+
+    const removeAddonItem = (index: number) => {
+        setFormData(prev => ({ ...prev, addons: prev.addons.filter((_, i) => i !== index) }));
+    };
+
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
         setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
@@ -270,6 +286,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
             costPrice: parseFloat(formData.costPrice) || 0,
             stock: parseInt(formData.stock, 10) || 0,
             recipe: formData.recipe.map(r => ({ ...r, quantity: parseFloat(String(r.quantity)) || 0 })),
+            addons: formData.addons.filter(a => a.name.trim() !== '').map(a => ({...a, price: Number(a.price) || 0})),
         };
         if (product && 'id' in product) {
             onSave({ ...productData, id: product.id });
@@ -287,6 +304,19 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
 
     const showSimpleStock = inventorySettings.enabled && !inventorySettings.trackIngredients;
     const showRecipe = inventorySettings.enabled && inventorySettings.trackIngredients;
+
+    const recipeCost = useMemo(() => {
+        if (!showRecipe) return 0;
+        return formData.recipe.reduce((sum, item) => {
+            const material = rawMaterials.find(rm => rm.id === item.rawMaterialId);
+            const cost = material?.costPerUnit || 0;
+            return sum + (cost * (parseFloat(String(item.quantity)) || 0));
+        }, 0);
+    }, [formData.recipe, rawMaterials, showRecipe]);
+    
+    const sellingPrice = parseFloat(formData.price) || 0;
+    const profit = sellingPrice - recipeCost;
+    const profitMargin = sellingPrice > 0 ? (profit / sellingPrice) * 100 : 0;
 
     return (
         <form ref={ref} onSubmit={handleSubmit} className="space-y-4">
@@ -363,10 +393,22 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                     </div>
                 )}
             </div>
+             <div className="space-y-3 pt-4 border-t border-slate-700">
+                <h3 className="text-lg font-semibold text-white">Add-ons / Topping (Opsional)</h3>
+                {formData.addons.map((addon, index) => (
+                    <div key={addon.id} className="flex items-center gap-2 bg-slate-900 p-2 rounded-md">
+                        <input type="text" value={addon.name} placeholder="Nama Add-on" onChange={(e) => handleAddonChange(index, 'name', e.target.value)} className="flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white" />
+                        <input type="number" value={addon.price} placeholder="Harga" onChange={(e) => handleAddonChange(index, 'price', parseFloat(e.target.value) || 0)} className="w-28 bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white" />
+                        <Button type="button" variant="danger" size="sm" onClick={() => removeAddonItem(index)}><Icon name="trash" className="w-4 h-4" /></Button>
+                    </div>
+                ))}
+                <Button type="button" variant="secondary" onClick={addAddonItem}>Tambah Add-on</Button>
+            </div>
 
             {inventorySettings.enabled && (
                 <div className="space-y-4 pt-4 border-t border-slate-700">
-                    <InputField name="costPrice" label="Harga Modal (IDR, Opsional)" type="number" value={formData.costPrice} onChange={handleChange} />
+                    <InputField name="costPrice" label="Harga Modal Manual (IDR, Opsional)" type="number" value={formData.costPrice} onChange={handleChange} />
+                    <p className="text-xs text-slate-500 -mt-2">Gunakan ini jika Anda tidak ingin menghitung HPP dari resep.</p>
                 </div>
             )}
 
@@ -397,6 +439,22 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                         </div>
                     ))}
                     <Button type="button" variant="secondary" onClick={addRecipeItem}>Tambah Bahan</Button>
+                    {recipeCost > 0 && (
+                        <div className="mt-4 space-y-2 text-sm bg-slate-900/50 p-3 rounded-lg border border-slate-700">
+                            <div className="flex justify-between">
+                                <span className="text-slate-400">Harga Pokok Produksi (HPP) dari Resep:</span>
+                                <span className="font-semibold text-white">{CURRENCY_FORMATTER.format(recipeCost)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400">Estimasi Laba:</span>
+                                <span className={`font-semibold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{CURRENCY_FORMATTER.format(profit)}</span>
+                            </div>
+                             <div className="flex justify-between">
+                                <span className="text-slate-400">Margin Laba:</span>
+                                <span className={`font-semibold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{profitMargin.toFixed(1)}%</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 

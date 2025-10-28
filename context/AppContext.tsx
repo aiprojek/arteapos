@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
-import type { Product, Transaction, CartItem, AppData, ReceiptSettings, InventorySettings, RawMaterial, User, AuthSettings, SessionState, SessionSettings, Payment, PaymentMethod, PaymentStatus, Expense, Supplier, Purchase, PurchaseStatus, PurchaseItem, StockAdjustment, ExpenseStatus, Customer, MembershipSettings, Reward, HeldCart } from '../types';
+import type { Product, Transaction, CartItem, AppData, ReceiptSettings, InventorySettings, RawMaterial, User, AuthSettings, SessionState, SessionSettings, Payment, PaymentMethod, PaymentStatus, Expense, Supplier, Purchase, PurchaseStatus, PurchaseItem, StockAdjustment, ExpenseStatus, Customer, MembershipSettings, Reward, HeldCart, Discount, Addon, DiscountDefinition } from '../types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { INITIAL_PRODUCTS } from '../constants';
 import type { AlertType, AlertVariant } from '../components/AlertModal';
@@ -25,6 +25,7 @@ interface AppContextType {
   transactions: Transaction[];
   users: User[];
   cart: CartItem[];
+  cartDiscount: Discount | null;
   receiptSettings: ReceiptSettings;
   inventorySettings: InventorySettings;
   authSettings: AuthSettings;
@@ -39,6 +40,7 @@ interface AppContextType {
   appliedReward: { reward: Reward, cartItem: CartItem } | null;
   heldCarts: HeldCart[];
   activeHeldCartId: string | null;
+  discountDefinitions: DiscountDefinition[];
 
 
   // Alert/Confirmation System
@@ -68,6 +70,11 @@ interface AppContextType {
   applyRewardToCart: (reward: Reward, customer: Customer) => void;
   removeRewardFromCart: () => void;
 
+  // Discount Management
+  addDiscountDefinition: (discount: Omit<DiscountDefinition, 'id'>) => void;
+  updateDiscountDefinition: (discount: DiscountDefinition) => void;
+  deleteDiscountDefinition: (discountId: string) => void;
+
   // Product & Category Management
   addProduct: (product: Omit<Product, 'id'>) => void;
   updateProduct: (product: Product) => void;
@@ -83,8 +90,9 @@ interface AppContextType {
   
   // Cart & Transaction
   addToCart: (product: Product) => void;
-  updateCartQuantity: (productId: string, quantity: number) => void;
-  removeFromCart: (productId: string) => void;
+  addConfiguredItemToCart: (product: Product, addons: Addon[]) => void;
+  updateCartQuantity: (cartItemId: string, quantity: number) => void;
+  removeFromCart: (cartItemId: string) => void;
   clearCart: () => void;
   saveTransaction: (details: {
     payments: Array<Omit<Payment, 'id' | 'createdAt'>>;
@@ -93,8 +101,12 @@ interface AppContextType {
     customerId?: string;
   }) => Transaction;
   addPaymentToTransaction: (transactionId: string, payments: Array<Omit<Payment, 'id' | 'createdAt'>>) => void;
-  getCartTotal: () => number;
+  getCartTotals: () => { subtotal: number; itemDiscountAmount: number; cartDiscountAmount: number; finalTotal: number };
   isProductAvailable: (product: Product) => { available: boolean, reason: string };
+  applyItemDiscount: (cartItemId: string, discount: Discount) => void;
+  removeItemDiscount: (cartItemId: string) => void;
+  applyCartDiscount: (discount: Discount) => void;
+  removeCartDiscount: () => void;
 
   // Held Carts (Order Tabs)
   holdActiveCart: (name: string) => void;
@@ -142,6 +154,7 @@ const initialData: AppData = {
         shopName: 'Artea POS',
         address: 'Jalan Teknologi No. 1',
         footerMessage: 'Terima kasih telah berbelanja!',
+        enableKitchenPrinter: false,
     },
     inventorySettings: {
         enabled: false,
@@ -164,6 +177,7 @@ const initialData: AppData = {
         pointRules: [],
         rewards: [],
     },
+    discountDefinitions: [],
     heldCarts: [],
 }
 
@@ -196,7 +210,20 @@ const migrateData = (data: any): AppData => {
         };
     });
 
-    const migrated = { ...data, products: migratedProducts, categories: migratedCategories, expenses: migratedExpenses };
+    // Add costPerUnit to old raw materials
+    const migratedRawMaterials = (data.rawMaterials || []).map((rm: any) => {
+        if ('costPerUnit' in rm) return rm;
+        return { ...rm, costPerUnit: 0 };
+    });
+
+    const migrated = { 
+        ...data, 
+        products: migratedProducts, 
+        categories: migratedCategories, 
+        expenses: migratedExpenses,
+        rawMaterials: migratedRawMaterials
+    };
+
     if (!migrated.customers) migrated.customers = [];
     if (!migrated.membershipSettings) migrated.membershipSettings = { enabled: false, pointRules: [], rewards: [] };
     if (!migrated.stockAdjustments) migrated.stockAdjustments = [];
@@ -204,6 +231,10 @@ const migrateData = (data: any): AppData => {
     if (migrated.sessionSettings && typeof migrated.sessionSettings.enableCartHolding === 'undefined') {
         migrated.sessionSettings.enableCartHolding = false;
     }
+    if (migrated.receiptSettings && typeof migrated.receiptSettings.enableKitchenPrinter === 'undefined') {
+        migrated.receiptSettings.enableKitchenPrinter = false;
+    }
+    if (!migrated.discountDefinitions) migrated.discountDefinitions = [];
 
 
     return migrated;
@@ -213,6 +244,7 @@ const migrateData = (data: any): AppData => {
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [data, setData] = useLocalStorage<AppData>('ai-projek-pos-data', initialData, migrateData);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartDiscount, setCartDiscount] = useState<Discount | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [session, setSession] = useLocalStorage<SessionState | null>('ai-projek-pos-session', null);
   const [alertState, setAlertState] = useState<AlertState>({
@@ -226,7 +258,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [activeHeldCartId, setActiveHeldCartId] = useState<string | null>(null);
 
   
-  const { products, transactions, receiptSettings, inventorySettings, rawMaterials, users, authSettings, sessionSettings, expenses, suppliers, purchases, stockAdjustments, categories, customers, membershipSettings, heldCarts = [] } = data;
+  const { products, transactions, receiptSettings, inventorySettings, rawMaterials, users, authSettings, sessionSettings, expenses, suppliers, purchases, stockAdjustments, categories, customers, membershipSettings, discountDefinitions = [], heldCarts = [] } = data;
 
   useEffect(() => {
     if (authSettings?.enabled) {
@@ -354,6 +386,30 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const updateMembershipSettings = useCallback((settings: MembershipSettings) => {
     setData(prev => ({ ...prev, membershipSettings: settings }));
   }, [setData]);
+  
+  const addDiscountDefinition = useCallback((discountData: Omit<DiscountDefinition, 'id'>) => {
+    const newDiscount = { ...discountData, id: Date.now().toString() };
+    setData(prev => ({ ...prev, discountDefinitions: [...(prev.discountDefinitions || []), newDiscount] }));
+  }, [setData]);
+
+  const updateDiscountDefinition = useCallback((updatedDiscount: DiscountDefinition) => {
+      setData(prev => ({
+          ...prev,
+          discountDefinitions: (prev.discountDefinitions || []).map(d => d.id === updatedDiscount.id ? updatedDiscount : d)
+      }));
+  }, [setData]);
+
+  const deleteDiscountDefinition = useCallback((discountId: string) => {
+      setData(prev => ({
+          ...prev,
+          discountDefinitions: (prev.discountDefinitions || []).filter(d => d.id !== discountId)
+      }));
+  }, [setData]);
+
+  const removeRewardFromCart = useCallback(() => {
+    setCart(prev => prev.filter(item => !item.isReward));
+    setAppliedReward(null);
+  }, [setCart, setAppliedReward]);
 
   const applyRewardToCart = useCallback((reward: Reward, customer: Customer) => {
     if (customer.points < reward.pointsCost) {
@@ -365,6 +421,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (reward.type === 'discount_amount' && reward.discountValue) {
         rewardCartItem = {
             id: `reward-${reward.id}`,
+            cartItemId: `reward-${Date.now()}`,
             name: `Reward: ${reward.name}`,
             price: -reward.discountValue,
             quantity: 1,
@@ -377,6 +434,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         if (product) {
             rewardCartItem = {
                 ...product,
+                cartItemId: `reward-${Date.now()}`,
                 price: 0,
                 quantity: 1,
                 isReward: true,
@@ -394,12 +452,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setCart(prev => [...prev, rewardCartItem!]);
         setAppliedReward({ reward, cartItem: rewardCartItem });
     }
-  }, [products, showAlert, setCart, setAppliedReward]);
-
-  const removeRewardFromCart = useCallback(() => {
-    setCart(prev => prev.filter(item => !item.isReward));
-    setAppliedReward(null);
-  }, [setCart, setAppliedReward]);
+    // FIX: Add removeRewardFromCart to dependency array.
+  }, [products, showAlert, setCart, setAppliedReward, removeRewardFromCart]);
 
 
   const addProduct = useCallback((product: Omit<Product, 'id'>) => {
@@ -659,40 +713,119 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         return prevCart;
       }
       
-      const existingItem = prevCart.find(item => item.id === product.id && !item.isReward);
+      const existingItem = prevCart.find(item => item.id === product.id && !item.isReward && !item.selectedAddons);
       if (existingItem) {
         return prevCart.map(item =>
-          item.id === product.id && !item.isReward ? { ...item, quantity: item.quantity + 1 } : item
+          item.cartItemId === existingItem.cartItemId ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-      return [...prevCart, { ...product, quantity: 1 }];
+      return [...prevCart, { ...product, quantity: 1, cartItemId: Date.now().toString() }];
     });
   }, [isProductAvailable, showAlert]);
 
+  const addConfiguredItemToCart = useCallback((product: Product, addons: Addon[]) => {
+      setCart(prevCart => {
+         const { available, reason } = isProductAvailable(product);
+         if (!available) {
+            showAlert({ type: 'alert', title: 'Gagal Menambahkan Produk', message: `Tidak dapat menambahkan ${product.name}. ${reason}.`});
+            return prevCart;
+         }
+         const newItem: CartItem = {
+             ...product,
+             quantity: 1,
+             cartItemId: Date.now().toString(),
+             selectedAddons: addons,
+         };
+         return [...prevCart, newItem];
+      });
+  }, [isProductAvailable, showAlert]);
 
-  const updateCartQuantity = useCallback((productId: string, quantity: number) => {
+
+  const updateCartQuantity = useCallback((cartItemId: string, quantity: number) => {
     setCart(prevCart => {
       if (quantity <= 0) {
-        return prevCart.filter(item => item.id !== productId || item.isReward);
+        return prevCart.filter(item => item.cartItemId !== cartItemId || item.isReward);
       }
       return prevCart.map(item =>
-        item.id === productId && !item.isReward ? { ...item, quantity } : item
+        item.cartItemId === cartItemId && !item.isReward ? { ...item, quantity } : item
       );
     });
   }, []);
 
-  const removeFromCart = useCallback((productId: string) => {
-    setCart(prevCart => prevCart.filter(item => item.id !== productId || item.isReward));
+  const removeFromCart = useCallback((cartItemId: string) => {
+    setCart(prevCart => prevCart.filter(item => item.cartItemId !== cartItemId || item.isReward));
   }, []);
 
   const clearCart = useCallback(() => {
     setCart([]);
     setAppliedReward(null);
+    setCartDiscount(null);
   }, []);
 
-  const getCartTotal = useCallback(() => {
-    return cart.reduce((total, item) => total + item.price * item.quantity, 0);
-  }, [cart]);
+  const getCartTotals = useCallback(() => {
+    let subtotal = 0;
+    let itemDiscountAmount = 0;
+
+    cart.forEach(item => {
+        const addonsTotal = item.selectedAddons?.reduce((sum, addon) => sum + addon.price, 0) || 0;
+        const itemOriginalTotal = (item.price + addonsTotal) * item.quantity;
+        
+        let currentItemDiscount = 0;
+        
+        if (item.discount) {
+            if (item.discount.type === 'amount') {
+                currentItemDiscount = item.discount.value * item.quantity;
+            } else { // percentage
+                currentItemDiscount = itemOriginalTotal * (item.discount.value / 100);
+            }
+        }
+        
+        currentItemDiscount = Math.min(currentItemDiscount, itemOriginalTotal);
+        
+        subtotal += itemOriginalTotal;
+        itemDiscountAmount += currentItemDiscount;
+    });
+
+    const subtotalAfterItemDiscounts = subtotal - itemDiscountAmount;
+    let cartDiscountAmount = 0;
+
+    if (cartDiscount) {
+        if (cartDiscount.type === 'amount') {
+            cartDiscountAmount = cartDiscount.value;
+        } else { // percentage
+            cartDiscountAmount = subtotalAfterItemDiscounts * (cartDiscount.value / 100);
+        }
+    }
+    
+    cartDiscountAmount = Math.min(cartDiscountAmount, subtotalAfterItemDiscounts);
+    
+    const finalTotal = subtotalAfterItemDiscounts - cartDiscountAmount;
+
+    return { subtotal, itemDiscountAmount, cartDiscountAmount, finalTotal };
+  }, [cart, cartDiscount]);
+
+    const applyItemDiscount = useCallback((cartItemId: string, discount: Discount) => {
+        setCart(prev => prev.map(item => item.cartItemId === cartItemId ? { ...item, discount } : item));
+    }, []);
+
+    const removeItemDiscount = useCallback((cartItemId: string) => {
+        setCart(prev => prev.map(item => {
+            if (item.cartItemId === cartItemId) {
+                const { discount, ...rest } = item;
+                return rest;
+            }
+            return item;
+        }));
+    }, []);
+
+    const applyCartDiscount = useCallback((discount: Discount) => {
+        setCartDiscount(discount);
+    }, []);
+
+    const removeCartDiscount = useCallback(() => {
+        setCartDiscount(null);
+    }, []);
+
 
   // --- Held Carts (Order Tabs) Logic ---
   const saveCurrentCartState = useCallback(() => {
@@ -715,6 +848,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const switchActiveCart = useCallback((newCartId: string | null) => {
       saveCurrentCartState();
       removeRewardFromCart();
+      removeCartDiscount();
       
       if (newCartId === null) {
           setCart([]);
@@ -726,7 +860,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               setActiveHeldCartId(newCartId);
           }
       }
-  }, [saveCurrentCartState, removeRewardFromCart, heldCarts]);
+  }, [saveCurrentCartState, removeRewardFromCart, heldCarts, removeCartDiscount]);
   
   const holdActiveCart = useCallback((name: string) => {
       if (cart.length === 0) {
@@ -751,7 +885,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               if (cartId === activeHeldCartId) {
                   switchActiveCart(null);
               }
-              setData(prev => ({ ...prev, heldCarts: (prev.heldCarts || []).filter(c => c.id !== cartId) }));
+              setData(prev => {
+                const newHeldCarts = (prev.heldCarts || []).filter(c => c.id !== cartId);
+                return { ...prev, heldCarts: newHeldCarts };
+            });
           }
       });
   }, [activeHeldCartId, setData, switchActiveCart, showAlert]);
@@ -773,11 +910,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (cart.length === 0) throw new Error("Cart is empty");
     if (!currentUser) throw new Error("No user is logged in");
 
-    const total = getCartTotal();
+    const { subtotal, finalTotal } = getCartTotals();
     const amountPaid = payments.reduce((sum, p) => sum + p.amount, 0);
     
     let paymentStatus: PaymentStatus;
-    if (amountPaid >= total) {
+    if (amountPaid >= finalTotal) {
         paymentStatus = 'paid';
     } else if (amountPaid > 0) {
         paymentStatus = 'partial';
@@ -794,13 +931,22 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     const cartWithCost = cart.map(item => {
         const product = products.find(p => p.id === item.id);
+        if (inventorySettings.enabled && inventorySettings.trackIngredients && product?.recipe) {
+             const recipeCost = product.recipe.reduce((sum, recipeItem) => {
+                const material = rawMaterials.find(rm => rm.id === recipeItem.rawMaterialId);
+                return sum + ((material?.costPerUnit || 0) * recipeItem.quantity);
+            }, 0);
+            return { ...item, costPrice: recipeCost };
+        }
         return { ...item, costPrice: product?.costPrice };
     });
 
     const newTransaction: Transaction = {
       id: now.getTime().toString(),
       items: cartWithCost,
-      total,
+      subtotal,
+      cartDiscount,
+      total: finalTotal,
       amountPaid,
       paymentStatus,
       payments: fullPayments,
@@ -817,6 +963,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         let updatedProducts = prev.products;
         let updatedRawMaterials = prev.rawMaterials;
         let updatedHeldCarts = prev.heldCarts || [];
+
 
         // Membership Point Calculation
         if (prev.membershipSettings.enabled && customerId) {
@@ -912,7 +1059,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     // Switch to a new empty cart after transaction
     switchActiveCart(null);
     return newTransaction;
-  }, [cart, getCartTotal, setData, clearCart, products, currentUser, appliedReward, activeHeldCartId, switchActiveCart]);
+  }, [cart, getCartTotals, setData, clearCart, products, currentUser, appliedReward, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, rawMaterials]);
   
   const addPaymentToTransaction = useCallback((transactionId: string, payments: Array<Omit<Payment, 'id' | 'createdAt'>>) => {
     setData(prev => {
@@ -970,6 +1117,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       if (!dataToRestore.customers) dataToRestore.customers = [];
       if (!dataToRestore.membershipSettings) dataToRestore.membershipSettings = { enabled: false, pointRules: [], rewards: [] };
       if (!dataToRestore.heldCarts) dataToRestore.heldCarts = [];
+      if (!dataToRestore.discountDefinitions) dataToRestore.discountDefinitions = [];
 
 
       if (typeof dataToRestore.inventorySettings.trackIngredients === 'undefined') {
@@ -1048,6 +1196,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         transactions,
         users,
         cart,
+        cartDiscount,
         receiptSettings,
         inventorySettings,
         authSettings: authSettings || { enabled: false }, // Fallback for safety
@@ -1062,6 +1211,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         appliedReward,
         heldCarts,
         activeHeldCartId,
+        discountDefinitions,
         alertState,
         showAlert,
         hideAlert,
@@ -1079,6 +1229,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         updateMembershipSettings,
         applyRewardToCart,
         removeRewardFromCart,
+        addDiscountDefinition,
+        updateDiscountDefinition,
+        deleteDiscountDefinition,
         addProduct,
         updateProduct,
         deleteProduct,
@@ -1089,12 +1242,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         updateRawMaterial,
         deleteRawMaterial,
         addToCart,
+        addConfiguredItemToCart,
         updateCartQuantity,
         removeFromCart,
         clearCart,
         saveTransaction,
         addPaymentToTransaction,
-        getCartTotal,
+        getCartTotals,
+        applyItemDiscount,
+        removeItemDiscount,
+        applyCartDiscount,
+        removeCartDiscount,
         holdActiveCart,
         switchActiveCart,
         deleteHeldCart,

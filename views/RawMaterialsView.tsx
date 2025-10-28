@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import type { RawMaterial } from '../types';
@@ -6,6 +5,7 @@ import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Icon from '../components/Icon';
 import { dataService } from '../services/dataService';
+import { CURRENCY_FORMATTER } from '../constants';
 
 const InputField: React.FC<{
     name: string;
@@ -35,7 +35,7 @@ const RawMaterialForm: React.FC<{
     onSave: (material: Omit<RawMaterial, 'id'> | RawMaterial) => void, 
     onCancel: () => void 
 }> = ({ material, onSave, onCancel }) => {
-    const [formData, setFormData] = useState({ name: '', stock: '', unit: '' });
+    const [formData, setFormData] = useState({ name: '', stock: '', unit: '', costPerUnit: '' });
 
     useEffect(() => {
         if (material) {
@@ -43,9 +43,10 @@ const RawMaterialForm: React.FC<{
                 name: material.name,
                 stock: material.stock.toString(),
                 unit: material.unit,
+                costPerUnit: material.costPerUnit?.toString() || ''
             });
         } else {
-            setFormData({ name: '', stock: '', unit: '' });
+            setFormData({ name: '', stock: '', unit: '', costPerUnit: '' });
         }
     }, [material]);
 
@@ -59,6 +60,7 @@ const RawMaterialForm: React.FC<{
         const materialData = {
             ...formData,
             stock: parseFloat(formData.stock) || 0,
+            costPerUnit: parseFloat(formData.costPerUnit) || 0,
         };
         if (material && 'id' in material) {
             onSave({ ...materialData, id: material.id });
@@ -72,6 +74,8 @@ const RawMaterialForm: React.FC<{
             <InputField name="name" label="Nama Bahan Baku" required value={formData.name} onChange={handleChange} />
             <InputField name="stock" label="Jumlah Stok" type="number" required value={formData.stock} onChange={handleChange} />
             <InputField name="unit" label="Satuan (cth: gram, ml, pcs)" required value={formData.unit} onChange={handleChange} />
+            <InputField name="costPerUnit" label="Biaya per Satuan (IDR, Opsional)" type="number" value={formData.costPerUnit} onChange={handleChange} />
+
             <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="secondary" onClick={onCancel}>Batal</Button>
                 <Button type="submit" variant="primary">Simpan</Button>
@@ -164,6 +168,7 @@ const RawMaterialsView: React.FC = () => {
                     <thead className="bg-slate-700">
                         <tr>
                             <th className="p-3">Nama Bahan</th>
+                            <th className="p-3">Biaya per Satuan</th>
                             <th className="p-3">Stok</th>
                             <th className="p-3">Satuan</th>
                             <th className="p-3">Aksi</th>
@@ -173,6 +178,7 @@ const RawMaterialsView: React.FC = () => {
                         {rawMaterials.map(material => (
                             <tr key={material.id} className="border-b border-slate-700 last:border-b-0 hover:bg-slate-700/50">
                                 <td className="p-3 font-medium">{material.name}</td>
+                                <td className="p-3 text-slate-300">{material.costPerUnit ? CURRENCY_FORMATTER.format(material.costPerUnit) : '-'}</td>
                                 <td className="p-3 text-slate-300">{material.stock}</td>
                                 <td className="p-3 text-slate-400">{material.unit}</td>
                                 <td className="p-3">

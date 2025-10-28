@@ -1,3 +1,5 @@
+
+
 import React, { useState } from 'react';
 import { AppProvider, useAppContext } from './context/AppContext';
 import type { View } from './types';
@@ -12,6 +14,7 @@ import HelpView from './views/HelpView';
 import Header from './components/Header';
 import Icon from './components/Icon';
 import AlertModal from './components/AlertModal';
+import DashboardView from './views/DashboardView';
 
 const Nav: React.FC<{ 
   activeView: View, 
@@ -46,7 +49,10 @@ const Nav: React.FC<{
         <Icon name="logo" className="w-8 h-8 text-[#52a37c]" />
         <h1 className="text-xl font-bold text-white">Artea POS</h1>
       </div>
+      
+      {isAdmin && <NavItem view="dashboard" label="Dashboard" icon="reports" />}
       <NavItem view="pos" label="Kasir" icon="cash" />
+      
       {isAdmin && (
         <>
           <NavItem view="products" label="Produk" icon="products" />
@@ -63,21 +69,17 @@ const Nav: React.FC<{
 
 const AppContent: React.FC = () => {
   const { currentUser } = useAppContext();
-  const [activeView, setActiveView] = useState<View>('pos');
+  const isAdmin = currentUser?.role === 'admin';
+  const [activeView, setActiveView] = useState<View>(isAdmin ? 'dashboard' : 'pos');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   
-  useState(() => {
-    if (currentUser?.role === 'staff') {
-      setActiveView('pos');
-    }
-  });
-
   const closeSidebar = () => setSidebarOpen(false);
   const toggleSidebar = () => setSidebarOpen(prev => !prev);
 
   const renderView = () => {
-    if (currentUser?.role === 'admin') {
+    if (isAdmin) {
       switch (activeView) {
+        case 'dashboard': return <DashboardView />;
         case 'pos': return <POSView />;
         case 'products': return <ProductsView />;
         case 'raw-materials': return <RawMaterialsView />;
@@ -85,9 +87,10 @@ const AppContent: React.FC = () => {
         case 'reports': return <ReportsView />;
         case 'settings': return <SettingsView />;
         case 'help': return <HelpView />;
-        default: return <POSView />;
+        default: return <DashboardView />;
       }
     }
+    // For staff
     switch (activeView) {
         case 'pos': return <POSView />;
         case 'help': return <HelpView />;
@@ -147,7 +150,8 @@ const AuthGate: React.FC = () => {
   );
 }
 
-const App: React.FC = () => (
+// FIX: Changed App component from a `React.FC` to a standard function component to resolve a typing issue where `AppProvider` was incorrectly reported as missing a `children` prop.
+const App = () => (
   <AppProvider>
     <AuthGate />
   </AppProvider>

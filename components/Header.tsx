@@ -11,6 +11,7 @@ interface HeaderProps {
 }
 
 const viewTitles: Record<View, string> = {
+    dashboard: 'Dashboard',
     pos: 'Point of Sale',
     products: 'Manajemen Produk',
     'raw-materials': 'Manajemen Bahan Baku',

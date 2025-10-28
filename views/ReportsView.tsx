@@ -4,7 +4,7 @@ import { CURRENCY_FORMATTER } from '../constants';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import type { Transaction, PaymentMethod } from '../types';
+import type { Transaction, PaymentMethod, RawMaterial } from '../types';
 import ReceiptModal from '../components/ReceiptModal';
 import Modal from '../components/Modal';
 import UpdatePaymentModal from '../components/UpdatePaymentModal';
@@ -120,7 +120,7 @@ const PaymentStatusBadge: React.FC<{ status: Transaction['paymentStatus'] }> = (
 };
 
 const ReportsView: React.FC = () => {
-    const { transactions, inventorySettings, session, startSession, sessionSettings, addPaymentToTransaction } = useAppContext();
+    const { transactions, inventorySettings, session, startSession, sessionSettings, addPaymentToTransaction, rawMaterials, products } = useAppContext();
     const [filter, setFilter] = useState<TimeFilter>('today');
     const [reportScope, setReportScope] = useState<ReportScope>('session');
     const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -200,6 +200,7 @@ const ReportsView: React.FC = () => {
         let totalProfit = 0;
         const salesByHour = Array(24).fill(0);
         const productSales = new Map<string, {name: string, quantity: number, revenue: number}>();
+        const rawMaterialsMap = new Map<string, RawMaterial>(rawMaterials.map(m => [m.id, m]));
         
         filteredTransactions.forEach(t => {
             totalSales += t.total;
@@ -208,9 +209,21 @@ const ReportsView: React.FC = () => {
 
             let transactionCost = 0;
             t.items.forEach(item => {
-                if (item.costPrice) {
-                    transactionCost += (item.costPrice * item.quantity);
+                const product = products.find(p => p.id === item.id);
+                let itemCost = 0;
+
+                // Prioritize recipe cost if available and feature is enabled
+                if (inventorySettings.enabled && inventorySettings.trackIngredients && product?.recipe) {
+                    itemCost = product.recipe.reduce((sum, recipeItem) => {
+                        const material = rawMaterialsMap.get(recipeItem.rawMaterialId);
+                        return sum + ((material?.costPerUnit || 0) * recipeItem.quantity);
+                    }, 0);
+                } else if (item.costPrice) {
+                    itemCost = item.costPrice;
                 }
+
+                transactionCost += itemCost * item.quantity;
+                
                 const existing = productSales.get(item.id) || { name: item.name, quantity: 0, revenue: 0 };
                 productSales.set(item.id, {
                     name: item.name,
@@ -239,7 +252,7 @@ const ReportsView: React.FC = () => {
             bestSellingProducts,
             hourlyChartData
         };
-    }, [filteredTransactions]);
+    }, [filteredTransactions, inventorySettings, rawMaterials, products]);
 
 
     const salesOverTimeData = useMemo(() => {

@@ -2,13 +2,13 @@
 
 ![Lisensi](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 ![Status Proyek](https://img.shields.io/badge/status-aktif-brightgreen.svg)
-![React](https://img.shields.io/badge/React-19-blue?logo=react)
+![React](https://img.shields.io/badge/React-18-blue?logo=react)
 ![Vite](https://img.shields.io/badge/Vite-5-blue?logo=vite)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-blue?logo=tailwindcss)
 
 <p align="center">
-  <img src="public/favicon.svg" alt="Artea POS Logo" width="128"/>
+  <img src="arteapos-jsx/public/favicon.svg" alt="Artea POS Logo" width="128"/>
 </p>
 
 <h1 align="center">Artea POS</h1>
@@ -45,17 +45,40 @@ Model kerja ini memungkinkan siklus pengembangan yang sangat cepat, di mana ide 
 
 ---
 
-## Tampilan Aplikasi
+## 🚀 Deployment & Penggunaan Offline (PWA)
 
-| Tampilan Kasir (POS) | Laporan Penjualan | Pengaturan |
-| :---: | :---: | :---: |
-| _(Screenshot tampilan utama kasir)_ | _(Screenshot halaman laporan dengan grafik)_ | _(Screenshot halaman pengaturan aplikasi)_ |
+Aplikasi ini adalah Progressive Web App (PWA), yang artinya dapat "diinstal" di perangkat Anda (Desktop atau Ponsel) untuk pengalaman seperti aplikasi native dan bekerja 100% offline. Ini adalah cara yang direkomendasikan untuk penggunaan sehari-hari.
+
+**Cara Instalasi:**
+
+1.  **Build Aplikasi:** Buka terminal di direktori `arteapos-jsx` dan jalankan:
+    ```bash
+    # Instal dependensi terlebih dahulu jika belum
+    npm install
+    # Build aplikasi untuk produksi
+    npm run build
+    ```
+    Perintah ini akan membuat folder `dist` yang berisi semua file aplikasi yang sudah jadi.
+
+2.  **Jalankan Server Lokal (Hanya untuk Instalasi Pertama):**
+    Sajikan folder `dist` menggunakan server lokal. Perintah sederhana yang bisa digunakan:
+    ```bash
+    # Pastikan Anda berada di direktori arteapos-jsx
+    npx serve -s dist
+    ```
+3.  **Buka di Browser:** Buka alamat lokal yang ditampilkan (misalnya `http://localhost:3000`) di browser modern seperti Chrome atau Edge.
+4.  **Instal Aplikasi:** Di bilah alamat browser, cari dan klik ikon "Instal" (biasanya ikon monitor dengan panah ke bawah).
+5.  **Selesai!** Aplikasi akan terinstal dan ikonnya akan muncul di desktop atau daftar aplikasi Anda. Anda kini bisa menutup server dan menjalankan aplikasi langsung dari ikon tersebut kapan saja, bahkan tanpa koneksi internet.
+
+Untuk panduan instalasi di perangkat Android, lihat [USAGE_GUIDE.md](./arteapos-jsx/USAGE_GUIDE.md).
+
+---
 
 ## ✨ Fitur Utama
 
 Artea POS dilengkapi dengan berbagai fitur untuk membantu mengelola operasional bisnis Anda secara efisien:
 
-####  cashier Manajemen Penjualan (POS)
+#### 🛒 Manajemen Penjualan (POS)
 - **Antarmuka Kasir Intuitif:** Proses transaksi dengan cepat dan mudah.
 - **Keranjang Dinamis:** Tambah, hapus, dan ubah kuantitas produk dengan mudah.
 - **Pemindai Barcode:** Gunakan kamera perangkat untuk memindai barcode produk.
@@ -104,7 +127,7 @@ Artea POS dilengkapi dengan berbagai fitur untuk membantu mengelola operasional 
 
 ## 🛠️ Teknologi yang Digunakan
 
-- **Frontend:** [React 19](https://react.dev/)
+- **Frontend:** [React 18](https://react.dev/)
 - **Build Tool:** [Vite](https://vitejs.dev/)
 - **Bahasa:** [TypeScript](https://www.typescriptlang.org/)
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/)
@@ -122,7 +145,7 @@ Untuk menjalankan proyek ini di mesin lokal Anda, ikuti langkah-langkah berikut:
 
 2.  **Masuk ke direktori proyek:**
     ```bash
-    cd arteapos
+    cd arteapos/arteapos-jsx
     ```
 
 3.  **Install dependensi:**
@@ -135,7 +158,7 @@ Untuk menjalankan proyek ini di mesin lokal Anda, ikuti langkah-langkah berikut:
     npm run dev
     ```
 
-5.  Buka browser Anda dan navigasikan ke `http://localhost:5173`.
+5.  Buka browser Anda dan navigasikan ke alamat yang ditampilkan di terminal (biasanya `http://localhost:5173`).
 
 ## 📖 Panduan Penggunaan Dasar
 
@@ -169,7 +192,7 @@ Jika Anda menemukan bug atau memiliki ide fitur, silakan buat [Issues](https://g
 
 ## 📜 Lisensi
 
-Proyek ini dilisensikan di bawah [GNU General Public License v3.0](./LICENSE).
+Proyek ini dilisensikan di bawah [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
 ## ❤️ Dukungan & Komunitas
 

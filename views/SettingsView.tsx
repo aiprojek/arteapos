@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { dataService } from '../services/dataService';
@@ -676,7 +677,6 @@ const DiscountManagement: React.FC = () => {
 
 
 const SettingsView: React.FC = () => {
-    // FIX: Destructured `discountDefinitions` from `useAppContext` and added it to the objects for `handleBackup` and `handleExportAllReports` to satisfy the `AppData` type requirement.
     const { products, categories, rawMaterials, transactions, receiptSettings, inventorySettings, authSettings, users, expenses, suppliers, purchases, stockAdjustments, customers, membershipSettings, restoreData, bulkAddProducts, updateInventorySettings, updateAuthSettings, currentUser, session, endSession, sessionSettings, updateSessionSettings, showAlert, updateMembershipSettings, heldCarts, discountDefinitions } = useAppContext();
     const restoreInputRef = useRef<HTMLInputElement>(null);
     const importProductsInputRef = useRef<HTMLInputElement>(null);

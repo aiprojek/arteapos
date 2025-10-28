@@ -16,11 +16,11 @@ import Icon from './components/Icon';
 import AlertModal from './components/AlertModal';
 import DashboardView from './views/DashboardView';
 
-const Nav: React.FC<{ 
+const Nav = ({ activeView, setActiveView, onNavigate }: { 
   activeView: View, 
   setActiveView: (view: View) => void,
   onNavigate: () => void 
-}> = ({ activeView, setActiveView, onNavigate }) => {
+}) => {
   const { inventorySettings, currentUser } = useAppContext();
   const isAdmin = currentUser?.role === 'admin';
 
@@ -29,7 +29,7 @@ const Nav: React.FC<{
     onNavigate(); // This will close the sidebar on mobile
   };
 
-  const NavItem: React.FC<{ view: View; label: string; icon: 'cash' | 'products' | 'reports' | 'settings' | 'ingredients' | 'finance' }> = ({ view, label, icon }) => (
+  const NavItem = ({ view, label, icon }: { view: View; label: string; icon: 'cash' | 'products' | 'reports' | 'settings' | 'ingredients' | 'finance' }) => (
     <button
       onClick={() => handleNavigation(view)}
       className={`flex flex-row items-center justify-start gap-2 p-3 w-full text-sm rounded-lg transition-colors ${
@@ -67,7 +67,7 @@ const Nav: React.FC<{
 }
 
 
-const AppContent: React.FC = () => {
+const AppContent = () => {
   const { currentUser } = useAppContext();
   const isAdmin = currentUser?.role === 'admin';
   const [activeView, setActiveView] = useState<View>(isAdmin ? 'dashboard' : 'pos');
@@ -129,7 +129,7 @@ const AppContent: React.FC = () => {
   );
 };
 
-const AuthGate: React.FC = () => {
+const AuthGate = () => {
   const { currentUser, authSettings, alertState, hideAlert } = useAppContext();
   
   return (
@@ -150,7 +150,6 @@ const AuthGate: React.FC = () => {
   );
 }
 
-// FIX: Changed App component from a `React.FC` to a standard function component to resolve a typing issue where `AppProvider` was incorrectly reported as missing a `children` prop.
 const App = () => (
   <AppProvider>
     <AuthGate />

@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { dataService } from '../services/dataService';
@@ -767,7 +766,7 @@ const SettingsView: React.FC = () => {
     };
     
     const handleExportAllReports = () => {
-        const allData = { products, categories, rawMaterials, transactions, receiptSettings, inventorySettings, users, authSettings, sessionSettings, expenses, suppliers, purchases, stockAdjustments, customers, membershipSettings, discountDefinitions, heldCarts };
+        const allData: AppData = { products, categories, rawMaterials, transactions, receiptSettings, inventorySettings, users, authSettings, sessionSettings, expenses, suppliers, purchases, stockAdjustments, customers, membershipSettings, discountDefinitions, heldCarts };
         dataService.exportAllReportsCSV(allData);
         setMessage({ type: 'success', text: 'Semua laporan berhasil diunduh.' });
     };

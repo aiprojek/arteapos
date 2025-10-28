@@ -453,7 +453,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setAppliedReward({ reward, cartItem: rewardCartItem });
     }
     // FIX: Add removeRewardFromCart to dependency array.
-  }, [products, showAlert, setCart, setAppliedReward, removeRewardFromCart]);
+  }, [products, showAlert, removeRewardFromCart]);
 
 
   const addProduct = useCallback((product: Omit<Product, 'id'>) => {

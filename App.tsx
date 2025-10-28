@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import { AppProvider, useAppContext } from './context/AppContext';
 import type { View } from './types';

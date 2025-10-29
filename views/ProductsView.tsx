@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useAppContext } from '../context/AppContext';
+import { useProduct } from '../context/ProductContext';
+import { useUI } from '../context/UIContext';
 import type { Product, RecipeItem, Addon } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -43,7 +44,8 @@ const CategoryInput: React.FC<{
     value: string[];
     onChange: (value: string[]) => void;
 }> = ({ value, onChange }) => {
-    const { categories, addCategory, showAlert } = useAppContext();
+    const { categories, addCategory } = useProduct();
+    const { showAlert } = useUI();
     const [inputValue, setInputValue] = useState('');
     const [suggestions, setSuggestions] = useState<string[]>([]);
 
@@ -145,7 +147,8 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
     onOpenCamera: () => void,
     isCameraAvailable: boolean,
 }>(({ product, onSave, onCancel, onOpenCamera, isCameraAvailable }, ref) => {
-    const { inventorySettings, rawMaterials, showAlert } = useAppContext();
+    const { inventorySettings, rawMaterials } = useProduct();
+    const { showAlert } = useUI();
     const [formData, setFormData] = useState({
         name: '', price: '', category: [] as string[], imageUrl: '', costPrice: '',
         stock: '', trackStock: false, recipe: [] as RecipeItem[], isFavorite: false, barcode: '', addons: [] as Addon[]
@@ -396,7 +399,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
              <div className="space-y-3 pt-4 border-t border-slate-700">
                 <h3 className="text-lg font-semibold text-white">Add-ons / Topping (Opsional)</h3>
                 {formData.addons.map((addon, index) => (
-                    <div key={addon.id} className="flex items-center gap-2 bg-slate-900 p-2 rounded-md">
+                    <div key={index} className="flex items-center gap-2 bg-slate-900 p-2 rounded-md">
                         <input type="text" value={addon.name} placeholder="Nama Add-on" onChange={(e) => handleAddonChange(index, 'name', e.target.value)} className="flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white" />
                         <input type="number" value={addon.price} placeholder="Harga" onChange={(e) => handleAddonChange(index, 'price', parseFloat(e.target.value) || 0)} className="w-28 bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white" />
                         <Button type="button" variant="danger" size="sm" onClick={() => removeAddonItem(index)}><Icon name="trash" className="w-4 h-4" /></Button>
@@ -528,7 +531,7 @@ const RestockModal: React.FC<{
 
 
 const ProductsView: React.FC = () => {
-    const { products, addProduct, updateProduct, deleteProduct, inventorySettings, addStockAdjustment } = useAppContext();
+    const { products, addProduct, updateProduct, deleteProduct, inventorySettings, addStockAdjustment } = useProduct();
     const [isModalOpen, setModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [isCameraModalOpen, setCameraModalOpen] = useState(false);

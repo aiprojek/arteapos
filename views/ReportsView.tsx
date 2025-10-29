@@ -1,10 +1,12 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { useAppContext } from '../context/AppContext';
+import { useFinance } from '../context/FinanceContext';
+import { useProduct } from '../context/ProductContext';
+import { useSession } from '../context/SessionContext';
 import { CURRENCY_FORMATTER } from '../constants';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import type { Transaction, PaymentMethod, RawMaterial } from '../types';
+import type { Transaction, RawMaterial } from '../types';
 import ReceiptModal from '../components/ReceiptModal';
 import Modal from '../components/Modal';
 import UpdatePaymentModal from '../components/UpdatePaymentModal';
@@ -26,7 +28,7 @@ const EndSessionModal: React.FC<{
     sessionSales: number,
     startingCash: number,
 }> = ({ isOpen, onClose, sessionSales, startingCash }) => {
-    const { endSession } = useAppContext();
+    const { endSession } = useSession();
     const [step, setStep] = useState(1);
     const [finalCashInput, setFinalCashInput] = useState('');
 
@@ -120,7 +122,9 @@ const PaymentStatusBadge: React.FC<{ status: Transaction['paymentStatus'] }> = (
 };
 
 const ReportsView: React.FC = () => {
-    const { transactions, inventorySettings, session, startSession, sessionSettings, addPaymentToTransaction, rawMaterials, products } = useAppContext();
+    const { transactions, addPaymentToTransaction } = useFinance();
+    const { inventorySettings, rawMaterials, products } = useProduct();
+    const { session, startSession, sessionSettings, endSession } = useSession();
     const [filter, setFilter] = useState<TimeFilter>('today');
     const [reportScope, setReportScope] = useState<ReportScope>('session');
     const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -274,10 +278,6 @@ const ReportsView: React.FC = () => {
         const categoryMap = new Map<string, number>();
         filteredTransactions.forEach(t => {
             t.items.forEach(item => {
-                // FIX: A product's category is a string array (string[]).
-                // The previous code incorrectly tried to use the array as a map key.
-                // This now iterates over each category for a product.
-                // Added Array.isArray for extra safety.
                 const categories = (item.category && Array.isArray(item.category) && item.category.length > 0) ? item.category : ['Uncategorized'];
                 categories.forEach(cat => {
                     categoryMap.set(cat, (categoryMap.get(cat) || 0) + (item.price * item.quantity));
@@ -335,7 +335,7 @@ const ReportsView: React.FC = () => {
                      <div className="flex gap-2 items-center flex-wrap justify-end">
                         {sessionSettings.enabled && (
                             <div className="flex bg-slate-700 p-1 rounded-lg">
-                                <button onClick={() => setReportScope('session')} className={`px-3 py-1 text-sm rounded-md transition-colors ${reportScope === 'session' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-600'}`}>
+                                <button onClick={() => setReportScope('session')} disabled={!session} className={`px-3 py-1 text-sm rounded-md transition-colors ${reportScope === 'session' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-600'} disabled:opacity-50 disabled:cursor-not-allowed`}>
                                     Sesi Saat Ini
                                 </button>
                                 <button onClick={() => setReportScope('historical')} className={`px-3 py-1 text-sm rounded-md transition-colors ${reportScope === 'historical' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-600'}`}>
@@ -430,7 +430,7 @@ const ReportsView: React.FC = () => {
 
             {sessionSettings.enabled && !session && reportScope === 'session' ? (
                  <div className="text-center py-12 bg-slate-800 rounded-lg">
-                    <Icon name="reports" className="w-12 h-12 text-slate-600 mb-4" />
+                    <Icon name="reports" className="w-12 h-12 text-slate-600 mx-auto mb-4" />
                     <h3 className="text-xl font-bold text-white">Tidak Ada Sesi Aktif</h3>
                     <p className="text-slate-400 mt-2">Mulai sesi baru untuk melihat laporan sesi saat ini.</p>
                 </div>

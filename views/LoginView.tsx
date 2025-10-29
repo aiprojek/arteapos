@@ -1,10 +1,12 @@
-import React, { useState, useRef } from 'react';
-import { useAppContext } from '../context/AppContext';
+import React, { useState, useRef, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useUI } from '../context/UIContext';
 import Icon from '../components/Icon';
 import type { User } from '../types';
 
 const LoginView: React.FC = () => {
-    const { users, login, showAlert, resetDefaultAdminPin } = useAppContext();
+    const { users, login, resetDefaultAdminPin } = useAuth();
+    const { showAlert } = useUI();
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [pin, setPin] = useState('');
     const [error, setError] = useState('');
@@ -18,17 +20,24 @@ const LoginView: React.FC = () => {
             setPin(pin + key);
         }
     };
+    
+    useEffect(() => {
+        if (pin.length === 4 && selectedUser) {
+            handleLogin(selectedUser, pin);
+        }
+    }, [pin, selectedUser]);
+
 
     const handleBackspace = () => {
         setError('');
         setPin(pin.slice(0, -1));
     };
 
-    const handleLogin = () => {
-        if (!selectedUser) return;
-        if (!login(selectedUser, pin)) {
+    const handleLogin = (user: User, currentPin: string) => {
+        if (!user) return;
+        if (!login(user, currentPin)) {
             setError('PIN salah. Silakan coba lagi.');
-            setPin('');
+            setTimeout(() => setPin(''), 500);
         }
     };
     
@@ -40,7 +49,7 @@ const LoginView: React.FC = () => {
 
         logoClickTimer.current = setTimeout(() => {
             logoClickCount.current = 0;
-        }, 2000); // Reset count if no clicks for 2 seconds
+        }, 2000);
 
         if (logoClickCount.current === 5) {
             logoClickCount.current = 0;
@@ -117,7 +126,7 @@ const LoginView: React.FC = () => {
 
             <div className="flex justify-center items-center gap-3 h-12 mb-4">
                 {Array(4).fill(0).map((_, i) => (
-                    <div key={i} className={`w-4 h-4 rounded-full transition-colors ${i < pin.length ? 'bg-[#52a37c]' : 'bg-slate-700'}`}></div>
+                    <div key={i} className={`w-4 h-4 rounded-full transition-colors ${i < pin.length ? 'bg-[#52a37c]' : 'bg-slate-700'} ${error ? 'animate-shake' : ''}`}></div>
                 ))}
             </div>
             
@@ -137,20 +146,12 @@ const LoginView: React.FC = () => {
                     </svg>
                 </KeypadButton>
             </div>
-
-            <button
-                onClick={handleLogin}
-                disabled={pin.length !== 4}
-                className="w-full mt-6 bg-[#347758] text-white font-bold py-3 rounded-lg transition-opacity hover:bg-[#2a6046] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                Login
-            </button>
         </div>
     );
-
+    
     return (
-        <div className="bg-slate-900 min-h-screen flex flex-col items-center justify-center p-4">
-           {selectedUser ? <PinEntryScreen /> : <ProfileSelectionScreen />}
+        <div className="h-screen w-screen flex items-center justify-center bg-slate-900 p-4">
+            {selectedUser ? <PinEntryScreen /> : <ProfileSelectionScreen />}
         </div>
     );
 };

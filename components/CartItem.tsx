@@ -1,7 +1,7 @@
 import React from 'react';
 import type { CartItem as CartItemType } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
-import { useAppContext } from '../context/AppContext';
+import { useCart } from '../context/CartContext';
 import Icon from './Icon';
 
 interface CartItemProps {
@@ -10,7 +10,7 @@ interface CartItemProps {
 }
 
 const CartItem: React.FC<CartItemProps> = ({ item, onOpenDiscountModal }) => {
-  const { updateCartQuantity, removeFromCart, removeRewardFromCart } = useAppContext();
+  const { updateCartQuantity, removeFromCart, removeRewardFromCart } = useCart();
 
   const handleQuantityChange = (delta: number) => {
     updateCartQuantity(item.cartItemId, item.quantity + delta);
@@ -38,7 +38,7 @@ const CartItem: React.FC<CartItemProps> = ({ item, onOpenDiscountModal }) => {
          <div className="flex items-center justify-between py-3 bg-[#347758]/10 border-l-4 border-[#347758] px-2 rounded-md">
             <div className="flex-1">
                 <p className="font-semibold text-[#7ac0a0] flex items-center gap-2"><Icon name="award" className="w-4 h-4" />{item.name}</p>
-                <p className="text-sm text-slate-400">{item.price === 0 ? 'GRATIS' : 'Diskon'}</p>
+                <p className="text-sm text-slate-400">{item.price === 0 ? 'GRATIS' : `Potongan ${CURRENCY_FORMATTER.format(item.price * -1)}`}</p>
             </div>
             <div className="w-24 text-right font-medium text-[#52a37c]">{CURRENCY_FORMATTER.format(item.price * item.quantity)}</div>
             <button onClick={removeRewardFromCart} className="ml-3 text-slate-500 hover:text-red-500">

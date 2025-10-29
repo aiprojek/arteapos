@@ -1,5 +1,13 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { useAppContext } from '../context/AppContext';
+// FIX: Replace obsolete useAppContext with specific context hooks
+import { useCart } from '../context/CartContext';
+import { useCustomer } from '../context/CustomerContext';
+import { useDiscount } from '../context/DiscountContext';
+import { useFinance } from '../context/FinanceContext';
+import { useProduct } from '../context/ProductContext';
+import { useSession } from '../context/SessionContext';
+import { useSettings } from '../context/SettingsContext';
+import { useUI } from '../context/UIContext';
 import type { Product, CartItem as CartItemType, Transaction, Customer, Reward, Payment, PaymentMethod, HeldCart, Discount, Addon, DiscountDefinition } from '../types';
 import ProductCard from '../components/ProductCard';
 import CartItemComponent from '../components/CartItem';
@@ -120,7 +128,7 @@ const NameCartModal: React.FC<{
 const HeldCartsTabs: React.FC<{
     onSwitch: (cartId: string | null) => void;
 }> = ({ onSwitch }) => {
-    const { heldCarts, activeHeldCartId } = useAppContext();
+    const { heldCarts, activeHeldCartId } = useCart();
 
     return (
         <div className="mb-4 -mx-4 px-2">
@@ -300,7 +308,8 @@ const RewardsModal: React.FC<{
     onClose: () => void,
     customer: Customer,
 }> = ({ isOpen, onClose, customer }) => {
-    const { membershipSettings, applyRewardToCart } = useAppContext();
+    const { membershipSettings } = useCustomer();
+    const { applyRewardToCart } = useCart();
     
     const availableRewards = useMemo(() =>
         membershipSettings.rewards.filter(r => r.pointsCost <= customer.points)
@@ -341,7 +350,7 @@ const DiscountModal: React.FC<{
     initialDiscount: Discount | null;
     title: string;
 }> = ({ isOpen, onClose, onSave, onRemove, initialDiscount, title }) => {
-    const { discountDefinitions } = useAppContext();
+    const { discountDefinitions } = useDiscount();
     const [mode, setMode] = useState<'select' | 'manual'>('select');
     const [manualType, setManualType] = useState<'percentage' | 'amount'>('percentage');
     const [manualValue, setManualValue] = useState('');
@@ -461,7 +470,7 @@ const CustomerSelection: React.FC<{
     selectedCustomer: Customer | null;
     onSelectCustomer: (customer: Customer | null) => void;
 }> = ({ selectedCustomer, onSelectCustomer }) => {
-    const { customers, membershipSettings } = useAppContext();
+    const { customers, membershipSettings } = useCustomer();
     if (!membershipSettings.enabled) return null;
 
     return (
@@ -514,12 +523,20 @@ const ProductListItem: React.FC<{
 
 const POSView: React.FC = () => {
     const { 
-        products, categories, addToCart, addConfiguredItemToCart, cart, getCartTotals, clearCart, saveTransaction, 
-        findProductByBarcode, isProductAvailable, membershipSettings, appliedReward, removeRewardFromCart, showAlert,
-        sessionSettings, heldCarts, activeHeldCartId, switchActiveCart, holdActiveCart, deleteHeldCart, updateHeldCartName,
-        transactions, applyItemDiscount, removeItemDiscount,
-        cartDiscount, applyCartDiscount, removeCartDiscount, receiptSettings
-    } = useAppContext();
+        products, categories, findProductByBarcode, isProductAvailable
+    } = useProduct();
+    const {
+        addToCart, addConfiguredItemToCart, cart, getCartTotals, clearCart, saveTransaction, 
+        appliedReward, removeRewardFromCart,
+        heldCarts, activeHeldCartId, switchActiveCart, holdActiveCart, deleteHeldCart, updateHeldCartName,
+        applyItemDiscount, removeItemDiscount,
+        cartDiscount, applyCartDiscount, removeCartDiscount,
+    } = useCart();
+    const { showAlert } = useUI();
+    const { sessionSettings } = useSession();
+    const { transactions } = useFinance();
+    const { receiptSettings } = useSettings();
+    const { membershipSettings } = useCustomer();
     const [activeCategory, setActiveCategory] = useState('Semua');
     const [searchTerm, setSearchTerm] = useState('');
     const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);

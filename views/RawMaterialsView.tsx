@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAppContext } from '../context/AppContext';
+import { useProduct } from '../context/ProductContext';
+import { useUI } from '../context/UIContext';
 import type { RawMaterial } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -86,7 +87,8 @@ const RawMaterialForm: React.FC<{
 
 
 const RawMaterialsView: React.FC = () => {
-    const { rawMaterials, addRawMaterial, updateRawMaterial, deleteRawMaterial, bulkAddRawMaterials, showAlert } = useAppContext();
+    const { rawMaterials, addRawMaterial, updateRawMaterial, deleteRawMaterial, bulkAddRawMaterials } = useProduct();
+    const { showAlert } = useUI();
     const [isModalOpen, setModalOpen] = useState(false);
     const [editingMaterial, setEditingMaterial] = useState<RawMaterial | null>(null);
     const importInputRef = useRef<HTMLInputElement>(null);

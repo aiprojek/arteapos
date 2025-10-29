@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import KitchenNote from './KitchenNote';
-import { useAppContext } from '../context/AppContext';
+import { useSettings } from '../context/SettingsContext';
+import { useUI } from '../context/UIContext';
 import type { Transaction } from '../types';
 import Icon from './Icon';
 
@@ -11,21 +12,21 @@ interface KitchenNoteModalProps {
 }
 
 const KitchenNoteModal: React.FC<KitchenNoteModalProps> = ({ isOpen, onClose, transaction }) => {
-  const { receiptSettings, showAlert } = useAppContext();
+  const { receiptSettings } = useSettings();
+  const { showAlert } = useUI();
   const noteRef = useRef<HTMLDivElement>(null);
-  const hasTriggeredPrint = useRef(false); // To ensure print is called only once per opening
+  const hasTriggeredPrint = useRef(false);
 
   useEffect(() => {
     if (isOpen && !hasTriggeredPrint.current) {
       hasTriggeredPrint.current = true;
       const timer = setTimeout(() => {
         handlePrint();
-      }, 300); // Delay to allow content to render
+      }, 300);
 
       return () => clearTimeout(timer);
     }
     
-    // Reset the flag when the modal is closed
     if (!isOpen) {
       hasTriggeredPrint.current = false;
     }
@@ -79,7 +80,6 @@ const KitchenNoteModal: React.FC<KitchenNoteModalProps> = ({ isOpen, onClose, tr
     `);
     printWindow.document.close();
     
-    // Close the modal immediately after triggering the print dialog
     onClose();
   };
 
@@ -87,13 +87,11 @@ const KitchenNoteModal: React.FC<KitchenNoteModalProps> = ({ isOpen, onClose, tr
       return null;
   }
 
-  // This modal is a brief loading indicator shown while the print dialog is being prepared.
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
       <div className="bg-slate-800 rounded-xl shadow-lg p-6 text-center text-white">
           <Icon name="printer" className="w-10 h-10 mx-auto mb-4 animate-pulse" />
           <p>Mempersiapkan catatan dapur...</p>
-          {/* Hidden component for printing */}
           <div className="hidden">
             <KitchenNote ref={noteRef} transaction={transaction} settings={receiptSettings} />
           </div>

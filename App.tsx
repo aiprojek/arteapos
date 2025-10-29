@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { AppProvider, useAppContext } from './context/AppContext';
+import AppProviders from './context/AppProviders';
+import { useAuth } from './context/AuthContext';
+import { useUI } from './context/UIContext';
+import { useProduct } from './context/ProductContext';
 import type { View } from './types';
 import POSView from './views/POSView';
 import ProductsView from './views/ProductsView';
@@ -19,7 +22,8 @@ const Nav = ({ activeView, setActiveView, onNavigate }: {
   setActiveView: (view: View) => void,
   onNavigate: () => void 
 }) => {
-  const { inventorySettings, currentUser } = useAppContext();
+  const { currentUser } = useAuth();
+  const { inventorySettings } = useProduct();
   const isAdmin = currentUser?.role === 'admin';
 
   const handleNavigation = (view: View) => {
@@ -27,7 +31,7 @@ const Nav = ({ activeView, setActiveView, onNavigate }: {
     onNavigate(); // This will close the sidebar on mobile
   };
 
-  const NavItem = ({ view, label, icon }: { view: View; label: string; icon: 'cash' | 'products' | 'reports' | 'settings' | 'ingredients' | 'finance' }) => (
+  const NavItem = ({ view, label, icon }: { view: View; label: string; icon: 'cash' | 'products' | 'reports' | 'settings' | 'ingredients' | 'finance' | 'book' | 'award' }) => (
     <button
       onClick={() => handleNavigation(view)}
       className={`flex flex-row items-center justify-start gap-2 p-3 w-full text-sm rounded-lg transition-colors ${
@@ -66,7 +70,7 @@ const Nav = ({ activeView, setActiveView, onNavigate }: {
 
 
 const AppContent = () => {
-  const { currentUser } = useAppContext();
+  const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'admin';
   const [activeView, setActiveView] = useState<View>(isAdmin ? 'dashboard' : 'pos');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -128,7 +132,8 @@ const AppContent = () => {
 };
 
 const AuthGate = () => {
-  const { currentUser, authSettings, alertState, hideAlert } = useAppContext();
+  const { currentUser, authSettings } = useAuth();
+  const { alertState, hideAlert } = useUI();
   
   return (
     <>
@@ -149,9 +154,9 @@ const AuthGate = () => {
 }
 
 const App = () => (
-  <AppProvider>
+  <AppProviders>
     <AuthGate />
-  </AppProvider>
+  </AppProviders>
 );
 
 

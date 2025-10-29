@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { useAppContext } from '../context/AppContext';
 import Modal from './Modal';
 import Button from './Button';
 import { CURRENCY_FORMATTER } from '../constants';

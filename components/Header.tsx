@@ -1,7 +1,7 @@
 import React from 'react';
 import type { View } from '../types';
 import Icon from './Icon';
-import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import Button from './Button';
 
 interface HeaderProps {
@@ -22,7 +22,7 @@ const viewTitles: Record<View, string> = {
 };
 
 const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick }) => {
-    const { currentUser, logout, authSettings } = useAppContext();
+    const { currentUser, logout, authSettings } = useAuth();
 
     return (
         <header className="flex items-center justify-between p-4 bg-slate-800 border-b border-slate-700 flex-shrink-0">

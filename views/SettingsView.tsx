@@ -1,5 +1,14 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { useAppContext } from '../context/AppContext';
+import { useData } from '../context/DataContext';
+import { useUI } from '../context/UIContext';
+import { useAuth } from '../context/AuthContext';
+import { useProduct } from '../context/ProductContext';
+import { useSettings } from '../context/SettingsContext';
+import { useSession } from '../context/SessionContext';
+import { useCustomer } from '../context/CustomerContext';
+import { useDiscount } from '../context/DiscountContext';
+import { useFinance } from '../context/FinanceContext';
+import { useCart } from '../context/CartContext';
 import { dataService } from '../services/dataService';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
@@ -22,7 +31,7 @@ const UserForm: React.FC<{
     onSave: (user: Omit<User, 'id'> | User) => void,
     onCancel: () => void
 }> = ({ user, onSave, onCancel }) => {
-    const { showAlert } = useAppContext();
+    const { showAlert } = useUI();
     const [formData, setFormData] = useState({ name: '', pin: '', role: 'staff' as 'admin' | 'staff' });
 
     useEffect(() => {
@@ -82,7 +91,8 @@ const UserForm: React.FC<{
 
 
 const UserManagement: React.FC = () => {
-    const { users, addUser, updateUser, deleteUser, currentUser, showAlert, resetUserPin } = useAppContext();
+    const { users, addUser, updateUser, deleteUser, currentUser, resetUserPin } = useAuth();
+    const { showAlert } = useUI();
     const [isModalOpen, setModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
 
@@ -168,7 +178,7 @@ const UserManagement: React.FC = () => {
 }
 
 const ReceiptSettingsForm: React.FC = () => {
-    const { receiptSettings, updateReceiptSettings } = useAppContext();
+    const { receiptSettings, updateReceiptSettings } = useSettings();
     const [settings, setSettings] = useState<ReceiptSettings>(receiptSettings);
     const [saved, setSaved] = useState(false);
 
@@ -247,7 +257,8 @@ const ToggleSwitch: React.FC<{
 );
 
 const CategoryManagement: React.FC = () => {
-    const { categories, addCategory, deleteCategory, showAlert } = useAppContext();
+    const { categories, addCategory, deleteCategory } = useProduct();
+    const { showAlert } = useUI();
     const [newCategory, setNewCategory] = useState('');
 
     const handleAddCategory = () => {
@@ -300,7 +311,8 @@ const CategoryManagement: React.FC = () => {
 };
 
 const MembershipManagement: React.FC = () => {
-    const { membershipSettings, updateMembershipSettings, products, categories } = useAppContext();
+    const { membershipSettings, updateMembershipSettings } = useCustomer();
+    const { products, categories } = useProduct();
     const [isRuleModalOpen, setRuleModalOpen] = useState(false);
     const [editingRule, setEditingRule] = useState<PointRule | null>(null);
     const [isRewardModalOpen, setRewardModalOpen] = useState(false);
@@ -620,7 +632,8 @@ const DiscountFormModal: React.FC<{
 }
 
 const DiscountManagement: React.FC = () => {
-    const { discountDefinitions, addDiscountDefinition, updateDiscountDefinition, deleteDiscountDefinition, showAlert } = useAppContext();
+    const { discountDefinitions, addDiscountDefinition, updateDiscountDefinition, deleteDiscountDefinition } = useDiscount();
+    const { showAlert } = useUI();
     const [isModalOpen, setModalOpen] = useState(false);
     const [editingDiscount, setEditingDiscount] = useState<DiscountDefinition | null>(null);
 
@@ -676,13 +689,21 @@ const DiscountManagement: React.FC = () => {
 
 
 const SettingsView: React.FC = () => {
-    const { products, categories, rawMaterials, transactions, receiptSettings, inventorySettings, authSettings, users, expenses, suppliers, purchases, stockAdjustments, customers, membershipSettings, restoreData, bulkAddProducts, updateInventorySettings, updateAuthSettings, currentUser, session, endSession, sessionSettings, updateSessionSettings, showAlert, updateMembershipSettings, heldCarts, discountDefinitions } = useAppContext();
+    const { data, restoreData } = useData();
+    const { showAlert } = useUI();
+    const { currentUser, authSettings, updateAuthSettings } = useAuth();
+    const { products, inventorySettings, updateInventorySettings, bulkAddProducts } = useProduct();
+    const { receiptSettings } = useSettings();
+    const { session, endSession, sessionSettings, updateSessionSettings } = useSession();
+    const { membershipSettings, updateMembershipSettings } = useCustomer();
+    const { heldCarts } = useCart();
+    
     const restoreInputRef = useRef<HTMLInputElement>(null);
     const importProductsInputRef = useRef<HTMLInputElement>(null);
     const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
     const handleBackup = () => {
-        dataService.exportData({ products, categories, rawMaterials, transactions, receiptSettings, inventorySettings, users, authSettings, sessionSettings, expenses, suppliers, purchases, stockAdjustments, customers, membershipSettings, discountDefinitions, heldCarts });
+        dataService.exportData(data);
         setMessage({ type: 'success', text: 'Data backup berhasil diunduh.' });
     };
 
@@ -766,8 +787,7 @@ const SettingsView: React.FC = () => {
     };
     
     const handleExportAllReports = () => {
-        const allData: AppData = { products, categories, rawMaterials, transactions, receiptSettings, inventorySettings, users, authSettings, sessionSettings, expenses, suppliers, purchases, stockAdjustments, customers, membershipSettings, discountDefinitions, heldCarts };
-        dataService.exportAllReportsCSV(allData);
+        dataService.exportAllReportsCSV(data);
         setMessage({ type: 'success', text: 'Semua laporan berhasil diunduh.' });
     };
 

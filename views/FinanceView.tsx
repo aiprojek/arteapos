@@ -1,5 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useAppContext } from '../context/AppContext';
+// FIX: Replace obsolete useAppContext with specific context hooks
+import { useFinance } from '../context/FinanceContext';
+import { useProduct } from '../context/ProductContext';
+import { useUI } from '../context/UIContext';
+import { useCustomer } from '../context/CustomerContext';
 import type { Expense, Supplier, Purchase, PurchaseItem, PurchaseStatus, RawMaterial, Transaction, PaymentMethod, ExpenseStatus, Customer, Product } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -19,7 +23,7 @@ const StatCard: React.FC<{title: string; value: string | number; className?: str
 
 // --- Cash Flow Tab ---
 const CashFlowTab: React.FC = () => {
-    const { transactions, expenses, purchases } = useAppContext();
+    const { transactions, expenses, purchases } = useFinance();
     const [filter, setFilter] = useState<TimeFilter>('month');
     const [customStartDate, setCustomStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [customEndDate, setCustomEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -218,7 +222,7 @@ const CashFlowTab: React.FC = () => {
 
 // --- Debt & Receivables Tab ---
 const DebtReceivablesTab: React.FC = () => {
-    const { transactions, purchases, expenses, addPaymentToTransaction, addPaymentToPurchase, addPaymentToExpense } = useAppContext();
+    const { transactions, purchases, expenses, addPaymentToTransaction, addPaymentToPurchase, addPaymentToExpense } = useFinance();
     const [subTab, setSubTab] = useState<'receivables' | 'payables' | 'expense_payables'>('receivables');
     const [updatingTransaction, setUpdatingTransaction] = useState<Transaction | null>(null);
     const [payingPurchase, setPayingPurchase] = useState<Purchase | null>(null);
@@ -416,7 +420,7 @@ const CustomerFormModal: React.FC<{
 }
 
 const CustomersTab: React.FC = () => {
-    const { customers, addCustomer, updateCustomer, deleteCustomer } = useAppContext();
+    const { customers, addCustomer, updateCustomer, deleteCustomer } = useCustomer();
     const [isModalOpen, setModalOpen] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -495,9 +499,13 @@ const CustomersTab: React.FC = () => {
 const FinanceView: React.FC = () => {
     const [mainView, setMainView] = useState<'finance' | 'customers'>('finance');
     const [activeTab, setActiveTab] = useState<FinanceSubTab>('cashflow');
-    const { products, expenses, addExpense, updateExpense, deleteExpense, showAlert, addPaymentToExpense } = useAppContext();
-    const { suppliers, addSupplier, updateSupplier, deleteSupplier } = useAppContext();
-    const { purchases, addPurchase, addPaymentToPurchase, rawMaterials } = useAppContext();
+    const { products, rawMaterials } = useProduct();
+    const { 
+        expenses, addExpense, updateExpense, deleteExpense, addPaymentToExpense, 
+        suppliers, addSupplier, updateSupplier, deleteSupplier,
+        purchases, addPurchase, addPaymentToPurchase 
+    } = useFinance();
+    const { showAlert } = useUI();
 
     const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
     const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -683,7 +691,7 @@ const PurchasesAndSuppliersTab: React.FC<{
     onPayDebt: (p: Purchase) => void,
 }> = (props) => {
     const [subTab, setSubTab] = useState<'purchases' | 'suppliers'>('purchases');
-    const { suppliers, purchases } = useAppContext();
+    const { suppliers, purchases } = useFinance();
 
     const PurchaseStatusBadge: React.FC<{status: PurchaseStatus}> = ({status}) => {
         const info = {

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { useAppContext } from '../context/AppContext';
+import { useFinance } from '../context/FinanceContext';
+import { useProduct } from '../context/ProductContext';
 import { CURRENCY_FORMATTER } from '../constants';
 import Icon from '../components/Icon';
 
@@ -19,7 +20,8 @@ const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'product
 );
 
 const DashboardView: React.FC = () => {
-    const { transactions, products, inventorySettings } = useAppContext();
+    const { transactions } = useFinance();
+    const { products, inventorySettings } = useProduct();
 
     const dashboardData = useMemo(() => {
         const now = new Date();

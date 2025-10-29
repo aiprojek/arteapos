@@ -3,7 +3,8 @@ import Modal from './Modal';
 import Receipt from './Receipt';
 import Button from './Button';
 import Icon from './Icon';
-import { useAppContext } from '../context/AppContext';
+import { useSettings } from '../context/SettingsContext';
+import { useUI } from '../context/UIContext';
 import type { Transaction } from '../types';
 import { useToImage } from '../hooks/useToImage';
 
@@ -14,9 +15,8 @@ interface ReceiptModalProps {
 }
 
 const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transaction }) => {
-  const { receiptSettings, showAlert } = useAppContext();
-  // FIX: Removed `cacheBust` property as it's not supported by the underlying
-  // html2canvas library and was causing a type error.
+  const { receiptSettings } = useSettings();
+  const { showAlert } = useUI();
   const [receiptRef, { isLoading: isProcessing, error: imageError, getImage }] = useToImage<HTMLDivElement>({
     quality: 0.95,
     backgroundColor: '#ffffff',
@@ -24,7 +24,6 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
   const [canShareImage, setCanShareImage] = useState(false);
 
   useEffect(() => {
-    // Cek apakah browser mendukung Web Share API untuk file
     if (isOpen) {
       const dummyFile = new File([''], 'dummy.png', { type: 'image/png' });
       if (navigator.canShare && navigator.canShare({ files: [dummyFile] })) {
@@ -78,13 +77,11 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
       <html>
         <head>
           <title>Struk Transaksi</title>
-          <script src="https://cdn.tailwindcss.com"></script>
           <style>${styles}</style>
         </head>
         <body>
           ${receiptElement.outerHTML}
           <script>
-            // Add a small delay to allow Tailwind's JIT compiler to process classes
             setTimeout(() => {
                 window.print();
                 window.onafterprint = () => window.close();
@@ -101,7 +98,6 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
     try {
         const dataUrl = await getImage();
         if (!dataUrl) {
-            // error already handled by the hook's useEffect
             return;
         }
 
@@ -114,14 +110,12 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
                 files: [file],
             });
         } else {
-            // Fallback untuk desktop: unduh gambar
             const link = document.createElement('a');
             link.href = dataUrl;
             link.download = `struk-${transaction.id}.png`;
             link.click();
         }
     } catch (error) {
-        // Jangan tampilkan error jika pengguna membatalkan dialog 'share'
         if (error instanceof DOMException && error.name === 'AbortError') {
             console.log("Aksi berbagi dibatalkan oleh pengguna.");
         } else {
@@ -135,11 +129,9 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
     }
   };
 
-// FIX: Added missing return statement for the component.
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Struk Transaksi">
       <div className="bg-slate-700 p-2 sm:p-4 rounded-lg overflow-y-auto max-h-[60vh]">
-        {/* Wrapper for on-screen preview with a fixed width for better readability */}
         <div className="max-w-xs mx-auto">
             <Receipt ref={receiptRef} transaction={transaction} settings={receiptSettings} />
         </div>

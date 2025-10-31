@@ -3,6 +3,8 @@ import type { View } from '../types';
 import Icon from './Icon';
 import { useAuth } from '../context/AuthContext';
 import Button from './Button';
+import { dataService } from '../services/dataService';
+import { useUI } from '../context/UIContext';
 
 interface HeaderProps {
     activeView: View;
@@ -23,6 +25,25 @@ const viewTitles: Record<View, string> = {
 
 const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick }) => {
     const { currentUser, logout, authSettings } = useAuth();
+    const { showAlert } = useUI();
+    const isAdmin = currentUser?.role === 'admin';
+
+    const handleBackup = async () => {
+        try {
+            await dataService.exportData();
+            showAlert({
+                type: 'alert',
+                title: 'Backup Berhasil',
+                message: 'File backup data Anda telah berhasil diunduh. Simpan di tempat yang aman.'
+            });
+        } catch (error) {
+            showAlert({
+                type: 'alert',
+                title: 'Backup Gagal',
+                message: `Terjadi kesalahan saat membuat file backup: ${error instanceof Error ? error.message : String(error)}`
+            });
+        }
+    };
 
     return (
         <header className="flex items-center justify-between p-4 bg-slate-800 border-b border-slate-700 flex-shrink-0">
@@ -33,6 +54,18 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                 <h1 className="text-lg font-semibold text-white">{viewTitles[activeView]}</h1>
             </div>
             <div className="flex items-center gap-3">
+                 {isAdmin && (
+                    <Button
+                        onClick={handleBackup}
+                        variant="secondary"
+                        size="sm"
+                        className="p-2 aspect-square"
+                        aria-label="Backup Data"
+                        title="Backup Data"
+                    >
+                        <Icon name="download" className="w-5 h-5" />
+                    </Button>
+                 )}
                  {activeView !== 'help' && (
                     <Button 
                         onClick={() => setActiveView('help')} 

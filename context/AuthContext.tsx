@@ -4,24 +4,36 @@ import type { User, AuthSettings } from '../types';
 
 const SYSTEM_USER: User = { id: 'system', name: 'Admin Sistem', pin: '', role: 'admin' };
 
+// Helper function to hash PINs using SHA-256
+async function hashPin(pin: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  // convert bytes to hex string
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+}
+
 interface AuthContextType {
   currentUser: User | null;
   users: User[];
   authSettings: AuthSettings;
-  login: (user: User, pin: string) => boolean;
+  login: (user: User, pin: string) => Promise<boolean>;
   logout: () => void;
-  addUser: (user: Omit<User, 'id'>) => void;
-  updateUser: (user: User) => void;
+  addUser: (user: Omit<User, 'id'>) => Promise<void>;
+  updateUser: (user: User) => Promise<void>;
   deleteUser: (userId: string) => void;
-  resetUserPin: (userId: string) => string | null;
-  resetDefaultAdminPin: () => string | null;
+  resetUserPin: (userId: string) => Promise<string | null>;
+  resetDefaultAdminPin: () => Promise<string | null>;
   updateAuthSettings: (settings: AuthSettings) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const { data, setData } = useData();
+// FIX: Change to React.FC to fix children prop type error
+export const AuthProvider: React.FC = ({ children }) => {
+  const { data, setData, isDataLoading } = useData();
   const { authSettings, users } = data;
   const [currentUser, setCurrentUser] = useState<User | null>(() => authSettings.enabled ? null : SYSTEM_USER);
 
@@ -33,21 +45,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [authSettings?.enabled]);
 
-  useState(() => {
-    if (!data.users || data.users.length === 0) {
-      const defaultAdmin: User = { id: 'admin_default', name: 'Admin', pin: '1111', role: 'admin' };
-      setData(prev => ({ ...prev, users: [defaultAdmin] }));
-    }
-  });
+  useEffect(() => {
+    const setupDefaultAdmin = async () => {
+        if (!isDataLoading && users.length === 0) {
+            const hashedPin = await hashPin('1111');
+            const defaultAdmin: User = { id: 'admin_default', name: 'Admin', pin: hashedPin, role: 'admin' };
+            setData(prev => ({ ...prev, users: [defaultAdmin] }));
+        }
+    };
+    setupDefaultAdmin();
+  }, [isDataLoading, users, setData]);
 
-  const login = useCallback((user: User, pin: string): boolean => {
+  const login = useCallback(async (user: User, pin: string): Promise<boolean> => {
     if (!authSettings.enabled) return false;
-    if (user && user.pin === pin) {
-      setCurrentUser(user);
-      return true;
+
+    // Check if stored pin is already hashed (SHA-256 hash is 64 hex characters)
+    const isHashed = user.pin.length === 64; 
+
+    if (isHashed) {
+        const enteredPinHash = await hashPin(pin);
+        if (user.pin === enteredPinHash) {
+            setCurrentUser(user);
+            return true;
+        }
+    } else { // Plaintext pin, migrate on successful login
+        if (user.pin === pin) {
+            setCurrentUser(user);
+            // Migrate to hashed pin in the background
+            const newHashedPin = await hashPin(pin);
+            setData(prev => ({
+                ...prev,
+                users: prev.users.map(u => u.id === user.id ? { ...u, pin: newHashedPin } : u)
+            }));
+            return true;
+        }
     }
+    
     return false;
-  }, [authSettings.enabled]);
+  }, [authSettings.enabled, setData]);
 
   const logout = useCallback(() => {
     if (authSettings.enabled) {
@@ -55,27 +90,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [authSettings.enabled]);
 
-  const addUser = useCallback((user: Omit<User, 'id'>) => {
-    const newUser = { ...user, id: Date.now().toString() };
+  const addUser = useCallback(async (user: Omit<User, 'id'>) => {
+    const hashedPin = await hashPin(user.pin);
+    const newUser = { ...user, pin: hashedPin, id: Date.now().toString() };
     setData(prev => ({ ...prev, users: [...prev.users, newUser] }));
   }, [setData]);
 
-  const updateUser = useCallback((updatedUser: User) => {
-    setData(prev => ({ ...prev, users: prev.users.map(u => u.id === updatedUser.id ? updatedUser : u) }));
-  }, [setData]);
+  const updateUser = useCallback(async (updatedUser: User) => {
+    const originalUser = users.find(u => u.id === updatedUser.id);
+    
+    let pinToSave = updatedUser.pin;
+    // If pin has changed and it's not already a hash, then hash it.
+    if (originalUser && originalUser.pin !== updatedUser.pin && updatedUser.pin.length !== 64) {
+        pinToSave = await hashPin(updatedUser.pin);
+    }
+    
+    const finalUser = { ...updatedUser, pin: pinToSave };
+    setData(prev => ({ ...prev, users: prev.users.map(u => u.id === finalUser.id ? finalUser : u) }));
+  }, [setData, users]);
 
   const deleteUser = useCallback((userId: string) => {
     setData(prev => ({ ...prev, users: prev.users.filter(u => u.id !== userId) }));
   }, [setData]);
   
-  const resetUserPin = useCallback((userId: string) => {
+  const resetUserPin = useCallback(async (userId: string) => {
+    const hashedPin = await hashPin('0000');
     let userName: string | null = null;
     setData(prev => {
         const userIndex = prev.users.findIndex(u => u.id === userId);
         if (userIndex > -1) {
             userName = prev.users[userIndex].name;
             const updatedUsers = [...prev.users];
-            updatedUsers[userIndex] = { ...updatedUsers[userIndex], pin: '0000' };
+            updatedUsers[userIndex] = { ...updatedUsers[userIndex], pin: hashedPin };
             return { ...prev, users: updatedUsers };
         }
         return prev;
@@ -83,14 +129,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return userName;
   }, [setData]);
 
-  const resetDefaultAdminPin = useCallback(() => {
+  const resetDefaultAdminPin = useCallback(async () => {
+    const hashedPin = await hashPin('1111');
     let adminName: string | null = null;
     setData(prev => {
         const adminIndex = prev.users.findIndex(u => u.role === 'admin');
         if (adminIndex > -1) {
             adminName = prev.users[adminIndex].name;
             const updatedUsers = [...prev.users];
-            updatedUsers[adminIndex] = { ...updatedUsers[adminIndex], pin: '1111' };
+            updatedUsers[adminIndex] = { ...updatedUsers[adminIndex], pin: hashedPin };
             return { ...prev, users: updatedUsers };
         }
         return prev;

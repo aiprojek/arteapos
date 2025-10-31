@@ -1,4 +1,5 @@
 
+
 const CACHE_NAME = 'artea-pos-cache-v1';
 const urlsToCache = [
   '/',
@@ -14,6 +15,7 @@ const urlsToCache = [
   'https://aistudiocdn.com/react@^19.1.1/jsx-runtime',
   'https://aistudiocdn.com/recharts@^2.12.7',
   'https://aistudiocdn.com/html5-qrcode@^2.3.8',
+  'https://aistudiocdn.com/dexie@^4.0.7',
 ];
 
 self.addEventListener('install', event => {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Product } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 import ProductPlaceholder from './ProductPlaceholder';
@@ -11,6 +11,23 @@ interface ProductCardProps {
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onClick, availability }) => {
   const { available, reason } = availability;
+  const [imageSrc, setImageSrc] = useState<string | undefined>();
+
+  useEffect(() => {
+    let objectUrl: string | undefined;
+    if (product.image instanceof Blob) {
+      objectUrl = URL.createObjectURL(product.image);
+      setImageSrc(objectUrl);
+    } else {
+      setImageSrc(product.imageUrl);
+    }
+
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [product.image, product.imageUrl]);
 
   return (
     <button
@@ -23,9 +40,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onClick, availabilit
           <span className="text-white font-bold text-lg">{reason}</span>
         </div>
       )}
-      {product.imageUrl ? (
+      {imageSrc ? (
         <img
-            src={product.imageUrl}
+            src={imageSrc}
             alt={product.name}
             className="w-full h-32 object-cover"
         />

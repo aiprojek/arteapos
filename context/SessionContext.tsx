@@ -1,6 +1,6 @@
-import React, { createContext, useContext, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, ReactNode, useCallback, useState, useEffect } from 'react';
 import { useData } from './DataContext';
-import { useLocalStorage } from '../hooks/useLocalStorage';
+import { db } from '../services/db';
 import type { SessionState, SessionSettings } from '../types';
 
 interface SessionContextType {
@@ -13,21 +13,42 @@ interface SessionContextType {
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
-export const SessionProvider = ({ children }: { children: ReactNode }) => {
-    const { data, setData } = useData();
+export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { data, setData, isDataLoading } = useData();
     const { sessionSettings } = data;
-    const [session, setSession] = useLocalStorage<SessionState | null>('ai-projek-pos-session', null);
+    const [session, setSession] = useState<SessionState | null>(null);
+
+    useEffect(() => {
+        if (!isDataLoading) {
+            db.session.get('activeSession').then(activeSession => {
+                if (activeSession) {
+                    setSession(activeSession.value);
+                }
+            });
+        }
+    }, [isDataLoading]);
 
     const updateSessionSettings = useCallback((settings: SessionSettings) => {
         setData(prev => ({ ...prev, sessionSettings: settings }));
     }, [setData]);
 
-    const startSession = useCallback((startingCash: number) => {
-        setSession({ startingCash, startTime: new Date().toISOString() });
+    const startSession = useCallback(async (startingCash: number) => {
+        const newSession: SessionState = { startingCash, startTime: new Date().toISOString() };
+        try {
+            await db.session.put({ key: 'activeSession', value: newSession });
+            setSession(newSession);
+        } catch (error) {
+            console.error("Failed to save session to DB", error);
+        }
     }, [setSession]);
 
-    const endSession = useCallback(() => {
-        setSession(null);
+    const endSession = useCallback(async () => {
+        try {
+            await db.session.delete('activeSession');
+            setSession(null);
+        } catch (error) {
+            console.error("Failed to delete session from DB", error);
+        }
     }, [setSession]);
 
     return (

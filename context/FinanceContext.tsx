@@ -1,12 +1,12 @@
 import React, { createContext, useContext, ReactNode, useCallback } from 'react';
 import { useData } from './DataContext';
-import type { Expense, Supplier, Purchase, ExpenseStatus, PurchaseStatus, StockAdjustment, Transaction, Payment } from '../types';
+import type { Expense, Supplier, Purchase, ExpenseStatus, PurchaseStatus, StockAdjustment, Transaction as TransactionType, Payment } from '../types';
 
 interface FinanceContextType {
     expenses: Expense[];
     suppliers: Supplier[];
     purchases: Purchase[];
-    transactions: Transaction[];
+    transactions: TransactionType[];
     addExpense: (expense: Omit<Expense, 'id' | 'status'>) => void;
     updateExpense: (expense: Expense) => void;
     deleteExpense: (expenseId: string) => void;
@@ -21,9 +21,11 @@ interface FinanceContextType {
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
-export const FinanceProvider = ({ children }: { children: ReactNode }) => {
+// FIX: Change to React.FC to fix children prop type error
+export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ children }) => {
     const { data, setData } = useData();
-    const { expenses, suppliers, purchases, transactions } = data;
+    // FIX: Use 'transactionRecords' from data and alias it to 'transactions' for context consumers.
+    const { expenses, suppliers, purchases, transactionRecords: transactions } = data;
 
     const addExpense = useCallback((expenseData: Omit<Expense, 'id' | 'status'>) => {
         const status: ExpenseStatus = expenseData.amountPaid >= expenseData.amount ? 'lunas' : 'belum-lunas';
@@ -146,7 +148,8 @@ export const FinanceProvider = ({ children }: { children: ReactNode }) => {
 
     const addPaymentToTransaction = useCallback((transactionId: string, payments: Array<Omit<Payment, 'id' | 'createdAt'>>) => {
         setData(prev => {
-            const targetTransaction = prev.transactions.find(t => t.id === transactionId);
+            // FIX: Use 'transactionRecords' for data manipulation.
+            const targetTransaction = prev.transactionRecords.find(t => t.id === transactionId);
             if (!targetTransaction) {
                 console.error("Transaction not found for payment update");
                 return prev;
@@ -162,7 +165,7 @@ export const FinanceProvider = ({ children }: { children: ReactNode }) => {
             const updatedPayments = [...targetTransaction.payments, ...fullNewPayments];
             const newAmountPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
 
-            let newPaymentStatus: Transaction['paymentStatus'];
+            let newPaymentStatus: TransactionType['paymentStatus'];
             if (newAmountPaid >= targetTransaction.total) {
                 newPaymentStatus = 'paid';
             } else if (newAmountPaid > 0) {
@@ -171,18 +174,20 @@ export const FinanceProvider = ({ children }: { children: ReactNode }) => {
                 newPaymentStatus = 'unpaid';
             }
             
-            const updatedTransaction: Transaction = {
+            const updatedTransaction: TransactionType = {
                 ...targetTransaction,
                 payments: updatedPayments,
                 amountPaid: newAmountPaid,
                 paymentStatus: newPaymentStatus,
             };
 
-            const updatedTransactions = prev.transactions.map(t => 
+            // FIX: Use 'transactionRecords' for data manipulation.
+            const updatedTransactions = prev.transactionRecords.map(t => 
                 t.id === transactionId ? updatedTransaction : t
             );
 
-            return { ...prev, transactions: updatedTransactions };
+            // FIX: Update 'transactionRecords' in the data state.
+            return { ...prev, transactionRecords: updatedTransactions };
         });
     }, [setData]);
 

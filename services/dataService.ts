@@ -1,4 +1,5 @@
-import type { AppData, Product, RawMaterial, Transaction, Expense, Purchase, Customer, StockAdjustment } from '../types';
+import type { AppData, Product, RawMaterial, Transaction as TransactionType, Expense, Purchase, Customer, StockAdjustment, Addon } from '../types';
+import { db } from './db';
 
 const downloadCSV = (csvContent: string, filename: string) => {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -12,7 +13,16 @@ const downloadCSV = (csvContent: string, filename: string) => {
     URL.revokeObjectURL(url);
 };
 
-const exportTransactionsCSV = (transactions: Transaction[]) => {
+const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+};
+
+const exportTransactionsCSV = (transactions: TransactionType[]) => {
     const headers = 'id,createdAt,customerName,userName,total,amountPaid,paymentStatus,items';
     const rows = transactions.map(t => {
         const items = t.items.map(i => `${i.name} (qty: ${i.quantity}, price: ${i.price})`).join('; ');
@@ -62,7 +72,60 @@ const exportStockAdjustmentsCSV = (stockAdjustments: StockAdjustment[]) => {
 
 
 export const dataService = {
-  exportData: (data: AppData) => {
+  exportData: async () => {
+    const data: Partial<AppData> = {};
+    
+    await db.transaction('r', db.tables.map(t => t.name), async () => {
+      const [
+        products, categoriesObj, rawMaterials, transactionRecords, users, settings,
+        expenses, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts
+      ] = await Promise.all([
+        db.products.toArray(),
+        db.appState.get('categories'),
+        db.rawMaterials.toArray(),
+        db.transactionRecords.toArray(),
+        db.users.toArray(),
+        db.settings.toArray(),
+        db.expenses.toArray(),
+        db.suppliers.toArray(),
+        db.purchases.toArray(),
+        db.stockAdjustments.toArray(),
+        db.customers.toArray(),
+        db.discountDefinitions.toArray(),
+        db.heldCarts.toArray()
+      ]);
+
+      const productsForExport = await Promise.all(
+        products.map(async p => {
+          if (p.image instanceof Blob) {
+            const base64 = await blobToBase64(p.image);
+            const { image, ...rest } = p;
+            return { ...rest, imageUrl: base64 };
+          }
+          return p;
+        })
+      );
+      
+      data.products = productsForExport as Product[];
+      data.categories = categoriesObj?.value || [];
+      data.rawMaterials = rawMaterials;
+      data.transactionRecords = transactionRecords;
+      data.users = users;
+      data.expenses = expenses;
+      data.suppliers = suppliers;
+      data.purchases = purchases;
+      data.stockAdjustments = stockAdjustments;
+      data.customers = customers;
+      data.discountDefinitions = discountDefinitions;
+      data.heldCarts = heldCarts;
+
+      data.receiptSettings = settings.find(s => s.key === 'receiptSettings')?.value;
+      data.inventorySettings = settings.find(s => s.key === 'inventorySettings')?.value;
+      data.authSettings = settings.find(s => s.key === 'authSettings')?.value;
+      data.sessionSettings = settings.find(s => s.key === 'sessionSettings')?.value;
+      data.membershipSettings = settings.find(s => s.key === 'membershipSettings')?.value;
+    });
+
     const jsonString = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -83,8 +146,7 @@ export const dataService = {
         try {
           const result = event.target?.result as string;
           const parsedData = JSON.parse(result) as AppData;
-          // Basic validation
-          if ('products' in parsedData && 'transactions' in parsedData) {
+          if ('products' in parsedData && 'transactionRecords' in parsedData) {
             resolve(parsedData);
           } else {
             reject(new Error('Invalid backup file format.'));
@@ -98,12 +160,19 @@ export const dataService = {
     });
   },
 
-  exportProductsCSV: (products: Product[]) => {
-    const headers = 'id,name,price,category,barcode,costPrice,stock,trackStock,isFavorite,imageUrl';
-    const rows = products.map(p => {
+  exportProductsCSV: async (products: Product[]) => {
+    const headers = 'id,name,price,category,barcode,costPrice,stock,trackStock,isFavorite,imageUrl,addons';
+    const rows = await Promise.all(products.map(async p => {
         const category = Array.isArray(p.category) ? p.category.join(';') : '';
-        return `${p.id},"${p.name}",${p.price},"${category}",${p.barcode || ''},${p.costPrice || 0},${p.stock || 0},${p.trackStock || false},${p.isFavorite || false},"${p.imageUrl || ''}"`;
-    });
+        const addonsString = (p.addons || [])
+            .map(a => `${a.name}:${a.price}:${a.costPrice || 0}`)
+            .join('|');
+        let imageUrl = p.imageUrl || '';
+        if (p.image instanceof Blob) {
+            imageUrl = await blobToBase64(p.image);
+        }
+        return `${p.id},"${p.name}",${p.price},"${category}",${p.barcode || ''},${p.costPrice || 0},${p.stock || 0},${p.trackStock || false},${p.isFavorite || false},"${imageUrl}","${addonsString}"`;
+    }));
     const csvContent = [headers, ...rows].join('\n');
     downloadCSV(csvContent, 'products_export.csv');
   },
@@ -129,7 +198,7 @@ export const dataService = {
             const product: any = {};
             
             headers.forEach((header, index) => {
-                const key = header as keyof Product;
+                const key = header as keyof Product | 'addons';
                 let value: any = values[index]?.replace(/"/g, '').trim();
 
                 if (key === 'price' || key === 'costPrice' || key === 'stock') {
@@ -138,12 +207,30 @@ export const dataService = {
                     value = value.toLowerCase() === 'true';
                 } else if (key === 'category') {
                     value = typeof value === 'string' ? value.split(';').filter(Boolean) : [];
+                } else if (key === 'addons') {
+                    value = (value || '').split('|').filter(Boolean).map((addonStr: string, idx: number) => {
+                        const parts = addonStr.split(':');
+                        if (parts.length >= 2) {
+                            return {
+                                id: `${Date.now()}-${idx}`,
+                                name: parts[0] || '',
+                                price: parseFloat(parts[1]) || 0,
+                                costPrice: parseFloat(parts[2]) || 0,
+                            };
+                        }
+                        return null;
+                    }).filter((a: Addon | null): a is Addon => a !== null);
                 }
                 
                 product[key] = value;
             });
+            
+            // If ID is empty, it's a new product. Generate a unique ID.
+            if (!product.id) {
+                product.id = `${Date.now()}-${i}`;
+            }
 
-            if(product.id && product.name && product.price !== undefined) {
+            if(product.name && product.price !== undefined) {
                 products.push(product as Product);
             }
           }
@@ -208,7 +295,8 @@ export const dataService = {
 
   exportAllReportsCSV: (data: AppData) => {
     // Browser will download these files sequentially
-    if (data.transactions.length > 0) exportTransactionsCSV(data.transactions);
+    // FIX: Use 'transactionRecords' from AppData.
+    if (data.transactionRecords.length > 0) exportTransactionsCSV(data.transactionRecords);
     if (data.expenses.length > 0) exportExpensesCSV(data.expenses);
     if (data.purchases.length > 0) exportPurchasesCSV(data.purchases, data.rawMaterials, data.products);
     if (data.customers.length > 0) exportCustomersCSV(data.customers);

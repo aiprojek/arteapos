@@ -5,13 +5,13 @@ import Button from './Button';
 import Icon from './Icon';
 import { useSettings } from '../context/SettingsContext';
 import { useUI } from '../context/UIContext';
-import type { Transaction } from '../types';
+import type { Transaction as TransactionType } from '../types';
 import { useToImage } from '../hooks/useToImage';
 
 interface ReceiptModalProps {
   isOpen: boolean;
   onClose: () => void;
-  transaction: Transaction;
+  transaction: TransactionType;
 }
 
 const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transaction }) => {

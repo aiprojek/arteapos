@@ -2,13 +2,13 @@ import React, { useState, useMemo } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import { CURRENCY_FORMATTER } from '../constants';
-import type { Transaction, PaymentMethod } from '../types';
+import type { Transaction as TransactionType, PaymentMethod } from '../types';
 
 interface UpdatePaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: (payments: Array<{ method: PaymentMethod; amount: number }>) => void;
-    transaction: Transaction;
+    transaction: TransactionType;
 }
 
 const UpdatePaymentModal: React.FC<UpdatePaymentModalProps> = ({ isOpen, onClose, onConfirm, transaction }) => {
@@ -50,52 +50,53 @@ const UpdatePaymentModal: React.FC<UpdatePaymentModalProps> = ({ isOpen, onClose
                 <div className="grid grid-cols-3 gap-2 text-center">
                     <div className="bg-slate-700 p-2 rounded-lg">
                         <p className="text-slate-400 text-xs">Total Tagihan</p>
-                        <p className="text-lg font-bold text-sky-400">{CURRENCY_FORMATTER.format(transaction.total)}</p>
+                        <p className="text-lg font-bold text-slate-200">{CURRENCY_FORMATTER.format(transaction.total)}</p>
                     </div>
                     <div className="bg-slate-700 p-2 rounded-lg">
-                        <p className="text-slate-400 text-xs">Total Dibayar</p>
-                        <p className="text-lg font-bold text-green-400">{CURRENCY_FORMATTER.format(totalPaid)}</p>
+                        <p className="text-slate-400 text-xs">Sudah Dibayar</p>
+                        <p className="text-lg font-bold text-green-400">{CURRENCY_FORMATTER.format(transaction.amountPaid)}</p>
                     </div>
                     <div className="bg-slate-700 p-2 rounded-lg">
                         <p className="text-slate-400 text-xs">Sisa Tagihan</p>
-                        <p className={`text-lg font-bold ${remainingAmount > 0 ? 'text-red-400' : 'text-slate-200'}`}>{CURRENCY_FORMATTER.format(Math.max(0, remainingAmount))}</p>
+                        <p className="text-lg font-bold text-yellow-400">{CURRENCY_FORMATTER.format(transaction.total - transaction.amountPaid)}</p>
                     </div>
                 </div>
 
-                <div className="space-y-2 max-h-24 overflow-y-auto bg-slate-900 p-2 rounded-md">
-                    <p className="text-xs text-slate-500 font-semibold">Pembayaran Sebelumnya:</p>
-                    {transaction.payments.map((p) => (
-                        <div key={p.id} className="flex justify-between items-center text-sm bg-slate-800/50 px-2 py-1 rounded">
-                            <span className="capitalize">{p.method === 'cash' ? 'Tunai' : 'Non-Tunai'}</span>
-                            <span>{CURRENCY_FORMATTER.format(p.amount)}</span>
-                        </div>
-                    ))}
-                     {newPayments.map((p, index) => (
-                        <div key={`new-${index}`} className="flex justify-between items-center text-sm bg-slate-800 px-2 py-1 rounded border-l-2 border-sky-400">
-                            <span className="capitalize">{p.method === 'cash' ? 'Tunai' : 'Non-Tunai'} (Baru)</span>
-                            <span className="font-bold">{CURRENCY_FORMATTER.format(p.amount)}</span>
-                        </div>
-                    ))}
+                <div className="border-t border-slate-700 pt-4">
+                    <p className="text-sm font-semibold mb-2">Tambah Pembayaran Baru</p>
+                    <div className="space-y-2">
+                        {newPayments.map((p, i) => (
+                            <div key={i} className="flex justify-between p-2 bg-slate-700 rounded-md text-sm">
+                                <span>Pembayaran Baru {i+1} ({p.method === 'cash' ? 'Tunai' : 'Non-Tunai'})</span>
+                                <span>{CURRENCY_FORMATTER.format(p.amount)}</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
-                <div className="pt-2">
-                    <label htmlFor="newPaymentAmount" className="block text-sm font-medium text-slate-300 mb-1">Tambah Pembayaran Baru</label>
-                    <input
-                        id="newPaymentAmount"
-                        type="number"
-                        value={newPaymentAmount}
-                        onChange={(e) => setNewPaymentAmount(e.target.value)}
-                        placeholder="Masukkan jumlah"
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg"
-                    />
-                     {remainingAmount > 0 && <button onClick={() => setNewPaymentAmount(remainingAmount.toString())} className="text-xs text-sky-400 hover:text-sky-300 mt-2">Lunasin Sisa Tagihan</button>}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                    <Button onClick={() => handleAddPayment('cash')} disabled={!newPaymentAmount}>Tunai</Button>
-                    <Button onClick={() => handleAddPayment('non-cash')} disabled={!newPaymentAmount}>Non-Tunai</Button>
+                <input type="number" min="0" value={newPaymentAmount} onChange={e => setNewPaymentAmount(e.target.value)} placeholder="Masukkan jumlah bayar" className="w-full bg-slate-700 p-3 text-xl text-center rounded-md" />
+
+                <div className="grid grid-cols-2 gap-3">
+                    <Button onClick={() => handleAddPayment('cash')} disabled={!newPaymentAmount}>Tambah Tunai</Button>
+                    <Button onClick={() => handleAddPayment('non-cash')} disabled={!newPaymentAmount}>Tambah Non-Tunai</Button>
                 </div>
                 
-                <Button variant="primary" onClick={handleConfirm} className="w-full text-lg py-3 mt-4" disabled={newPayments.length === 0}>
+                <div className="pt-4 border-t border-slate-700">
+                    <div className="flex justify-between font-bold text-lg">
+                        <span>Sisa Tagihan Baru:</span>
+                        <span className={remainingAmount > 0 ? 'text-yellow-400' : 'text-green-400'}>
+                            {CURRENCY_FORMATTER.format(remainingAmount > 0 ? remainingAmount : 0)}
+                        </span>
+                    </div>
+                    {remainingAmount < 0 && (
+                        <div className="flex justify-between text-sm">
+                            <span>Kembalian:</span>
+                            <span>{CURRENCY_FORMATTER.format(-remainingAmount)}</span>
+                        </div>
+                    )}
+                </div>
+
+                <Button variant="primary" onClick={handleConfirm} disabled={newPayments.length === 0} className="w-full text-lg py-3 mt-4">
                     Simpan Pembayaran
                 </Button>
             </div>

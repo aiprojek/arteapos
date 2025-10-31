@@ -6,10 +6,11 @@ import { CURRENCY_FORMATTER } from '../constants';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import type { Transaction, RawMaterial } from '../types';
+import type { Transaction as TransactionType, RawMaterial } from '../types';
 import ReceiptModal from '../components/ReceiptModal';
 import Modal from '../components/Modal';
 import UpdatePaymentModal from '../components/UpdatePaymentModal';
+import VirtualizedTable from '../components/VirtualizedTable';
 
 
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
@@ -63,6 +64,7 @@ const EndSessionModal: React.FC<{
                         <input
                             id="finalCash"
                             type="number"
+                            min="0"
                             value={finalCashInput}
                             onChange={(e) => setFinalCashInput(e.target.value)}
                             className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg"
@@ -110,7 +112,7 @@ const EndSessionModal: React.FC<{
     );
 }
 
-const PaymentStatusBadge: React.FC<{ status: Transaction['paymentStatus'] }> = ({ status }) => {
+const PaymentStatusBadge: React.FC<{ status: TransactionType['paymentStatus'] }> = ({ status }) => {
     const statusInfo = {
         paid: { text: 'Lunas', className: 'bg-green-500/20 text-green-300' },
         partial: { text: 'Kurang Bayar', className: 'bg-yellow-500/20 text-yellow-300' },
@@ -127,8 +129,8 @@ const ReportsView: React.FC = () => {
     const { session, startSession, sessionSettings, endSession } = useSession();
     const [filter, setFilter] = useState<TimeFilter>('today');
     const [reportScope, setReportScope] = useState<ReportScope>('session');
-    const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-    const [updatingTransaction, setUpdatingTransaction] = useState<Transaction | null>(null);
+    const [selectedTransaction, setSelectedTransaction] = useState<TransactionType | null>(null);
+    const [updatingTransaction, setUpdatingTransaction] = useState<TransactionType | null>(null);
     const [isStartSessionModalOpen, setStartSessionModalOpen] = useState(false);
     const [isEndSessionModalOpen, setEndSessionModalOpen] = useState(false);
     const [startingCashInput, setStartingCashInput] = useState('');
@@ -204,30 +206,20 @@ const ReportsView: React.FC = () => {
         let totalProfit = 0;
         const salesByHour = Array(24).fill(0);
         const productSales = new Map<string, {name: string, quantity: number, revenue: number}>();
-        const rawMaterialsMap = new Map<string, RawMaterial>(rawMaterials.map(m => [m.id, m]));
         
         filteredTransactions.forEach(t => {
             totalSales += t.total;
             const hour = new Date(t.createdAt).getHours();
             salesByHour[hour] += t.total;
 
-            let transactionCost = 0;
+            const transactionCost = t.items.reduce((sum, item) => {
+                // item.costPrice is the single source of truth for cost at the time of transaction.
+                // It includes base product cost (from recipe or manual) + addon costs.
+                return sum + ((item.costPrice || 0) * item.quantity);
+            }, 0);
+            totalProfit += t.total - transactionCost;
+            
             t.items.forEach(item => {
-                const product = products.find(p => p.id === item.id);
-                let itemCost = 0;
-
-                // Prioritize recipe cost if available and feature is enabled
-                if (inventorySettings.enabled && inventorySettings.trackIngredients && product?.recipe) {
-                    itemCost = product.recipe.reduce((sum, recipeItem) => {
-                        const material = rawMaterialsMap.get(recipeItem.rawMaterialId);
-                        return sum + ((material?.costPerUnit || 0) * recipeItem.quantity);
-                    }, 0);
-                } else if (item.costPrice) {
-                    itemCost = item.costPrice;
-                }
-
-                transactionCost += itemCost * item.quantity;
-                
                 const existing = productSales.get(item.id) || { name: item.name, quantity: 0, revenue: 0 };
                 productSales.set(item.id, {
                     name: item.name,
@@ -235,7 +227,6 @@ const ReportsView: React.FC = () => {
                     revenue: existing.revenue + (item.price * item.quantity),
                 });
             });
-            totalProfit += t.total - transactionCost;
         });
 
         const bestSellingProducts = Array.from(productSales.values())
@@ -256,7 +247,7 @@ const ReportsView: React.FC = () => {
             bestSellingProducts,
             hourlyChartData
         };
-    }, [filteredTransactions, inventorySettings, rawMaterials, products]);
+    }, [filteredTransactions]);
 
 
     const salesOverTimeData = useMemo(() => {
@@ -321,6 +312,23 @@ const ReportsView: React.FC = () => {
         setFilter(newFilter);
         setFilterDropdownOpen(false);
     };
+
+    const columns = useMemo(() => [
+        { label: 'Waktu', width: '1.5fr', render: (t: TransactionType) => <span className="text-slate-400 whitespace-nowrap">{new Date(t.createdAt).toLocaleString('id-ID')}</span> },
+        { label: 'Pelanggan', width: '1fr', render: (t: TransactionType) => <span className="font-semibold text-white">{t.customerName || '-'}</span> },
+        { label: 'Kasir', width: '1fr', render: (t: TransactionType) => t.userName },
+        { label: 'Total', width: '1fr', render: (t: TransactionType) => <span className="font-medium">{CURRENCY_FORMATTER.format(t.total)}</span> },
+        { label: 'Status Pembayaran', width: '1fr', render: (t: TransactionType) => <PaymentStatusBadge status={t.paymentStatus} /> },
+        { label: 'Items', width: '2fr', render: (t: TransactionType) => <span className="truncate">{t.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</span> },
+        { label: 'Aksi', width: '1.5fr', render: (t: TransactionType) => (
+            <div className="flex gap-2">
+                <Button variant="secondary" size="sm" onClick={() => setSelectedTransaction(t)}>Lihat Struk</Button>
+                {(t.paymentStatus === 'unpaid' || t.paymentStatus === 'partial') && (
+                    <Button size="sm" onClick={() => setUpdatingTransaction(t)}>Tambah Pembayaran</Button>
+                )}
+            </div>
+        )}
+    ], [setSelectedTransaction, setUpdatingTransaction]);
 
     return (
         <div className="space-y-6">
@@ -501,42 +509,14 @@ const ReportsView: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="bg-slate-800 rounded-lg shadow-md overflow-hidden">
+                    <div className="bg-slate-800 rounded-lg shadow-md flex flex-col min-h-[400px]">
                         <h2 className="text-lg font-semibold p-4">Detail Transaksi</h2>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-slate-700">
-                                    <tr>
-                                        <th className="p-3">Waktu</th>
-                                        <th className="p-3">Pelanggan</th>
-                                        <th className="p-3">Kasir</th>
-                                        <th className="p-3">Total</th>
-                                        <th className="p-3">Status Pembayaran</th>
-                                        <th className="p-3">Items</th>
-                                        <th className="p-3">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredTransactions.map(t => (
-                                        <tr key={t.id} className="border-b border-slate-700 last:border-b-0">
-                                            <td className="p-3 text-slate-400 whitespace-nowrap">{new Date(t.createdAt).toLocaleString('id-ID')}</td>
-                                            <td className="p-3 font-semibold text-white">{t.customerName || '-'}</td>
-                                            <td className="p-3 text-slate-300">{t.userName}</td>
-                                            <td className="p-3 font-medium">{CURRENCY_FORMATTER.format(t.total)}</td>
-                                            <td className="p-3"><PaymentStatusBadge status={t.paymentStatus} /></td>
-                                            <td className="p-3 text-slate-300 max-w-xs truncate">{t.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</td>
-                                            <td className="p-3">
-                                                <div className="flex gap-2">
-                                                    <Button variant="secondary" size="sm" onClick={() => setSelectedTransaction(t)}>Lihat Struk</Button>
-                                                    {(t.paymentStatus === 'unpaid' || t.paymentStatus === 'partial') && (
-                                                        <Button size="sm" onClick={() => setUpdatingTransaction(t)}>Tambah Pembayaran</Button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <div className="flex-1 min-h-0">
+                           <VirtualizedTable 
+                                data={filteredTransactions}
+                                columns={columns}
+                                rowHeight={60}
+                           />
                         </div>
                     </div>
                 </>
@@ -550,6 +530,7 @@ const ReportsView: React.FC = () => {
                         <input
                             id="startingCash"
                             type="number"
+                            min="0"
                             value={startingCashInput}
                             onChange={(e) => setStartingCashInput(e.target.value)}
                             className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg"

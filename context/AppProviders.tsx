@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import React from 'react';
 import { DataProvider } from './DataContext';
 import { UIProvider } from './UIContext';
 import { AuthProvider } from './AuthContext';
@@ -10,7 +10,8 @@ import { DiscountProvider } from './DiscountContext';
 import { CustomerProvider } from './CustomerContext';
 import { CartProvider } from './CartContext';
 
-const AppProviders = ({ children }: { children: ReactNode }) => {
+// FIX: Change to React.FC to fix children prop type error
+const AppProviders: React.FC = ({ children }) => {
   return (
     <DataProvider>
       <UIProvider>

@@ -9,11 +9,35 @@ import { CURRENCY_FORMATTER } from '../constants';
 import CameraCaptureModal from '../components/CameraCaptureModal';
 import { useCameraAvailability } from '../hooks/useCameraAvailability';
 import ProductPlaceholder from '../components/ProductPlaceholder';
+import VirtualizedTable from '../components/VirtualizedTable';
 
 // Informasikan TypeScript tentang pustaka global JsBarcode
 declare const JsBarcode: any;
 
 type ImageSource = 'none' | 'url' | 'upload' | 'camera';
+
+// Helper functions for image conversion
+function base64ToBlob(base64: string): Blob {
+    const [meta, data] = base64.split(',');
+    if (!meta || !data) return new Blob();
+    const mime = meta.match(/:(.*?);/)?.[1];
+    const bstr = atob(data);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
 const InputField: React.FC<{
     name: string;
@@ -24,7 +48,8 @@ const InputField: React.FC<{
     required?: boolean;
     step?: string;
     className?: string;
-}> = ({ name, label, value, onChange, type = 'text', required = false, step, className='' }) => (
+    min?: string;
+}> = ({ name, label, value, onChange, type = 'text', required = false, step, className='', min }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
         <input
@@ -35,6 +60,7 @@ const InputField: React.FC<{
             onChange={onChange}
             required={required}
             step={step}
+            min={min}
             className={`w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white ${className}`}
         />
     </div>
@@ -159,7 +185,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
 
     useEffect(() => {
         if (product) {
-            setFormData({
+            const productData = {
                 name: product.name,
                 price: product.price.toString(),
                 category: Array.isArray(product.category) ? product.category : (product.category ? [product.category] : []),
@@ -171,13 +197,17 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 isFavorite: product.isFavorite || false,
                 barcode: product.barcode || '',
                 addons: product.addons || [],
-            });
-            const hasImage = !!product.imageUrl;
-            const isUrl = hasImage && product.imageUrl!.startsWith('http');
-            const isBase64 = hasImage && product.imageUrl!.startsWith('data:image');
-            if (isUrl) setImageSource('url');
-            else if (isBase64) setImageSource('upload');
-            else setImageSource('none');
+            };
+            
+            setFormData(productData);
+
+            if (productData.imageUrl.startsWith('data:')) {
+                setImageSource('upload');
+            } else if (productData.imageUrl.startsWith('http')) {
+                setImageSource('url');
+            } else {
+                setImageSource('none');
+            }
         } else {
             // Reset form for a new product
             setFormData({ name: '', price: '', category: [], imageUrl: '', costPrice: '', stock: '', trackStock: false, recipe: [], isFavorite: false, barcode: '', addons: [] });
@@ -268,7 +298,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
     };
 
     const addAddonItem = () => {
-        setFormData(prev => ({ ...prev, addons: [...prev.addons, { id: Date.now().toString(), name: '', price: 0 }] }));
+        setFormData(prev => ({ ...prev, addons: [...prev.addons, { id: Date.now().toString(), name: '', price: 0, costPrice: 0 }] }));
     };
 
     const removeAddonItem = (index: number) => {
@@ -289,7 +319,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
             costPrice: parseFloat(formData.costPrice) || 0,
             stock: parseInt(formData.stock, 10) || 0,
             recipe: formData.recipe.map(r => ({ ...r, quantity: parseFloat(String(r.quantity)) || 0 })),
-            addons: formData.addons.filter(a => a.name.trim() !== '').map(a => ({...a, price: Number(a.price) || 0})),
+            addons: formData.addons.filter(a => a.name.trim() !== '').map(a => ({...a, price: Number(a.price) || 0, costPrice: Number(a.costPrice) || 0})),
         };
         if (product && 'id' in product) {
             onSave({ ...productData, id: product.id });
@@ -334,7 +364,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                      </label>
                 </div>
             </div>
-            <InputField name="price" label="Harga Jual (IDR)" type="number" required value={formData.price} onChange={handleChange}/>
+            <InputField name="price" label="Harga Jual (IDR)" type="number" required value={formData.price} onChange={handleChange} min="0"/>
             
             <CategoryInput value={formData.category} onChange={(newCats) => setFormData(prev => ({ ...prev, category: newCats }))} />
             
@@ -399,10 +429,38 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
              <div className="space-y-3 pt-4 border-t border-slate-700">
                 <h3 className="text-lg font-semibold text-white">Add-ons / Topping (Opsional)</h3>
                 {formData.addons.map((addon, index) => (
-                    <div key={index} className="flex items-center gap-2 bg-slate-900 p-2 rounded-md">
-                        <input type="text" value={addon.name} placeholder="Nama Add-on" onChange={(e) => handleAddonChange(index, 'name', e.target.value)} className="flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white" />
-                        <input type="number" value={addon.price} placeholder="Harga" onChange={(e) => handleAddonChange(index, 'price', parseFloat(e.target.value) || 0)} className="w-28 bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white" />
-                        <Button type="button" variant="danger" size="sm" onClick={() => removeAddonItem(index)}><Icon name="trash" className="w-4 h-4" /></Button>
+                    <div key={index} className="flex flex-wrap items-center gap-2 bg-slate-900 p-2 rounded-md">
+                        <input
+                            type="text"
+                            value={addon.name}
+                            placeholder="Nama Add-on"
+                            onChange={(e) => handleAddonChange(index, 'name', e.target.value)}
+                            className="flex-1 min-w-[150px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
+                        />
+                        <input
+                            type="number"
+                            min="0"
+                            value={addon.price}
+                            placeholder="Harga Jual"
+                            onChange={(e) => handleAddonChange(index, 'price', parseFloat(e.target.value) || 0)}
+                            className="flex-1 min-w-[120px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
+                        />
+                        <input
+                            type="number"
+                            min="0"
+                            value={addon.costPrice || ''}
+                            placeholder="Harga Modal"
+                            onChange={(e) => handleAddonChange(index, 'costPrice', parseFloat(e.target.value) || 0)}
+                            className="flex-1 min-w-[120px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
+                        />
+                        <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            onClick={() => removeAddonItem(index)}
+                        >
+                            <Icon name="trash" className="w-4 h-4" />
+                        </Button>
                     </div>
                 ))}
                 <Button type="button" variant="secondary" onClick={addAddonItem}>Tambah Add-on</Button>
@@ -410,7 +468,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
 
             {inventorySettings.enabled && (
                 <div className="space-y-4 pt-4 border-t border-slate-700">
-                    <InputField name="costPrice" label="Harga Modal Manual (IDR, Opsional)" type="number" value={formData.costPrice} onChange={handleChange} />
+                    <InputField name="costPrice" label="Harga Modal Manual (IDR, Opsional)" type="number" value={formData.costPrice} onChange={handleChange} min="0"/>
                     <p className="text-xs text-slate-500 -mt-2">Gunakan ini jika Anda tidak ingin menghitung HPP dari resep.</p>
                 </div>
             )}
@@ -418,7 +476,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
             {showSimpleStock && (
                 <div className="flex items-center gap-4">
                     <div className="flex-1">
-                        <InputField name="stock" label="Jumlah Stok (Opsional)" type="number" value={formData.stock} onChange={handleChange} />
+                        <InputField name="stock" label="Jumlah Stok (Opsional)" type="number" value={formData.stock} onChange={handleChange} min="0" />
                     </div>
                     <div className="pt-7">
                         <label className="flex items-center space-x-2 cursor-pointer">
@@ -437,7 +495,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                             <select value={item.rawMaterialId} onChange={(e) => handleRecipeChange(index, 'rawMaterialId', e.target.value)} className="flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white">
                                 {rawMaterials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.unit})</option>)}
                             </select>
-                            <input type="number" value={item.quantity} placeholder="Jumlah" onChange={(e) => handleRecipeChange(index, 'quantity', e.target.value)} className="w-24 bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white" />
+                            <input type="number" min="0" value={item.quantity} placeholder="Jumlah" onChange={(e) => handleRecipeChange(index, 'quantity', e.target.value)} className="w-24 bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white" />
                             <Button type="button" variant="danger" size="sm" onClick={() => removeRecipeItem(index)}><Icon name="trash" className="w-4 h-4" /></Button>
                         </div>
                     ))}
@@ -514,7 +572,7 @@ const RestockModal: React.FC<{
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">Jumlah Stok Masuk</label>
-                    <input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} required placeholder="0" className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-xl" />
+                    <input type="number" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} required placeholder="0" className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-xl" />
                 </div>
                  <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">Catatan (Opsional)</label>
@@ -529,6 +587,29 @@ const RestockModal: React.FC<{
     );
 };
 
+const ProductImage: React.FC<{ product: Product, className?: string }> = ({ product, className }) => {
+    const [imageSrc, setImageSrc] = useState<string | undefined>();
+    
+    useEffect(() => {
+        let objectUrl: string | undefined;
+        if (product.image instanceof Blob) {
+            objectUrl = URL.createObjectURL(product.image);
+            setImageSrc(objectUrl);
+        } else {
+            setImageSrc(product.imageUrl);
+        }
+        return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+    }, [product.image, product.imageUrl]);
+
+    if (imageSrc) {
+        return <img src={imageSrc} alt={product.name} className={`w-10 h-10 rounded-md object-cover ${className}`} />;
+    }
+    return (
+        <div className={`w-10 h-10 rounded-md overflow-hidden ${className}`}>
+           <ProductPlaceholder productName={product.name} size="small" className="w-full h-full" />
+        </div>
+    );
+};
 
 const ProductsView: React.FC = () => {
     const { products, addProduct, updateProduct, deleteProduct, inventorySettings, addStockAdjustment } = useProduct();
@@ -538,9 +619,25 @@ const ProductsView: React.FC = () => {
     const [restockingProduct, setRestockingProduct] = useState<Product | null>(null);
     const productFormRef = useRef<HTMLFormElement>(null);
     const isCameraAvailable = useCameraAvailability();
+    const [searchTerm, setSearchTerm] = useState('');
 
-    const handleOpenModal = (product: Product | null = null) => {
-        setEditingProduct(product);
+    const filteredProducts = useMemo(() => {
+        return products.filter(product =>
+            product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            product.category.join(' ').toLowerCase().includes(searchTerm.toLowerCase())
+        ).sort((a,b) => a.name.localeCompare(b.name));
+    }, [products, searchTerm]);
+
+    const handleOpenModal = async (product: Product | null = null) => {
+        if (product && product.image instanceof Blob) {
+          const dataUrl = await blobToBase64(product.image);
+          const productForForm = { ...product, imageUrl: dataUrl };
+          delete productForForm.image;
+          setEditingProduct(productForForm);
+        } else {
+            setEditingProduct(product);
+        }
         setModalOpen(true);
     };
 
@@ -550,10 +647,20 @@ const ProductsView: React.FC = () => {
     };
 
     const handleSaveProduct = (productData: Omit<Product, 'id'> | Product) => {
-        if ('id' in productData) {
-            updateProduct(productData);
+        const productToSave: any = { ...productData };
+        
+        if (productToSave.imageUrl && productToSave.imageUrl.startsWith('data:')) {
+            productToSave.image = base64ToBlob(productToSave.imageUrl);
+            productToSave.imageUrl = undefined;
+        } else if (!productToSave.imageUrl) {
+             productToSave.imageUrl = undefined;
+        }
+
+
+        if ('id' in productToSave) {
+            updateProduct(productToSave);
         } else {
-            addProduct(productData);
+            addProduct(productToSave);
         }
         handleCloseModal();
     };
@@ -579,76 +686,79 @@ const ProductsView: React.FC = () => {
 
         return <span className={color}>{stock}</span>
     }
+    
+    const columns = useMemo(() => [
+        { label: 'Nama', width: '2fr', render: (p: Product) => (
+            <div className="font-medium flex items-center gap-3">
+               <ProductImage product={p} />
+               <div className="flex items-center gap-2">
+                   <span>{p.name}</span>
+                   {p.isFavorite && <Icon name="star" className="w-4 h-4 text-yellow-400" title="Produk Favorit" />}
+               </div>
+            </div>
+        )},
+        { label: 'Kategori', width: '1.5fr', render: (p: Product) => (
+            <div className="flex flex-wrap gap-1">
+                {p.category.map(cat => <span key={cat} className="text-xs bg-slate-700 px-2 py-0.5 rounded-full">{cat}</span>)}
+            </div>
+        )},
+        { label: 'Barcode', width: '1fr', render: (p: Product) => <span className="font-mono text-sm">{p.barcode || '-'}</span>},
+        ...(inventorySettings.enabled ? [{ label: 'Harga Modal', width: '1fr', render: (p: Product) => p.costPrice ? CURRENCY_FORMATTER.format(p.costPrice) : '-' }] : []),
+        { label: 'Harga Jual', width: '1fr', render: (p: Product) => CURRENCY_FORMATTER.format(p.price) },
+        ...(inventorySettings.enabled && !inventorySettings.trackIngredients ? [{ label: 'Stok', width: '0.5fr', render: (p: Product) => <StockIndicator product={p} /> }] : []),
+        { label: 'Aksi', width: '1fr', render: (p: Product) => (
+            <div className="flex gap-2">
+                {p.trackStock && !inventorySettings.trackIngredients && (
+                    <button onClick={() => setRestockingProduct(p)} className="text-green-400 hover:text-green-300" title="Tambah Stok">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"></path></svg>
+                    </button>
+                )}
+                <button onClick={() => handleOpenModal(p)} className="text-[#52a37c] hover:text-[#7ac0a0]" title="Edit Produk">
+                    <Icon name="edit" className="w-5 h-5" />
+                </button>
+                <button onClick={() => deleteProduct(p.id)} className="text-red-500 hover:text-red-400" title="Hapus Produk">
+                    <Icon name="trash" className="w-5 h-5" />
+                </button>
+            </div>
+        )}
+    ], [inventorySettings.enabled, deleteProduct]);
 
     return (
-        <div>
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-white">Produk</h1>
-                <Button variant="primary" onClick={() => handleOpenModal()}>
-                    <Icon name="plus" className="w-5 h-5" />
-                    <span>Tambah Produk</span>
-                </Button>
+        <div className="flex flex-col h-full">
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                <h1 className="text-2xl font-bold text-white self-start sm:self-center">Produk</h1>
+                <div className="flex items-center gap-4 w-full sm:w-auto">
+                     <div className="relative flex-grow sm:flex-grow-0">
+                         <input
+                            type="text"
+                            placeholder="Cari produk..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-[#347758] focus:border-[#347758]"
+                        />
+                         <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    </div>
+                    <Button variant="primary" onClick={() => handleOpenModal()} className="flex-shrink-0">
+                        <Icon name="plus" className="w-5 h-5" />
+                        <span className="hidden sm:inline">Tambah Produk</span>
+                    </Button>
+                </div>
             </div>
 
-            <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
-                <table className="w-full text-left">
-                    <thead className="bg-slate-700">
-                        <tr>
-                            <th className="p-3">Nama</th>
-                            <th className="p-3">Kategori</th>
-                            <th className="p-3">Barcode</th>
-                            {inventorySettings.enabled && <th className="p-3">Harga Modal</th>}
-                            <th className="p-3">Harga Jual</th>
-                            {inventorySettings.enabled && !inventorySettings.trackIngredients && <th className="p-3 text-center">Stok</th>}
-                            <th className="p-3">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {products.map(product => (
-                            <tr key={product.id} className="border-b border-slate-700 last:border-b-0 hover:bg-slate-700/50">
-                                <td className="p-3 font-medium flex items-center gap-3">
-                                   {product.imageUrl ? (
-                                     <img src={product.imageUrl} alt={product.name} className="w-10 h-10 rounded-md object-cover" />
-                                   ) : (
-                                     <div className="w-10 h-10 rounded-md overflow-hidden">
-                                       <ProductPlaceholder productName={product.name} size="small" className="w-full h-full" />
-                                     </div>
-                                   )}
-                                   <div className="flex items-center gap-2">
-                                       <span>{product.name}</span>
-                                       {product.isFavorite && <Icon name="star" className="w-4 h-4 text-yellow-400" title="Produk Favorit" />}
-                                   </div>
-                                </td>
-                                <td className="p-3 text-slate-400">
-                                    <div className="flex flex-wrap gap-1">
-                                        {product.category.map(cat => <span key={cat} className="text-xs bg-slate-700 px-2 py-0.5 rounded-full">{cat}</span>)}
-                                    </div>
-                                </td>
-                                <td className="p-3 text-slate-400 font-mono text-sm">{product.barcode || '-'}</td>
-                                {inventorySettings.enabled && <td className="p-3">{product.costPrice ? CURRENCY_FORMATTER.format(product.costPrice) : '-'}</td>}
-                                <td className="p-3">{CURRENCY_FORMATTER.format(product.price)}</td>
-                                {inventorySettings.enabled && !inventorySettings.trackIngredients && <td className="p-3 text-center"><StockIndicator product={product} /></td>}
-                                <td className="p-3">
-                                    <div className="flex gap-2">
-                                        {product.trackStock && !inventorySettings.trackIngredients && (
-                                            <button onClick={() => setRestockingProduct(product)} className="text-green-400 hover:text-green-300" title="Tambah Stok">
-                                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"></path></svg>
-                                            </button>
-                                        )}
-                                        <button onClick={() => handleOpenModal(product)} className="text-[#52a37c] hover:text-[#7ac0a0]" title="Edit Produk">
-                                            <Icon name="edit" className="w-5 h-5" />
-                                        </button>
-                                        <button onClick={() => deleteProduct(product.id)} className="text-red-500 hover:text-red-400" title="Hapus Produk">
-                                            <Icon name="trash" className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+            <div className="flex-1 min-h-0 bg-slate-800 rounded-lg shadow-md flex flex-col">
+                 {filteredProducts.length > 0 ? (
+                    <VirtualizedTable
+                        data={filteredProducts}
+                        columns={columns}
+                        rowHeight={68}
+                    />
+                 ) : (
+                    <div className="flex-1 flex items-center justify-center text-center p-8 text-slate-500">
+                        {searchTerm ? `Tidak ada produk yang cocok dengan "${searchTerm}".` : 'Belum ada produk. Klik "Tambah Produk" untuk memulai.'}
+                    </div>
+                )}
             </div>
-
+            
             <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingProduct ? 'Edit Produk' : 'Tambah Produk Baru'}>
                 <ProductForm
                     ref={productFormRef}

@@ -36,7 +36,8 @@ const UserForm: React.FC<{
 
     useEffect(() => {
         if (user) {
-            setFormData({ name: user.name, pin: user.pin, role: user.role });
+            // Do not display the hashed pin in the form, show empty or placeholder
+            setFormData({ name: user.name, pin: '', role: user.role });
         } else {
             setFormData({ name: '', pin: '', role: 'staff' });
         }
@@ -48,17 +49,38 @@ const UserForm: React.FC<{
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (formData.pin.length !== 4 || !/^\d{4}$/.test(formData.pin)) {
+        
+        // PIN is only required if it's a new user or if the user is explicitly changing it
+        if (!user && (formData.pin.length !== 4 || !/^\d{4}$/.test(formData.pin))) {
             showAlert({
                 type: 'alert',
                 title: 'PIN Tidak Valid',
-                message: 'PIN harus terdiri dari 4 digit angka.'
+                message: 'PIN harus terdiri dari 4 digit angka untuk pengguna baru.'
             });
             return;
         }
+
+        if (user && formData.pin && (formData.pin.length !== 4 || !/^\d{4}$/.test(formData.pin))) {
+             showAlert({
+                type: 'alert',
+                title: 'PIN Baru Tidak Valid',
+                message: 'Jika ingin mengubah, PIN baru harus terdiri dari 4 digit angka.'
+            });
+            return;
+        }
+
         const userData = { ...formData };
         if (user && 'id' in user) {
-            onSave({ ...userData, id: user.id });
+            // If pin is empty, it means user is not changing it.
+            // Send the original user data but with updated name/role.
+            // The AuthContext will handle whether to re-hash or not.
+            const dataToSave = {
+                ...user,
+                name: userData.name,
+                role: userData.role,
+                pin: userData.pin || user.pin // Use new pin if provided, otherwise old one
+            };
+            onSave(dataToSave);
         } else {
             onSave(userData);
         }
@@ -72,7 +94,16 @@ const UserForm: React.FC<{
             </div>
             <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">PIN (4 Digit Angka)</label>
-                <input type="password" name="pin" value={formData.pin} onChange={handleChange} required maxLength={4} pattern="\d{4}" className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <input 
+                    type="password" 
+                    name="pin" 
+                    value={formData.pin} 
+                    onChange={handleChange} 
+                    required={!user} // PIN is required only for new users
+                    placeholder={user ? 'Kosongkan jika tidak diubah' : 'Wajib diisi'}
+                    maxLength={4} 
+                    pattern="\d{4}" 
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
             </div>
             <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Peran (Role)</label>
@@ -96,11 +127,11 @@ const UserManagement: React.FC = () => {
     const [isModalOpen, setModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
 
-    const handleSaveUser = (userData: Omit<User, 'id'> | User) => {
+    const handleSaveUser = async (userData: Omit<User, 'id'> | User) => {
         if ('id' in userData) {
-            updateUser(userData);
+            await updateUser(userData);
         } else {
-            addUser(userData);
+            await addUser(userData);
         }
         setModalOpen(false);
     };
@@ -122,8 +153,8 @@ const UserManagement: React.FC = () => {
             title: `Reset PIN untuk ${user.name}?`,
             message: 'PIN pengguna ini akan direset ke "0000". Pengguna harus segera menggantinya setelah login.',
             confirmText: 'Ya, Reset',
-            onConfirm: () => {
-                const resetName = resetUserPin(user.id);
+            onConfirm: async () => {
+                const resetName = await resetUserPin(user.id);
                 if (resetName) {
                     showAlert({
                         type: 'alert',
@@ -459,13 +490,13 @@ const PointRuleModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (d
                 </div>
                 {type === 'spend' && (
                     <div className="grid grid-cols-2 gap-3">
-                        <input type="number" value={pointsEarned} onChange={e => setPointsEarned(e.target.value)} placeholder="Jumlah Poin" required className="bg-slate-700 p-2 rounded-md"/>
-                        <input type="number" value={spendAmount} onChange={e => setSpendAmount(e.target.value)} placeholder="Setiap Belanja (Rp)" required className="bg-slate-700 p-2 rounded-md"/>
+                        <input type="number" min="0" value={pointsEarned} onChange={e => setPointsEarned(e.target.value)} placeholder="Jumlah Poin" required className="bg-slate-700 p-2 rounded-md"/>
+                        <input type="number" min="0" value={spendAmount} onChange={e => setSpendAmount(e.target.value)} placeholder="Setiap Belanja (Rp)" required className="bg-slate-700 p-2 rounded-md"/>
                     </div>
                 )}
                 {type === 'product' && (
                     <div className="grid grid-cols-2 gap-3">
-                        <input type="number" value={pointsPerItem} onChange={e => setPointsPerItem(e.target.value)} placeholder="Poin per Item" required className="bg-slate-700 p-2 rounded-md"/>
+                        <input type="number" min="0" value={pointsPerItem} onChange={e => setPointsPerItem(e.target.value)} placeholder="Poin per Item" required className="bg-slate-700 p-2 rounded-md"/>
                         <select value={targetId} onChange={e => setTargetId(e.target.value)} required className="bg-slate-700 p-2 rounded-md">
                             <option value="" disabled>Pilih Produk</option>
                             {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -474,7 +505,7 @@ const PointRuleModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (d
                 )}
                 {type === 'category' && (
                     <div className="grid grid-cols-2 gap-3">
-                        <input type="number" value={pointsPerItem} onChange={e => setPointsPerItem(e.target.value)} placeholder="Poin per Item" required className="bg-slate-700 p-2 rounded-md"/>
+                        <input type="number" min="0" value={pointsPerItem} onChange={e => setPointsPerItem(e.target.value)} placeholder="Poin per Item" required className="bg-slate-700 p-2 rounded-md"/>
                          <select value={targetId} onChange={e => setTargetId(e.target.value)} required className="bg-slate-700 p-2 rounded-md">
                              <option value="" disabled>Pilih Kategori</option>
                             {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -523,13 +554,13 @@ const RewardModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (data
         <Modal isOpen={isOpen} onClose={onClose} title={reward ? "Edit Reward" : "Tambah Reward"}>
              <form onSubmit={handleSubmit} className="space-y-4">
                  <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Nama Reward (cth: Diskon 5rb)" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                 <input type="number" value={form.pointsCost} onChange={e => setForm({...form, pointsCost: e.target.value})} placeholder="Biaya Poin" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                 <input type="number" min="0" value={form.pointsCost} onChange={e => setForm({...form, pointsCost: e.target.value})} placeholder="Biaya Poin" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
                  <select value={form.type} onChange={e => setForm({...form, type: e.target.value as any})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white">
                     <option value="discount_amount">Potongan Harga (Rp)</option>
                     <option value="free_product">Produk Gratis</option>
                  </select>
                  {form.type === 'discount_amount' && (
-                     <input type="number" value={form.discountValue} onChange={e => setForm({...form, discountValue: e.target.value})} placeholder="Jumlah Potongan (Rp)" required className="w-full bg-slate-700 p-2 rounded-md"/>
+                     <input type="number" min="0" value={form.discountValue} onChange={e => setForm({...form, discountValue: e.target.value})} placeholder="Jumlah Potongan (Rp)" required className="w-full bg-slate-700 p-2 rounded-md"/>
                  )}
                   {form.type === 'free_product' && (
                      <select value={form.freeProductId} onChange={e => setForm({...form, freeProductId: e.target.value})} required className="w-full bg-slate-700 p-2 rounded-md">
@@ -610,7 +641,7 @@ const DiscountFormModal: React.FC<{
                     <button type="button" onClick={() => setForm({...form, type: 'percentage'})} className={`flex-1 py-1 text-sm rounded-md transition-colors ${form.type === 'percentage' ? 'bg-[#347758] text-white font-semibold' : 'text-slate-300'}`}>Persentase (%)</button>
                     <button type="button" onClick={() => setForm({...form, type: 'amount'})} className={`flex-1 py-1 text-sm rounded-md transition-colors ${form.type === 'amount' ? 'bg-[#347758] text-white font-semibold' : 'text-slate-300'}`}>Jumlah (Rp)</button>
                 </div>
-                <input type="number" value={form.value} onChange={e => setForm({...form, value: e.target.value})} placeholder={form.type === 'percentage' ? 'cth: 15' : 'cth: 10000'} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <input type="number" min="0" value={form.value} onChange={e => setForm({...form, value: e.target.value})} placeholder={form.type === 'percentage' ? 'cth: 15' : 'cth: 10000'} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="text-xs text-slate-400">Tanggal Mulai (Opsional)</label>
@@ -702,8 +733,8 @@ const SettingsView: React.FC = () => {
     const importProductsInputRef = useRef<HTMLInputElement>(null);
     const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
-    const handleBackup = () => {
-        dataService.exportData(data);
+    const handleBackup = async () => {
+        await dataService.exportData();
         setMessage({ type: 'success', text: 'Data backup berhasil diunduh.' });
     };
 
@@ -713,14 +744,14 @@ const SettingsView: React.FC = () => {
             showAlert({
                 type: 'confirm',
                 title: 'Konfirmasi Pemulihan Data',
-                message: 'Apakah Anda yakin ingin memulihkan data? Semua data saat ini akan ditimpa dan Anda mungkin perlu login kembali.',
+                message: 'Apakah Anda yakin ingin memulihkan data? Semua data saat ini akan ditimpa dan aplikasi akan dimuat ulang.',
                 confirmVariant: 'danger',
                 confirmText: 'Ya, Pulihkan',
                 onConfirm: async () => {
                     try {
                         const data = await dataService.importData(file);
-                        restoreData(data);
-                        setMessage({ type: 'success', text: 'Data berhasil dipulihkan.' });
+                        await restoreData(data);
+                        // The restoreData function will handle reload.
                     } catch (error) {
                         setMessage({ type: 'error', text: (error as Error).message });
                     } finally {

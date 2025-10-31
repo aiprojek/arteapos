@@ -4,12 +4,14 @@ import { useFinance } from '../context/FinanceContext';
 import { useProduct } from '../context/ProductContext';
 import { useUI } from '../context/UIContext';
 import { useCustomer } from '../context/CustomerContext';
-import type { Expense, Supplier, Purchase, PurchaseItem, PurchaseStatus, RawMaterial, Transaction, PaymentMethod, ExpenseStatus, Customer, Product } from '../types';
+// FIX: Aliased `Transaction` to `TransactionType` to resolve a naming conflict with Dexie's internal types, which was causing cascading type errors across the application.
+import type { Expense, Supplier, Purchase, PurchaseItem, PurchaseStatus, RawMaterial, Transaction as TransactionType, PaymentMethod, ExpenseStatus, Customer, Product } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Icon from '../components/Icon';
 import { CURRENCY_FORMATTER } from '../constants';
 import UpdatePaymentModal from '../components/UpdatePaymentModal';
+import Pagination from '../components/Pagination';
 
 type FinanceSubTab = 'cashflow' | 'expenses' | 'purchasing' | 'debt-receivables';
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
@@ -224,7 +226,8 @@ const CashFlowTab: React.FC = () => {
 const DebtReceivablesTab: React.FC = () => {
     const { transactions, purchases, expenses, addPaymentToTransaction, addPaymentToPurchase, addPaymentToExpense } = useFinance();
     const [subTab, setSubTab] = useState<'receivables' | 'payables' | 'expense_payables'>('receivables');
-    const [updatingTransaction, setUpdatingTransaction] = useState<Transaction | null>(null);
+    // FIX: Changed type from `Transaction` to `TransactionType` to use the aliased type and avoid conflicts.
+    const [updatingTransaction, setUpdatingTransaction] = useState<TransactionType | null>(null);
     const [payingPurchase, setPayingPurchase] = useState<Purchase | null>(null);
     const [payingExpense, setPayingExpense] = useState<Expense | null>(null);
 
@@ -424,6 +427,8 @@ const CustomersTab: React.FC = () => {
     const [isModalOpen, setModalOpen] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 20;
 
     const filteredCustomers = useMemo(() =>
         customers.filter(c => 
@@ -432,6 +437,18 @@ const CustomersTab: React.FC = () => {
             c.contact?.toLowerCase().includes(searchTerm.toLowerCase())
         ).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     , [customers, searchTerm]);
+    
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm]);
+
+    const totalPages = Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE);
+    const paginatedCustomers = useMemo(() => {
+        return filteredCustomers.slice(
+            (currentPage - 1) * ITEMS_PER_PAGE,
+            currentPage * ITEMS_PER_PAGE
+        );
+    }, [filteredCustomers, currentPage]);
 
     const handleSave = (data: Omit<Customer, 'id' | 'memberId' | 'points' | 'createdAt'> | Customer) => {
         if ('id' in data) {
@@ -471,7 +488,7 @@ const CustomersTab: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredCustomers.map(c => (
+                        {paginatedCustomers.map(c => (
                             <tr key={c.id} className="border-b border-slate-700 last:border-b-0">
                                 <td className="p-3 font-semibold">{c.name}</td>
                                 <td className="p-3 text-slate-400">{c.memberId}</td>
@@ -487,8 +504,15 @@ const CustomersTab: React.FC = () => {
                         ))}
                     </tbody>
                 </table>
-                {customers.length === 0 && <p className="p-4 text-center text-slate-500">Belum ada pelanggan terdaftar.</p>}
+                {filteredCustomers.length === 0 && <p className="p-4 text-center text-slate-500">{searchTerm ? 'Pelanggan tidak ditemukan.' : 'Belum ada pelanggan terdaftar.'}</p>}
              </div>
+             <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                itemsPerPage={ITEMS_PER_PAGE}
+                totalItems={filteredCustomers.length}
+            />
              <CustomerFormModal isOpen={isModalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} customer={editingCustomer} />
         </div>
     )
@@ -814,8 +838,8 @@ const ExpenseModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (dat
                 <input type="date" name="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
                 <input type="text" name="description" placeholder="Deskripsi (cth: Bayar Listrik)" value={form.description} onChange={e => setForm({...form, description: e.target.value})} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
                 <input type="text" name="category" placeholder="Kategori (cth: Operasional)" value={form.category} onChange={e => setForm({...form, category: e.target.value})} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                <input type="number" name="amount" placeholder="Total Tagihan (IDR)" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                <input type="number" name="amountPaid" placeholder="Jumlah Dibayar (kosongkan jika lunas)" value={form.amountPaid} onChange={e => setForm({...form, amountPaid: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <input type="number" min="0" name="amount" placeholder="Total Tagihan (IDR)" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <input type="number" min="0" name="amountPaid" placeholder="Jumlah Dibayar (kosongkan jika lunas)" value={form.amountPaid} onChange={e => setForm({...form, amountPaid: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
                 <div className="flex justify-end gap-3 pt-2">
                     <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
                     <Button type="submit">Simpan</Button>
@@ -971,8 +995,8 @@ const PurchaseModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (da
                                                 props.products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
                                             )}
                                         </select>
-                                        <input type="number" placeholder="Jml" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)} className="w-full bg-slate-700 p-1.5 rounded text-sm" />
-                                        <input type="number" placeholder="Harga/unit" value={item.price} onChange={e => handleItemChange(index, 'price', parseFloat(e.target.value) || 0)} className="w-full bg-slate-700 p-1.5 rounded text-sm" />
+                                        <input type="number" min="0" placeholder="Jml" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)} className="w-full bg-slate-700 p-1.5 rounded text-sm" />
+                                        <input type="number" min="0" placeholder="Harga/unit" value={item.price} onChange={e => handleItemChange(index, 'price', parseFloat(e.target.value) || 0)} className="w-full bg-slate-700 p-1.5 rounded text-sm" />
                                         <Button type="button" size="sm" variant="danger" onClick={() => removeItem(index)}><Icon name="trash" className="w-4 h-4" /></Button>
                                     </div>
                                 </div>
@@ -986,7 +1010,7 @@ const PurchaseModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (da
                     <div className="flex justify-between font-bold text-lg"><span>Total Tagihan:</span><span>{CURRENCY_FORMATTER.format(total)}</span></div>
                     <div>
                         <label className="block text-xs font-medium text-slate-400 mb-1">Jumlah Dibayar</label>
-                        <input type="number" placeholder="Jumlah Dibayar (IDR)" value={form.amountPaid} onChange={e => setForm({...form, amountPaid: parseFloat(e.target.value) || 0})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                        <input type="number" min="0" placeholder="Jumlah Dibayar (IDR)" value={form.amountPaid} onChange={e => setForm({...form, amountPaid: parseFloat(e.target.value) || 0})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
                     </div>
                 </div>
                 <div className="flex justify-end gap-3 pt-2">
@@ -1033,6 +1057,7 @@ const PayDebtModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (amo
                     <label className="block text-sm font-medium text-slate-300 mb-1">Jumlah Pembayaran</label>
                     <input
                         type="number"
+                        min="0"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
                         placeholder="0"
@@ -1086,6 +1111,7 @@ const PayExpenseDebtModal: React.FC<{isOpen: boolean, onClose: () => void, onSav
                     <label className="block text-sm font-medium text-slate-300 mb-1">Jumlah Pembayaran</label>
                     <input
                         type="number"
+                        min="0"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
                         placeholder="0"

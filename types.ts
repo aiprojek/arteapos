@@ -2,6 +2,7 @@ export interface Addon {
   id: string;
   name: string;
   price: number;
+  costPrice?: number;
 }
 
 export interface RawMaterial {
@@ -39,7 +40,8 @@ export interface Product {
   name: string;
   price: number;
   category: string[];
-  imageUrl?: string;
+  image?: Blob; // For uploaded/captured images stored as Blobs
+  imageUrl?: string; // For external image URLs
   costPrice?: number;
   stock?: number;
   trackStock?: boolean;
@@ -231,7 +233,8 @@ export interface AppData {
   products: Product[];
   categories: string[];
   rawMaterials: RawMaterial[];
-  transactions: Transaction[];
+  // FIX: Renamed 'transactions' to 'transactionRecords' to resolve a naming conflict with Dexie's internal methods.
+  transactionRecords: Transaction[];
   users: User[];
   receiptSettings: ReceiptSettings;
   inventorySettings: InventorySettings;

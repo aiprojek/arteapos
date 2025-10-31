@@ -27,7 +27,22 @@ interface ProductContextType {
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
-export const ProductProvider = ({ children }: { children: ReactNode }) => {
+function base64ToBlob(base64: string): Blob {
+    const [meta, data] = base64.split(',');
+    if (!meta || !data) {
+        return new Blob();
+    }
+    const mime = meta.match(/:(.*?);/)?.[1];
+    const bstr = atob(data);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+}
+
+export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const { data, setData } = useData();
   const { products, categories, rawMaterials, inventorySettings, stockAdjustments } = data;
   const { showAlert } = useUI();
@@ -138,8 +153,17 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
 
   const bulkAddProducts = useCallback((newProducts: Product[]) => {
     setData(prev => {
+        const productsWithBlobs = newProducts.map(p => {
+            const prod: any = { ...p };
+            if (prod.imageUrl && prod.imageUrl.startsWith('data:')) {
+                prod.image = base64ToBlob(prod.imageUrl);
+                delete prod.imageUrl;
+            }
+            return prod;
+        });
+
         const productMap = new Map(prev.products.map(p => [p.id, p]));
-        newProducts.forEach(p => productMap.set(p.id, p));
+        productsWithBlobs.forEach(p => productMap.set(p.id, p));
         return { ...prev, products: Array.from(productMap.values()) };
     });
   }, [setData]);

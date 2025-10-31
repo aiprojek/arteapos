@@ -14,7 +14,8 @@ interface CustomerContextType {
 
 const CustomerContext = createContext<CustomerContextType | undefined>(undefined);
 
-export const CustomerProvider = ({ children }: { children: ReactNode }) => {
+// FIX: Change to React.FC to fix children prop type error
+export const CustomerProvider: React.FC = ({ children }) => {
     const { data, setData } = useData();
     const { showAlert } = useUI();
     const { customers, membershipSettings } = data;

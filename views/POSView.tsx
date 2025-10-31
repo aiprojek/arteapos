@@ -8,7 +8,7 @@ import { useProduct } from '../context/ProductContext';
 import { useSession } from '../context/SessionContext';
 import { useSettings } from '../context/SettingsContext';
 import { useUI } from '../context/UIContext';
-import type { Product, CartItem as CartItemType, Transaction, Customer, Reward, Payment, PaymentMethod, HeldCart, Discount, Addon, DiscountDefinition } from '../types';
+import type { Product, CartItem as CartItemType, Transaction as TransactionType, Customer, Reward, Payment, PaymentMethod, HeldCart, Discount, Addon, DiscountDefinition } from '../types';
 import ProductCard from '../components/ProductCard';
 import CartItemComponent from '../components/CartItem';
 import Button from '../components/Button';
@@ -280,7 +280,7 @@ const PaymentModal: React.FC<{
                     ))}
                 </div>
 
-                <input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder="Masukkan jumlah bayar" className="w-full bg-slate-700 p-3 text-xl text-center rounded-md" />
+                <input type="number" min="0" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder="Masukkan jumlah bayar" className="w-full bg-slate-700 p-3 text-xl text-center rounded-md" />
                 
                 <div className="grid grid-cols-4 gap-2 text-sm">
                     {quickCashValues.map(val => (
@@ -540,7 +540,7 @@ const POSView: React.FC = () => {
     const [activeCategory, setActiveCategory] = useState('Semua');
     const [searchTerm, setSearchTerm] = useState('');
     const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
-    const [lastTransaction, setLastTransaction] = useState<Transaction | null>(null);
+    const [lastTransaction, setLastTransaction] = useState<TransactionType | null>(null);
     const [isReceiptModalOpen, setReceiptModalOpen] = useState(false);
     const [isBarcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -555,7 +555,7 @@ const POSView: React.FC = () => {
 
     const [isAddonModalOpen, setAddonModalOpen] = useState(false);
     const [productForAddons, setProductForAddons] = useState<Product | null>(null);
-    const [transactionForKitchenNote, setTransactionForKitchenNote] = useState<Transaction | null>(null);
+    const [transactionForKitchenNote, setTransactionForKitchenNote] = useState<TransactionType | null>(null);
 
 
     useEffect(() => {

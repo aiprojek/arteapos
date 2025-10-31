@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import AppProviders from './context/AppProviders';
 import { useAuth } from './context/AuthContext';
+import { useData } from './context/DataContext';
 import { useUI } from './context/UIContext';
 import { useProduct } from './context/ProductContext';
 import type { View } from './types';
@@ -133,11 +134,29 @@ const AppContent = () => {
 
 const AuthGate = () => {
   const { currentUser, authSettings } = useAuth();
+  
+  return (authSettings.enabled && !currentUser) ? <LoginView /> : <AppContent />;
+}
+
+const AppInitializer: React.FC = () => {
+  const { isDataLoading } = useData();
   const { alertState, hideAlert } = useUI();
+  
+  if (isDataLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-900 text-white">
+        <div className="flex flex-col items-center gap-4 text-center">
+            <Icon name="logo" className="w-16 h-16 text-[#52a37c] animate-pulse" />
+            <p className="text-lg text-slate-400">Memuat basis data...</p>
+            <p className="text-sm text-slate-500 max-w-xs">Harap tunggu sebentar. Jika ini pertama kalinya, proses mungkin sedikit lebih lama.</p>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <>
-      {authSettings.enabled && !currentUser ? <LoginView /> : <AppContent />}
+      <AuthGate />
       <AlertModal
         isOpen={alertState.isOpen}
         onClose={hideAlert}
@@ -153,9 +172,9 @@ const AuthGate = () => {
   );
 }
 
-const App = () => (
+const App: React.FC = () => (
   <AppProviders>
-    <AuthGate />
+    <AppInitializer />
   </AppProviders>
 );
 

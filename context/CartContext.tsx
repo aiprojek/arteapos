@@ -3,7 +3,7 @@ import { useData } from './DataContext';
 import { useUI } from './UIContext';
 import { useAuth } from './AuthContext';
 import { useProduct } from './ProductContext';
-import type { CartItem, Discount, Product, HeldCart, Transaction, Payment, PaymentMethod, PaymentStatus, Addon, Reward, Customer } from '../types';
+import type { CartItem, Discount, Product, HeldCart, Transaction as TransactionType, Payment, PaymentMethod, PaymentStatus, Addon, Reward, Customer } from '../types';
 
 interface CartContextType {
     cart: CartItem[];
@@ -30,14 +30,15 @@ interface CartContextType {
         customerName?: string;
         customerContact?: string;
         customerId?: string;
-    }) => Transaction;
+    }) => TransactionType;
     applyRewardToCart: (reward: Reward, customer: Customer) => void;
     removeRewardFromCart: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-export const CartProvider = ({ children }: { children: ReactNode }) => {
+// FIX: Change to React.FC to fix children prop type error
+export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children }) => {
     const { data, setData } = useData();
     const { showAlert } = useUI();
     const { currentUser } = useAuth();
@@ -276,17 +277,19 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
         const cartWithCost = cart.map(item => {
             const product = products.find(p => p.id === item.id);
+            const addonsCost = item.selectedAddons?.reduce((sum, addon) => sum + (addon.costPrice || 0), 0) || 0;
+
             if (inventorySettings.enabled && inventorySettings.trackIngredients && product?.recipe) {
                 const recipeCost = product.recipe.reduce((sum, recipeItem) => {
                     const material = rawMaterials.find(rm => rm.id === recipeItem.rawMaterialId);
                     return sum + ((material?.costPerUnit || 0) * recipeItem.quantity);
                 }, 0);
-                return { ...item, costPrice: recipeCost };
+                return { ...item, costPrice: recipeCost + addonsCost };
             }
-            return { ...item, costPrice: product?.costPrice };
+            return { ...item, costPrice: (product?.costPrice || 0) + addonsCost };
         });
 
-        const newTransaction: Transaction = {
+        const newTransaction: TransactionType = {
             id: now.getTime().toString(), items: cartWithCost, subtotal, cartDiscount, total: finalTotal, amountPaid,
             paymentStatus, payments: fullPayments, createdAt: now.toISOString(), userId: currentUser.id,
             userName: currentUser.name, customerName, customerContact, customerId,
@@ -358,7 +361,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                     updatedRawMaterials = prev.rawMaterials.map(m => rawMaterialUpdates.has(m.id) ? { ...m, stock: m.stock - (rawMaterialUpdates.get(m.id) || 0) } : m);
                 }
             }
-            return { ...prev, transactions: [newTransaction, ...prev.transactions], products: updatedProducts, rawMaterials: updatedRawMaterials, customers: updatedCustomers, heldCarts: updatedHeldCarts };
+            // FIX: Update 'transactionRecords' instead of 'transactions'.
+            return { ...prev, transactionRecords: [newTransaction, ...prev.transactionRecords], products: updatedProducts, rawMaterials: updatedRawMaterials, customers: updatedCustomers, heldCarts: updatedHeldCarts };
         });
         
         switchActiveCart(null);

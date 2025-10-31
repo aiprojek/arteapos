@@ -1,9 +1,9 @@
 import React from 'react';
-import type { Transaction, ReceiptSettings } from '../types';
+import type { Transaction as TransactionType, ReceiptSettings } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 
 interface ReceiptProps {
-    transaction: Transaction;
+    transaction: TransactionType;
     settings: ReceiptSettings;
 }
 

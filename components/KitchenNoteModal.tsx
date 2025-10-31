@@ -2,13 +2,13 @@ import React, { useEffect, useRef } from 'react';
 import KitchenNote from './KitchenNote';
 import { useSettings } from '../context/SettingsContext';
 import { useUI } from '../context/UIContext';
-import type { Transaction } from '../types';
+import type { Transaction as TransactionType } from '../types';
 import Icon from './Icon';
 
 interface KitchenNoteModalProps {
   isOpen: boolean;
   onClose: () => void;
-  transaction: Transaction;
+  transaction: TransactionType;
 }
 
 const KitchenNoteModal: React.FC<KitchenNoteModalProps> = ({ isOpen, onClose, transaction }) => {

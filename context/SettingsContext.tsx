@@ -9,7 +9,8 @@ interface SettingsContextType {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-export const SettingsProvider = ({ children }: { children: ReactNode }) => {
+// FIX: Change to React.FC to fix children prop type error
+export const SettingsProvider: React.FC = ({ children }) => {
     const { data, setData } = useData();
     const { receiptSettings } = data;
 

@@ -21,6 +21,15 @@ const LoginView: React.FC = () => {
         }
     };
     
+    const handleLogin = async (user: User, currentPin: string) => {
+        if (!user) return;
+        const success = await login(user, currentPin);
+        if (!success) {
+            setError('PIN salah. Silakan coba lagi.');
+            setTimeout(() => setPin(''), 500);
+        }
+    };
+
     useEffect(() => {
         if (pin.length === 4 && selectedUser) {
             handleLogin(selectedUser, pin);
@@ -33,13 +42,6 @@ const LoginView: React.FC = () => {
         setPin(pin.slice(0, -1));
     };
 
-    const handleLogin = (user: User, currentPin: string) => {
-        if (!user) return;
-        if (!login(user, currentPin)) {
-            setError('PIN salah. Silakan coba lagi.');
-            setTimeout(() => setPin(''), 500);
-        }
-    };
     
     const handleLogoClick = () => {
         logoClickCount.current += 1;
@@ -61,8 +63,8 @@ const LoginView: React.FC = () => {
                 message: "Ini akan mereset PIN akun admin pertama ke '1111'. Gunakan ini hanya jika Anda lupa PIN Anda. Tidak ada data lain yang akan terpengaruh.",
                 confirmText: 'Ya, Reset PIN',
                 confirmVariant: 'danger',
-                onConfirm: () => {
-                    const adminName = resetDefaultAdminPin();
+                onConfirm: async () => {
+                    const adminName = await resetDefaultAdminPin();
                     if(adminName) {
                         showAlert({
                             type: 'alert',

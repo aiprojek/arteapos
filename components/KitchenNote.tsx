@@ -1,8 +1,8 @@
 import React from 'react';
-import type { Transaction, ReceiptSettings } from '../types';
+import type { Transaction as TransactionType, ReceiptSettings } from '../types';
 
 interface KitchenNoteProps {
-    transaction: Transaction;
+    transaction: TransactionType;
     settings: ReceiptSettings;
 }
 

@@ -195,43 +195,54 @@ export const dataService = {
             if (!lines[i].trim()) continue;
             // A simple CSV parser, not robust for complex cases with commas in values
             const values = lines[i].split(',');
-            const product: any = {};
             
-            headers.forEach((header, index) => {
-                const key = header as keyof Product | 'addons';
+            const productData = headers.reduce((acc, header, index) => {
+                const key = header as keyof Product;
                 let value: any = values[index]?.replace(/"/g, '').trim();
 
-                if (key === 'price' || key === 'costPrice' || key === 'stock') {
-                    value = parseFloat(value) || 0;
-                } else if (key === 'trackStock' || key === 'isFavorite') {
-                    value = value.toLowerCase() === 'true';
-                } else if (key === 'category') {
-                    value = typeof value === 'string' ? value.split(';').filter(Boolean) : [];
-                } else if (key === 'addons') {
-                    value = (value || '').split('|').filter(Boolean).map((addonStr: string, idx: number) => {
-                        const parts = addonStr.split(':');
-                        if (parts.length >= 2) {
-                            return {
-                                id: `${Date.now()}-${idx}`,
-                                name: parts[0] || '',
-                                price: parseFloat(parts[1]) || 0,
-                                costPrice: parseFloat(parts[2]) || 0,
-                            };
-                        }
-                        return null;
-                    }).filter((a: Addon | null): a is Addon => a !== null);
+                switch (key) {
+                    case 'price':
+                    case 'costPrice':
+                    case 'stock':
+                        value = parseFloat(value) || 0;
+                        break;
+                    case 'trackStock':
+                    case 'isFavorite':
+                        value = value.toLowerCase() === 'true';
+                        break;
+                    case 'category':
+                        value = typeof value === 'string' ? value.split(';').filter(Boolean) : [];
+                        break;
+                    case 'addons':
+                        value = (value || '').split('|').filter(Boolean).map((addonStr: string, idx: number) => {
+                            const parts = addonStr.split(':');
+                            if (parts.length >= 2) {
+                                return {
+                                    id: `${Date.now()}-${idx}`,
+                                    name: parts[0] || '',
+                                    price: parseFloat(parts[1]) || 0,
+                                    costPrice: parseFloat(parts[2]) || 0,
+                                };
+                            }
+                            return null;
+                        }).filter((a: Addon | null): a is Addon => a !== null);
+                        break;
+                    default:
+                        break;
                 }
                 
-                product[key] = value;
-            });
+                (acc as any)[key] = value;
+                return acc;
+
+            }, {} as Partial<Product>);
             
             // If ID is empty, it's a new product. Generate a unique ID.
-            if (!product.id) {
-                product.id = `${Date.now()}-${i}`;
+            if (!productData.id) {
+                productData.id = `${Date.now()}-${i}`;
             }
 
-            if(product.name && product.price !== undefined) {
-                products.push(product as Product);
+            if(productData.name && productData.price !== undefined) {
+                products.push(productData as Product);
             }
           }
           resolve(products);
@@ -268,19 +279,20 @@ export const dataService = {
           for (let i = 1; i < lines.length; i++) {
             if (!lines[i].trim()) continue;
             const values = lines[i].split(',');
-            const material: any = {};
 
-            headers.forEach((header, index) => {
+            const materialData = headers.reduce((acc, header, index) => {
               const key = header as keyof RawMaterial;
               let value: string | number = values[index]?.replace(/"/g, '').trim();
               if (key === 'stock') {
                 value = parseFloat(value) || 0;
               }
-              material[key] = value;
-            });
+              (acc as any)[key] = value;
+              return acc;
+            }, {} as Partial<RawMaterial>);
 
-            if (material.id && material.name && material.stock !== undefined && material.unit) {
-              materials.push(material as RawMaterial);
+
+            if (materialData.id && materialData.name && materialData.stock !== undefined && materialData.unit) {
+              materials.push(materialData as RawMaterial);
             }
           }
           resolve(materials);

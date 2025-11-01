@@ -2,7 +2,7 @@
 import React from 'react';
 
 interface IconProps {
-  name: 'cash' | 'products' | 'reports' | 'settings' | 'logo' | 'plus' | 'trash' | 'edit' | 'download' | 'upload' | 'close' | 'search' | 'printer' | 'share' | 'ingredients' | 'users' | 'logout' | 'camera' | 'star' | 'reset' | 'finance' | 'award' | 'barcode' | 'pay' | 'help' | 'github' | 'donate' | 'telegram' | 'chat' | 'info-circle' | 'book' | 'star-fill' | 'check-circle-fill' | 'menu' | 'tag';
+  name: 'cash' | 'products' | 'reports' | 'settings' | 'logo' | 'plus' | 'trash' | 'edit' | 'download' | 'upload' | 'close' | 'search' | 'printer' | 'share' | 'ingredients' | 'users' | 'logout' | 'camera' | 'star' | 'reset' | 'finance' | 'award' | 'barcode' | 'pay' | 'help' | 'github' | 'donate' | 'telegram' | 'chat' | 'info-circle' | 'book' | 'star-fill' | 'check-circle-fill' | 'menu' | 'tag' | 'trending-up';
   className?: string;
   title?: string;
 }
@@ -45,6 +45,7 @@ const Icon: React.FC<IconProps> = ({ name, className = 'w-6 h-6', title }) => {
     chat: <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>,
     menu: <path fillRule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>,
     tag: <path d="M2 2v4.586a1 1 0 0 0 .293.707l7 7a1 1 0 0 0 1.414 0l4.586-4.586a1 1 0 0 0 0-1.414l-7-7A1 1 0 0 0 7.586 1H2a1 1 0 0 0-1 1zm4 1.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>,
+    'trending-up': <><path d="M16 6l-4.204 4.204-2.122-2.122L3 14.878l-1.414-1.414L8 6.122l2.122 2.122L14.586 4z"/><path d="M11 4h5v5"/></>,
   };
 
   return (

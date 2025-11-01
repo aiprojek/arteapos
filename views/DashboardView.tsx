@@ -147,6 +147,41 @@ Here is the sales and product data:`;
         "Beri saya ide promo untuk akhir pekan berdasarkan data penjualan.",
     ];
 
+    const renderMarkdown = (text: string) => {
+        const lines = text.split('\n');
+        let html = '';
+        let inList = false;
+
+        for (const line of lines) {
+            // Process markdown for each line
+            let processedLine = line.trim()
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // Bold
+
+            if (processedLine.startsWith('- ')) {
+                const listItemContent = processedLine.substring(2);
+                if (!inList) {
+                    html += '<ul>';
+                    inList = true;
+                }
+                html += `<li>${listItemContent}</li>`;
+            } else {
+                if (inList) {
+                    html += '</ul>';
+                    inList = false;
+                }
+                if (processedLine) { // Avoid creating empty paragraphs for empty lines
+                    html += `<p>${processedLine}</p>`;
+                }
+            }
+        }
+
+        if (inList) {
+            html += '</ul>';
+        }
+
+        return { __html: html };
+    };
+
     return (
         <div className="space-y-6">
             <h1 className="text-3xl font-bold text-white">Dashboard</h1>
@@ -201,7 +236,10 @@ Here is the sales and product data:`;
                             {isLoadingAI && <p className="text-sm text-slate-400 text-center animate-pulse">Artea AI sedang berpikir...</p>}
                             {aiError && <p className="text-sm text-red-400 text-center">{aiError}</p>}
                             {aiResponse && (
-                                <div className="prose prose-sm prose-invert max-w-none bg-slate-900/50 p-4 rounded-lg border border-slate-700 text-slate-300" style={{whiteSpace: 'pre-wrap'}}>{aiResponse}</div>
+                                <div 
+                                    className="prose prose-sm prose-invert max-w-none bg-slate-900/50 p-4 rounded-lg border border-slate-700 text-slate-300" 
+                                    dangerouslySetInnerHTML={renderMarkdown(aiResponse)}
+                                />
                             )}
                         </div>
                     </div>

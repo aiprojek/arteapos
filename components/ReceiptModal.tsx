@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import Receipt from './Receipt';
@@ -5,8 +6,10 @@ import Button from './Button';
 import Icon from './Icon';
 import { useSettings } from '../context/SettingsContext';
 import { useUI } from '../context/UIContext';
+import { useFinance } from '../context/FinanceContext';
 import type { Transaction as TransactionType } from '../types';
 import { useToImage } from '../hooks/useToImage';
+import { bluetoothPrinterService } from '../utils/bluetoothPrinter';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -17,6 +20,7 @@ interface ReceiptModalProps {
 const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transaction }) => {
   const { receiptSettings } = useSettings();
   const { showAlert } = useUI();
+  const { refundTransaction } = useFinance();
   const [receiptRef, { isLoading: isProcessing, error: imageError, getImage }] = useToImage<HTMLDivElement>({
     quality: 0.95,
     backgroundColor: '#ffffff',
@@ -60,6 +64,7 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
         return;
     }
     
+    // We must ensure Tailwind is loaded in the new window for styles to apply
     const styles = `
       @media print {
         @page { 
@@ -77,20 +82,26 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
       <html>
         <head>
           <title>Struk Transaksi</title>
+          <script src="https://cdn.tailwindcss.com"></script>
           <style>${styles}</style>
         </head>
         <body>
           ${receiptElement.outerHTML}
           <script>
+            // Wait for Tailwind to process classes before printing
             setTimeout(() => {
                 window.print();
                 window.onafterprint = () => window.close();
-            }, 250);
+            }, 500);
           </script>
         </body>
       </html>
     `);
     printWindow.document.close();
+  };
+
+  const handleBluetoothPrint = async () => {
+      await bluetoothPrinterService.printReceipt(transaction, receiptSettings);
   };
 
   const handleExportImage = async () => {
@@ -129,6 +140,20 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
     }
   };
 
+  const handleRefund = () => {
+    showAlert({
+        type: 'confirm',
+        title: 'Batalkan Transaksi (Refund)?',
+        message: 'Anda yakin ingin membatalkan transaksi ini? Stok produk akan dikembalikan dan omzet akan dikurangi.',
+        confirmVariant: 'danger',
+        confirmText: 'Ya, Refund',
+        onConfirm: () => {
+            refundTransaction(transaction.id);
+            onClose();
+        }
+    });
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Struk Transaksi">
       <div className="bg-slate-700 p-2 sm:p-4 rounded-lg overflow-y-auto max-h-[60vh]">
@@ -136,24 +161,38 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
             <Receipt ref={receiptRef} transaction={transaction} settings={receiptSettings} />
         </div>
       </div>
-      <div className="flex flex-col sm:flex-row justify-center gap-4 pt-6">
-        <Button variant="secondary" onClick={handlePrint}>
-            <Icon name="printer" className="w-5 h-5"/>
-            <span>Cetak Struk</span>
-        </Button>
-        <Button variant="primary" onClick={handleExportImage} disabled={isProcessing}>
-            {canShareImage ? (
-                <>
-                    <Icon name="share" className="w-5 h-5"/>
-                    <span>{isProcessing ? 'Memproses...' : 'Bagikan Gambar'}</span>
-                </>
-            ) : (
-                <>
-                    <Icon name="download" className="w-5 h-5"/>
-                    <span>{isProcessing ? 'Memproses...' : 'Unduh Gambar'}</span>
-                </>
+      <div className="flex flex-col gap-3 pt-6">
+        <div className="flex flex-col sm:flex-row justify-center gap-3">
+            <Button variant="secondary" onClick={handleBluetoothPrint} className="flex-1" title="Cetak langsung ke Printer Thermal Bluetooth (Android/Desktop)">
+                <Icon name="bluetooth" className="w-5 h-5 text-blue-400"/>
+                <span>Cetak BT</span>
+            </Button>
+            <Button variant="secondary" onClick={handlePrint} className="flex-1" title="Cetak via browser print dialog">
+                <Icon name="printer" className="w-5 h-5"/>
+                <span>Cetak PDF</span>
+            </Button>
+        </div>
+        <div className="flex flex-col sm:flex-row justify-center gap-3">
+            <Button variant="primary" onClick={handleExportImage} disabled={isProcessing} className="flex-1">
+                {canShareImage ? (
+                    <>
+                        <Icon name="share" className="w-5 h-5"/>
+                        <span>{isProcessing ? '...' : 'Bagikan Gambar'}</span>
+                    </>
+                ) : (
+                    <>
+                        <Icon name="download" className="w-5 h-5"/>
+                        <span>{isProcessing ? '...' : 'Unduh Gambar'}</span>
+                    </>
+                )}
+            </Button>
+            {transaction.paymentStatus !== 'refunded' && (
+                <Button variant="danger" onClick={handleRefund} className="flex-1">
+                    <Icon name="reset" className="w-5 h-5"/>
+                    <span>Refund</span>
+                </Button>
             )}
-        </Button>
+        </div>
       </div>
     </Modal>
   );

@@ -1,9 +1,11 @@
+
 import React, { createContext, useContext, ReactNode, useCallback } from 'react';
 import { useData } from './DataContext';
-import type { Expense, Supplier, Purchase, ExpenseStatus, PurchaseStatus, StockAdjustment, Transaction as TransactionType, Payment } from '../types';
+import type { Expense, Supplier, Purchase, ExpenseStatus, PurchaseStatus, StockAdjustment, Transaction as TransactionType, Payment, OtherIncome, Product, RawMaterial } from '../types';
 
 interface FinanceContextType {
     expenses: Expense[];
+    otherIncomes: OtherIncome[];
     suppliers: Supplier[];
     purchases: Purchase[];
     transactions: TransactionType[];
@@ -11,12 +13,17 @@ interface FinanceContextType {
     updateExpense: (expense: Expense) => void;
     deleteExpense: (expenseId: string) => void;
     addPaymentToExpense: (expenseId: string, amount: number) => void;
+    addOtherIncome: (income: Omit<OtherIncome, 'id'>) => void;
+    updateOtherIncome: (income: OtherIncome) => void;
+    deleteOtherIncome: (incomeId: string) => void;
     addSupplier: (supplier: Omit<Supplier, 'id'>) => void;
     updateSupplier: (supplier: Supplier) => void;
     deleteSupplier: (supplierId: string) => void;
     addPurchase: (purchase: Omit<Purchase, 'id' | 'status' | 'supplierName' | 'totalAmount'>) => void;
     addPaymentToPurchase: (purchaseId: string, amount: number) => void;
     addPaymentToTransaction: (transactionId: string, payments: Array<Omit<Payment, 'id' | 'createdAt'>>) => void;
+    refundTransaction: (transactionId: string) => void;
+    importTransactions: (newTransactions: TransactionType[]) => void;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -25,7 +32,7 @@ const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ children }) => {
     const { data, setData } = useData();
     // FIX: Use 'transactionRecords' from data and alias it to 'transactions' for context consumers.
-    const { expenses, suppliers, purchases, transactionRecords: transactions } = data;
+    const { expenses, otherIncomes = [], suppliers, purchases, transactionRecords: transactions } = data;
 
     const addExpense = useCallback((expenseData: Omit<Expense, 'id' | 'status'>) => {
         const status: ExpenseStatus = expenseData.amountPaid >= expenseData.amount ? 'lunas' : 'belum-lunas';
@@ -55,6 +62,19 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
             });
             return { ...prev, expenses: updatedExpenses };
         });
+    }, [setData]);
+
+    const addOtherIncome = useCallback((incomeData: Omit<OtherIncome, 'id'>) => {
+        const newIncome = { ...incomeData, id: Date.now().toString() };
+        setData(prev => ({ ...prev, otherIncomes: [newIncome, ...(prev.otherIncomes || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
+    }, [setData]);
+
+    const updateOtherIncome = useCallback((updatedIncome: OtherIncome) => {
+        setData(prev => ({ ...prev, otherIncomes: (prev.otherIncomes || []).map(i => i.id === updatedIncome.id ? updatedIncome : i).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
+    }, [setData]);
+
+    const deleteOtherIncome = useCallback((incomeId: string) => {
+        setData(prev => ({ ...prev, otherIncomes: (prev.otherIncomes || []).filter(i => i.id !== incomeId) }));
     }, [setData]);
 
     const addSupplier = useCallback((supplier: Omit<Supplier, 'id'>) => {
@@ -191,9 +211,93 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
         });
     }, [setData]);
 
+    const refundTransaction = useCallback((transactionId: string) => {
+        setData(prev => {
+            const targetTransaction = prev.transactionRecords.find(t => t.id === transactionId);
+            if (!targetTransaction || targetTransaction.paymentStatus === 'refunded') return prev;
+
+            // 1. Mark Transaction as Refunded
+            const updatedTransaction: TransactionType = { ...targetTransaction, paymentStatus: 'refunded' };
+            const updatedTransactions = prev.transactionRecords.map(t => t.id === transactionId ? updatedTransaction : t);
+
+            let updatedProducts = [...prev.products];
+            let updatedRawMaterials = [...prev.rawMaterials];
+            let updatedCustomers = [...prev.customers];
+            
+            // 2. Restore Inventory (Logic reversed from saveTransaction)
+            if (prev.inventorySettings.enabled) {
+                const rawMaterialUpdates = new Map<string, number>();
+                const cartItems = targetTransaction.items.filter(item => !(item.isReward && item.price === 0));
+
+                cartItems.forEach(item => {
+                    const product = prev.products.find(p => p.id === item.id);
+                    // Use recipe from ITEM SNAPSHOT if available to ensure historical accuracy, 
+                    // otherwise fallback to current product definition
+                    const recipeToRestore = item.recipe || product?.recipe;
+
+                    if (prev.inventorySettings.trackIngredients && recipeToRestore && recipeToRestore.length > 0) {
+                        recipeToRestore.forEach(recipeItem => {
+                            const totalToRestore = recipeItem.quantity * item.quantity;
+                            rawMaterialUpdates.set(recipeItem.rawMaterialId, (rawMaterialUpdates.get(recipeItem.rawMaterialId) || 0) + totalToRestore);
+                        });
+                    } else if (product && product.trackStock) {
+                        const idx = updatedProducts.findIndex(p => p.id === item.id);
+                        if (idx > -1) {
+                            updatedProducts[idx] = { ...updatedProducts[idx], stock: (updatedProducts[idx].stock || 0) + item.quantity };
+                        }
+                    }
+                });
+
+                if (rawMaterialUpdates.size > 0) {
+                    updatedRawMaterials = prev.rawMaterials.map(m => rawMaterialUpdates.has(m.id) ? { ...m, stock: m.stock + (rawMaterialUpdates.get(m.id) || 0) } : m);
+                }
+            }
+
+            // 3. Revert Customer Points (if earned)
+            if (targetTransaction.customerId && targetTransaction.pointsEarned && prev.membershipSettings.enabled) {
+                const customerIndex = updatedCustomers.findIndex(c => c.id === targetTransaction.customerId);
+                if (customerIndex > -1) {
+                    // Deduct earned points, but add back spent points if a reward was redeemed
+                    let pointsCorrection = -targetTransaction.pointsEarned;
+                    if (targetTransaction.rewardRedeemed) {
+                        pointsCorrection += targetTransaction.rewardRedeemed.pointsSpent;
+                    }
+                    
+                    // Prevent negative points just in case
+                    const newPoints = Math.max(0, updatedCustomers[customerIndex].points + pointsCorrection);
+                    updatedCustomers[customerIndex] = { ...updatedCustomers[customerIndex], points: newPoints };
+                }
+            }
+
+            return {
+                ...prev,
+                transactionRecords: updatedTransactions,
+                products: updatedProducts,
+                rawMaterials: updatedRawMaterials,
+                customers: updatedCustomers
+            };
+        });
+    }, [setData]);
+
+    const importTransactions = useCallback((newTransactions: TransactionType[]) => {
+        setData(prev => {
+            // Merge transactions, filtering out duplicates by ID
+            const existingIds = new Set(prev.transactionRecords.map(t => t.id));
+            const uniqueNewTransactions = newTransactions.filter(t => !existingIds.has(t.id));
+            
+            if (uniqueNewTransactions.length === 0) return prev;
+
+            return {
+                ...prev,
+                transactionRecords: [...uniqueNewTransactions, ...prev.transactionRecords].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            };
+        });
+    }, [setData]);
+
     return (
         <FinanceContext.Provider value={{
             expenses,
+            otherIncomes,
             suppliers,
             purchases,
             transactions,
@@ -201,12 +305,17 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
             updateExpense,
             deleteExpense,
             addPaymentToExpense,
+            addOtherIncome,
+            updateOtherIncome,
+            deleteOtherIncome,
             addSupplier,
             updateSupplier,
             deleteSupplier,
             addPurchase,
             addPaymentToPurchase,
             addPaymentToTransaction,
+            refundTransaction,
+            importTransactions
         }}>
             {children}
         </FinanceContext.Provider>

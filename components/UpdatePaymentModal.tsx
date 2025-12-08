@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import Modal from './Modal';
 import Button from './Button';
@@ -74,7 +75,7 @@ const UpdatePaymentModal: React.FC<UpdatePaymentModalProps> = ({ isOpen, onClose
                     </div>
                 </div>
 
-                <input type="number" min="0" value={newPaymentAmount} onChange={e => setNewPaymentAmount(e.target.value)} placeholder="Masukkan jumlah bayar" className="w-full bg-slate-700 p-3 text-xl text-center rounded-md" />
+                <input type="number" min="0" value={newPaymentAmount} onChange={e => setNewPaymentAmount(e.target.value)} placeholder="Masukkan jumlah bayar" className="w-full bg-slate-700 p-3 text-xl text-center rounded-md text-white" />
 
                 <div className="grid grid-cols-2 gap-3">
                     <Button onClick={() => handleAddPayment('cash')} disabled={!newPaymentAmount}>Tambah Tunai</Button>

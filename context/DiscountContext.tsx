@@ -11,8 +11,7 @@ interface DiscountContextType {
 
 const DiscountContext = createContext<DiscountContextType | undefined>(undefined);
 
-// FIX: Change to React.FC to fix children prop type error
-export const DiscountProvider: React.FC = ({ children }) => {
+export const DiscountProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { data, setData } = useData();
     const { discountDefinitions = [] } = data;
 

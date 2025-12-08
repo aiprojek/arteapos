@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useCallback } from 'react';
 import { useFinance } from '../context/FinanceContext';
 import { useProduct } from '../context/ProductContext';
@@ -5,7 +6,6 @@ import { CURRENCY_FORMATTER } from '../constants';
 import Icon from '../components/Icon';
 import Button from '../components/Button';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { GoogleGenAI } from '@google/genai';
 import type { Transaction } from '../types';
 
 
@@ -39,8 +39,11 @@ const DashboardView: React.FC = () => {
         const weekStart = new Date(todayStart);
         weekStart.setDate(weekStart.getDate() - 6); // Last 7 days including today
 
-        const todayTransactions = transactions.filter(t => new Date(t.createdAt).getTime() >= todayStart);
-        const last7DaysTransactions = transactions.filter(t => new Date(t.createdAt).getTime() >= weekStart.getTime());
+        // Filter out refunded transactions for stats
+        const activeTransactions = transactions.filter(t => t.paymentStatus !== 'refunded');
+
+        const todayTransactions = activeTransactions.filter(t => new Date(t.createdAt).getTime() >= todayStart);
+        const last7DaysTransactions = activeTransactions.filter(t => new Date(t.createdAt).getTime() >= weekStart.getTime());
 
         const todaySales = todayTransactions.reduce((sum, t) => sum + t.total, 0);
         const transactionCount = todayTransactions.length;
@@ -91,7 +94,7 @@ const DashboardView: React.FC = () => {
             outstandingReceivables,
             salesTrend: salesByDay,
             topProducts,
-            recentTransactions: transactions.slice(0, 5)
+            recentTransactions: transactions.slice(0, 5) // Show recent transactions including refunds for visibility, or filter? Let's show active ones.
         };
     }, [transactions, products, inventorySettings]);
     
@@ -101,13 +104,15 @@ const DashboardView: React.FC = () => {
         setAiError('');
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-            const recentTransactions = transactions.slice(0, 100).map(t => ({
-                date: new Date(t.createdAt).toISOString().split('T')[0],
-                total: t.total,
-                items: t.items.filter(i => !i.isReward).map(i => ({ name: i.name, quantity: i.quantity, price: i.price }))
-            }));
+            // Limit data sent to AI to avoid context length issues and improve speed
+            const recentTransactions = transactions
+                .filter(t => t.paymentStatus !== 'refunded')
+                .slice(0, 50)
+                .map(t => ({
+                    date: new Date(t.createdAt).toISOString().split('T')[0],
+                    total: t.total,
+                    items: t.items.filter(i => !i.isReward).map(i => ({ name: i.name, quantity: i.quantity }))
+                }));
 
             const productContext = products.map(p => ({
                 name: p.name,
@@ -116,21 +121,42 @@ const DashboardView: React.FC = () => {
                 stock: p.stock
             }));
 
-            const systemInstruction = `You are "Artea AI", a helpful business analyst for a small cafe owner. Analyze the provided JSON data to answer the user's question concisely, clearly, and in Bahasa Indonesia. Provide actionable insights and suggestions. Format your response using simple markdown (bold text with **, lists with -). Do not explain that you are an AI. Do not repeat the data back to the user. Start your response with a friendly greeting.
-Here is the sales and product data:`;
+            const systemInstruction = `You are "Artea AI", a smart business consultant for a POS system. 
+            Analyze the provided sales JSON data.
+            Answer the user's question in Bahasa Indonesia.
+            Keep answers concise, practical, and action-oriented.
+            Use simple Markdown (bold, lists) for formatting.
+            Do not mention technical details like JSON or API.`;
             
-            const contents = `${systemInstruction}\n\n## Recent Sales Data (JSON)\n${JSON.stringify(recentTransactions)}\n\n## Product Catalog (JSON)\n${JSON.stringify(productContext)}\n\n## User's Question\n${question}`;
+            const userContent = `Data Penjualan Terakhir:\n${JSON.stringify(recentTransactions)}\n\nKatalog Produk:\n${JSON.stringify(productContext)}\n\nPertanyaan User:\n${question}`;
             
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents,
+            // Using Pollinations.ai (Free, No API Key required)
+            const response = await fetch('https://text.pollinations.ai/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    messages: [
+                        { role: 'system', content: systemInstruction },
+                        { role: 'user', content: userContent }
+                    ],
+                    model: 'openai', // Pollinations routes to the best available free model
+                    seed: Math.floor(Math.random() * 1000), // Random seed to ensure fresh answers
+                    jsonMode: false
+                }),
             });
 
-            setAiResponse(response.text);
+            if (!response.ok) {
+                throw new Error(`Pollinations API Error: ${response.statusText}`);
+            }
+
+            const text = await response.text();
+            setAiResponse(text);
 
         } catch (err) {
-            console.error("Gemini API Error:", err);
-            setAiError("Maaf, terjadi kesalahan saat mengambil insight. Silakan coba lagi nanti.");
+            console.error("AI API Error:", err);
+            setAiError("Maaf, layanan AI sedang sibuk atau tidak dapat diakses saat ini. Silakan coba lagi nanti.");
         } finally {
             setIsLoadingAI(false);
         }
@@ -142,41 +168,56 @@ Here is the sales and product data:`;
     };
 
     const presetQuestions = [
-        "Berikan saya ringkasan penjualan minggu ini.",
-        "Produk mana yang paling laku dan paling tidak laku?",
-        "Beri saya ide promo untuk akhir pekan berdasarkan data penjualan.",
+        "Analisis tren penjualan minggu ini.",
+        "Rekomendasi stok barang yang perlu ditambah.",
+        "Ide strategi promosi untuk meningkatkan omzet.",
     ];
 
     const renderMarkdown = (text: string) => {
+        // Simple Markdown parser for basic formatting
         const lines = text.split('\n');
         let html = '';
         let inList = false;
 
         for (const line of lines) {
-            // Process markdown for each line
             let processedLine = line.trim()
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // Bold
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+                .replace(/\*(.*?)\*/g, '<em>$1</em>'); // Italic
 
-            if (processedLine.startsWith('- ')) {
+            if (processedLine.startsWith('- ') || processedLine.startsWith('* ')) {
                 const listItemContent = processedLine.substring(2);
                 if (!inList) {
-                    html += '<ul>';
+                    html += '<ul class="list-disc pl-5 space-y-1">';
                     inList = true;
                 }
                 html += `<li>${listItemContent}</li>`;
+            } else if (processedLine.match(/^\d+\.\s/)) {
+                 const listItemContent = processedLine.replace(/^\d+\.\s/, '');
+                 if (!inList) {
+                    html += '<ol class="list-decimal pl-5 space-y-1">';
+                    inList = true;
+                 }
+                 html += `<li>${listItemContent}</li>`;
             } else {
                 if (inList) {
-                    html += '</ul>';
+                    html += line.match(/^\d+\.\s/) ? '</ol>' : '</ul>';
                     inList = false;
                 }
-                if (processedLine) { // Avoid creating empty paragraphs for empty lines
-                    html += `<p>${processedLine}</p>`;
+                if (processedLine) {
+                    if (processedLine.startsWith('###')) {
+                        html += `<h4 class="text-lg font-bold text-white mt-3 mb-1">${processedLine.replace('###', '').trim()}</h4>`;
+                    } else if (processedLine.startsWith('##')) {
+                        html += `<h3 class="text-xl font-bold text-white mt-4 mb-2">${processedLine.replace('##', '').trim()}</h3>`;
+                    } else {
+                        html += `<p class="mb-2">${processedLine}</p>`;
+                    }
                 }
             }
         }
 
         if (inList) {
-            html += '</ul>';
+             // Close any open lists at end of string (simple heuristic, might need checking if it was ul or ol)
+             html += '</ul>'; 
         }
 
         return { __html: html };
@@ -221,20 +262,22 @@ Here is the sales and product data:`;
                     <div className="bg-slate-800 p-4 sm:p-6 rounded-xl shadow-lg">
                         <h3 className="flex items-center gap-2 text-lg font-semibold text-white mb-4">
                              <Icon name="chat" className="w-5 h-5 text-slate-400"/>
-                             AI Sales Advisor
+                             Artea AI - Asisten Cerdas (Beta)
                         </h3>
                         <div className="space-y-3">
                              <div className="flex flex-wrap gap-2">
                                 {presetQuestions.map(q => (
-                                    <button key={q} onClick={() => handleAIPrompt(q)} className="text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded-md transition-colors">{q}</button>
+                                    <button key={q} onClick={() => handleAIPrompt(q)} className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-full transition-colors border border-slate-600 hover:border-slate-500">{q}</button>
                                 ))}
                             </div>
                             <div className="flex gap-2">
-                                <input type="text" value={aiQuestion} onChange={(e) => setAiQuestion(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAIPrompt(aiQuestion)} placeholder="Tanya tentang bisnis Anda..." className="flex-1 w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" />
-                                <Button onClick={() => handleAIPrompt(aiQuestion)} disabled={isLoadingAI || !aiQuestion}>Tanya</Button>
+                                <input type="text" value={aiQuestion} onChange={(e) => setAiQuestion(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAIPrompt(aiQuestion)} placeholder="Tanya saran bisnis..." className="flex-1 w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:ring-1 focus:ring-[#347758]" />
+                                <Button onClick={() => handleAIPrompt(aiQuestion)} disabled={isLoadingAI || !aiQuestion}>
+                                    {isLoadingAI ? <span className="animate-spin">↻</span> : <Icon name="chat" className="w-4 h-4" />}
+                                </Button>
                             </div>
-                            {isLoadingAI && <p className="text-sm text-slate-400 text-center animate-pulse">Artea AI sedang berpikir...</p>}
-                            {aiError && <p className="text-sm text-red-400 text-center">{aiError}</p>}
+                            {isLoadingAI && <p className="text-sm text-slate-400 text-center animate-pulse">Sedang menganalisis data...</p>}
+                            {aiError && <p className="text-sm text-red-400 text-center bg-red-900/20 p-2 rounded">{aiError}</p>}
                             {aiResponse && (
                                 <div 
                                     className="prose prose-sm prose-invert max-w-none bg-slate-900/50 p-4 rounded-lg border border-slate-700 text-slate-300" 
@@ -264,10 +307,14 @@ Here is the sales and product data:`;
                             {dashboardData.recentTransactions.map((t: Transaction) => (
                                 <div key={t.id} className="flex justify-between items-center text-sm border-b border-slate-700/50 pb-2 last:border-b-0 last:pb-0">
                                     <div>
-                                        <p className="font-medium text-slate-200">{t.customerName || 'Penjualan'}</p>
+                                        <p className={`font-medium ${t.paymentStatus === 'refunded' ? 'line-through text-slate-500' : 'text-slate-200'}`}>{t.customerName || 'Penjualan'}</p>
                                         <p className="text-xs text-slate-400">{new Date(t.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit'})}</p>
                                     </div>
-                                    <p className="font-semibold text-green-400">{CURRENCY_FORMATTER.format(t.total)}</p>
+                                    {t.paymentStatus === 'refunded' ? (
+                                        <span className="text-xs bg-slate-700 text-slate-400 px-2 py-1 rounded-full">Refunded</span>
+                                    ) : (
+                                        <p className="font-semibold text-green-400">{CURRENCY_FORMATTER.format(t.total)}</p>
+                                    )}
                                 </div>
                             ))}
                             {dashboardData.recentTransactions.length === 0 && <p className="text-sm text-slate-500">Belum ada transaksi.</p>}

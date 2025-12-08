@@ -1,4 +1,5 @@
-import type { AppData, Product, RawMaterial, Transaction as TransactionType, Expense, Purchase, Customer, StockAdjustment, Addon } from '../types';
+
+import type { AppData, Product, RawMaterial, Transaction as TransactionType, Expense, Purchase, Customer, StockAdjustment, Addon, CartItem } from '../types';
 import { db } from './db';
 
 const downloadCSV = (csvContent: string, filename: string) => {
@@ -22,15 +23,142 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
     });
 };
 
-const exportTransactionsCSV = (transactions: TransactionType[]) => {
+const generateTransactionsCSVString = (transactions: TransactionType[]) => {
     const headers = 'id,createdAt,customerName,userName,total,amountPaid,paymentStatus,items';
     const rows = transactions.map(t => {
         const items = t.items.map(i => `${i.name} (qty: ${i.quantity}, price: ${i.price})`).join('; ');
-        return `${t.id},"${new Date(t.createdAt).toLocaleString('id-ID')}","${t.customerName || ''}","${t.userName}",${t.total},${t.amountPaid},${t.paymentStatus},"${items}"`;
+        // Escape quotes in items string and others
+        const escapedItems = items.replace(/"/g, '""');
+        const escapedCustomer = (t.customerName || '').replace(/"/g, '""');
+        
+        return `${t.id},"${new Date(t.createdAt).toLocaleString('id-ID')}","${escapedCustomer}","${t.userName}",${t.total},${t.amountPaid},${t.paymentStatus},"${escapedItems}"`;
     });
-    const csvContent = [headers, ...rows].join('\n');
+    return [headers, ...rows].join('\n');
+};
+
+const exportTransactionsCSV = (transactions: TransactionType[]) => {
+    const csvContent = generateTransactionsCSVString(transactions);
     downloadCSV(csvContent, 'transactions_report.csv');
 };
+
+const parseCSVLine = (line: string): string[] => {
+    const values: string[] = [];
+    let current = '';
+    let inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+            if (inQuote && line[i + 1] === '"') {
+                current += '"';
+                i++;
+            } else {
+                inQuote = !inQuote;
+            }
+        } else if (char === ',' && !inQuote) {
+            values.push(current.trim());
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    values.push(current.trim());
+    return values;
+};
+
+const parseTransactionsCSV = (csvText: string): TransactionType[] => {
+    const lines = csvText.trim().split('\n');
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].split(',').map(h => h.trim());
+    const transactions: TransactionType[] = [];
+
+    // Mapping index based on standard header: id,createdAt,customerName,userName,total,amountPaid,paymentStatus,items
+    const idIdx = headers.findIndex(h => h.includes('id'));
+    const dateIdx = headers.findIndex(h => h.includes('createdAt') || h.includes('Date')); // flexible check
+    const custIdx = headers.findIndex(h => h.includes('customerName'));
+    const userIdx = headers.findIndex(h => h.includes('userName') || h.includes('Cashier'));
+    const totalIdx = headers.findIndex(h => h.includes('total'));
+    const paidIdx = headers.findIndex(h => h.includes('amountPaid'));
+    const statusIdx = headers.findIndex(h => h.includes('paymentStatus'));
+    const itemsIdx = headers.findIndex(h => h.includes('items'));
+
+    if (idIdx === -1 || totalIdx === -1) {
+        throw new Error('Format CSV tidak valid. Kolom ID atau Total hilang.');
+    }
+
+    for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const vals = parseCSVLine(lines[i]);
+        
+        // Basic validation
+        if (vals.length < headers.length) continue;
+
+        try {
+            // Reconstruct Items
+            const itemsStr = vals[itemsIdx] || '';
+            const items: CartItem[] = itemsStr.split(';').filter(Boolean).map((s, idx) => {
+                // Regex to match "Name (qty: 1, price: 1000)"
+                const match = s.trim().match(/(.+?) \(qty: (\d+), price: (\d+)\)/);
+                if (match) {
+                    return {
+                        id: `imported-item-${Date.now()}-${idx}`,
+                        cartItemId: `imported-cart-${Date.now()}-${idx}`,
+                        name: match[1],
+                        quantity: parseInt(match[2]),
+                        price: parseFloat(match[3]),
+                        category: ['Imported'],
+                    } as CartItem;
+                }
+                return null;
+            }).filter((item): item is CartItem => item !== null);
+
+            const createdAtStr = vals[dateIdx]?.replace(/"/g, ''); // Remove quotes if any
+            // Try to parse date, fallback to now if fail
+            let createdAt = new Date().toISOString();
+            if (createdAtStr) {
+                 // Try parsing standard locale string or ISO
+                 const parsed = Date.parse(createdAtStr);
+                 if (!isNaN(parsed)) {
+                     createdAt = new Date(parsed).toISOString();
+                 } else {
+                     // Handle potential DD/MM/YYYY format if localeString was used
+                     const parts = createdAtStr.split(/[/\s,:]+/);
+                     if (parts.length >= 3) {
+                         // Very rough estimation, assume Day Month Year order for ID-ID locale
+                         // This is best effort.
+                     }
+                 }
+            }
+
+            const transaction: TransactionType = {
+                id: vals[idIdx] || `imported-${Date.now()}-${i}`,
+                createdAt: createdAt,
+                customerName: vals[custIdx],
+                userName: vals[userIdx] || 'Imported',
+                userId: 'imported',
+                total: parseFloat(vals[totalIdx]) || 0,
+                amountPaid: parseFloat(vals[paidIdx]) || 0,
+                paymentStatus: (vals[statusIdx] as any) || 'paid',
+                items: items,
+                subtotal: parseFloat(vals[totalIdx]) || 0, // Assume no discount for simplicity in import
+                payments: [], // Cannot reconstruct exact payment history easily
+            };
+            
+            // Re-validate totals to be safe
+            const calcTotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            if (Math.abs(calcTotal - transaction.total) > 1) {
+                // Warning: calculated total differs from imported total. 
+                // We keep imported total as truth for financial reports.
+            }
+
+            transactions.push(transaction);
+        } catch (e) {
+            console.error(`Skipping row ${i}:`, e);
+        }
+    }
+
+    return transactions;
+}
 
 const exportExpensesCSV = (expenses: Expense[]) => {
     const headers = 'id,date,description,category,amount,amountPaid,status';
@@ -78,7 +206,7 @@ export const dataService = {
     await db.transaction('r', db.tables.map(t => t.name), async () => {
       const [
         products, categoriesObj, rawMaterials, transactionRecords, users, settings,
-        expenses, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts
+        expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts
       ] = await Promise.all([
         db.products.toArray(),
         db.appState.get('categories'),
@@ -87,6 +215,7 @@ export const dataService = {
         db.users.toArray(),
         db.settings.toArray(),
         db.expenses.toArray(),
+        db.otherIncomes.toArray(),
         db.suppliers.toArray(),
         db.purchases.toArray(),
         db.stockAdjustments.toArray(),
@@ -112,6 +241,7 @@ export const dataService = {
       data.transactionRecords = transactionRecords;
       data.users = users;
       data.expenses = expenses;
+      data.otherIncomes = otherIncomes;
       data.suppliers = suppliers;
       data.purchases = purchases;
       data.stockAdjustments = stockAdjustments;
@@ -306,12 +436,13 @@ export const dataService = {
   },
 
   exportAllReportsCSV: (data: AppData) => {
-    // Browser will download these files sequentially
-    // FIX: Use 'transactionRecords' from AppData.
     if (data.transactionRecords.length > 0) exportTransactionsCSV(data.transactionRecords);
     if (data.expenses.length > 0) exportExpensesCSV(data.expenses);
     if (data.purchases.length > 0) exportPurchasesCSV(data.purchases, data.rawMaterials, data.products);
     if (data.customers.length > 0) exportCustomersCSV(data.customers);
     if (data.stockAdjustments.length > 0) exportStockAdjustmentsCSV(data.stockAdjustments);
-  }
+  },
+
+  generateTransactionsCSVString, // Exported to be used in Report View for sending to admin
+  parseTransactionsCSV
 };

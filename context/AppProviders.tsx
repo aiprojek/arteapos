@@ -10,8 +10,7 @@ import { DiscountProvider } from './DiscountContext';
 import { CustomerProvider } from './CustomerContext';
 import { CartProvider } from './CartContext';
 
-// FIX: Change to React.FC to fix children prop type error
-const AppProviders: React.FC = ({ children }) => {
+const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <DataProvider>
       <UIProvider>

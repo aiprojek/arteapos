@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import type { AppData } from '../types';
 import { db, initialData } from '../services/db';
@@ -41,7 +42,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         const [
           products, categoriesObj, rawMaterials, transactionRecords, users, settings,
-          expenses, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts
+          expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts
         ] = await Promise.all([
           db.products.toArray(),
           db.appState.get('categories'),
@@ -51,6 +52,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           db.users.toArray(),
           db.settings.toArray(),
           db.expenses.toArray(),
+          db.otherIncomes.toArray(),
           db.suppliers.toArray(),
           db.purchases.toArray(),
           db.stockAdjustments.toArray(),
@@ -67,6 +69,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           transactionRecords,
           users,
           expenses,
+          otherIncomes: otherIncomes || [],
           suppliers,
           purchases,
           stockAdjustments,
@@ -118,6 +121,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 case 'transactionRecords':
                 case 'users':
                 case 'expenses':
+                case 'otherIncomes':
                 case 'suppliers':
                 case 'purchases':
                 case 'stockAdjustments':
@@ -173,6 +177,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await db.transactionRecords.bulkAdd(backupData.transactionRecords || []);
       await db.users.bulkAdd(backupData.users || []);
       await db.expenses.bulkAdd(backupData.expenses || []);
+      await db.otherIncomes.bulkAdd(backupData.otherIncomes || []);
       await db.suppliers.bulkAdd(backupData.suppliers || []);
       await db.purchases.bulkAdd(backupData.purchases || []);
       await db.stockAdjustments.bulkAdd(backupData.stockAdjustments || []);

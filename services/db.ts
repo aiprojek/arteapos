@@ -1,9 +1,10 @@
+
 import Dexie, { type EntityTable } from 'dexie';
 // FIX: The imported type 'Transaction' conflicts with Dexie's 'transaction' method. It is aliased to 'TransactionType' to resolve this.
 import type { 
     Product, RawMaterial, Transaction as TransactionType, User, Expense, Supplier, Purchase, 
     StockAdjustment, Customer, DiscountDefinition, HeldCart, ReceiptSettings, 
-    InventorySettings, AuthSettings, SessionSettings, MembershipSettings, AppData, SessionState
+    InventorySettings, AuthSettings, SessionSettings, MembershipSettings, AppData, SessionState, OtherIncome
 } from '../types';
 import { INITIAL_PRODUCTS } from '../constants';
 
@@ -52,6 +53,8 @@ export const initialData: AppData = {
         address: 'Jalan Teknologi No. 1',
         footerMessage: 'Terima kasih telah berbelanja!',
         enableKitchenPrinter: false,
+        adminWhatsapp: '',
+        adminTelegram: '',
     },
     inventorySettings: {
         enabled: false,
@@ -65,6 +68,7 @@ export const initialData: AppData = {
         enableCartHolding: false,
     },
     expenses: [],
+    otherIncomes: [],
     suppliers: [],
     purchases: [],
     stockAdjustments: [],
@@ -90,6 +94,7 @@ export const db = new Dexie('ArteaPosDB') as Dexie & {
     transactionRecords: EntityTable<TransactionType, 'id'>;
     users: EntityTable<User, 'id'>;
     expenses: EntityTable<Expense, 'id'>;
+    otherIncomes: EntityTable<OtherIncome, 'id'>; // New Table
     suppliers: EntityTable<Supplier, 'id'>;
     purchases: EntityTable<Purchase, 'id'>;
     stockAdjustments: EntityTable<StockAdjustment, 'id'>;
@@ -129,6 +134,10 @@ db.version(2).upgrade(async (tx) => {
             delete product.imageUrl;
         }
     });
+});
+
+db.version(3).stores({
+    otherIncomes: 'id, date'
 });
 
 

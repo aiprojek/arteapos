@@ -1,11 +1,11 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// FIX: Replace obsolete useAppContext with specific context hooks
 import { useFinance } from '../context/FinanceContext';
 import { useProduct } from '../context/ProductContext';
 import { useUI } from '../context/UIContext';
 import { useCustomer } from '../context/CustomerContext';
-// FIX: Aliased `Transaction` to `TransactionType` to resolve a naming conflict with Dexie's internal types, which was causing cascading type errors across the application.
-import type { Expense, Supplier, Purchase, PurchaseItem, PurchaseStatus, RawMaterial, Transaction as TransactionType, PaymentMethod, ExpenseStatus, Customer, Product } from '../types';
+import { useAuth } from '../context/AuthContext';
+import type { Expense, Supplier, Purchase, PurchaseItem, PurchaseStatus, RawMaterial, Transaction as TransactionType, PaymentMethod, ExpenseStatus, Customer, Product, OtherIncome } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Icon from '../components/Icon';
@@ -13,7 +13,7 @@ import { CURRENCY_FORMATTER } from '../constants';
 import UpdatePaymentModal from '../components/UpdatePaymentModal';
 import Pagination from '../components/Pagination';
 
-type FinanceSubTab = 'cashflow' | 'expenses' | 'purchasing' | 'debt-receivables';
+type FinanceSubTab = 'cashflow' | 'expenses' | 'other_income' | 'purchasing' | 'debt-receivables';
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
 
 const StatCard: React.FC<{title: string; value: string | number; className?: string}> = ({title, value, className}) => (
@@ -25,7 +25,7 @@ const StatCard: React.FC<{title: string; value: string | number; className?: str
 
 // --- Cash Flow Tab ---
 const CashFlowTab: React.FC = () => {
-    const { transactions, expenses, purchases } = useFinance();
+    const { transactions, expenses, purchases, otherIncomes } = useFinance();
     const [filter, setFilter] = useState<TimeFilter>('month');
     const [customStartDate, setCustomStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [customEndDate, setCustomEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -73,24 +73,29 @@ const CashFlowTab: React.FC = () => {
             }
         };
 
-        const filteredTransactions = transactions.filter(t => filterPredicate(t.createdAt));
+        const filteredTransactions = transactions.filter(t => filterPredicate(t.createdAt) && t.paymentStatus !== 'refunded');
         const filteredExpenses = expenses.filter(e => filterPredicate(e.date));
         const filteredPurchases = purchases.filter(p => filterPredicate(p.date));
+        const filteredOtherIncome = otherIncomes.filter(i => filterPredicate(i.date));
 
-        const totalIncome = filteredTransactions.reduce((sum, t) => sum + t.total, 0);
+        const salesIncome = filteredTransactions.reduce((sum, t) => sum + t.total, 0);
+        const otherIncomeTotal = filteredOtherIncome.reduce((sum, i) => sum + i.amount, 0);
+        const totalIncome = salesIncome + otherIncomeTotal;
+
         const totalOpEx = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
         const totalPurchases = filteredPurchases.reduce((sum, p) => sum + p.totalAmount, 0);
         const totalExpenses = totalOpEx + totalPurchases;
         const netCashFlow = totalIncome - totalExpenses;
 
         const combinedFlow = [
-            ...filteredTransactions.map(t => ({ type: 'Pemasukan', date: t.createdAt, description: `Penjualan #${t.id.slice(-4)}`, amount: t.total })),
+            ...filteredTransactions.map(t => ({ type: 'Penjualan', date: t.createdAt, description: `Penjualan #${t.id.slice(-4)}`, amount: t.total })),
+            ...filteredOtherIncome.map(i => ({ type: 'Pemasukan Lain', date: i.date, description: i.description, amount: i.amount })),
             ...filteredExpenses.map(e => ({ type: 'Pengeluaran', date: e.date, description: e.description, amount: -e.amount })),
-            ...filteredPurchases.map(p => ({ type: 'Pengeluaran', date: p.date, description: `Pembelian dari ${p.supplierName}`, amount: -p.totalAmount }))
+            ...filteredPurchases.map(p => ({ type: 'Pembelian', date: p.date, description: `Pembelian dari ${p.supplierName}`, amount: -p.totalAmount }))
         ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         return { totalIncome, totalExpenses, netCashFlow, combinedFlow };
-    }, [filter, transactions, expenses, purchases, customStartDate, customEndDate]);
+    }, [filter, transactions, expenses, purchases, otherIncomes, customStartDate, customEndDate]);
     
     const filterLabels: Record<TimeFilter, string> = {
         today: 'Hari Ini',
@@ -196,9 +201,10 @@ const CashFlowTab: React.FC = () => {
                  <h3 className="text-lg font-bold text-white p-4">Riwayat Arus Kas</h3>
                  <div className="overflow-x-auto">
                     <table className="w-full text-left">
-                        <thead className="bg-slate-700">
+                        <thead className="bg-slate-700 text-slate-200">
                              <tr>
                                 <th className="p-3">Tanggal</th>
+                                <th className="p-3">Tipe</th>
                                 <th className="p-3">Deskripsi</th>
                                 <th className="p-3 text-right">Jumlah</th>
                             </tr>
@@ -207,9 +213,10 @@ const CashFlowTab: React.FC = () => {
                             {data.combinedFlow.map((item, index) => (
                                 <tr key={index} className="border-b border-slate-700 last:border-b-0">
                                     <td className="p-3 text-slate-400 whitespace-nowrap">{new Date(item.date).toLocaleDateString('id-ID')}</td>
+                                    <td className="p-3"><span className={`text-xs px-2 py-1 rounded-full ${item.amount > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{item.type}</span></td>
                                     <td className="p-3">{item.description}</td>
                                     <td className={`p-3 text-right font-semibold ${item.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                        {CURRENCY_FORMATTER.format(item.amount)}
+                                        {CURRENCY_FORMATTER.format(Math.abs(item.amount))}
                                     </td>
                                 </tr>
                             ))}
@@ -222,16 +229,94 @@ const CashFlowTab: React.FC = () => {
     );
 };
 
+const PayDebtModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (amount: number) => void;
+    purchase: Purchase;
+}> = ({ isOpen, onClose, onSave, purchase }) => {
+    const [amount, setAmount] = useState('');
+    const remaining = purchase.totalAmount - purchase.amountPaid;
+
+    const handleSubmit = () => {
+        const val = parseFloat(amount);
+        if (val > 0) {
+            onSave(val);
+            onClose();
+        }
+    }
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={`Bayar Utang ke ${purchase.supplierName}`}>
+            <div className="space-y-4">
+                <div className="flex justify-between bg-slate-700 p-3 rounded-lg">
+                    <span className="text-slate-300">Sisa Utang</span>
+                    <span className="font-bold text-red-400">{CURRENCY_FORMATTER.format(remaining)}</span>
+                </div>
+                <input
+                    type="number"
+                    value={amount}
+                    onChange={e => setAmount(e.target.value)}
+                    placeholder="Jumlah Pembayaran"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                    autoFocus
+                />
+                <Button onClick={handleSubmit} disabled={!amount || parseFloat(amount) <= 0} className="w-full">Bayar</Button>
+            </div>
+        </Modal>
+    );
+}
+
+const PayExpenseDebtModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (amount: number) => void;
+    expense: Expense;
+}> = ({ isOpen, onClose, onSave, expense }) => {
+    const [amount, setAmount] = useState('');
+    const remaining = expense.amount - expense.amountPaid;
+
+    const handleSubmit = () => {
+        const val = parseFloat(amount);
+        if (val > 0) {
+            onSave(val);
+            onClose();
+        }
+    }
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={`Bayar Utang Pengeluaran`}>
+            <div className="space-y-4">
+                <div className="p-2 bg-slate-800 rounded mb-2">
+                    <p className="text-sm text-slate-400">{expense.description}</p>
+                </div>
+                <div className="flex justify-between bg-slate-700 p-3 rounded-lg">
+                    <span className="text-slate-300">Sisa Utang</span>
+                    <span className="font-bold text-red-400">{CURRENCY_FORMATTER.format(remaining)}</span>
+                </div>
+                <input
+                    type="number"
+                    value={amount}
+                    onChange={e => setAmount(e.target.value)}
+                    placeholder="Jumlah Pembayaran"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                    autoFocus
+                />
+                <Button onClick={handleSubmit} disabled={!amount || parseFloat(amount) <= 0} className="w-full">Bayar</Button>
+            </div>
+        </Modal>
+    );
+}
+
 // --- Debt & Receivables Tab ---
 const DebtReceivablesTab: React.FC = () => {
     const { transactions, purchases, expenses, addPaymentToTransaction, addPaymentToPurchase, addPaymentToExpense } = useFinance();
     const [subTab, setSubTab] = useState<'receivables' | 'payables' | 'expense_payables'>('receivables');
-    // FIX: Changed type from `Transaction` to `TransactionType` to use the aliased type and avoid conflicts.
     const [updatingTransaction, setUpdatingTransaction] = useState<TransactionType | null>(null);
     const [payingPurchase, setPayingPurchase] = useState<Purchase | null>(null);
     const [payingExpense, setPayingExpense] = useState<Expense | null>(null);
 
-    const receivables = useMemo(() => transactions.filter(t => t.paymentStatus === 'partial' || t.paymentStatus === 'unpaid').sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()), [transactions]);
+    const receivables = useMemo(() => transactions.filter(t => (t.paymentStatus === 'partial' || t.paymentStatus === 'unpaid')).sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()), [transactions]);
     const payables = useMemo(() => purchases.filter(p => p.status === 'belum-lunas').sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()), [purchases]);
     const expensePayables = useMemo(() => expenses.filter(e => e.status === 'belum-lunas').sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()), [expenses]);
     
@@ -272,7 +357,7 @@ const DebtReceivablesTab: React.FC = () => {
                     <StatCard title="Total Piutang Pelanggan" value={totalReceivables} className="border-l-4 border-yellow-500" />
                     <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
                          <table className="w-full text-left">
-                            <thead className="bg-slate-700">
+                            <thead className="bg-slate-700 text-slate-200">
                                 <tr>
                                     <th className="p-3">Tanggal</th>
                                     <th className="p-3">Pelanggan</th>
@@ -303,7 +388,7 @@ const DebtReceivablesTab: React.FC = () => {
                     <StatCard title="Total Utang ke Pemasok" value={totalPayables} className="border-l-4 border-red-500" />
                      <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
                         <table className="w-full text-left">
-                           <thead className="bg-slate-700">
+                           <thead className="bg-slate-700 text-slate-200">
                                <tr>
                                    <th className="p-3">Tanggal</th>
                                    <th className="p-3">Pemasok</th>
@@ -334,7 +419,7 @@ const DebtReceivablesTab: React.FC = () => {
                     <StatCard title="Total Utang Pengeluaran" value={totalExpensePayables} className="border-l-4 border-red-500" />
                      <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
                         <table className="w-full text-left">
-                           <thead className="bg-slate-700">
+                           <thead className="bg-slate-700 text-slate-200">
                                <tr>
                                    <th className="p-3">Tanggal</th>
                                    <th className="p-3">Deskripsi</th>
@@ -478,7 +563,7 @@ const CustomersTab: React.FC = () => {
             </div>
              <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
                 <table className="w-full text-left">
-                    <thead className="bg-slate-700">
+                    <thead className="bg-slate-700 text-slate-200">
                         <tr>
                             <th className="p-3">Nama</th>
                             <th className="p-3">ID Anggota</th>
@@ -518,14 +603,366 @@ const CustomersTab: React.FC = () => {
     )
 }
 
+const ExpenseFormModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (data: Omit<Expense, 'id' | 'status'> | Expense) => void;
+    expense: Expense | null;
+}> = ({ isOpen, onClose, onSave, expense }) => {
+    const [form, setForm] = useState({ description: '', amount: '', category: '', date: '', amountPaid: '' });
+
+    useEffect(() => {
+        if (expense) {
+            setForm({
+                description: expense.description,
+                amount: expense.amount.toString(),
+                category: expense.category,
+                date: new Date(expense.date).toISOString().split('T')[0],
+                amountPaid: expense.amountPaid.toString(),
+            });
+        } else {
+            setForm({ description: '', amount: '', category: '', date: new Date().toISOString().split('T')[0], amountPaid: '' });
+        }
+    }, [expense, isOpen]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const amount = parseFloat(form.amount) || 0;
+        const amountPaid = form.amountPaid ? parseFloat(form.amountPaid) : amount; // Default to full amount if not specified
+        const data = {
+            description: form.description,
+            amount,
+            category: form.category,
+            date: new Date(form.date).toISOString(),
+            amountPaid
+        };
+        if (expense) onSave({ ...data, id: expense.id, status: expense.status });
+        else onSave(data);
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={expense ? 'Edit Pengeluaran' : 'Tambah Pengeluaran'}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <input type="text" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Deskripsi (cth: Listrik)" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <input type="number" min="0" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="Jumlah (Rp)" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <input type="text" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="Kategori (cth: Operasional)" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <div>
+                    <label className="block text-xs text-slate-400 mb-1">Jumlah yang Dibayar (Kosongkan jika Lunas)</label>
+                    <input type="number" min="0" value={form.amountPaid} onChange={e => setForm({ ...form, amountPaid: e.target.value })} placeholder="Jumlah Dibayar" className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                    <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
+                    <Button type="submit">Simpan</Button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
+const OtherIncomeFormModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (data: Omit<OtherIncome, 'id'> | OtherIncome) => void;
+    income: OtherIncome | null;
+}> = ({ isOpen, onClose, onSave, income }) => {
+    const [form, setForm] = useState({ description: '', amount: '', category: '', date: '' });
+
+    useEffect(() => {
+        if (income) {
+            setForm({
+                description: income.description,
+                amount: income.amount.toString(),
+                category: income.category,
+                date: new Date(income.date).toISOString().split('T')[0],
+            });
+        } else {
+            setForm({ description: '', amount: '', category: '', date: new Date().toISOString().split('T')[0] });
+        }
+    }, [income, isOpen]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const data = {
+            description: form.description,
+            amount: parseFloat(form.amount) || 0,
+            category: form.category,
+            date: new Date(form.date).toISOString(),
+        };
+        if (income) onSave({ ...data, id: income.id });
+        else onSave(data);
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={income ? 'Edit Pemasukan Lain' : 'Tambah Pemasukan Lain'}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <input type="text" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Deskripsi" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <input type="number" min="0" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="Jumlah (Rp)" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <input type="text" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="Kategori" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <div className="flex justify-end gap-3 pt-2">
+                    <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
+                    <Button type="submit">Simpan</Button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
+const SupplierFormModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (data: Omit<Supplier, 'id'> | Supplier) => void;
+    supplier: Supplier | null;
+}> = ({ isOpen, onClose, onSave, supplier }) => {
+    const [form, setForm] = useState({ name: '', contact: '' });
+
+    useEffect(() => {
+        if (supplier) {
+            setForm({ name: supplier.name, contact: supplier.contact || '' });
+        } else {
+            setForm({ name: '', contact: '' });
+        }
+    }, [supplier, isOpen]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const data = { name: form.name, contact: form.contact };
+        if (supplier) onSave({ ...data, id: supplier.id });
+        else onSave(data);
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={supplier ? 'Edit Pemasok' : 'Tambah Pemasok'}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Nama Pemasok" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <input type="text" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} placeholder="Kontak / Alamat" className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <div className="flex justify-end gap-3 pt-2">
+                    <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
+                    <Button type="submit">Simpan</Button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
+const PurchaseFormModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (data: Omit<Purchase, 'id' | 'status' | 'supplierName' | 'totalAmount'>) => void;
+}> = ({ isOpen, onClose, onSave }) => {
+    const { suppliers } = useFinance();
+    const { products, rawMaterials } = useProduct();
+    const [supplierId, setSupplierId] = useState('');
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [items, setItems] = useState<PurchaseItem[]>([]);
+    const [amountPaid, setAmountPaid] = useState('');
+
+    const [newItemType, setNewItemType] = useState<'raw_material' | 'product'>('raw_material');
+    const [newItemId, setNewItemId] = useState('');
+    const [newItemQty, setNewItemQty] = useState('');
+    const [newItemPrice, setNewItemPrice] = useState('');
+
+    const addItem = () => {
+        if (!newItemId || !newItemQty || !newItemPrice) return;
+        const item: PurchaseItem = {
+            itemType: newItemType,
+            quantity: parseFloat(newItemQty),
+            price: parseFloat(newItemPrice),
+            rawMaterialId: newItemType === 'raw_material' ? newItemId : undefined,
+            productId: newItemType === 'product' ? newItemId : undefined,
+        };
+        setItems([...items, item]);
+        setNewItemId(''); setNewItemQty(''); setNewItemPrice('');
+    };
+
+    const removeItem = (index: number) => {
+        setItems(items.filter((_, i) => i !== index));
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const paid = amountPaid ? parseFloat(amountPaid) : totalAmount;
+        onSave({
+            supplierId,
+            date: new Date(date).toISOString(),
+            items,
+            amountPaid: paid
+        });
+    };
+
+    const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Catat Pembelian Stok">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <select value={supplierId} onChange={e => setSupplierId(e.target.value)} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white">
+                    <option value="" disabled>Pilih Pemasok</option>
+                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                
+                <div className="bg-slate-700 p-3 rounded-lg space-y-2">
+                    <p className="text-sm font-bold">Item Pembelian</p>
+                    {items.map((item, idx) => {
+                        const name = item.itemType === 'product' 
+                            ? products.find(p => p.id === item.productId)?.name 
+                            : rawMaterials.find(m => m.id === item.rawMaterialId)?.name;
+                        return (
+                            <div key={idx} className="flex justify-between items-center text-xs bg-slate-800 p-2 rounded">
+                                <span>{name} x {item.quantity}</span>
+                                <span>{CURRENCY_FORMATTER.format(item.price * item.quantity)}</span>
+                                <button type="button" onClick={() => removeItem(idx)} className="text-red-400"><Icon name="trash" className="w-3 h-3"/></button>
+                            </div>
+                        )
+                    })}
+                    <div className="flex gap-2 items-center flex-wrap">
+                        <select value={newItemType} onChange={e => setNewItemType(e.target.value as any)} className="bg-slate-900 text-xs p-2 rounded">
+                            <option value="raw_material">Bahan Baku</option>
+                            <option value="product">Produk</option>
+                        </select>
+                        <select value={newItemId} onChange={e => setNewItemId(e.target.value)} className="bg-slate-900 text-xs p-2 rounded flex-1">
+                            <option value="" disabled>Pilih Item</option>
+                            {newItemType === 'raw_material' 
+                                ? rawMaterials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)
+                                : products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+                            }
+                        </select>
+                        <input type="number" placeholder="Qty" value={newItemQty} onChange={e => setNewItemQty(e.target.value)} className="w-16 bg-slate-900 text-xs p-2 rounded text-white"/>
+                        <input type="number" placeholder="Harga Satuan" value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)} className="w-24 bg-slate-900 text-xs p-2 rounded text-white"/>
+                        <button type="button" onClick={addItem} className="bg-[#347758] p-2 rounded text-white"><Icon name="plus" className="w-3 h-3"/></button>
+                    </div>
+                </div>
+
+                <div className="flex justify-between items-center bg-slate-800 p-2 rounded">
+                    <span>Total Pembelian</span>
+                    <span className="font-bold text-white">{CURRENCY_FORMATTER.format(totalAmount)}</span>
+                </div>
+
+                <div>
+                    <label className="block text-xs text-slate-400 mb-1">Jumlah Dibayar (Kosongkan jika Lunas)</label>
+                    <input type="number" min="0" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} placeholder="Jumlah Dibayar" className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                    <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
+                    <Button type="submit" disabled={items.length === 0 || !supplierId}>Simpan</Button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
+const PurchasesAndSuppliersTab: React.FC<{
+    onAddSupplier: () => void;
+    onEditSupplier: (s: Supplier) => void;
+    onAddPurchase: () => void;
+    onDeleteSupplier: (id: string) => void;
+}> = ({ onAddSupplier, onEditSupplier, onAddPurchase, onDeleteSupplier }) => {
+    const { suppliers, purchases } = useFinance();
+    const [activeSection, setActiveSection] = useState<'purchases' | 'suppliers'>('purchases');
+
+    return (
+        <div className="space-y-6">
+            <div className="flex bg-slate-700 p-1 rounded-lg w-fit">
+                <button onClick={() => setActiveSection('purchases')} className={`px-4 py-1 text-sm rounded-md transition-colors ${activeSection === 'purchases' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>
+                    Riwayat Pembelian
+                </button>
+                <button onClick={() => setActiveSection('suppliers')} className={`px-4 py-1 text-sm rounded-md transition-colors ${activeSection === 'suppliers' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>
+                    Daftar Pemasok
+                </button>
+            </div>
+
+            {activeSection === 'suppliers' && (
+                <div>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold">Data Pemasok</h3>
+                        <Button onClick={onAddSupplier} size="sm"><Icon name="plus" className="w-4 h-4"/> Tambah Pemasok</Button>
+                    </div>
+                    <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-700 text-slate-200">
+                                <tr>
+                                    <th className="p-3">Nama</th>
+                                    <th className="p-3">Kontak</th>
+                                    <th className="p-3">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {suppliers.map(s => (
+                                    <tr key={s.id} className="border-b border-slate-700 last:border-b-0">
+                                        <td className="p-3 font-medium">{s.name}</td>
+                                        <td className="p-3 text-slate-300">{s.contact || '-'}</td>
+                                        <td className="p-3">
+                                            <div className="flex gap-2">
+                                                <button onClick={() => onEditSupplier(s)} className="text-[#52a37c] hover:text-[#7ac0a0]"><Icon name="edit" /></button>
+                                                <button onClick={() => onDeleteSupplier(s.id)} className="text-red-500 hover:text-red-400"><Icon name="trash" /></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {suppliers.length === 0 && <p className="p-4 text-center text-slate-500">Belum ada pemasok.</p>}
+                    </div>
+                </div>
+            )}
+
+            {activeSection === 'purchases' && (
+                <div>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold">Riwayat Pembelian Stok</h3>
+                        <Button onClick={onAddPurchase} size="sm"><Icon name="plus" className="w-4 h-4"/> Catat Pembelian</Button>
+                    </div>
+                    <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-700 text-slate-200">
+                                <tr>
+                                    <th className="p-3">Tanggal</th>
+                                    <th className="p-3">Pemasok</th>
+                                    <th className="p-3 text-right">Total</th>
+                                    <th className="p-3 text-right">Dibayar</th>
+                                    <th className="p-3">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {purchases.map(p => (
+                                    <tr key={p.id} className="border-b border-slate-700 last:border-b-0">
+                                        <td className="p-3 text-slate-400">{new Date(p.date).toLocaleDateString('id-ID')}</td>
+                                        <td className="p-3">{p.supplierName}</td>
+                                        <td className="p-3 text-right font-medium">{CURRENCY_FORMATTER.format(p.totalAmount)}</td>
+                                        <td className="p-3 text-right text-slate-300">{CURRENCY_FORMATTER.format(p.amountPaid)}</td>
+                                        <td className="p-3">
+                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${p.status === 'lunas' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
+                                                {p.status === 'lunas' ? 'Lunas' : 'Belum Lunas'}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {purchases.length === 0 && <p className="p-4 text-center text-slate-500">Belum ada riwayat pembelian.</p>}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 
 // --- Main Finance View ---
 const FinanceView: React.FC = () => {
+    const { currentUser } = useAuth();
+    const isAdmin = currentUser?.role === 'admin';
     const [mainView, setMainView] = useState<'finance' | 'customers'>('finance');
-    const [activeTab, setActiveTab] = useState<FinanceSubTab>('cashflow');
+    // Set default tab based on role: Admin -> Cashflow, Staff -> Expenses
+    const [activeTab, setActiveTab] = useState<FinanceSubTab>(isAdmin ? 'cashflow' : 'expenses');
+    
     const { products, rawMaterials } = useProduct();
     const { 
         expenses, addExpense, updateExpense, deleteExpense, addPaymentToExpense, 
+        otherIncomes, addOtherIncome, updateOtherIncome, deleteOtherIncome,
         suppliers, addSupplier, updateSupplier, deleteSupplier,
         purchases, addPurchase, addPaymentToPurchase 
     } = useFinance();
@@ -533,6 +970,8 @@ const FinanceView: React.FC = () => {
 
     const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
     const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+    const [isIncomeModalOpen, setIncomeModalOpen] = useState(false);
+    const [editingIncome, setEditingIncome] = useState<OtherIncome | null>(null);
     const [isSupplierModalOpen, setSupplierModalOpen] = useState(false);
     const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
     const [isPurchaseModalOpen, setPurchaseModalOpen] = useState(false);
@@ -562,6 +1001,23 @@ const FinanceView: React.FC = () => {
         }
         setPayingExpense(null);
     }
+
+    // --- Other Income Logic ---
+    const handleSaveIncome = (data: Omit<OtherIncome, 'id'> | OtherIncome) => {
+        if ('id' in data) {
+            updateOtherIncome(data);
+        } else {
+            addOtherIncome(data);
+        }
+        setIncomeModalOpen(false);
+    };
+    const handleDeleteIncome = (id: string) => {
+        showAlert({
+            type: 'confirm', title: 'Hapus Pemasukan?', confirmVariant: 'danger',
+            message: 'Anda yakin ingin menghapus catatan pemasukan ini?',
+            onConfirm: () => deleteOtherIncome(id),
+        });
+    };
 
     // --- Supplier Logic ---
     const handleSaveSupplier = (data: Omit<Supplier, 'id'> | Supplier) => {
@@ -621,14 +1077,57 @@ const FinanceView: React.FC = () => {
     const FinanceTabs = () => (
         <div className="space-y-6">
              <div className="border-b border-slate-700 flex flex-nowrap overflow-x-auto -mb-px">
-                <SubTabButton tab="cashflow" label="Arus Kas" />
-                <SubTabButton tab="debt-receivables" label="Utang & Piutang" />
+                {/* Cash Flow Tab is strictly for Admins */}
+                {isAdmin && <SubTabButton tab="cashflow" label="Arus Kas" />}
+                <SubTabButton tab="other_income" label="Pemasukan Lain" />
                 <SubTabButton tab="expenses" label="Pengeluaran" />
                 <SubTabButton tab="purchasing" label="Pembelian & Pemasok" />
+                <SubTabButton tab="debt-receivables" label="Utang & Piutang" />
             </div>
             
-            {activeTab === 'cashflow' && <CashFlowTab />}
+            {isAdmin && activeTab === 'cashflow' && <CashFlowTab />}
             {activeTab === 'debt-receivables' && <DebtReceivablesTab />}
+
+            {activeTab === 'other_income' && (
+                <div>
+                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+                        <h2 className="text-xl font-bold">Daftar Pemasukan Lain</h2>
+                        <Button onClick={() => {setEditingIncome(null); setIncomeModalOpen(true);}} className="w-full sm:w-auto">
+                            <Icon name="plus" className="w-5 h-5" /> <span>Tambah Pemasukan</span>
+                        </Button>
+                    </div>
+                     <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-700 text-slate-200">
+                                <tr>
+                                    <th className="p-3">Tanggal</th>
+                                    <th className="p-3">Deskripsi</th>
+                                    <th className="p-3">Kategori</th>
+                                    <th className="p-3 text-right">Jumlah</th>
+                                    <th className="p-3">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {otherIncomes.map(i => (
+                                    <tr key={i.id} className="border-b border-slate-700 last:border-b-0">
+                                        <td className="p-3 text-slate-400">{new Date(i.date).toLocaleDateString('id-ID')}</td>
+                                        <td className="p-3">{i.description}</td>
+                                        <td className="p-3 text-slate-300">{i.category}</td>
+                                        <td className="p-3 text-right font-semibold text-green-400">{CURRENCY_FORMATTER.format(i.amount)}</td>
+                                        <td className="p-3">
+                                            <div className="flex gap-2">
+                                                <button onClick={() => {setEditingIncome(i); setIncomeModalOpen(true);}} className="text-[#52a37c] hover:text-[#7ac0a0]"><Icon name="edit" /></button>
+                                                <button onClick={() => handleDeleteIncome(i.id)} className="text-red-500 hover:text-red-400"><Icon name="trash" /></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {otherIncomes.length === 0 && <p className="p-4 text-center text-slate-500">Belum ada pemasukan lain tercatat.</p>}
+                     </div>
+                </div>
+            )}
 
             {activeTab === 'expenses' && (
                 <div>
@@ -640,7 +1139,7 @@ const FinanceView: React.FC = () => {
                     </div>
                      <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
                         <table className="w-full text-left">
-                            <thead className="bg-slate-700">
+                            <thead className="bg-slate-700 text-slate-200">
                                 <tr>
                                     <th className="p-3">Tanggal</th>
                                     <th className="p-3">Deskripsi</th>
@@ -674,459 +1173,55 @@ const FinanceView: React.FC = () => {
             )}
             
             {activeTab === 'purchasing' && <PurchasesAndSuppliersTab 
-                onAddSupplier={() => {setEditingSupplier(null); setSupplierModalOpen(true)}}
-                onEditSupplier={(s) => {setEditingSupplier(s); setSupplierModalOpen(true)}}
+                onAddSupplier={() => {setEditingSupplier(null); setSupplierModalOpen(true);}}
+                onEditSupplier={(s) => {setEditingSupplier(s); setSupplierModalOpen(true);}}
                 onDeleteSupplier={handleDeleteSupplier}
                 onAddPurchase={handleOpenPurchaseModal}
-                onPayDebt={(p) => setPayingPurchase(p)}
             />}
         </div>
-    )
-
-    return (
-        <div className="space-y-6">
-            <div className="flex bg-slate-800 p-1 rounded-lg">
-                <button onClick={() => setMainView('finance')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${mainView === 'finance' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-700'}`}>
-                    Keuangan
-                </button>
-                 <button onClick={() => setMainView('customers')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${mainView === 'customers' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-700'}`}>
-                    Pelanggan
-                </button>
-            </div>
-            
-            {mainView === 'finance' ? <FinanceTabs /> : <CustomersTab />}
-
-            {/* Modals */}
-            <ExpenseModal isOpen={isExpenseModalOpen} onClose={() => setExpenseModalOpen(false)} onSave={handleSaveExpense} expense={editingExpense} />
-            <SupplierModal isOpen={isSupplierModalOpen} onClose={() => setSupplierModalOpen(false)} onSave={handleSaveSupplier} supplier={editingSupplier} />
-            <PurchaseModal isOpen={isPurchaseModalOpen} onClose={() => setPurchaseModalOpen(false)} onSave={handleSavePurchase} suppliers={suppliers} rawMaterials={rawMaterials} products={products} />
-            {payingPurchase && <PayDebtModal isOpen={!!payingPurchase} onClose={() => setPayingPurchase(null)} onSave={handlePayPurchaseDebt} purchase={payingPurchase} />}
-            {payingExpense && <PayExpenseDebtModal isOpen={!!payingExpense} onClose={() => setPayingExpense(null)} onSave={handlePayExpenseDebt} expense={payingExpense} />}
-        </div>
     );
-};
-
-// --- Sub-View for Purchasing ---
-const PurchasesAndSuppliersTab: React.FC<{
-    onAddSupplier: () => void,
-    onEditSupplier: (s: Supplier) => void,
-    onDeleteSupplier: (id: string) => void,
-    onAddPurchase: () => void,
-    onPayDebt: (p: Purchase) => void,
-}> = (props) => {
-    const [subTab, setSubTab] = useState<'purchases' | 'suppliers'>('purchases');
-    const { suppliers, purchases } = useFinance();
-
-    const PurchaseStatusBadge: React.FC<{status: PurchaseStatus}> = ({status}) => {
-        const info = {
-            'lunas': { text: 'Lunas', className: 'bg-green-500/20 text-green-300' },
-            'belum-lunas': { text: 'Belum Lunas', className: 'bg-yellow-500/20 text-yellow-300' }
-        };
-        return <span className={`px-2 py-1 text-xs font-medium rounded-full ${info[status].className}`}>{info[status].text}</span>
-    }
 
     return (
-        <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div className="flex bg-slate-700 p-1 rounded-lg w-full sm:w-auto">
-                    <button onClick={() => setSubTab('purchases')} className={`flex-1 text-center sm:flex-none px-3 py-1 text-sm rounded-md transition-colors ${subTab === 'purchases' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>
-                        <span className="sm:hidden">Pembelian</span>
-                        <span className="hidden sm:inline">Daftar Pembelian</span>
+        <div className="max-w-7xl mx-auto pb-20">
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold text-white">Keuangan & Pelanggan</h1>
+                <div className="flex bg-slate-800 p-1 rounded-lg">
+                    <button onClick={() => setMainView('finance')} className={`px-4 py-2 text-sm rounded-md transition-colors ${mainView === 'finance' ? 'bg-[#347758] text-white' : 'text-slate-400'}`}>
+                        Keuangan
                     </button>
-                    <button onClick={() => setSubTab('suppliers')} className={`flex-1 text-center sm:flex-none px-3 py-1 text-sm rounded-md transition-colors ${subTab === 'suppliers' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>
-                        <span className="sm:hidden">Pemasok</span>
-                        <span className="hidden sm:inline">Daftar Pemasok</span>
+                    <button onClick={() => setMainView('customers')} className={`px-4 py-2 text-sm rounded-md transition-colors ${mainView === 'customers' ? 'bg-[#347758] text-white' : 'text-slate-400'}`}>
+                        Pelanggan
                     </button>
                 </div>
-                <Button onClick={subTab === 'purchases' ? props.onAddPurchase : props.onAddSupplier} className="w-full sm:w-auto">
-                    <Icon name="plus" className="w-5 h-5" /> <span>{subTab === 'purchases' ? 'Catat Pembelian' : 'Tambah Pemasok'}</span>
-                </Button>
             </div>
 
+            {mainView === 'finance' && <FinanceTabs />}
+            {mainView === 'customers' && <CustomersTab />}
 
-            <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
-                {subTab === 'purchases' ? (
-                     <table className="w-full text-left">
-                        <thead className="bg-slate-700">
-                            <tr>
-                                <th className="p-3">Tanggal</th>
-                                <th className="p-3">Pemasok</th>
-                                <th className="p-3 text-right">Total Tagihan</th>
-                                <th className="p-3 text-right">Dibayar</th>
-                                <th className="p-3">Status</th>
-                                <th className="p-3">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {purchases.map(p => (
-                                <tr key={p.id} className="border-b border-slate-700 last:border-b-0">
-                                    <td className="p-3 text-slate-400">{new Date(p.date).toLocaleDateString('id-ID')}</td>
-                                    <td className="p-3 font-semibold">{p.supplierName}</td>
-                                    <td className="p-3 text-right">{CURRENCY_FORMATTER.format(p.totalAmount)}</td>
-                                    <td className="p-3 text-right">{CURRENCY_FORMATTER.format(p.amountPaid)}</td>
-                                    <td className="p-3"><PurchaseStatusBadge status={p.status} /></td>
-                                    <td className="p-3">
-                                        {p.status === 'belum-lunas' && <Button size="sm" onClick={() => props.onPayDebt(p)}>Bayar Utang</Button>}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                     </table>
-                ) : (
-                     <table className="w-full text-left">
-                        <thead className="bg-slate-700">
-                            <tr>
-                                <th className="p-3">Nama Pemasok</th>
-                                <th className="p-3">Kontak</th>
-                                <th className="p-3">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                             {suppliers.map(s => (
-                                <tr key={s.id} className="border-b border-slate-700 last:border-b-0">
-                                    <td className="p-3 font-semibold">{s.name}</td>
-                                    <td className="p-3 text-slate-300">{s.contact || '-'}</td>
-                                    <td className="p-3">
-                                        <div className="flex gap-2">
-                                            <button onClick={() => props.onEditSupplier(s)} className="text-[#52a37c] hover:text-[#7ac0a0]"><Icon name="edit" /></button>
-                                            <button onClick={() => props.onDeleteSupplier(s.id)} className="text-red-500 hover:text-red-400"><Icon name="trash" /></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                     </table>
-                )}
-                 {subTab === 'purchases' && purchases.length === 0 && <p className="p-4 text-center text-slate-500">Belum ada pembelian tercatat.</p>}
-                 {subTab === 'suppliers' && suppliers.length === 0 && <p className="p-4 text-center text-slate-500">Belum ada pemasok terdaftar.</p>}
-            </div>
+            <ExpenseFormModal 
+                isOpen={isExpenseModalOpen} 
+                onClose={() => setExpenseModalOpen(false)} 
+                onSave={handleSaveExpense} 
+                expense={editingExpense} 
+            />
+            <OtherIncomeFormModal
+                isOpen={isIncomeModalOpen}
+                onClose={() => setIncomeModalOpen(false)}
+                onSave={handleSaveIncome}
+                income={editingIncome}
+            />
+            <SupplierFormModal
+                isOpen={isSupplierModalOpen}
+                onClose={() => setSupplierModalOpen(false)}
+                onSave={handleSaveSupplier}
+                supplier={editingSupplier}
+            />
+            <PurchaseFormModal
+                isOpen={isPurchaseModalOpen}
+                onClose={() => setPurchaseModalOpen(false)}
+                onSave={handleSavePurchase}
+            />
         </div>
-    );
-}
-
-// --- Modals and Forms ---
-const ExpenseModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (data: Omit<Expense, 'id' | 'status'> | Expense) => void, expense: Expense | null}> = ({isOpen, onClose, onSave, expense}) => {
-    const [form, setForm] = useState({description: '', amount: '', amountPaid: '', category: '', date: new Date().toISOString().split('T')[0]});
-    useEffect(() => {
-        if(expense) setForm({description: expense.description, amount: String(expense.amount), amountPaid: String(expense.amountPaid), category: expense.category, date: new Date(expense.date).toISOString().split('T')[0]});
-        else setForm({description: '', amount: '', amountPaid: '', category: '', date: new Date().toISOString().split('T')[0]});
-    }, [expense, isOpen]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const totalAmount = parseFloat(form.amount) || 0;
-        const paidAmount = form.amountPaid ? (parseFloat(form.amountPaid) || 0) : totalAmount;
-
-        const expenseData = { 
-            description: form.description,
-            amount: totalAmount,
-            amountPaid: paidAmount,
-            category: form.category,
-            date: new Date(form.date).toISOString()
-        };
-        
-        if (expense?.id) {
-            onSave({ ...expenseData, id: expense.id, status: expense.status });
-        } else {
-            onSave(expenseData);
-        }
-    };
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title={expense ? 'Edit Pengeluaran' : 'Tambah Pengeluaran'}>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <input type="date" name="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                <input type="text" name="description" placeholder="Deskripsi (cth: Bayar Listrik)" value={form.description} onChange={e => setForm({...form, description: e.target.value})} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                <input type="text" name="category" placeholder="Kategori (cth: Operasional)" value={form.category} onChange={e => setForm({...form, category: e.target.value})} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                <input type="number" min="0" name="amount" placeholder="Total Tagihan (IDR)" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                <input type="number" min="0" name="amountPaid" placeholder="Jumlah Dibayar (kosongkan jika lunas)" value={form.amountPaid} onChange={e => setForm({...form, amountPaid: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                <div className="flex justify-end gap-3 pt-2">
-                    <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
-                    <Button type="submit">Simpan</Button>
-                </div>
-            </form>
-        </Modal>
-    )
-}
-
-const SupplierModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (data: Omit<Supplier, 'id'> | Supplier) => void, supplier: Supplier | null}> = ({isOpen, onClose, onSave, supplier}) => {
-    const [form, setForm] = useState({name: '', contact: ''});
-    useEffect(() => {
-        if(supplier) setForm({name: supplier.name, contact: supplier.contact || ''});
-        else setForm({name: '', contact: ''});
-    }, [supplier, isOpen]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        // Check if we are editing or creating a new one
-        if (supplier && supplier.id) {
-            onSave({ ...form, id: supplier.id });
-        } else {
-            // Ensure we don't send an 'id' property for new entries
-            onSave(form);
-        }
-    }
-
-     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={supplier ? 'Edit Pemasok' : 'Tambah Pemasok'}>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <input type="text" name="name" placeholder="Nama Pemasok" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                <input type="text" name="contact" placeholder="Kontak (No. HP/Email, opsional)" value={form.contact} onChange={e => setForm({...form, contact: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                <div className="flex justify-end gap-3 pt-2">
-                    <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
-                    <Button type="submit">Simpan</Button>
-                </div>
-            </form>
-        </Modal>
-    )
-}
-
-const PurchaseModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (data: Omit<Purchase, 'id' | 'status' | 'supplierName' | 'totalAmount'>) => void, suppliers: Supplier[], rawMaterials: RawMaterial[], products: Product[]}> = (props) => {
-    const [form, setForm] = useState<{supplierId: string, items: PurchaseItem[], amountPaid: number, date: string}>({supplierId: props.suppliers[0]?.id || '', items: [], amountPaid: 0, date: new Date().toISOString().split('T')[0]});
-    
-    useEffect(() => {
-        if(props.isOpen) {
-            const initialItem: PurchaseItem[] = (props.rawMaterials.length > 0)
-                ? [{ itemType: 'raw_material', rawMaterialId: props.rawMaterials[0].id, quantity: 0, price: 0 }]
-                : (props.products.length > 0)
-                    ? [{ itemType: 'product', productId: props.products[0].id, quantity: 0, price: 0 }]
-                    : [];
-
-            setForm({
-                supplierId: props.suppliers[0]?.id || '',
-                items: initialItem,
-                amountPaid: 0,
-                date: new Date().toISOString().split('T')[0]
-            });
-        }
-    }, [props.isOpen, props.suppliers, props.rawMaterials, props.products]);
-
-    const handleItemChange = (index: number, field: keyof PurchaseItem, value: any) => {
-        const newItems = [...form.items];
-        const currentItem = { ...newItems[index] };
-
-        (currentItem as any)[field] = value;
-
-        if (field === 'itemType') {
-            if (value === 'raw_material') {
-                delete currentItem.productId;
-                currentItem.rawMaterialId = props.rawMaterials[0]?.id;
-            } else { // product
-                delete currentItem.rawMaterialId;
-                currentItem.productId = props.products[0]?.id;
-            }
-        }
-
-        newItems[index] = currentItem;
-        setForm({ ...form, items: newItems });
-    };
-    
-    const addItem = () => {
-        const lastItemType = form.items[form.items.length - 1]?.itemType || 'raw_material';
-        let newItem: PurchaseItem;
-    
-        if (lastItemType === 'raw_material' && props.rawMaterials.length > 0) {
-            newItem = { itemType: 'raw_material', rawMaterialId: props.rawMaterials[0].id, quantity: 0, price: 0 };
-        } else if (props.products.length > 0) {
-            newItem = { itemType: 'product', productId: props.products[0].id, quantity: 0, price: 0 };
-        } else {
-            return; 
-        }
-        setForm({ ...form, items: [...form.items, newItem] });
-    };
-
-    const removeItem = (index: number) => setForm({...form, items: form.items.filter((_, i) => i !== index)});
-    
-    const total = useMemo(() => form.items.reduce((sum, i) => sum + (i.price * i.quantity), 0), [form.items]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const purchaseData = {
-            ...form,
-            items: form.items.filter(item => item.quantity > 0 && item.price >= 0) // Filter out empty items
-        };
-        props.onSave(purchaseData);
-    };
-
-    return (
-        <Modal isOpen={props.isOpen} onClose={props.onClose} title="Catat Pembelian Baru">
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Tanggal Pembelian</label>
-                    <input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                </div>
-                <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Pilih Pemasok</label>
-                    <select value={form.supplierId} onChange={e => setForm({...form, supplierId: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white">
-                        {props.suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                </div>
-                
-                {(props.rawMaterials.length === 0 && props.products.length === 0) ? (
-                    <div className="text-center p-4 bg-slate-900 rounded-lg border border-yellow-500/30">
-                        <p className="font-semibold text-yellow-400">Tidak Ada Item</p>
-                        <p className="text-sm text-slate-400 mt-1">
-                            Anda harus menambahkan bahan baku atau produk terlebih dahulu sebelum mencatat item pembelian.
-                        </p>
-                    </div>
-                ) : (
-                    <>
-                        <div className="space-y-3 max-h-48 overflow-y-auto p-1">
-                             <div className="grid grid-cols-[1fr,80px,112px,32px] gap-2 px-2 text-xs text-slate-400 font-semibold mb-1">
-                                <div><label>Item Pembelian</label></div>
-                                <div><label>Jumlah</label></div>
-                                <div><label>Harga/Unit</label></div>
-                            </div>
-                            {form.items.map((item, index) => (
-                                <div key={index} className="bg-slate-900 p-2 rounded-md space-y-2">
-                                     <div className="flex gap-2 text-sm">
-                                        <button type="button" onClick={() => handleItemChange(index, 'itemType', 'raw_material')} className={`px-2 py-0.5 rounded-md ${item.itemType === 'raw_material' ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>Bahan Baku</button>
-                                        <button type="button" onClick={() => handleItemChange(index, 'itemType', 'product')} className={`px-2 py-0.5 rounded-md ${item.itemType === 'product' ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>Produk</button>
-                                    </div>
-                                    <div className="grid grid-cols-[1fr,80px,112px,32px] gap-2 items-center">
-                                        <select 
-                                            value={item.itemType === 'raw_material' ? item.rawMaterialId : item.productId} 
-                                            onChange={e => handleItemChange(index, item.itemType === 'raw_material' ? 'rawMaterialId' : 'productId', e.target.value)} 
-                                            className="flex-1 bg-slate-700 p-1.5 rounded text-sm w-full"
-                                        >
-                                            {item.itemType === 'raw_material' ? (
-                                                props.rawMaterials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)
-                                            ) : (
-                                                props.products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
-                                            )}
-                                        </select>
-                                        <input type="number" min="0" placeholder="Jml" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)} className="w-full bg-slate-700 p-1.5 rounded text-sm" />
-                                        <input type="number" min="0" placeholder="Harga/unit" value={item.price} onChange={e => handleItemChange(index, 'price', parseFloat(e.target.value) || 0)} className="w-full bg-slate-700 p-1.5 rounded text-sm" />
-                                        <Button type="button" size="sm" variant="danger" onClick={() => removeItem(index)}><Icon name="trash" className="w-4 h-4" /></Button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <Button type="button" variant="secondary" size="sm" onClick={addItem}>Tambah Item</Button>
-                    </>
-                )}
-                
-                <div className="pt-4 border-t border-slate-700 space-y-2">
-                    <div className="flex justify-between font-bold text-lg"><span>Total Tagihan:</span><span>{CURRENCY_FORMATTER.format(total)}</span></div>
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Jumlah Dibayar</label>
-                        <input type="number" min="0" placeholder="Jumlah Dibayar (IDR)" value={form.amountPaid} onChange={e => setForm({...form, amountPaid: parseFloat(e.target.value) || 0})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                    </div>
-                </div>
-                <div className="flex justify-end gap-3 pt-2">
-                    <Button type="button" variant="secondary" onClick={props.onClose}>Batal</Button>
-                    <Button type="submit" disabled={props.rawMaterials.length === 0 && props.products.length === 0}>Simpan Pembelian</Button>
-                </div>
-            </form>
-        </Modal>
-    );
-}
-
-const PayDebtModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (amount: number) => void, purchase: Purchase}> = ({isOpen, onClose, onSave, purchase}) => {
-    const [amount, setAmount] = useState('');
-    const remaining = purchase.totalAmount - purchase.amountPaid;
-
-    const handleSubmit = () => {
-        const payAmount = parseFloat(amount);
-        if (!isNaN(payAmount) && payAmount > 0) {
-            onSave(payAmount);
-        }
-    };
-
-    useEffect(() => {
-        if (!isOpen) {
-            setAmount('');
-        }
-    }, [isOpen]);
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Bayar Utang ke ${purchase.supplierName}`}>
-            <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-2 text-center">
-                    <div className="bg-slate-700 p-2 rounded-lg">
-                        <p className="text-slate-400 text-xs">Total Utang</p>
-                        <p className="text-lg font-bold text-red-400">{CURRENCY_FORMATTER.format(remaining)}</p>
-                    </div>
-                    <div className="bg-slate-700 p-2 rounded-lg">
-                        <p className="text-slate-400 text-xs">Total Tagihan</p>
-                        <p className="text-lg font-bold text-slate-200">{CURRENCY_FORMATTER.format(purchase.totalAmount)}</p>
-                    </div>
-                </div>
-
-                <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Jumlah Pembayaran</label>
-                    <input
-                        type="number"
-                        min="0"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        placeholder="0"
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg"
-                        autoFocus
-                    />
-                    <button onClick={() => setAmount(remaining.toString())} className="text-xs text-sky-400 hover:text-sky-300 mt-2">Bayar Lunas</button>
-                </div>
-                
-                <div className="flex justify-end gap-3 pt-4">
-                    <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
-                    <Button type="button" onClick={handleSubmit} disabled={!amount}>Simpan Pembayaran</Button>
-                </div>
-            </div>
-        </Modal>
-    );
-};
-
-const PayExpenseDebtModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (amount: number) => void, expense: Expense}> = ({isOpen, onClose, onSave, expense}) => {
-    const [amount, setAmount] = useState('');
-    const remaining = expense.amount - expense.amountPaid;
-
-    const handleSubmit = () => {
-        const payAmount = parseFloat(amount);
-        if (!isNaN(payAmount) && payAmount > 0) {
-            onSave(payAmount);
-        }
-    };
-
-    useEffect(() => {
-        if (!isOpen) {
-            setAmount('');
-        }
-    }, [isOpen]);
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Bayar Utang: ${expense.description}`}>
-            <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-2 text-center">
-                    <div className="bg-slate-700 p-2 rounded-lg">
-                        <p className="text-slate-400 text-xs">Total Utang</p>
-                        <p className="text-lg font-bold text-red-400">{CURRENCY_FORMATTER.format(remaining)}</p>
-                    </div>
-                    <div className="bg-slate-700 p-2 rounded-lg">
-                        <p className="text-slate-400 text-xs">Total Tagihan</p>
-                        <p className="text-lg font-bold text-slate-200">{CURRENCY_FORMATTER.format(expense.amount)}</p>
-                    </div>
-                </div>
-
-                <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Jumlah Pembayaran</label>
-                    <input
-                        type="number"
-                        min="0"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        placeholder="0"
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg"
-                        autoFocus
-                    />
-                    <button onClick={() => setAmount(remaining.toString())} className="text-xs text-sky-400 hover:text-sky-300 mt-2">Bayar Lunas</button>
-                </div>
-                
-                <div className="flex justify-end gap-3 pt-4">
-                    <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
-                    <Button type="button" onClick={handleSubmit} disabled={!amount}>Simpan Pembayaran</Button>
-                </div>
-            </div>
-        </Modal>
     );
 };
 

@@ -9,12 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.2.0",
+    "react": "^19.2.1",
     "recharts": "^2.12.7",
     "html5-qrcode": "^2.3.8",
     "dexie": "^4.0.7",
-    "react-dom": "^19.2.0",
-    "@google/genai": "^0.14.0"
+    "react-window": "1.8.10",
+    "react-dom": "^19.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

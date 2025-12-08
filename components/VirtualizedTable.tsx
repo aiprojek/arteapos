@@ -1,13 +1,13 @@
+
 import React, { useRef, useLayoutEffect, useState, useCallback } from 'react';
 import { useResizeObserver } from '../hooks/useResizeObserver';
-
-// Menginformasikan TypeScript tentang global yang diekspos oleh script CDN
-declare const ReactWindow: any;
+import { FixedSizeList } from 'react-window';
 
 interface Column<T> {
   label: string;
   render: (item: T) => React.ReactNode;
   width: string; // e.g., '1fr', '150px'
+  className?: string; // Allow custom classes for cells (e.g., overflow-visible)
 }
 
 interface VirtualizedTableProps<T> {
@@ -17,7 +17,6 @@ interface VirtualizedTableProps<T> {
 }
 
 const VirtualizedTable = <T extends { id: string | number }>({ data, columns, rowHeight }: VirtualizedTableProps<T>) => {
-  const { FixedSizeList } = ReactWindow;
   const containerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const { width, height } = useResizeObserver(containerRef);
@@ -35,7 +34,7 @@ const VirtualizedTable = <T extends { id: string | number }>({ data, columns, ro
         {columns.map((col, colIndex) => (
           <div 
             key={colIndex} 
-            className="px-3 py-2 text-slate-300 overflow-hidden truncate"
+            className={`px-3 py-2 text-slate-300 ${col.className ?? 'overflow-hidden truncate'}`}
             style={{ flex: col.width.endsWith('fr') ? col.width.replace('fr', '') : `0 0 ${col.width}`}}
             role="gridcell"
           >
@@ -46,16 +45,17 @@ const VirtualizedTable = <T extends { id: string | number }>({ data, columns, ro
     );
   }, [data, columns, gridTemplateColumns]);
   
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+  // FIX: FixedSizeList onScroll passes an object { scrollOffset, ... }, not a UIEvent.
+  const handleScroll = ({ scrollOffset }: { scrollOffset: number }) => {
     if (headerRef.current) {
-        headerRef.current.scrollLeft = e.currentTarget.scrollLeft;
+        headerRef.current.scrollLeft = scrollOffset;
     }
   };
 
 
   return (
     <div ref={containerRef} className="w-full h-full flex flex-col" role="grid">
-      <div ref={headerRef} className="bg-slate-700 font-semibold text-left sticky top-0 z-10 overflow-hidden">
+      <div ref={headerRef} className="bg-slate-700 text-slate-200 font-semibold text-left sticky top-0 z-10 overflow-hidden">
         <div className="flex" style={{ gridTemplateColumns, minWidth: width }}>
              {columns.map((col, colIndex) => (
               <div 
@@ -79,6 +79,7 @@ const VirtualizedTable = <T extends { id: string | number }>({ data, columns, ro
                 itemSize={rowHeight}
                 itemKey={(index: number) => data[index].id}
                 onScroll={handleScroll}
+                className="no-scrollbar" // Optional: utility to hide scrollbar if desired, but default is fine
             >
                 {Row}
             </FixedSizeList>

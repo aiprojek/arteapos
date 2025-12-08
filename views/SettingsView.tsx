@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useUI } from '../context/UIContext';
@@ -13,7 +14,7 @@ import { dataService } from '../services/dataService';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
 import Modal from '../components/Modal';
-import type { AppData, ReceiptSettings, InventorySettings, User, AuthSettings, MembershipSettings, PointRule, Reward, SessionSettings, DiscountDefinition } from '../types';
+import type { AppData, ReceiptSettings, InventorySettings, User, AuthSettings, MembershipSettings, PointRule, Reward, SessionSettings, DiscountDefinition, Transaction } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 
 const SettingsCard: React.FC<{title: string, description: string, children: React.ReactNode}> = ({title, description, children}) => (
@@ -245,6 +246,18 @@ const ReceiptSettingsForm: React.FC = () => {
                 <label className="block text-sm font-medium text-slate-300 mb-1">Pesan Footer</label>
                 <input type="text" name="footerMessage" value={settings.footerMessage} onChange={handleChange} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
             </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">WhatsApp Admin (cth: 628123...)</label>
+                    <input type="text" name="adminWhatsapp" value={settings.adminWhatsapp || ''} onChange={handleChange} placeholder="Tanpa '+'" className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Username Telegram Admin</label>
+                    <input type="text" name="adminTelegram" value={settings.adminTelegram || ''} onChange={handleChange} placeholder="Tanpa '@'" className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                </div>
+            </div>
+
             <div className="pt-4 border-t border-slate-700">
                 <ToggleSwitch
                     checked={settings.enableKitchenPrinter ?? false}
@@ -490,14 +503,14 @@ const PointRuleModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (d
                 </div>
                 {type === 'spend' && (
                     <div className="grid grid-cols-2 gap-3">
-                        <input type="number" min="0" value={pointsEarned} onChange={e => setPointsEarned(e.target.value)} placeholder="Jumlah Poin" required className="bg-slate-700 p-2 rounded-md"/>
-                        <input type="number" min="0" value={spendAmount} onChange={e => setSpendAmount(e.target.value)} placeholder="Setiap Belanja (Rp)" required className="bg-slate-700 p-2 rounded-md"/>
+                        <input type="number" min="0" value={pointsEarned} onChange={e => setPointsEarned(e.target.value)} placeholder="Jumlah Poin" required className="bg-slate-700 p-2 rounded-md text-white"/>
+                        <input type="number" min="0" value={spendAmount} onChange={e => setSpendAmount(e.target.value)} placeholder="Setiap Belanja (Rp)" required className="bg-slate-700 p-2 rounded-md text-white"/>
                     </div>
                 )}
                 {type === 'product' && (
                     <div className="grid grid-cols-2 gap-3">
-                        <input type="number" min="0" value={pointsPerItem} onChange={e => setPointsPerItem(e.target.value)} placeholder="Poin per Item" required className="bg-slate-700 p-2 rounded-md"/>
-                        <select value={targetId} onChange={e => setTargetId(e.target.value)} required className="bg-slate-700 p-2 rounded-md">
+                        <input type="number" min="0" value={pointsPerItem} onChange={e => setPointsPerItem(e.target.value)} placeholder="Poin per Item" required className="bg-slate-700 p-2 rounded-md text-white"/>
+                        <select value={targetId} onChange={e => setTargetId(e.target.value)} required className="bg-slate-700 p-2 rounded-md text-white">
                             <option value="" disabled>Pilih Produk</option>
                             {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
@@ -505,8 +518,8 @@ const PointRuleModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (d
                 )}
                 {type === 'category' && (
                     <div className="grid grid-cols-2 gap-3">
-                        <input type="number" min="0" value={pointsPerItem} onChange={e => setPointsPerItem(e.target.value)} placeholder="Poin per Item" required className="bg-slate-700 p-2 rounded-md"/>
-                         <select value={targetId} onChange={e => setTargetId(e.target.value)} required className="bg-slate-700 p-2 rounded-md">
+                        <input type="number" min="0" value={pointsPerItem} onChange={e => setPointsPerItem(e.target.value)} placeholder="Poin per Item" required className="bg-slate-700 p-2 rounded-md text-white"/>
+                         <select value={targetId} onChange={e => setTargetId(e.target.value)} required className="bg-slate-700 p-2 rounded-md text-white">
                              <option value="" disabled>Pilih Kategori</option>
                             {categories.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
@@ -560,10 +573,10 @@ const RewardModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (data
                     <option value="free_product">Produk Gratis</option>
                  </select>
                  {form.type === 'discount_amount' && (
-                     <input type="number" min="0" value={form.discountValue} onChange={e => setForm({...form, discountValue: e.target.value})} placeholder="Jumlah Potongan (Rp)" required className="w-full bg-slate-700 p-2 rounded-md"/>
+                     <input type="number" min="0" value={form.discountValue} onChange={e => setForm({...form, discountValue: e.target.value})} placeholder="Jumlah Potongan (Rp)" required className="w-full bg-slate-700 p-2 rounded-md text-white"/>
                  )}
                   {form.type === 'free_product' && (
-                     <select value={form.freeProductId} onChange={e => setForm({...form, freeProductId: e.target.value})} required className="w-full bg-slate-700 p-2 rounded-md">
+                     <select value={form.freeProductId} onChange={e => setForm({...form, freeProductId: e.target.value})} required className="w-full bg-slate-700 p-2 rounded-md text-white">
                          <option value="" disabled>Pilih Produk</option>
                         {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
@@ -645,11 +658,11 @@ const DiscountFormModal: React.FC<{
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="text-xs text-slate-400">Tanggal Mulai (Opsional)</label>
-                        <input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} className="w-full bg-slate-700 p-2 rounded-md"/>
+                        <input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} className="w-full bg-slate-700 p-2 rounded-md text-white"/>
                     </div>
                      <div>
                         <label className="text-xs text-slate-400">Tanggal Selesai (Opsional)</label>
-                        <input type="date" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})} className="w-full bg-slate-700 p-2 rounded-md"/>
+                        <input type="date" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})} className="w-full bg-slate-700 p-2 rounded-md text-white"/>
                     </div>
                 </div>
                 <ToggleSwitch checked={form.isActive} onChange={c => setForm({...form, isActive: c})} label="Aktifkan Diskon Ini" />
@@ -718,6 +731,72 @@ const DiscountManagement: React.FC = () => {
     );
 };
 
+const ImportTransactionsModal: React.FC<{isOpen: boolean, onClose: () => void}> = ({isOpen, onClose}) => {
+    const [csvText, setCsvText] = useState('');
+    const [parsedData, setParsedData] = useState<Transaction[]>([]);
+    const { importTransactions } = useFinance();
+    const { showAlert } = useUI();
+
+    const handlePreview = () => {
+        const transactions = dataService.parseTransactionsCSV(csvText);
+        setParsedData(transactions);
+        if (transactions.length === 0) {
+            showAlert({type: 'alert', title: 'Gagal Parsing', message: 'Format CSV tidak dikenali atau kosong.'});
+        }
+    };
+
+    const handleImport = () => {
+        if (parsedData.length > 0) {
+            importTransactions(parsedData);
+            showAlert({type: 'alert', title: 'Berhasil', message: `${parsedData.length} transaksi berhasil diimpor.`});
+            setParsedData([]);
+            setCsvText('');
+            onClose();
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Import Transaksi dari Text/CSV">
+            <div className="space-y-4">
+                <p className="text-sm text-slate-400">
+                    Tempel (Paste) teks CSV laporan transaksi dari chat (WhatsApp/Telegram) ke kolom di bawah ini.
+                </p>
+                <textarea
+                    className="w-full h-40 bg-slate-900 border border-slate-600 rounded-lg p-3 text-white text-xs font-mono"
+                    placeholder={`id,createdAt,customerName,userName,total...\n...`}
+                    value={csvText}
+                    onChange={e => setCsvText(e.target.value)}
+                ></textarea>
+                
+                {parsedData.length > 0 && (
+                    <div className="bg-slate-900 p-3 rounded-lg max-h-40 overflow-y-auto">
+                        <p className="text-xs font-bold text-green-400 mb-2">Preview ({parsedData.length} transaksi):</p>
+                        <ul className="text-xs text-slate-300 space-y-1">
+                            {parsedData.slice(0, 5).map(t => (
+                                <li key={t.id} className="truncate">
+                                    {new Date(t.createdAt).toLocaleDateString()} - {CURRENCY_FORMATTER.format(t.total)} ({t.items.length} items)
+                                </li>
+                            ))}
+                            {parsedData.length > 5 && <li>...dan {parsedData.length - 5} lainnya</li>}
+                        </ul>
+                    </div>
+                )}
+
+                <div className="flex justify-end gap-3">
+                    <Button variant="secondary" onClick={() => { setParsedData([]); setCsvText(''); }}>Reset</Button>
+                    {parsedData.length === 0 ? (
+                        <Button onClick={handlePreview} disabled={!csvText.trim()}>Preview Data</Button>
+                    ) : (
+                        <Button variant="primary" onClick={handleImport}>Import Sekarang</Button>
+                    )}
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
 
 const SettingsView: React.FC = () => {
     const { data, restoreData } = useData();
@@ -732,6 +811,7 @@ const SettingsView: React.FC = () => {
     const restoreInputRef = useRef<HTMLInputElement>(null);
     const importProductsInputRef = useRef<HTMLInputElement>(null);
     const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+    const [isImportTransOpen, setIsImportTransOpen] = useState(false);
 
     const handleBackup = async () => {
         await dataService.exportData();
@@ -923,7 +1003,7 @@ const SettingsView: React.FC = () => {
                          </div>
                     </SettingsCard>
                     
-                    <SettingsCard title="Pengaturan Struk & Cetak" description="Sesuaikan informasi yang ditampilkan pada struk pelanggan dan opsi cetak lainnya.">
+                    <SettingsCard title="Pengaturan Struk & Toko" description="Sesuaikan informasi yang ditampilkan pada struk pelanggan dan kontak admin.">
                         <ReceiptSettingsForm />
                     </SettingsCard>
                     
@@ -941,6 +1021,10 @@ const SettingsView: React.FC = () => {
                              <Button onClick={handleExportAllReports} variant="secondary">
                                 <Icon name="download" className="w-5 h-5" />
                                 Export Semua Laporan (CSV)
+                            </Button>
+                             <Button onClick={() => setIsImportTransOpen(true)} variant="secondary">
+                                <Icon name="chat" className="w-5 h-5" />
+                                Import Transaksi dari Text/CSV
                             </Button>
                         </div>
                     </SettingsCard>
@@ -965,6 +1049,7 @@ const SettingsView: React.FC = () => {
                     <p>Pengaturan hanya dapat diakses oleh Admin.</p>
                 </div>
             )}
+            <ImportTransactionsModal isOpen={isImportTransOpen} onClose={() => setIsImportTransOpen(false)} />
         </div>
     );
 };

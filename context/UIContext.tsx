@@ -20,8 +20,7 @@ interface UIContextType {
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
 
-// FIX: Change to React.FC to fix children prop type error
-export const UIProvider: React.FC = ({ children }) => {
+export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [alertState, setAlertState] = useState<AlertState>({
     isOpen: false,
     title: '',

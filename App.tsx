@@ -55,12 +55,12 @@ const Nav = ({ activeView, setActiveView, onNavigate }: {
       
       {isAdmin && <NavItem view="dashboard" label="Dashboard" icon="reports" />}
       <NavItem view="pos" label="Kasir" icon="cash" />
+      <NavItem view="finance" label="Keuangan" icon="finance" />
       
       {isAdmin && (
         <>
           <NavItem view="products" label="Produk" icon="products" />
           {inventorySettings.enabled && <NavItem view="raw-materials" label="Bahan Baku" icon="ingredients" />}
-          <NavItem view="finance" label="Keuangan" icon="finance" />
           <NavItem view="reports" label="Laporan" icon="reports" />
           <NavItem view="settings" label="Pengaturan" icon="settings" />
         </>
@@ -96,13 +96,14 @@ const AppContent = () => {
     // For staff
     switch (activeView) {
         case 'pos': return <POSView />;
+        case 'finance': return <FinanceView />;
         case 'help': return <HelpView />;
         default: return <POSView />;
     }
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen font-sans bg-slate-900">
+    <div className="flex flex-col md:flex-row h-screen font-sans bg-slate-900 text-slate-100">
       {/* Overlay for mobile */}
       {isSidebarOpen && (
         <div 

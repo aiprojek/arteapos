@@ -1,3 +1,4 @@
+
 export interface Addon {
   id: string;
   name: string;
@@ -83,7 +84,7 @@ export interface Payment {
   createdAt: string; // ISO string
 }
 
-export type PaymentStatus = 'paid' | 'unpaid' | 'partial';
+export type PaymentStatus = 'paid' | 'unpaid' | 'partial' | 'refunded';
 
 export interface Transaction {
   id: string;
@@ -113,6 +114,8 @@ export interface ReceiptSettings {
     address: string;
     footerMessage: string;
     enableKitchenPrinter?: boolean;
+    adminWhatsapp?: string; // New: Admin WhatsApp Number
+    adminTelegram?: string; // New: Admin Telegram Username
 }
 
 export interface InventorySettings {
@@ -129,9 +132,24 @@ export interface SessionSettings {
   enableCartHolding?: boolean; // New setting for held carts
 }
 
+// Updated Session Types for Shift Management
+export interface CashMovement {
+  id: string;
+  type: 'in' | 'out';
+  amount: number;
+  description: string;
+  timestamp: string; // ISO String
+  userId: string;
+  userName: string;
+}
+
 export interface SessionState {
+  id: string; // Session ID
   startingCash: number;
   startTime: string; // ISO string
+  userId: string; // User who started the shift
+  userName: string;
+  cashMovements: CashMovement[]; // Log of cash in/out during shift
 }
 
 // --- New Finance Types ---
@@ -144,6 +162,15 @@ export interface Expense {
   amount: number;
   amountPaid: number;
   status: ExpenseStatus;
+  category: string;
+  date: string; // ISO string
+}
+
+// New Type for Non-Sales Income
+export interface OtherIncome {
+  id: string;
+  description: string;
+  amount: number;
   category: string;
   date: string; // ISO string
 }
@@ -233,7 +260,6 @@ export interface AppData {
   products: Product[];
   categories: string[];
   rawMaterials: RawMaterial[];
-  // FIX: Renamed 'transactions' to 'transactionRecords' to resolve a naming conflict with Dexie's internal methods.
   transactionRecords: Transaction[];
   users: User[];
   receiptSettings: ReceiptSettings;
@@ -241,13 +267,14 @@ export interface AppData {
   authSettings: AuthSettings;
   sessionSettings: SessionSettings;
   expenses: Expense[];
+  otherIncomes: OtherIncome[]; // New field
   suppliers: Supplier[];
   purchases: Purchase[];
   stockAdjustments: StockAdjustment[];
   customers: Customer[];
   membershipSettings: MembershipSettings;
   discountDefinitions: DiscountDefinition[];
-  heldCarts?: HeldCart[]; // New data for held carts
+  heldCarts?: HeldCart[];
 }
 
 export type View = 'dashboard' | 'pos' | 'products' | 'raw-materials' | 'reports' | 'settings' | 'finance' | 'help';

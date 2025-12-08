@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 // FIX: Replace obsolete useAppContext with specific context hooks
 import { useCart } from '../context/CartContext';
 import { useCustomer } from '../context/CustomerContext';
@@ -162,6 +163,63 @@ const HeldCartsTabs: React.FC<{
     );
 }
 
+const CashManagementModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+}> = ({ isOpen, onClose }) => {
+    const { addCashMovement } = useSession();
+    const { showAlert } = useUI();
+    const [type, setType] = useState<'in' | 'out'>('out');
+    const [amount, setAmount] = useState('');
+    const [description, setDescription] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setType('out');
+            setAmount('');
+            setDescription('');
+        }
+    }, [isOpen]);
+
+    const handleSubmit = () => {
+        const value = parseFloat(amount);
+        if (isNaN(value) || value <= 0) return;
+        if (!description.trim()) return;
+
+        addCashMovement(type, value, description);
+        showAlert({ type: 'alert', title: 'Berhasil', message: 'Arus kas berhasil dicatat.' });
+        onClose();
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Kelola Kas (Shift Ini)">
+            <div className="space-y-4">
+                <div className="flex bg-slate-700 p-1 rounded-lg">
+                    <button onClick={() => setType('in')} className={`flex-1 py-2 text-sm rounded-md transition-colors ${type === 'in' ? 'bg-green-600 text-white font-semibold' : 'text-slate-300'}`}>
+                        Kas Masuk
+                    </button>
+                    <button onClick={() => setType('out')} className={`flex-1 py-2 text-sm rounded-md transition-colors ${type === 'out' ? 'bg-red-600 text-white font-semibold' : 'text-slate-300'}`}>
+                        Kas Keluar
+                    </button>
+                </div>
+                
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Jumlah</label>
+                    <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" placeholder="0" autoFocus/>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Keterangan</label>
+                    <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" placeholder={type === 'in' ? "cth: Tambahan Modal Receh" : "cth: Beli Es Batu"}/>
+                </div>
+
+                <Button onClick={handleSubmit} disabled={!amount || !description} className="w-full">
+                    Simpan
+                </Button>
+            </div>
+        </Modal>
+    );
+}
+
 
 // Payment Modal Component
 const PaymentModal: React.FC<{
@@ -250,14 +308,14 @@ const PaymentModal: React.FC<{
                             value={tempCustomerName}
                             onChange={e => setTempCustomerName(e.target.value)}
                             placeholder="Nama Pelanggan (Opsional)"
-                            className="w-full bg-slate-700 p-2 rounded-md"
+                            className="w-full bg-slate-700 p-2 rounded-md text-white"
                          />
                          <input
                             type="text"
                             value={tempCustomerContact}
                             onChange={e => setTempCustomerContact(e.target.value)}
                             placeholder="Kontak (Opsional)"
-                            className="w-full bg-slate-700 p-2 rounded-md"
+                            className="w-full bg-slate-700 p-2 rounded-md text-white"
                          />
                     </div>
                 )}
@@ -280,7 +338,7 @@ const PaymentModal: React.FC<{
                     ))}
                 </div>
 
-                <input type="number" min="0" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder="Masukkan jumlah bayar" className="w-full bg-slate-700 p-3 text-xl text-center rounded-md" />
+                <input type="number" min="0" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder="Masukkan jumlah bayar" className="w-full bg-slate-700 p-3 text-xl text-center rounded-md text-white" />
                 
                 <div className="grid grid-cols-4 gap-2 text-sm">
                     {quickCashValues.map(val => (
@@ -479,7 +537,7 @@ const CustomerSelection: React.FC<{
             <select 
                 value={selectedCustomer?.id || ''}
                 onChange={(e) => onSelectCustomer(customers.find(c => c.id === e.target.value) || null)}
-                className="w-full bg-slate-700 p-2 rounded-md text-sm"
+                className="w-full bg-slate-700 p-2 rounded-md text-sm text-white"
             >
                 <option value="">Umum</option>
                 {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.points} poin)</option>)}
@@ -533,7 +591,7 @@ const POSView: React.FC = () => {
         cartDiscount, applyCartDiscount, removeCartDiscount,
     } = useCart();
     const { showAlert } = useUI();
-    const { sessionSettings } = useSession();
+    const { sessionSettings, session } = useSession();
     const { transactions } = useFinance();
     const { receiptSettings } = useSettings();
     const { membershipSettings } = useCustomer();
@@ -556,6 +614,8 @@ const POSView: React.FC = () => {
     const [isAddonModalOpen, setAddonModalOpen] = useState(false);
     const [productForAddons, setProductForAddons] = useState<Product | null>(null);
     const [transactionForKitchenNote, setTransactionForKitchenNote] = useState<TransactionType | null>(null);
+    const [isCashMgmtOpen, setCashMgmtOpen] = useState(false);
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
 
     useEffect(() => {
@@ -564,6 +624,37 @@ const POSView: React.FC = () => {
         }
     }, [selectedCustomer, appliedReward, removeRewardFromCart]);
     
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore if in input or textarea (except for Escape)
+            const target = e.target as HTMLElement;
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+                if(e.key === 'Escape') {
+                    if (target === searchInputRef.current) {
+                        setSearchTerm('');
+                        searchInputRef.current?.blur();
+                    }
+                }
+                return;
+            }
+
+            if (e.key === '/') {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            } else if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            } else if (e.key === 'F2') {
+                e.preventDefault();
+                if(cart.length > 0) setPaymentModalOpen(true);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [cart.length]);
+
     const handleClearCart = () => {
         clearCart();
         setSelectedCustomer(null);
@@ -768,8 +859,9 @@ const POSView: React.FC = () => {
                 <div className="flex flex-col sm:flex-row gap-2 mb-4">
                     <div className="relative flex-1">
                          <input
+                            ref={searchInputRef}
                             type="text"
-                            placeholder="Cari produk..."
+                            placeholder="Cari produk... (Ctrl+/)"
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                             className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-[#347758] focus:border-[#347758]"
@@ -777,6 +869,15 @@ const POSView: React.FC = () => {
                          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     </div>
                     <div className="flex items-center gap-2">
+                        {sessionSettings.enabled && session && (
+                            <Button 
+                                variant="secondary" 
+                                onClick={() => setCashMgmtOpen(true)}
+                                title="Kelola Kas (Masuk/Keluar)"
+                            >
+                                <Icon name="finance" className="w-5 h-5" />
+                            </Button>
+                        )}
                         <Button 
                             variant="secondary" 
                             onClick={() => setBarcodeScannerOpen(true)}
@@ -905,7 +1006,7 @@ const POSView: React.FC = () => {
                                 <Button variant="danger" className="flex-1" onClick={handleClearCart} disabled={cart.length === 0}>
                                     <Icon name="trash" className="w-4 h-4"/> Bersihkan
                                 </Button>
-                                <Button variant="primary" className="flex-1 text-lg" onClick={() => setPaymentModalOpen(true)} disabled={cart.length === 0}>
+                                <Button variant="primary" className="flex-1 text-lg" onClick={() => setPaymentModalOpen(true)} disabled={cart.length === 0} title="Shortcut: F2">
                                     Bayar
                                 </Button>
                             </div>
@@ -925,6 +1026,7 @@ const POSView: React.FC = () => {
                 total={finalTotal}
                 selectedCustomer={selectedCustomer}
             />
+            <CashManagementModal isOpen={isCashMgmtOpen} onClose={() => setCashMgmtOpen(false)} />
             {lastTransaction && <ReceiptModal isOpen={isReceiptModalOpen} onClose={() => setReceiptModalOpen(false)} transaction={lastTransaction}/>}
             <BarcodeScannerModal isOpen={isBarcodeScannerOpen} onClose={() => setBarcodeScannerOpen(false)} onScan={handleBarcodeScan} />
             {selectedCustomer && <RewardsModal isOpen={isRewardsModalOpen} onClose={() => setRewardsModalOpen(false)} customer={selectedCustomer} />}

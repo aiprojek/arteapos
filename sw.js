@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'artea-pos-cache-v2';
+const CACHE_NAME = 'artea-pos-cache-v3';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -9,12 +9,15 @@ const urlsToCache = [
   'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
   'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js',
   'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
-  'https://aistudiocdn.com/react@^19.1.1',
-  'https://aistudiocdn.com/react-dom@^19.1.1/client',
-  'https://aistudiocdn.com/react@^19.1.1/jsx-runtime',
-  'https://aistudiocdn.com/recharts@^2.12.7',
+  'https://esm.sh/react@18.3.1',
+  'https://esm.sh/react-dom@18.3.1',
+  'https://esm.sh/react-dom@18.3.1/client',
+  'https://esm.sh/react@18.3.1/jsx-runtime',
+  'https://esm.sh/recharts@2.12.7?external=react,react-dom',
+  'https://esm.sh/react-window@1.8.10?external=react,react-dom',
   'https://aistudiocdn.com/html5-qrcode@^2.3.8',
   'https://aistudiocdn.com/dexie@^4.0.7',
+  'https://esm.sh/crypto-js@4.1.1',
 ];
 
 self.addEventListener('install', event => {

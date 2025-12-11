@@ -9,7 +9,7 @@ interface AccordionItemProps {
     children: React.ReactNode;
     isOpen: boolean;
     onToggle: () => void;
-    icon?: 'question' | 'wifi' | 'database' | 'printer' | 'cash' | 'products' | 'users' | 'warning' | 'tag' | 'plus' | 'settings' | 'award' | 'download' | 'reports' | 'finance' | 'chat' | 'lock' | 'share';
+    icon?: 'question' | 'wifi' | 'database' | 'printer' | 'cash' | 'products' | 'users' | 'warning' | 'tag' | 'plus' | 'settings' | 'award' | 'download' | 'reports' | 'finance' | 'chat' | 'lock' | 'share' | 'upload';
 }
 
 const AccordionItem: React.FC<AccordionItemProps> = ({ title, children, isOpen, onToggle, icon = 'question' }) => (
@@ -336,7 +336,7 @@ const HelpView: React.FC = () => {
                             <AccordionItem title="Laporan Shift & Anti-Edit" isOpen={openAccordion === 'sendreport'} onToggle={() => toggleAccordion('sendreport')} icon="lock">
                                 <p>Staf dapat mengirim laporan penjualan harian/shift langsung ke Admin tanpa masuk ke menu Laporan utama.</p>
                                 <p className="mt-2 font-bold text-white">Fitur Laporan Aman (Anti-Edit):</p>
-                                <p>Kasir dapat mengirim <strong>Kode Terenkripsi</strong> via WhatsApp yang berisi data penjualan asli. Staf tidak bisa mengubah angka di pesan tersebut. Admin kemudian menyalin kode tersebut dan menempelkannya di menu <strong>Pengaturan {'>'} Laporan & Transaksi Lama {'>'} Paste Teks</strong> untuk melihat laporan asli.</p>
+                                <p>Kasir dapat mengirim <strong>Kode Terenkripsi</strong> via WhatsApp yang berisi data penjualan asli. Staf tidak bisa mengubah angka di pesan tersebut. Admin harus copy-paste kode ini di menu <strong>Import Transaksi</strong>.</p>
                             </AccordionItem>
                             <AccordionItem title="Simpan Pesanan (Open Bill)" isOpen={openAccordion === 'heldcart'} onToggle={() => toggleAccordion('heldcart')} icon="plus">
                                 <p>Berguna untuk restoran/kafe (Order dulu, bayar nanti).</p>

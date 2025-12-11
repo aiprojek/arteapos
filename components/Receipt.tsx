@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Transaction as TransactionType, ReceiptSettings } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
@@ -32,6 +33,12 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(({ transaction, s
                     <div className="flex justify-between">
                         <span>Pelanggan:</span>
                         <span>{transaction.customerName}</span>
+                    </div>
+                )}
+                {transaction.orderType && (
+                    <div className="flex justify-between">
+                        <span>Tipe:</span>
+                        <span className="capitalize">{transaction.orderType.replace('-', ' ')}</span>
                     </div>
                 )}
             </div>
@@ -87,13 +94,25 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(({ transaction, s
                 {transaction.cartDiscount && (
                     <div className="flex justify-between">
                         <span>Diskon ({transaction.cartDiscount.name || (transaction.cartDiscount.type === 'percentage' ? `${transaction.cartDiscount.value}%` : 'Rp')})</span>
-                        <span>- {CURRENCY_FORMATTER.format(transaction.subtotal - transaction.total)}</span>
+                        <span>- {CURRENCY_FORMATTER.format(transaction.subtotal - (transaction.total - (transaction.tax || 0) - (transaction.serviceCharge || 0)))}</span>
                     </div>
                 )}
                  {transaction.rewardRedeemed && (
                      <div className="flex justify-between">
                         <span>Reward</span>
                         <span>- {CURRENCY_FORMATTER.format(transaction.rewardRedeemed.pointsSpent > 0 ? (transaction.items.find(i => i.rewardId === transaction.rewardRedeemed?.rewardId)?.price || 0) * -1 : 0)}</span>
+                    </div>
+                 )}
+                 {transaction.serviceCharge > 0 && (
+                    <div className="flex justify-between">
+                        <span>Service Charge</span>
+                        <span>{CURRENCY_FORMATTER.format(transaction.serviceCharge)}</span>
+                    </div>
+                 )}
+                 {transaction.tax > 0 && (
+                    <div className="flex justify-between">
+                        <span>Pajak (PB1/PPN)</span>
+                        <span>{CURRENCY_FORMATTER.format(transaction.tax)}</span>
                     </div>
                  )}
 

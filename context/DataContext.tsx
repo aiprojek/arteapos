@@ -42,7 +42,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         const [
           products, categoriesObj, rawMaterials, transactionRecords, users, settings,
-          expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts
+          expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts, sessionHistory
         ] = await Promise.all([
           db.products.toArray(),
           db.appState.get('categories'),
@@ -58,7 +58,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           db.stockAdjustments.toArray(),
           db.customers.toArray(),
           db.discountDefinitions.toArray(),
-          db.heldCarts.toArray()
+          db.heldCarts.toArray(),
+          db.sessionHistory.toArray(),
         ]);
         
         const loadedData = {
@@ -76,6 +77,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           customers,
           discountDefinitions,
           heldCarts,
+          sessionHistory: sessionHistory || [],
           receiptSettings: settings.find(s => s.key === 'receiptSettings')?.value || initialData.receiptSettings,
           inventorySettings: settings.find(s => s.key === 'inventorySettings')?.value || initialData.inventorySettings,
           authSettings: settings.find(s => s.key === 'authSettings')?.value || initialData.authSettings,
@@ -128,6 +130,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 case 'customers':
                 case 'discountDefinitions':
                 case 'heldCarts':
+                case 'sessionHistory':
                   // FIX: Corrected Dexie instance method call 'table'.
                   promises.push(db.table(key).clear().then(() => db.table(key).bulkAdd(value as any[])));
                   break;
@@ -184,6 +187,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await db.customers.bulkAdd(backupData.customers || []);
       await db.discountDefinitions.bulkAdd(backupData.discountDefinitions || []);
       await db.heldCarts.bulkAdd(backupData.heldCarts || []);
+      await db.sessionHistory.bulkAdd(backupData.sessionHistory || []);
       
       await db.appState.put({ key: 'categories', value: backupData.categories || [] });
 

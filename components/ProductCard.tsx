@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import type { Product } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
@@ -29,6 +30,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onClick, availabilit
     };
   }, [product.image, product.imageUrl]);
 
+  const hasVariants = product.variants && product.variants.length > 0;
+
   return (
     <button
       onClick={onClick}
@@ -51,7 +54,10 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onClick, availabilit
       )}
       <div className="p-3 flex flex-col flex-grow">
         <h3 className="font-semibold text-slate-100 group-hover:text-[#52a37c] transition-colors flex-grow">{product.name}</h3>
-        <p className="text-sm text-slate-400">{CURRENCY_FORMATTER.format(product.price)}</p>
+        <div className="flex justify-between items-baseline mt-1">
+            <p className="text-sm text-slate-400">{CURRENCY_FORMATTER.format(product.price)}</p>
+            {hasVariants && <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">Varian</span>}
+        </div>
       </div>
     </button>
   );

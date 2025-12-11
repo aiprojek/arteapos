@@ -25,18 +25,6 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
     quality: 0.95,
     backgroundColor: '#ffffff',
   });
-  const [canShareImage, setCanShareImage] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      const dummyFile = new File([''], 'dummy.png', { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [dummyFile] })) {
-        setCanShareImage(true);
-      } else {
-        setCanShareImage(false);
-      }
-    }
-  }, [isOpen]);
 
   useEffect(() => {
     if (imageError) {
@@ -104,37 +92,73 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
       await bluetoothPrinterService.printReceipt(transaction, receiptSettings);
   };
 
-  const handleExportImage = async () => {
+  const handleDownload = async () => {
     if (isProcessing) return;
     try {
         const dataUrl = await getImage();
-        if (!dataUrl) {
-            return;
-        }
+        if (!dataUrl) return;
 
-        if (canShareImage) {
-            const blob = await (await fetch(dataUrl)).blob();
-            const file = new File([blob], `struk-${transaction.id}.png`, { type: 'image/png' });
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = `struk-${transaction.id}.png`;
+        link.click();
+    } catch (error) {
+        console.error('Gagal mengunduh gambar:', error);
+        showAlert({
+            type: 'alert',
+            title: 'Gagal Mengunduh',
+            message: 'Terjadi kesalahan saat mencoba mengunduh gambar struk.'
+        });
+    }
+  };
+
+  const handleShare = async () => {
+    if (isProcessing) return;
+    try {
+        const dataUrl = await getImage();
+        if (!dataUrl) return;
+
+        const blob = await (await fetch(dataUrl)).blob();
+        const file = new File([blob], `struk-${transaction.id}.png`, { type: 'image/png' });
+
+        // Cek apakah browser mendukung fitur Share File native (biasanya di Mobile)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 title: 'Struk Transaksi',
-                text: `Berikut adalah struk untuk transaksi Anda pada ${new Date(transaction.createdAt).toLocaleDateString()}.`,
+                text: `Berikut adalah struk untuk transaksi #${transaction.id.slice(-6)}.`,
                 files: [file],
             });
         } else {
-            const link = document.createElement('a');
-            link.href = dataUrl;
-            link.download = `struk-${transaction.id}.png`;
-            link.click();
+            // Fallback untuk Desktop: Salin gambar ke Clipboard
+            try {
+                await navigator.clipboard.write([
+                    new ClipboardItem({
+                        [blob.type]: blob,
+                    }),
+                ]);
+                showAlert({
+                    type: 'alert',
+                    title: 'Disalin ke Clipboard',
+                    message: 'Gambar struk berhasil disalin. Anda dapat menempelkannya (Paste) langsung di WhatsApp Web atau Telegram Desktop.'
+                });
+            } catch (clipboardError) {
+                console.error("Clipboard write failed", clipboardError);
+                showAlert({
+                    type: 'alert',
+                    title: 'Gagal Membagikan',
+                    message: 'Browser Anda tidak mendukung fitur berbagi otomatis atau salin gambar. Silakan gunakan tombol "Unduh".'
+                });
+            }
         }
     } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
             console.log("Aksi berbagi dibatalkan oleh pengguna.");
         } else {
-            console.error('Gagal membagikan atau mengunduh gambar:', error);
+            console.error('Gagal membagikan gambar:', error);
             showAlert({
                 type: 'alert',
-                title: 'Gagal Mengekspor Struk',
-                message: 'Terjadi kesalahan saat mencoba mengekspor gambar struk. Silakan coba lagi.'
+                title: 'Gagal Membagikan',
+                message: 'Terjadi kesalahan saat mencoba membagikan struk.'
             });
         }
     }
@@ -156,15 +180,17 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Struk Transaksi">
-      <div className="bg-slate-700 p-2 sm:p-4 rounded-lg overflow-y-auto max-h-[60vh]">
-        <div className="max-w-xs mx-auto">
+      <div className="bg-slate-700 p-2 sm:p-4 rounded-lg overflow-y-auto max-h-[50vh]">
+        <div className="max-w-xs mx-auto transform scale-95 sm:scale-100 origin-top">
             <Receipt ref={receiptRef} transaction={transaction} settings={receiptSettings} />
         </div>
       </div>
+      
       <div className="flex flex-col gap-3 pt-6">
-        <div className="flex flex-col sm:flex-row justify-center gap-3">
+        {/* Row 1: Print Actions */}
+        <div className="flex flex-col sm:flex-row gap-3">
             <Button variant="secondary" onClick={handleBluetoothPrint} className="flex-1" title="Cetak langsung ke Printer Thermal Bluetooth (Android/Desktop)">
-                <Icon name="bluetooth" className="w-5 h-5 text-blue-400"/>
+                <Icon name="bluetooth" className="w-5 h-5"/>
                 <span>Cetak BT</span>
             </Button>
             <Button variant="secondary" onClick={handlePrint} className="flex-1" title="Cetak via browser print dialog">
@@ -172,27 +198,26 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
                 <span>Cetak PDF</span>
             </Button>
         </div>
-        <div className="flex flex-col sm:flex-row justify-center gap-3">
-            <Button variant="primary" onClick={handleExportImage} disabled={isProcessing} className="flex-1">
-                {canShareImage ? (
-                    <>
-                        <Icon name="share" className="w-5 h-5"/>
-                        <span>{isProcessing ? '...' : 'Bagikan Gambar'}</span>
-                    </>
-                ) : (
-                    <>
-                        <Icon name="download" className="w-5 h-5"/>
-                        <span>{isProcessing ? '...' : 'Unduh Gambar'}</span>
-                    </>
-                )}
+
+        {/* Row 2: Digital Actions (Download & Share) */}
+        <div className="flex flex-col sm:flex-row gap-3">
+            <Button variant="secondary" onClick={handleDownload} className="flex-1" disabled={isProcessing}>
+                <Icon name="download" className="w-5 h-5"/>
+                <span>{isProcessing ? '...' : 'Unduh'}</span>
             </Button>
-            {transaction.paymentStatus !== 'refunded' && (
-                <Button variant="danger" onClick={handleRefund} className="flex-1">
-                    <Icon name="reset" className="w-5 h-5"/>
-                    <span>Refund</span>
-                </Button>
-            )}
+            <Button variant="primary" onClick={handleShare} className="flex-1" disabled={isProcessing}>
+                <Icon name="share" className="w-5 h-5"/>
+                <span>{isProcessing ? '...' : 'Bagikan'}</span>
+            </Button>
         </div>
+
+        {/* Row 3: Refund (Full Width) */}
+        {transaction.paymentStatus !== 'refunded' && (
+            <Button variant="danger" onClick={handleRefund} className="w-full mt-2">
+                <Icon name="reset" className="w-5 h-5"/>
+                <span>Refund Transaksi</span>
+            </Button>
+        )}
       </div>
     </Modal>
   );

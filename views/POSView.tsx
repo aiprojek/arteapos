@@ -1,6 +1,5 @@
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-// FIX: Replace obsolete useAppContext with specific context hooks
 import { useCart } from '../context/CartContext';
 import { useCustomer } from '../context/CustomerContext';
 import { useDiscount } from '../context/DiscountContext';
@@ -9,7 +8,7 @@ import { useProduct } from '../context/ProductContext';
 import { useSession } from '../context/SessionContext';
 import { useSettings } from '../context/SettingsContext';
 import { useUI } from '../context/UIContext';
-import type { Product, CartItem as CartItemType, Transaction as TransactionType, Customer, Reward, Payment, PaymentMethod, HeldCart, Discount, Addon, DiscountDefinition } from '../types';
+import type { Product, CartItem as CartItemType, Transaction as TransactionType, Customer, Reward, Payment, PaymentMethod, HeldCart, Discount, Addon, DiscountDefinition, OrderType, ProductVariant } from '../types';
 import ProductCard from '../components/ProductCard';
 import CartItemComponent from '../components/CartItem';
 import Button from '../components/Button';
@@ -21,14 +20,48 @@ import BarcodeScannerModal from '../components/BarcodeScannerModal';
 import { useCameraAvailability } from '../hooks/useCameraAvailability';
 import ProductPlaceholder from '../components/ProductPlaceholder';
 import KitchenNoteModal from '../components/KitchenNoteModal';
+import EndSessionModal from '../components/EndSessionModal';
+import SendReportModal from '../components/SendReportModal';
+import CustomerFormModal from '../components/CustomerFormModal';
+
+// --- Variant Selection Modal ---
+const VariantModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    product: Product | null;
+    onSelect: (variant: ProductVariant) => void;
+}> = ({ isOpen, onClose, product, onSelect }) => {
+    if (!isOpen || !product || !product.variants || product.variants.length === 0) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={`Pilih Varian ${product.name}`}>
+            <div className="grid grid-cols-2 gap-3 max-h-80 overflow-y-auto">
+                {product.variants.map(variant => (
+                    <button
+                        key={variant.id}
+                        onClick={() => onSelect(variant)}
+                        className="bg-slate-700 hover:bg-slate-600 p-4 rounded-lg text-left transition-colors focus:ring-2 focus:ring-[#347758] focus:outline-none"
+                    >
+                        <p className="font-bold text-white">{variant.name}</p>
+                        <p className="text-sm text-[#52a37c]">{CURRENCY_FORMATTER.format(variant.price)}</p>
+                    </button>
+                ))}
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-700">
+                <Button variant="secondary" onClick={onClose} className="w-full">Batal</Button>
+            </div>
+        </Modal>
+    );
+};
 
 // --- Addon Modal ---
 const AddonModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     product: Product | null;
+    variant: ProductVariant | null;
     onConfirm: (selectedAddons: Addon[]) => void;
-}> = ({ isOpen, onClose, product, onConfirm }) => {
+}> = ({ isOpen, onClose, product, variant, onConfirm }) => {
     const [selectedAddons, setSelectedAddons] = useState<Addon[]>([]);
 
     useEffect(() => {
@@ -47,11 +80,12 @@ const AddonModal: React.FC<{
         );
     };
 
+    const basePrice = variant ? variant.price : product.price;
     const totalAddonPrice = selectedAddons.reduce((sum, addon) => sum + addon.price, 0);
-    const totalItemPrice = product.price + totalAddonPrice;
+    const totalItemPrice = basePrice + totalAddonPrice;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Pilih Add-on untuk ${product.name}`}>
+        <Modal isOpen={isOpen} onClose={onClose} title={`Pilih Add-on untuk ${product.name} ${variant ? `(${variant.name})` : ''}`}>
             <div className="space-y-3 max-h-64 overflow-y-auto">
                 {product.addons.map(addon => {
                     const isSelected = !!selectedAddons.find(a => a.id === addon.id);
@@ -167,7 +201,8 @@ const CashManagementModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
 }> = ({ isOpen, onClose }) => {
-    const { addCashMovement } = useSession();
+    const { addCashMovement, session } = useSession();
+    const { transactions } = useFinance();
     const { showAlert } = useUI();
     const [type, setType] = useState<'in' | 'out'>('out');
     const [amount, setAmount] = useState('');
@@ -180,6 +215,35 @@ const CashManagementModal: React.FC<{
             setDescription('');
         }
     }, [isOpen]);
+
+    // Calculate current drawer balance to show to staff
+    const currentDrawerBalance = useMemo(() => {
+        if (!session) return 0;
+        
+        // 1. Starting Cash
+        let balance = session.startingCash;
+
+        // 2. Cash Sales (Only 'paid' or 'partial' cash payments in this session)
+        const sessionTransactions = transactions.filter(t => 
+            new Date(t.createdAt) >= new Date(session.startTime) && 
+            t.paymentStatus !== 'refunded'
+        );
+        
+        const cashSales = sessionTransactions.reduce((sum, t) => {
+            const cashPay = t.payments.find(p => p.method === 'cash');
+            return sum + (cashPay ? cashPay.amount : 0);
+        }, 0);
+        
+        balance += cashSales;
+
+        // 3. Manual Cash Movements
+        session.cashMovements.forEach(m => {
+            if (m.type === 'in') balance += m.amount;
+            else balance -= m.amount;
+        });
+
+        return balance;
+    }, [session, transactions]);
 
     const handleSubmit = () => {
         const value = parseFloat(amount);
@@ -194,6 +258,11 @@ const CashManagementModal: React.FC<{
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Kelola Kas (Shift Ini)">
             <div className="space-y-4">
+                <div className="bg-slate-700/50 p-3 rounded-lg border border-slate-600 text-center">
+                    <p className="text-xs text-slate-400 mb-1">Estimasi Uang Tunai di Laci Saat Ini</p>
+                    <p className="text-2xl font-bold text-white">{CURRENCY_FORMATTER.format(currentDrawerBalance)}</p>
+                </div>
+
                 <div className="flex bg-slate-700 p-1 rounded-lg">
                     <button onClick={() => setType('in')} className={`flex-1 py-2 text-sm rounded-md transition-colors ${type === 'in' ? 'bg-green-600 text-white font-semibold' : 'text-slate-300'}`}>
                         Kas Masuk
@@ -209,12 +278,102 @@ const CashManagementModal: React.FC<{
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">Keterangan</label>
-                    <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" placeholder={type === 'in' ? "cth: Tambahan Modal Receh" : "cth: Beli Es Batu"}/>
+                    <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" placeholder={type === 'in' ? "cth: Tambahan Modal Receh" : "cth: Beli Es Batu, Bensin"}/>
                 </div>
 
                 <Button onClick={handleSubmit} disabled={!amount || !description} className="w-full">
                     Simpan
                 </Button>
+            </div>
+        </Modal>
+    );
+}
+
+const SessionHistoryModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onViewReceipt: (transaction: TransactionType) => void;
+    onRefund: (transaction: TransactionType) => void;
+}> = ({ isOpen, onClose, onViewReceipt, onRefund }) => {
+    const { session } = useSession();
+    const { transactions } = useFinance();
+
+    const sessionTransactions = useMemo(() => {
+        if (!session) return [];
+        return transactions
+            .filter(t => new Date(t.createdAt) >= new Date(session.startTime))
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }, [session, transactions]);
+
+    const sessionSummary = useMemo(() => {
+        const total = sessionTransactions
+            .filter(t => t.paymentStatus !== 'refunded')
+            .reduce((sum, t) => sum + t.total, 0);
+        return { total, count: sessionTransactions.length };
+    }, [sessionTransactions]);
+
+    if (!isOpen) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Riwayat Transaksi (Sesi Ini)">
+            <div className="space-y-4">
+                <div className="flex justify-between items-center bg-slate-700/50 p-3 rounded-lg border border-slate-600">
+                    <div>
+                        <p className="text-xs text-slate-400">Total Transaksi</p>
+                        <p className="font-bold text-white">{sessionSummary.count}</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-xs text-slate-400">Total Omzet Sesi</p>
+                        <p className="font-bold text-[#52a37c]">{CURRENCY_FORMATTER.format(sessionSummary.total)}</p>
+                    </div>
+                </div>
+
+                {sessionTransactions.length === 0 ? (
+                    <p className="text-center text-slate-400 py-8">Belum ada transaksi di sesi ini.</p>
+                ) : (
+                    <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                        {sessionTransactions.map(t => (
+                            <div key={t.id} className="bg-slate-700/50 p-3 rounded-lg border border-slate-600 flex justify-between items-center">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="font-bold text-white">{t.customerName || 'Umum'}</span>
+                                        {t.paymentStatus === 'refunded' && (
+                                            <span className="text-[10px] bg-red-500/20 text-red-300 px-1.5 py-0.5 rounded">Refunded</span>
+                                        )}
+                                        <span className="text-[10px] bg-slate-600 text-slate-300 px-1.5 py-0.5 rounded">
+                                            {new Date(t.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-400">
+                                        #{t.id.slice(-4)} • {t.items.length} items
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <p className={`font-bold ${t.paymentStatus === 'refunded' ? 'text-slate-500 line-through' : 'text-[#52a37c]'}`}>
+                                        {CURRENCY_FORMATTER.format(t.total)}
+                                    </p>
+                                    <div className="flex gap-2 mt-2 justify-end">
+                                        <button 
+                                            onClick={() => onViewReceipt(t)} 
+                                            className="text-xs bg-slate-600 hover:bg-slate-500 px-2 py-1 rounded text-white flex items-center gap-1"
+                                        >
+                                            <Icon name="printer" className="w-3 h-3" /> Struk
+                                        </button>
+                                        {t.paymentStatus !== 'refunded' && (
+                                            <button 
+                                                onClick={() => onRefund(t)} 
+                                                className="text-xs bg-red-900/50 hover:bg-red-900 text-red-300 px-2 py-1 rounded flex items-center gap-1"
+                                            >
+                                                <Icon name="reset" className="w-3 h-3" /> Refund
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                <Button variant="secondary" onClick={onClose} className="w-full">Tutup</Button>
             </div>
         </Modal>
     );
@@ -362,8 +521,8 @@ const PaymentModal: React.FC<{
 };
 
 const RewardsModal: React.FC<{
-    isOpen: boolean,
-    onClose: () => void,
+    isOpen: boolean;
+    onClose: () => void;
     customer: Customer,
 }> = ({ isOpen, onClose, customer }) => {
     const { membershipSettings } = useCustomer();
@@ -527,21 +686,39 @@ const DiscountModal: React.FC<{
 const CustomerSelection: React.FC<{
     selectedCustomer: Customer | null;
     onSelectCustomer: (customer: Customer | null) => void;
-}> = ({ selectedCustomer, onSelectCustomer }) => {
+    onOpenAddModal: () => void;
+    onSelectOrderType: (type: OrderType) => void;
+    orderType: OrderType;
+}> = ({ selectedCustomer, onSelectCustomer, onOpenAddModal, onSelectOrderType, orderType }) => {
     const { customers, membershipSettings } = useCustomer();
-    if (!membershipSettings.enabled) return null;
 
     return (
-        <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-300">Pelanggan</label>
-            <select 
-                value={selectedCustomer?.id || ''}
-                onChange={(e) => onSelectCustomer(customers.find(c => c.id === e.target.value) || null)}
-                className="w-full bg-slate-700 p-2 rounded-md text-sm text-white"
-            >
-                <option value="">Umum</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.points} poin)</option>)}
-            </select>
+        <div className="space-y-3">
+            <div className="flex bg-slate-700 p-1 rounded-lg">
+                <button onClick={() => onSelectOrderType('dine-in')} className={`flex-1 py-1 text-xs rounded-md transition-colors ${orderType === 'dine-in' ? 'bg-[#347758] text-white font-semibold' : 'text-slate-300'}`}>Dine-In</button>
+                <button onClick={() => onSelectOrderType('take-away')} className={`flex-1 py-1 text-xs rounded-md transition-colors ${orderType === 'take-away' ? 'bg-[#347758] text-white font-semibold' : 'text-slate-300'}`}>Take-Away</button>
+                <button onClick={() => onSelectOrderType('online')} className={`flex-1 py-1 text-xs rounded-md transition-colors ${orderType === 'online' ? 'bg-[#347758] text-white font-semibold' : 'text-slate-300'}`}>Online</button>
+            </div>
+            
+            {membershipSettings.enabled && (
+                <div className="flex gap-2">
+                    <select 
+                        value={selectedCustomer?.id || ''}
+                        onChange={(e) => onSelectCustomer(customers.find(c => c.id === e.target.value) || null)}
+                        className="w-full bg-slate-700 p-2 rounded-md text-sm text-white"
+                    >
+                        <option value="">Pelanggan Umum</option>
+                        {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.points} poin)</option>)}
+                    </select>
+                    <button 
+                        onClick={onOpenAddModal}
+                        className="bg-[#347758] p-2 rounded-md text-white hover:bg-[#2a6046]"
+                        title="Tambah Pelanggan Baru"
+                    >
+                        <Icon name="plus" className="w-5 h-5" />
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
@@ -552,6 +729,7 @@ const ProductListItem: React.FC<{
   availability: { available: boolean; reason: string };
 }> = ({ product, onClick, availability }) => {
   const { available, reason } = availability;
+  const hasVariants = product.variants && product.variants.length > 0;
   return (
     <button
       onClick={onClick}
@@ -574,7 +752,10 @@ const ProductListItem: React.FC<{
             <p className="font-semibold text-slate-100 truncate">{product.name}</p>
             <p className="text-xs text-slate-400 truncate">{product.category.join(', ')}</p>
         </div>
-        <p className="font-semibold text-slate-300">{CURRENCY_FORMATTER.format(product.price)}</p>
+        <div className="text-right">
+            <p className="font-semibold text-slate-300">{CURRENCY_FORMATTER.format(product.price)}</p>
+            {hasVariants && <p className="text-[10px] text-blue-300">Varian Tersedia</p>}
+        </div>
     </button>
   );
 };
@@ -589,12 +770,13 @@ const POSView: React.FC = () => {
         heldCarts, activeHeldCartId, switchActiveCart, holdActiveCart, deleteHeldCart, updateHeldCartName,
         applyItemDiscount, removeItemDiscount,
         cartDiscount, applyCartDiscount, removeCartDiscount,
+        orderType, setOrderType
     } = useCart();
     const { showAlert } = useUI();
-    const { sessionSettings, session } = useSession();
-    const { transactions } = useFinance();
+    const { sessionSettings, session, startSession } = useSession();
+    const { transactions, refundTransaction } = useFinance();
     const { receiptSettings } = useSettings();
-    const { membershipSettings } = useCustomer();
+    const { membershipSettings, addCustomer } = useCustomer();
     const [activeCategory, setActiveCategory] = useState('Semua');
     const [searchTerm, setSearchTerm] = useState('');
     const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -613,8 +795,26 @@ const POSView: React.FC = () => {
 
     const [isAddonModalOpen, setAddonModalOpen] = useState(false);
     const [productForAddons, setProductForAddons] = useState<Product | null>(null);
+    const [isVariantModalOpen, setVariantModalOpen] = useState(false);
+    const [productForVariant, setProductForVariant] = useState<Product | null>(null);
+    const [selectedVariantForAddons, setSelectedVariantForAddons] = useState<ProductVariant | null>(null);
+
     const [transactionForKitchenNote, setTransactionForKitchenNote] = useState<TransactionType | null>(null);
     const [isCashMgmtOpen, setCashMgmtOpen] = useState(false);
+    
+    // Start Session Logic inside POS
+    const [isStartSessionModalOpen, setStartSessionModalOpen] = useState(false);
+    const [startingCashInput, setStartingCashInput] = useState('');
+    
+    // End Session Logic inside POS
+    const [isEndSessionModalOpen, setEndSessionModalOpen] = useState(false);
+    const [isSendReportModalOpen, setSendReportModalOpen] = useState(false);
+
+    // New Features for Staff Convenience
+    const [isCustomerModalOpen, setCustomerModalOpen] = useState(false);
+    const [isHistoryModalOpen, setHistoryModalOpen] = useState(false);
+    const [receiptToView, setReceiptToView] = useState<TransactionType | null>(null);
+
     const searchInputRef = useRef<HTMLInputElement>(null);
 
 
@@ -627,6 +827,9 @@ const POSView: React.FC = () => {
     // Keyboard Shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Check session status to disable shortcuts if session is locked
+            if (sessionSettings.enabled && !session) return;
+
             // Ignore if in input or textarea (except for Escape)
             const target = e.target as HTMLElement;
             if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
@@ -653,7 +856,7 @@ const POSView: React.FC = () => {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [cart.length]);
+    }, [cart.length, session, sessionSettings.enabled]);
 
     const handleClearCart = () => {
         clearCart();
@@ -661,20 +864,75 @@ const POSView: React.FC = () => {
     }
 
     const handleProductClick = (product: Product) => {
+        // Step 1: Check if product has variants
+        if (product.variants && product.variants.length > 0) {
+            setProductForVariant(product);
+            setVariantModalOpen(true);
+            return;
+        }
+
+        // Step 2: Check if product has addons
         if (product.addons && product.addons.length > 0) {
             setProductForAddons(product);
+            setSelectedVariantForAddons(null); // No variant
             setAddonModalOpen(true);
-        } else {
-            addToCart(product);
+            return;
+        }
+
+        // Step 3: Add directly to cart
+        addToCart(product);
+    };
+
+    const handleVariantSelect = (variant: ProductVariant) => {
+        setVariantModalOpen(false);
+        if (productForVariant) {
+            // Check for addons AFTER selecting variant
+            if (productForVariant.addons && productForVariant.addons.length > 0) {
+                setProductForAddons(productForVariant);
+                setSelectedVariantForAddons(variant);
+                setAddonModalOpen(true);
+            } else {
+                // No addons, add variant directly
+                addConfiguredItemToCart(productForVariant, [], variant);
+                setProductForVariant(null);
+            }
         }
     };
 
     const handleAddonConfirm = (selectedAddons: Addon[]) => {
         if (productForAddons) {
-            addConfiguredItemToCart(productForAddons, selectedAddons);
+            addConfiguredItemToCart(productForAddons, selectedAddons, selectedVariantForAddons || undefined);
         }
         setAddonModalOpen(false);
         setProductForAddons(null);
+        setSelectedVariantForAddons(null);
+        setProductForVariant(null); // Reset this too in case we came from variant selection
+    };
+
+    const handleStartSession = () => {
+        startSession(parseFloat(startingCashInput) || 0);
+        setStartSessionModalOpen(false);
+        setStartingCashInput('');
+    }
+
+    const handleSaveCustomer = (customerData: Omit<Customer, 'id' | 'memberId' | 'points' | 'createdAt'> | Customer) => {
+        addCustomer(customerData);
+        setCustomerModalOpen(false);
+        // Note: New customer selection isn't automatic because addCustomer is async and doesn't return the ID immediately in current context structure.
+        // In a real app, you'd want to return the ID and select it here.
+        showAlert({ type: 'alert', title: 'Berhasil', message: 'Pelanggan berhasil ditambahkan. Silakan cari di dropdown.' });
+    };
+
+    const handleRefundTransaction = (transaction: TransactionType) => {
+        showAlert({
+            type: 'confirm',
+            title: 'Refund Transaksi?',
+            message: 'Stok akan dikembalikan dan omzet dikurangi. Yakin?',
+            confirmVariant: 'danger',
+            onConfirm: () => {
+                refundTransaction(transaction.id);
+            }
+        });
     };
 
     const bestSellingProductIds = useMemo(() => {
@@ -710,7 +968,7 @@ const POSView: React.FC = () => {
         return initialFilter.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
     }, [products, activeCategory, searchTerm, bestSellingProductIds]);
     
-    const { subtotal, itemDiscountAmount, cartDiscountAmount, finalTotal } = getCartTotals();
+    const { subtotal, itemDiscountAmount, cartDiscountAmount, taxAmount, serviceChargeAmount, finalTotal } = getCartTotals();
     
     const handleSaveTransaction = useCallback((payments: Array<Omit<Payment, 'id' | 'createdAt'>>, customerDetails: { customerId?: string, customerName?: string, customerContact?: string }) => {
         try {
@@ -851,6 +1109,42 @@ const POSView: React.FC = () => {
         );
     };
 
+    // Calculate session summary for EndSessionModal AND SendReportModal
+    const sessionSummary = useMemo(() => {
+        if (!session) return { cashSales: 0, cashIn: 0, cashOut: 0 };
+        
+        // Filter transactions since session start
+        const sessionTrans = transactions.filter(t => 
+            new Date(t.createdAt) >= new Date(session.startTime) && 
+            t.paymentStatus !== 'refunded'
+        );
+
+        // Sum cash payments
+        const cashSales = sessionTrans.reduce((sum, t) => {
+            const cashPay = t.payments.find(p => p.method === 'cash');
+            return sum + (cashPay ? cashPay.amount : 0);
+        }, 0);
+
+        // Sum movement
+        let cashIn = 0, cashOut = 0;
+        session.cashMovements.forEach(m => {
+            if (m.type === 'in') cashIn += m.amount;
+            else cashOut += m.amount;
+        });
+
+        return { cashSales, cashIn, cashOut };
+    }, [session, transactions]);
+
+    const sessionTransactions = useMemo(() => {
+        if (!session) return [];
+        return transactions.filter(t => 
+            new Date(t.createdAt) >= new Date(session.startTime) && 
+            t.paymentStatus !== 'refunded'
+        );
+    }, [session, transactions]);
+
+    // Check for Session Lock
+    const isSessionLocked = sessionSettings.enabled && !session;
 
     return (
         <div className="flex flex-col md:flex-row h-full gap-6">
@@ -864,70 +1158,117 @@ const POSView: React.FC = () => {
                             placeholder="Cari produk... (Ctrl+/)"
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-[#347758] focus:border-[#347758]"
+                            disabled={isSessionLocked}
+                            className={`w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-[#347758] focus:border-[#347758] ${isSessionLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                         />
                          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     </div>
                     <div className="flex items-center gap-2">
                         {sessionSettings.enabled && session && (
-                            <Button 
-                                variant="secondary" 
-                                onClick={() => setCashMgmtOpen(true)}
-                                title="Kelola Kas (Masuk/Keluar)"
-                            >
-                                <Icon name="finance" className="w-5 h-5" />
-                            </Button>
+                            <div className="flex items-center bg-slate-700 rounded-lg p-1">
+                                <Button 
+                                    variant="secondary" 
+                                    onClick={() => setHistoryModalOpen(true)}
+                                    title="Riwayat Transaksi Sesi Ini"
+                                    className="border-none hover:bg-slate-600 rounded px-3 py-1.5 flex gap-2 items-center text-xs sm:text-sm"
+                                >
+                                    <Icon name="book" className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="hidden lg:inline">Riwayat</span>
+                                </Button>
+                                <div className="w-px h-6 bg-slate-600 mx-1"></div>
+                                <Button 
+                                    variant="secondary" 
+                                    onClick={() => setCashMgmtOpen(true)}
+                                    title="Kelola Kas (Masuk/Keluar)"
+                                    className="border-none hover:bg-slate-600 rounded px-3 py-1.5 flex gap-2 items-center text-xs sm:text-sm"
+                                >
+                                    <Icon name="finance" className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="hidden lg:inline">Kas</span>
+                                </Button>
+                                <div className="w-px h-6 bg-slate-600 mx-1"></div>
+                                 <Button 
+                                    variant="secondary" 
+                                    onClick={() => setSendReportModalOpen(true)}
+                                    title="Kirim Laporan Shift"
+                                    className="border-none hover:bg-slate-600 rounded px-3 py-1.5 flex gap-2 items-center text-xs sm:text-sm"
+                                >
+                                    <Icon name="chat" className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="hidden lg:inline">Laporan</span>
+                                </Button>
+                                <div className="w-px h-6 bg-slate-600 mx-1"></div>
+                                <Button
+                                    variant="danger"
+                                    onClick={() => setEndSessionModalOpen(true)}
+                                    title="Tutup Sesi"
+                                    className="border-none bg-red-900/50 hover:bg-red-800 rounded px-3 py-1.5 flex gap-2 items-center text-xs sm:text-sm text-red-300"
+                                >
+                                    <Icon name="logout" className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="hidden lg:inline">Tutup</span>
+                                </Button>
+                            </div>
                         )}
                         <Button 
                             variant="secondary" 
                             onClick={() => setBarcodeScannerOpen(true)}
-                            disabled={!isCameraAvailable}
+                            disabled={!isCameraAvailable || isSessionLocked}
                             title={isCameraAvailable ? "Pindai Barcode Produk" : "Tidak ada kamera terdeteksi"}
+                            className="bg-slate-800 border border-slate-700"
                         >
                             <Icon name="barcode" className="w-5 h-5" />
                         </Button>
                     </div>
                 </div>
                 
-                <>
-                    <div className="flex items-center justify-between gap-4 pb-3 mb-2">
-                         <div className="flex items-center gap-2 overflow-x-auto -mx-4 px-4">
-                            <button onClick={() => setActiveCategory('Semua')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full ${activeCategory === 'Semua' ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>Semua</button>
-                            <button onClick={() => setActiveCategory('__FAVORITES__')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full flex items-center gap-1 transition-colors ${activeCategory === '__FAVORITES__' ? 'bg-[#347758] text-white' : 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/40'}`}>
-                                ⭐ Favorit
-                            </button>
-                            <button onClick={() => setActiveCategory('__BEST_SELLING__')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full flex items-center gap-1 transition-colors ${activeCategory === '__BEST_SELLING__' ? 'bg-[#347758] text-white' : 'bg-orange-500/20 text-orange-300 hover:bg-orange-500/40'}`}>
-                                🔥 Terlaris
-                            </button>
-                            {categories.map(cat => (
-                                <button key={cat} onClick={() => setActiveCategory(cat)} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full ${activeCategory === cat ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>{cat}</button>
-                            ))}
+                {isSessionLocked ? (
+                    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-800/50 rounded-xl border-2 border-dashed border-slate-700">
+                        <div className="bg-slate-800 p-4 rounded-full mb-4 shadow-lg">
+                            <Icon name="lock" className="w-12 h-12 text-slate-500" />
                         </div>
-                        <div className="flex items-center bg-slate-700 rounded-lg p-1">
-                            <button onClick={() => setProductViewMode('grid')} className={`p-1 rounded-md ${productViewMode === 'grid' ? 'bg-[#347758]' : 'text-slate-400'}`}><Icon name="products" className="w-4 h-4"/></button>
-                            <button onClick={() => setProductViewMode('list')} className={`p-1 rounded-md ${productViewMode === 'list' ? 'bg-[#347758]' : 'text-slate-400'}`}><Icon name="menu" className="w-4 h-4"/></button>
-                        </div>
+                        <h3 className="text-xl font-bold text-white mb-2">Sesi Penjualan Belum Dimulai</h3>
+                        <p className="text-slate-400 mb-6 max-w-xs text-sm">
+                            Untuk keamanan dan pencatatan yang akurat, silakan mulai sesi baru dan masukkan modal awal kasir.
+                        </p>
+                        <Button onClick={() => setStartSessionModalOpen(true)} variant="primary" size="lg">
+                            Mulai Sesi Sekarang
+                        </Button>
                     </div>
-                    <div className="flex-1 overflow-y-auto pr-2 -mr-2">
-                        {productViewMode === 'grid' ? (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                                {filteredProducts.map(product => (
-                                <ProductCard key={product.id} product={product} onClick={() => handleProductClick(product)} availability={isProductAvailable(product)} />
+                ) : (
+                    <>
+                        <div className="flex items-center justify-between gap-4 pb-3 mb-2">
+                             <div className="flex items-center gap-2 overflow-x-auto -mx-4 px-4">
+                                <button onClick={() => setActiveCategory('Semua')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full ${activeCategory === 'Semua' ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>Semua</button>
+                                <button onClick={() => setActiveCategory('__FAVORITES__')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full flex items-center gap-1 transition-colors ${activeCategory === '__FAVORITES__' ? 'bg-[#347758] text-white' : 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/40'}`}>
+                                    ⭐ Favorit
+                                </button>
+                                <button onClick={() => setActiveCategory('__BEST_SELLING__')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full flex items-center gap-1 transition-colors ${activeCategory === '__BEST_SELLING__' ? 'bg-[#347758] text-white' : 'bg-orange-500/20 text-orange-300 hover:bg-orange-500/40'}`}>
+                                    🔥 Terlaris
+                                </button>
+                                {categories.map(cat => (
+                                    <button key={cat} onClick={() => setActiveCategory(cat)} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full ${activeCategory === cat ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>{cat}</button>
                                 ))}
                             </div>
-                        ) : (
-                             <div className="space-y-2">
-                                {filteredProducts.map(product => (
-                                    <ProductListItem key={product.id} product={product} onClick={() => handleProductClick(product)} availability={isProductAvailable(product)} />
-                                ))}
+                            <div className="flex items-center bg-slate-700 rounded-lg p-1">
+                                <button onClick={() => setProductViewMode('grid')} className={`p-1 rounded-md ${productViewMode === 'grid' ? 'bg-[#347758]' : 'text-slate-400'}`}><Icon name="products" className="w-4 h-4"/></button>
+                                <button onClick={() => setProductViewMode('list')} className={`p-1 rounded-md ${productViewMode === 'list' ? 'bg-[#347758]' : 'text-slate-400'}`}><Icon name="menu" className="w-4 h-4"/></button>
                             </div>
-                        )}
-                    </div>
-                </>
+                        </div>
+                        <div className="flex-1 overflow-y-auto pr-2 -mr-2">
+                            {productViewMode === 'grid' ? (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                                    {filteredProducts.map(product => (
+                                    <ProductCard key={product.id} product={product} onClick={() => handleProductClick(product)} availability={isProductAvailable(product)} />
+                                    ))}
+                                </div>
+                            ) : (
+                                 <div className="space-y-2">
+                                    {filteredProducts.map(product => (
+                                        <ProductListItem key={product.id} product={product} onClick={() => handleProductClick(product)} availability={isProductAvailable(product)} />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
             
             {/* Cart Section */}
-            <div className="w-full md:w-96 lg:w-[420px] bg-slate-800 rounded-xl shadow-2xl flex flex-col p-4 flex-shrink-0 h-[45%] md:h-full">
+            <div className={`w-full md:w-96 lg:w-[420px] bg-slate-800 rounded-xl shadow-2xl flex flex-col p-4 flex-shrink-0 h-[45%] md:h-full ${isSessionLocked ? 'opacity-50 pointer-events-none' : ''}`}>
                 {sessionSettings.enabled && sessionSettings.enableCartHolding && <HeldCartsTabs onSwitch={switchCart} />}
                 
                 <h2 className="text-xl font-bold mb-2">Keranjang</h2>
@@ -944,7 +1285,13 @@ const POSView: React.FC = () => {
                            {cart.map(item => <CartItemComponent key={item.cartItemId} item={item} onOpenDiscountModal={handleOpenDiscountModal}/>)}
                         </div>
                         <div className="border-t border-slate-700 pt-3 mt-auto space-y-3">
-                            <CustomerSelection selectedCustomer={selectedCustomer} onSelectCustomer={setSelectedCustomer} />
+                            <CustomerSelection 
+                                selectedCustomer={selectedCustomer} 
+                                onSelectCustomer={setSelectedCustomer}
+                                onOpenAddModal={() => setCustomerModalOpen(true)}
+                                onSelectOrderType={setOrderType}
+                                orderType={orderType}
+                            />
                             
                             <div className="flex gap-2">
                                 {membershipSettings.enabled && (
@@ -969,6 +1316,18 @@ const POSView: React.FC = () => {
                                             {cartDiscount?.name && <span className="text-xs block">({cartDiscount.name})</span>}
                                         </span>
                                         <span>- {CURRENCY_FORMATTER.format(itemDiscountAmount + cartDiscountAmount)}</span>
+                                    </div>
+                                )}
+                                {serviceChargeAmount > 0 && (
+                                    <div className="flex justify-between text-slate-400">
+                                        <span>Service Charge ({receiptSettings.serviceChargeRate}%)</span>
+                                        <span>{CURRENCY_FORMATTER.format(serviceChargeAmount)}</span>
+                                    </div>
+                                )}
+                                {taxAmount > 0 && (
+                                    <div className="flex justify-between text-slate-400">
+                                        <span>Pajak ({receiptSettings.taxRate}%)</span>
+                                        <span>{CURRENCY_FORMATTER.format(taxAmount)}</span>
                                     </div>
                                 )}
                             </div>
@@ -1027,7 +1386,22 @@ const POSView: React.FC = () => {
                 selectedCustomer={selectedCustomer}
             />
             <CashManagementModal isOpen={isCashMgmtOpen} onClose={() => setCashMgmtOpen(false)} />
-            {lastTransaction && <ReceiptModal isOpen={isReceiptModalOpen} onClose={() => setReceiptModalOpen(false)} transaction={lastTransaction}/>}
+            
+            <SessionHistoryModal 
+                isOpen={isHistoryModalOpen} 
+                onClose={() => setHistoryModalOpen(false)} 
+                onViewReceipt={(t) => { setReceiptToView(t); setReceiptModalOpen(true); }}
+                onRefund={handleRefundTransaction}
+            />
+
+            {(lastTransaction || receiptToView) && (
+                <ReceiptModal 
+                    isOpen={isReceiptModalOpen} 
+                    onClose={() => { setReceiptModalOpen(false); setReceiptToView(null); }} 
+                    transaction={receiptToView || lastTransaction!}
+                />
+            )}
+
             <BarcodeScannerModal isOpen={isBarcodeScannerOpen} onClose={() => setBarcodeScannerOpen(false)} onScan={handleBarcodeScan} />
             {selectedCustomer && <RewardsModal isOpen={isRewardsModalOpen} onClose={() => setRewardsModalOpen(false)} customer={selectedCustomer} />}
             <NameCartModal isOpen={isNameModalOpen} onClose={() => setNameModalOpen(false)} onSave={handleSaveName} currentName={cartToRename?.name}/>
@@ -1047,10 +1421,17 @@ const POSView: React.FC = () => {
                 onSave={applyCartDiscount}
                 onRemove={removeCartDiscount}
             />
+            <VariantModal
+                isOpen={isVariantModalOpen}
+                onClose={() => { setVariantModalOpen(false); setProductForVariant(null); }}
+                product={productForVariant}
+                onSelect={handleVariantSelect}
+            />
             <AddonModal
                 isOpen={isAddonModalOpen}
-                onClose={() => setAddonModalOpen(false)}
+                onClose={() => { setAddonModalOpen(false); setProductForAddons(null); setSelectedVariantForAddons(null); }}
                 product={productForAddons}
+                variant={selectedVariantForAddons}
                 onConfirm={handleAddonConfirm}
             />
             {transactionForKitchenNote && (
@@ -1060,6 +1441,60 @@ const POSView: React.FC = () => {
                     transaction={transactionForKitchenNote}
                 />
             )}
+            
+            <CustomerFormModal 
+                isOpen={isCustomerModalOpen} 
+                onClose={() => setCustomerModalOpen(false)} 
+                onSave={handleSaveCustomer} 
+                customer={null} 
+            />
+
+            {/* Start Session Modal (Added here for convenience) */}
+            <Modal isOpen={isStartSessionModalOpen} onClose={() => setStartSessionModalOpen(false)} title="Mulai Sesi Penjualan">
+                <div className="space-y-4">
+                    <p className="text-slate-300">Masukkan jumlah uang tunai awal (modal) yang tersedia di laci kasir.</p>
+                    <div>
+                        <label htmlFor="startingCashPOS" className="block text-sm font-medium text-slate-300 mb-1">Uang Awalan (IDR)</label>
+                        <input
+                            id="startingCashPOS"
+                            type="number"
+                            min="0"
+                            value={startingCashInput}
+                            onChange={(e) => setStartingCashInput(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg"
+                            placeholder="0"
+                            autoFocus
+                        />
+                    </div>
+                    <Button onClick={handleStartSession} className="w-full py-3">
+                        Mulai Sesi
+                    </Button>
+                </div>
+            </Modal>
+
+            {/* End Session Modal */}
+            {session && (
+                <EndSessionModal
+                    isOpen={isEndSessionModalOpen}
+                    onClose={() => setEndSessionModalOpen(false)}
+                    sessionSales={sessionSummary.cashSales}
+                    startingCash={session.startingCash}
+                    cashIn={sessionSummary.cashIn}
+                    cashOut={sessionSummary.cashOut}
+                />
+            )}
+
+            <SendReportModal
+                isOpen={isSendReportModalOpen}
+                onClose={() => setSendReportModalOpen(false)}
+                data={sessionTransactions}
+                adminWhatsapp={receiptSettings.adminWhatsapp}
+                adminTelegram={receiptSettings.adminTelegram}
+                // Pass cash flow data
+                startingCash={session?.startingCash || 0}
+                cashIn={sessionSummary.cashIn}
+                cashOut={sessionSummary.cashOut}
+            />
         </div>
     );
 };

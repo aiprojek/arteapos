@@ -4,21 +4,24 @@ import { useFinance } from '../context/FinanceContext';
 import { useProduct } from '../context/ProductContext';
 import { useSession } from '../context/SessionContext';
 import { useSettings } from '../context/SettingsContext';
+import { useData } from '../context/DataContext';
 import { CURRENCY_FORMATTER } from '../constants';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import type { Transaction as TransactionType, RawMaterial, CashMovement } from '../types';
+import type { Transaction as TransactionType, SessionHistory } from '../types';
 import ReceiptModal from '../components/ReceiptModal';
 import Modal from '../components/Modal';
 import UpdatePaymentModal from '../components/UpdatePaymentModal';
 import VirtualizedTable from '../components/VirtualizedTable';
 import { dataService } from '../services/dataService';
 import { useUI } from '../context/UIContext';
+import EndSessionModal from '../components/EndSessionModal';
+import SendReportModal from '../components/SendReportModal';
 
 
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
-type ReportScope = 'session' | 'historical';
+type ReportScope = 'session' | 'historical' | 'session_history';
 
 const StatCard: React.FC<{title: string; value: string; className?: string}> = ({title, value, className}) => (
     <div className={`bg-slate-800 p-4 rounded-lg ${className}`}>
@@ -26,105 +29,6 @@ const StatCard: React.FC<{title: string; value: string; className?: string}> = (
         <p className="text-2xl font-bold text-white">{value}</p>
     </div>
 );
-
-const EndSessionModal: React.FC<{
-    isOpen: boolean,
-    onClose: () => void,
-    sessionSales: number,
-    startingCash: number,
-    cashIn: number,
-    cashOut: number,
-}> = ({ isOpen, onClose, sessionSales, startingCash, cashIn, cashOut }) => {
-    const { endSession } = useSession();
-    const [step, setStep] = useState(1);
-    const [finalCashInput, setFinalCashInput] = useState('');
-
-    const expectedCash = startingCash + sessionSales + cashIn - cashOut;
-    const finalCashAmount = parseFloat(finalCashInput) || 0;
-    const difference = finalCashAmount - expectedCash;
-
-    const handleProceed = () => {
-        if (finalCashInput) {
-            setStep(2);
-        }
-    }
-
-    const handleConfirmEnd = () => {
-        endSession();
-        onClose();
-    }
-    
-    const handleClose = () => {
-        setStep(1);
-        setFinalCashInput('');
-        onClose();
-    }
-
-    return (
-        <Modal isOpen={isOpen} onClose={handleClose} title="Tutup Sesi Penjualan">
-            {step === 1 && (
-                <div className="space-y-4">
-                     <p className="text-slate-300">Hitung semua uang tunai di laci kasir dan masukkan jumlah totalnya di bawah ini.</p>
-                     <div>
-                        <label htmlFor="finalCash" className="block text-sm font-medium text-slate-300 mb-1">Jumlah Uang di Laci (Dihitung)</label>
-                        <input
-                            id="finalCash"
-                            type="number"
-                            min="0"
-                            value={finalCashInput}
-                            onChange={(e) => setFinalCashInput(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg"
-                            placeholder="0"
-                        />
-                    </div>
-                    <Button onClick={handleProceed} disabled={!finalCashInput} className="w-full py-3">
-                        Lanjutkan ke Ringkasan
-                    </Button>
-                </div>
-            )}
-            {step === 2 && (
-                <div className="space-y-4">
-                    <h3 className="text-lg font-bold text-white text-center">Ringkasan Sesi</h3>
-                    <div className="space-y-2 text-sm">
-                        <div className="flex justify-between p-2 bg-slate-900 rounded-md">
-                            <span className="text-slate-400">Modal Awal</span>
-                            <span className="font-semibold text-white">{CURRENCY_FORMATTER.format(startingCash)}</span>
-                        </div>
-                        <div className="flex justify-between p-2 bg-slate-900 rounded-md">
-                            <span className="text-slate-400">Total Penjualan Tunai</span>
-                             <span className="font-semibold text-white">{CURRENCY_FORMATTER.format(sessionSales)}</span>
-                        </div>
-                        <div className="flex justify-between p-2 bg-slate-900 rounded-md">
-                            <span className="text-slate-400">Kas Masuk (Lainnya)</span>
-                             <span className="font-semibold text-green-400">+ {CURRENCY_FORMATTER.format(cashIn)}</span>
-                        </div>
-                        <div className="flex justify-between p-2 bg-slate-900 rounded-md">
-                            <span className="text-slate-400">Kas Keluar</span>
-                             <span className="font-semibold text-red-400">- {CURRENCY_FORMATTER.format(cashOut)}</span>
-                        </div>
-                         <div className="flex justify-between p-2 bg-slate-900 rounded-md font-bold border-t-2 border-slate-700">
-                            <span className="text-slate-300">Uang di Laci Seharusnya</span>
-                             <span className="text-white">{CURRENCY_FORMATTER.format(expectedCash)}</span>
-                        </div>
-                        <div className="flex justify-between p-2 bg-slate-700 rounded-md">
-                            <span className="text-slate-300">Uang di Laci (Dihitung)</span>
-                            <span className="font-semibold text-white">{CURRENCY_FORMATTER.format(finalCashAmount)}</span>
-                        </div>
-                        <div className={`flex justify-between p-3 rounded-md font-bold text-lg
-                            ${difference === 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
-                            <span>Selisih</span>
-                            <span>{CURRENCY_FORMATTER.format(difference)}</span>
-                        </div>
-                    </div>
-                    <p className="text-xs text-slate-500 text-center">Pastikan semua data sudah benar sebelum mengakhiri sesi. Tindakan ini tidak dapat diurungkan.</p>
-                     <Button onClick={handleConfirmEnd} variant="primary" className="w-full py-3">
-                        Konfirmasi & Tutup Sesi
-                    </Button>
-                </div>
-            )}
-        </Modal>
-    );
-}
 
 const PaymentStatusBadge: React.FC<{ status: TransactionType['paymentStatus'] }> = ({ status }) => {
     const statusInfo = {
@@ -137,88 +41,6 @@ const PaymentStatusBadge: React.FC<{ status: TransactionType['paymentStatus'] }>
 
     return <span className={`px-2 py-1 text-xs font-medium rounded-full ${className}`}>{text}</span>;
 };
-
-const SendReportModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    data: TransactionType[];
-    adminWhatsapp?: string;
-    adminTelegram?: string;
-}> = ({ isOpen, onClose, data, adminWhatsapp, adminTelegram }) => {
-    const { showAlert } = useUI();
-
-    if (!isOpen) return null;
-
-    const handleSend = (platform: 'whatsapp' | 'telegram') => {
-        if (data.length === 0) {
-            showAlert({ type: 'alert', title: 'Data Kosong', message: 'Tidak ada data untuk dikirim.' });
-            return;
-        }
-
-        const csvContent = dataService.generateTransactionsCSVString(data);
-        const encodedCsv = encodeURIComponent(csvContent);
-        
-        // Browser URL limit check (conservative approx 2000 chars)
-        if (encodedCsv.length > 2000) {
-             // Fallback: Copy to clipboard
-             navigator.clipboard.writeText(csvContent)
-                .then(() => {
-                    showAlert({ 
-                        type: 'alert', 
-                        title: 'Laporan Terlalu Panjang', 
-                        message: 'Data laporan terlalu panjang untuk dikirim langsung via URL. Data CSV telah disalin ke clipboard Anda. Silakan tempel (paste) manual di chat.' 
-                    });
-                })
-                .catch(() => {
-                     showAlert({ type: 'alert', title: 'Error', message: 'Gagal menyalin data ke clipboard.' });
-                });
-             onClose();
-             return;
-        }
-
-        let url = '';
-        if (platform === 'whatsapp') {
-            const phoneNumber = adminWhatsapp ? adminWhatsapp.replace(/\D/g, '') : '';
-            const target = phoneNumber.startsWith('0') ? `62${phoneNumber.slice(1)}` : (phoneNumber.startsWith('62') ? phoneNumber : `62${phoneNumber}`);
-            
-            if (!target) {
-                 showAlert({ type: 'alert', title: 'Nomor WhatsApp Kosong', message: 'Silakan atur nomor WhatsApp admin di Pengaturan.' });
-                 return;
-            }
-            url = `https://wa.me/${target}?text=${encodedCsv}`;
-        } else if (platform === 'telegram') {
-             // For Telegram, direct message via URL scheme isn't as straightforward as WA without a bot.
-             // We use share url with text, but since we don't have a specific URL to share, we use a dummy or just text parameter if supported by client.
-             // https://t.me/share/url?url={url}&text={text}
-             // Since we only want to send text, we can try leaving URL empty or pointing to app.
-             url = `https://t.me/share/url?url=https://arteapos.pages.dev&text=${encodedCsv}`;
-        }
-
-        if (url) {
-            window.open(url, '_blank');
-            onClose();
-        }
-    };
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Kirim Laporan ke Admin">
-            <div className="space-y-4">
-                <p className="text-slate-300 text-sm">Pilih aplikasi untuk mengirim laporan penjualan (CSV):</p>
-                <div className="grid grid-cols-2 gap-4">
-                    <Button onClick={() => handleSend('whatsapp')} className="bg-[#25D366] hover:bg-[#1da851] text-white">
-                        <Icon name="whatsapp" className="w-5 h-5" /> WhatsApp
-                    </Button>
-                    <Button onClick={() => handleSend('telegram')} className="bg-[#0088cc] hover:bg-[#0077b5] text-white">
-                        <Icon name="telegram" className="w-5 h-5" /> Telegram
-                    </Button>
-                </div>
-                <div className="text-xs text-slate-500 mt-2">
-                    <p>Note: Jika data terlalu banyak, aplikasi akan menyalin data ke clipboard agar Anda bisa menempelnya (paste) secara manual.</p>
-                </div>
-            </div>
-        </Modal>
-    );
-}
 
 const ActionMenu: React.FC<{
     transaction: TransactionType;
@@ -281,10 +103,48 @@ const ActionMenu: React.FC<{
     );
 };
 
+const SessionHistoryTable: React.FC<{ history: SessionHistory[] }> = ({ history }) => {
+    return (
+        <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
+            <table className="w-full text-left min-w-[900px] text-sm">
+                <thead className="bg-slate-700 text-slate-200">
+                    <tr>
+                        <th className="p-3">Mulai</th>
+                        <th className="p-3">Selesai</th>
+                        <th className="p-3">User</th>
+                        <th className="p-3 text-right">Modal Awal</th>
+                        <th className="p-3 text-right">Omzet Tunai</th>
+                        <th className="p-3 text-right">Fisik (Aktual)</th>
+                        <th className="p-3 text-right">Selisih</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {history.length === 0 ? (
+                        <tr><td colSpan={7} className="p-4 text-center text-slate-500">Belum ada riwayat sesi.</td></tr>
+                    ) : history.map(s => (
+                        <tr key={s.id} className="border-b border-slate-700 last:border-b-0">
+                            <td className="p-3 text-slate-300">{new Date(s.startTime).toLocaleString('id-ID')}</td>
+                            <td className="p-3 text-slate-300">{s.endTime ? new Date(s.endTime).toLocaleString('id-ID') : '-'}</td>
+                            <td className="p-3">{s.userName}</td>
+                            <td className="p-3 text-right text-slate-400">{CURRENCY_FORMATTER.format(s.startingCash)}</td>
+                            <td className="p-3 text-right text-green-400 font-medium">{CURRENCY_FORMATTER.format(s.totalSales)}</td>
+                            <td className="p-3 text-right text-white font-bold">{CURRENCY_FORMATTER.format(s.actualCash)}</td>
+                            <td className={`p-3 text-right font-bold ${s.variance === 0 ? 'text-slate-500' : s.variance > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {CURRENCY_FORMATTER.format(s.variance)}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
 const ReportsView: React.FC = () => {
     const { transactions, addPaymentToTransaction, refundTransaction } = useFinance();
     const { inventorySettings, rawMaterials, products } = useProduct();
     const { session, startSession, sessionSettings, endSession } = useSession();
+    const { data: appData } = useData();
     const { receiptSettings } = useSettings();
     const { showAlert } = useUI();
     const [filter, setFilter] = useState<TimeFilter>('today');
@@ -533,19 +393,22 @@ const ReportsView: React.FC = () => {
             <div className="space-y-4">
                 <div className="flex justify-between items-start flex-wrap gap-4">
                      <div>
-                         <h1 className="text-2xl font-bold text-white">{showSessionView && session ? 'Laporan Sesi Saat Ini' : 'Laporan Penjualan'}</h1>
+                         <h1 className="text-2xl font-bold text-white">{showSessionView && session ? 'Laporan Sesi Saat Ini' : reportScope === 'session_history' ? 'Riwayat Sesi (Shift)' : 'Laporan Penjualan'}</h1>
                          {showSessionView && session && (
                             <p className="text-sm text-slate-400">Dimulai pada {new Date(session.startTime).toLocaleString('id-ID')} oleh {session.userName}</p>
                          )}
                     </div>
                      <div className="flex gap-2 items-center flex-wrap justify-end">
                         {sessionSettings.enabled && (
-                            <div className="flex bg-slate-700 p-1 rounded-lg">
-                                <button onClick={() => setReportScope('session')} disabled={!session} className={`px-3 py-1 text-sm rounded-md transition-colors ${reportScope === 'session' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-600'} disabled:opacity-50 disabled:cursor-not-allowed`}>
+                            <div className="flex bg-slate-700 p-1 rounded-lg overflow-x-auto">
+                                <button onClick={() => setReportScope('session')} disabled={!session} className={`px-3 py-1 text-sm rounded-md transition-colors whitespace-nowrap ${reportScope === 'session' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-600'} disabled:opacity-50 disabled:cursor-not-allowed`}>
                                     Sesi Saat Ini
                                 </button>
-                                <button onClick={() => setReportScope('historical')} className={`px-3 py-1 text-sm rounded-md transition-colors ${reportScope === 'historical' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-600'}`}>
-                                    Semua Laporan
+                                <button onClick={() => setReportScope('historical')} className={`px-3 py-1 text-sm rounded-md transition-colors whitespace-nowrap ${reportScope === 'historical' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-600'}`}>
+                                    Semua Penjualan
+                                </button>
+                                 <button onClick={() => setReportScope('session_history')} className={`px-3 py-1 text-sm rounded-md transition-colors whitespace-nowrap ${reportScope === 'session_history' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-600'}`}>
+                                    Riwayat Shift
                                 </button>
                             </div>
                         )}
@@ -572,21 +435,25 @@ const ReportsView: React.FC = () => {
                             </div>
                         )}
                         
-                        <Button onClick={exportReport} variant="secondary" size="sm" disabled={filteredTransactions.length === 0}>
-                            <Icon name="download" className="w-4 h-4"/> Export CSV
-                        </Button>
-                        
-                        <Button onClick={() => setSendReportModalOpen(true)} variant="primary" size="sm" disabled={filteredTransactions.length === 0}>
-                            <Icon name="chat" className="w-4 h-4"/> Kirim ke Admin
-                        </Button>
+                        {reportScope !== 'session_history' && (
+                            <>
+                                <Button onClick={exportReport} variant="secondary" size="sm" disabled={filteredTransactions.length === 0}>
+                                    <Icon name="download" className="w-4 h-4"/> Export CSV
+                                </Button>
+                                
+                                <Button onClick={() => setSendReportModalOpen(true)} variant="primary" size="sm" disabled={filteredTransactions.length === 0}>
+                                    <Icon name="chat" className="w-4 h-4"/> Kirim ke Admin
+                                </Button>
+                            </>
+                        )}
 
-                        {sessionSettings.enabled && !session && (
+                        {sessionSettings.enabled && !session && reportScope !== 'session_history' && (
                             <Button onClick={() => setStartSessionModalOpen(true)} variant="primary" size="sm">
                                 <Icon name="plus" className="w-4 h-4"/>
                                 Mulai Sesi
                             </Button>
                         )}
-                        {isSessionMode && (
+                        {isSessionMode && reportScope === 'session' && (
                              <Button onClick={() => setEndSessionModalOpen(true)} variant="danger" size="sm">
                                 Tutup Sesi
                             </Button>
@@ -620,143 +487,150 @@ const ReportsView: React.FC = () => {
                 )}
             </div>
 
-            <div className={`grid grid-cols-2 ${inventorySettings.enabled ? 'lg:grid-cols-4' : 'lg:grid-cols-2'} gap-4`}>
-                 {showSessionView && session ? (
-                    <>
-                        <StatCard title="Modal Awal" value={CURRENCY_FORMATTER.format(session.startingCash)} />
-                        <StatCard title="Penjualan Bersih" value={CURRENCY_FORMATTER.format(reportData.totalSales)} />
-                        <StatCard title="Estimasi Kas Di Laci" value={CURRENCY_FORMATTER.format(session.startingCash + reportData.totalCashSales + reportData.cashIn - reportData.cashOut)} className="bg-[#347758]/20" />
-                        {inventorySettings.enabled && <StatCard title="Laba Sesi" value={CURRENCY_FORMATTER.format(reportData.totalProfit)} />}
-                    </>
+            {reportScope === 'session_history' ? (
+                <SessionHistoryTable history={appData.sessionHistory || []} />
+            ) : (
+            <>
+                <div className={`grid grid-cols-2 ${inventorySettings.enabled ? 'lg:grid-cols-4' : 'lg:grid-cols-2'} gap-4`}>
+                     {showSessionView && session ? (
+                        <>
+                            <StatCard title="Modal Awal" value={CURRENCY_FORMATTER.format(session.startingCash)} />
+                            <StatCard title="Penjualan Bersih" value={CURRENCY_FORMATTER.format(reportData.totalSales)} />
+                            <StatCard title="Estimasi Kas Di Laci" value={CURRENCY_FORMATTER.format(session.startingCash + reportData.totalCashSales + reportData.cashIn - reportData.cashOut)} className="bg-[#347758]/20" />
+                            {inventorySettings.enabled && <StatCard title="Laba Sesi" value={CURRENCY_FORMATTER.format(reportData.totalProfit)} />}
+                        </>
+                    ) : (
+                        <>
+                            <StatCard title="Total Penjualan Bersih" value={CURRENCY_FORMATTER.format(reportData.totalSales)} />
+                            <StatCard title="Total Transaksi" value={reportData.totalTransactions.toString()} />
+                            <StatCard title="Rata-rata/Transaksi" value={CURRENCY_FORMATTER.format(reportData.avgTransaction)} />
+                            {inventorySettings.enabled && <StatCard title="Total Laba" value={CURRENCY_FORMATTER.format(reportData.totalProfit)} />}
+                        </>
+                    )}
+                </div>
+
+                {sessionSettings.enabled && !session && reportScope === 'session' ? (
+                     <div className="text-center py-12 bg-slate-800 rounded-lg">
+                        <Icon name="reports" className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-white">Tidak Ada Sesi Aktif</h3>
+                        <p className="text-slate-400 mt-2">Mulai sesi baru untuk melihat laporan sesi saat ini.</p>
+                    </div>
+                ) : filteredTransactions.length === 0 && !session ? (
+                    <div className="text-center py-12 bg-slate-800 rounded-lg">
+                        <p className="text-slate-400">{showSessionView ? 'Belum ada transaksi di sesi ini.' : 'Tidak ada transaksi untuk periode yang dipilih.'}</p>
+                    </div>
                 ) : (
                     <>
-                        <StatCard title="Total Penjualan Bersih" value={CURRENCY_FORMATTER.format(reportData.totalSales)} />
-                        <StatCard title="Total Transaksi" value={reportData.totalTransactions.toString()} />
-                        <StatCard title="Rata-rata/Transaksi" value={CURRENCY_FORMATTER.format(reportData.avgTransaction)} />
-                        {inventorySettings.enabled && <StatCard title="Total Laba" value={CURRENCY_FORMATTER.format(reportData.totalProfit)} />}
-                    </>
-                )}
-            </div>
-
-            {sessionSettings.enabled && !session && reportScope === 'session' ? (
-                 <div className="text-center py-12 bg-slate-800 rounded-lg">
-                    <Icon name="reports" className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <h3 className="text-xl font-bold text-white">Tidak Ada Sesi Aktif</h3>
-                    <p className="text-slate-400 mt-2">Mulai sesi baru untuk melihat laporan sesi saat ini.</p>
-                </div>
-            ) : filteredTransactions.length === 0 && !session ? (
-                <div className="text-center py-12 bg-slate-800 rounded-lg">
-                    <p className="text-slate-400">{showSessionView ? 'Belum ada transaksi di sesi ini.' : 'Tidak ada transaksi untuk periode yang dipilih.'}</p>
-                </div>
-            ) : (
-                <>
-                    {/* Session Cash Movement Summary */}
-                    {showSessionView && session && (reportData.cashIn > 0 || reportData.cashOut > 0) && (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="bg-slate-800 p-4 rounded-lg">
-                                <h3 className="font-semibold text-white mb-2">Aktivitas Kas Non-Penjualan</h3>
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-slate-400">Total Kas Masuk (Tambahan)</span>
-                                        <span className="text-green-400 font-semibold">+{CURRENCY_FORMATTER.format(reportData.cashIn)}</span>
+                        {/* Session Cash Movement Summary */}
+                        {showSessionView && session && (reportData.cashIn > 0 || reportData.cashOut > 0) && (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                <div className="bg-slate-800 p-4 rounded-lg">
+                                    <h3 className="font-semibold text-white mb-2">Aktivitas Kas Non-Penjualan</h3>
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-slate-400">Total Kas Masuk (Tambahan)</span>
+                                            <span className="text-green-400 font-semibold">+{CURRENCY_FORMATTER.format(reportData.cashIn)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-slate-400">Total Kas Keluar</span>
+                                            <span className="text-red-400 font-semibold">-{CURRENCY_FORMATTER.format(reportData.cashOut)}</span>
+                                        </div>
                                     </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-slate-400">Total Kas Keluar</span>
-                                        <span className="text-red-400 font-semibold">-{CURRENCY_FORMATTER.format(reportData.cashOut)}</span>
+                                </div>
+                                <div className="bg-slate-800 p-4 rounded-lg overflow-y-auto max-h-40">
+                                    <h3 className="font-semibold text-white mb-2 text-sm">Rincian Pergerakan Kas</h3>
+                                    <table className="w-full text-xs text-left min-w-[300px]">
+                                        <tbody>
+                                            {session.cashMovements.map((m) => (
+                                                <tr key={m.id} className="border-b border-slate-700/50">
+                                                    <td className="py-1">{new Date(m.timestamp).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}</td>
+                                                    <td className="py-1">{m.description}</td>
+                                                    <td className={`py-1 text-right font-medium ${m.type === 'in' ? 'text-green-400' : 'text-red-400'}`}>
+                                                        {m.type === 'in' ? '+' : '-'}{CURRENCY_FORMATTER.format(m.amount)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {inventorySettings.enabled && (
+                             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                                 <div className="lg:col-span-3 bg-slate-800 p-4 rounded-lg">
+                                    <h3 className="font-semibold mb-4 text-white">Penjualan per Jam (Jam Sibuk)</h3>
+                                    <ResponsiveContainer width="100%" height={300}>
+                                        <BarChart data={reportData.hourlyChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                            <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
+                                            <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `Rp${Number(value) / 1000}k`} />
+                                            <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }} formatter={(value: number) => [CURRENCY_FORMATTER.format(value), 'Total']} />
+                                            <Bar dataKey="total" fill="#10b981" />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                <div className="lg:col-span-2 bg-slate-800 p-4 rounded-lg">
+                                    <h3 className="font-semibold text-white mb-4">Produk Terlaris</h3>
+                                    <div className="space-y-2 max-h-[280px] overflow-y-auto">
+                                        {reportData.bestSellingProducts.map((p, index) => (
+                                            <div key={index} className="flex justify-between items-center text-sm">
+                                                <span className="text-slate-300 truncate pr-2">{p.name}</span>
+                                                <span className="font-semibold text-white bg-slate-700 px-2 py-0.5 rounded">{p.quantity} terjual</span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
-                            <div className="bg-slate-800 p-4 rounded-lg overflow-y-auto max-h-40">
-                                <h3 className="font-semibold text-white mb-2 text-sm">Rincian Pergerakan Kas</h3>
-                                <table className="w-full text-xs text-left">
-                                    <tbody>
-                                        {session.cashMovements.map((m) => (
-                                            <tr key={m.id} className="border-b border-slate-700/50">
-                                                <td className="py-1">{new Date(m.timestamp).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}</td>
-                                                <td className="py-1">{m.description}</td>
-                                                <td className={`py-1 text-right font-medium ${m.type === 'in' ? 'text-green-400' : 'text-red-400'}`}>
-                                                    {m.type === 'in' ? '+' : '-'}{CURRENCY_FORMATTER.format(m.amount)}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
+                        )}
 
-                    {inventorySettings.enabled && (
-                         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                             <div className="lg:col-span-3 bg-slate-800 p-4 rounded-lg">
-                                <h3 className="font-semibold mb-4 text-white">Penjualan per Jam (Jam Sibuk)</h3>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <h3 className="font-semibold mb-4 text-white">Penjualan per Hari</h3>
                                 <ResponsiveContainer width="100%" height={300}>
-                                    <BarChart data={reportData.hourlyChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                                    <BarChart data={salesOverTimeData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                                         <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
                                         <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `Rp${Number(value) / 1000}k`} />
                                         <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }} formatter={(value: number) => [CURRENCY_FORMATTER.format(value), 'Total']} />
-                                        <Bar dataKey="total" fill="#10b981" />
+                                        <Bar dataKey="total" fill="#347758" />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
-                            <div className="lg:col-span-2 bg-slate-800 p-4 rounded-lg">
-                                <h3 className="font-semibold text-white mb-4">Produk Terlaris</h3>
-                                <div className="space-y-2 max-h-[280px] overflow-y-auto">
-                                    {reportData.bestSellingProducts.map((p, index) => (
-                                        <div key={index} className="flex justify-between items-center text-sm">
-                                            <span className="text-slate-300 truncate pr-2">{p.name}</span>
-                                            <span className="font-semibold text-white bg-slate-700 px-2 py-0.5 rounded">{p.quantity} terjual</span>
-                                        </div>
-                                    ))}
-                                </div>
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <h3 className="font-semibold mb-4 text-white">Penjualan per Kategori</h3>
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <PieChart>
+                                        <Pie data={categorySalesData} cx="50%" cy="50%" labelLine={false} outerRadius={100} fill="#8884d8" dataKey="value" nameKey="name"
+                                            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                                                const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                                const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
+                                                const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
+                                                return ( <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central">{`${(percent * 100).toFixed(0)}%`}</text> );
+                                            }}>
+                                            {categorySalesData.map((entry, index) => ( <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} /> ))}
+                                        </Pie>
+                                        <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }} formatter={(value: number, name: string) => [CURRENCY_FORMATTER.format(value), name]} />
+                                        <Legend />
+                                    </PieChart>
+                                </ResponsiveContainer>
                             </div>
                         </div>
-                    )}
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="bg-slate-800 p-4 rounded-lg">
-                            <h3 className="font-semibold mb-4 text-white">Penjualan per Hari</h3>
-                            <ResponsiveContainer width="100%" height={300}>
-                                <BarChart data={salesOverTimeData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                    <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
-                                    <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `Rp${Number(value) / 1000}k`} />
-                                    <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }} formatter={(value: number) => [CURRENCY_FORMATTER.format(value), 'Total']} />
-                                    <Bar dataKey="total" fill="#347758" />
-                                </BarChart>
-                            </ResponsiveContainer>
+                        <div className="bg-slate-800 rounded-lg shadow-md flex flex-col min-h-[400px]">
+                            <h2 className="text-lg font-semibold p-4">Detail Transaksi</h2>
+                            <div className="flex-1 min-h-0">
+                               <VirtualizedTable 
+                                    data={filteredTransactions}
+                                    columns={columns}
+                                    rowHeight={60}
+                                    minWidth={900}
+                               />
+                            </div>
                         </div>
-                        <div className="bg-slate-800 p-4 rounded-lg">
-                            <h3 className="font-semibold mb-4 text-white">Penjualan per Kategori</h3>
-                            <ResponsiveContainer width="100%" height={300}>
-                                <PieChart>
-                                    <Pie data={categorySalesData} cx="50%" cy="50%" labelLine={false} outerRadius={100} fill="#8884d8" dataKey="value" nameKey="name"
-                                        label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-                                            const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                                            const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
-                                            const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
-                                            return ( <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central">{`${(percent * 100).toFixed(0)}%`}</text> );
-                                        }}>
-                                        {categorySalesData.map((entry, index) => ( <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} /> ))}
-                                    </Pie>
-                                    <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }} formatter={(value: number, name: string) => [CURRENCY_FORMATTER.format(value), name]} />
-                                    <Legend />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-
-                    <div className="bg-slate-800 rounded-lg shadow-md flex flex-col min-h-[400px]">
-                        <h2 className="text-lg font-semibold p-4">Detail Transaksi</h2>
-                        <div className="flex-1 min-h-0">
-                           <VirtualizedTable 
-                                data={filteredTransactions}
-                                columns={columns}
-                                rowHeight={60}
-                           />
-                        </div>
-                    </div>
-                </>
+                    </>
+                )}
+            </>
             )}
             
             <Modal isOpen={isStartSessionModalOpen} onClose={() => setStartSessionModalOpen(false)} title="Mulai Sesi Penjualan">
@@ -813,6 +687,10 @@ const ReportsView: React.FC = () => {
                 data={filteredTransactions}
                 adminWhatsapp={receiptSettings.adminWhatsapp}
                 adminTelegram={receiptSettings.adminTelegram}
+                // Pass cash flow data only if viewing current session
+                startingCash={showSessionView && session ? session.startingCash : 0}
+                cashIn={showSessionView ? reportData.cashIn : 0}
+                cashOut={showSessionView ? reportData.cashOut : 0}
             />
         </div>
     );

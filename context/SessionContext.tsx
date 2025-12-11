@@ -3,13 +3,13 @@ import React, { createContext, useContext, ReactNode, useCallback, useState, use
 import { useData } from './DataContext';
 import { useAuth } from './AuthContext';
 import { db } from '../services/db';
-import type { SessionState, SessionSettings, CashMovement } from '../types';
+import type { SessionState, SessionSettings, CashMovement, SessionHistory } from '../types';
 
 interface SessionContextType {
     session: SessionState | null;
     sessionSettings: SessionSettings;
     startSession: (startingCash: number) => void;
-    endSession: () => void;
+    endSession: (data?: { actualCash: number, expectedCash: number, sales: number, cashIn: number, cashOut: number }) => void;
     updateSessionSettings: (settings: SessionSettings) => void;
     addCashMovement: (type: 'in' | 'out', amount: number, description: string) => void;
 }
@@ -53,15 +53,34 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }, [setSession, currentUser]);
 
-    const endSession = useCallback(async () => {
+    const endSession = useCallback(async (finalData?: { actualCash: number, expectedCash: number, sales: number, cashIn: number, cashOut: number }) => {
         try {
-            // Here you could choose to save the finished session to a 'shiftHistory' table if needed
+            if (session && finalData) {
+                // Archive session
+                const history: SessionHistory = {
+                    ...session,
+                    endTime: new Date().toISOString(),
+                    actualCash: finalData.actualCash,
+                    expectedCash: finalData.expectedCash,
+                    totalSales: finalData.sales,
+                    cashInTotal: finalData.cashIn,
+                    cashOutTotal: finalData.cashOut,
+                    variance: finalData.actualCash - finalData.expectedCash
+                };
+                
+                // Add to Context State and DB via DataContext
+                setData(prev => ({
+                    ...prev,
+                    sessionHistory: [history, ...(prev.sessionHistory || [])]
+                }));
+            }
+
             await db.session.delete('activeSession');
             setSession(null);
         } catch (error) {
             console.error("Failed to delete session from DB", error);
         }
-    }, [setSession]);
+    }, [session, setData]);
 
     const addCashMovement = useCallback(async (type: 'in' | 'out', amount: number, description: string) => {
         if (!session) return;

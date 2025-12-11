@@ -1,9 +1,11 @@
+
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { useData } from './DataContext';
 import { useUI } from './UIContext';
 import { useAuth } from './AuthContext';
 import { useProduct } from './ProductContext';
-import type { CartItem, Discount, Product, HeldCart, Transaction as TransactionType, Payment, PaymentMethod, PaymentStatus, Addon, Reward, Customer } from '../types';
+import { useSettings } from './SettingsContext';
+import type { CartItem, Discount, Product, HeldCart, Transaction as TransactionType, Payment, PaymentMethod, PaymentStatus, Addon, Reward, Customer, OrderType, ProductVariant } from '../types';
 
 interface CartContextType {
     cart: CartItem[];
@@ -11,12 +13,21 @@ interface CartContextType {
     heldCarts: HeldCart[];
     activeHeldCartId: string | null;
     appliedReward: { reward: Reward, cartItem: CartItem } | null;
+    orderType: OrderType;
+    setOrderType: (type: OrderType) => void;
     addToCart: (product: Product) => void;
-    addConfiguredItemToCart: (product: Product, addons: Addon[]) => void;
+    addConfiguredItemToCart: (product: Product, addons: Addon[], variant?: ProductVariant) => void;
     updateCartQuantity: (cartItemId: string, quantity: number) => void;
     removeFromCart: (cartItemId: string) => void;
     clearCart: () => void;
-    getCartTotals: () => { subtotal: number; itemDiscountAmount: number; cartDiscountAmount: number; finalTotal: number };
+    getCartTotals: () => { 
+        subtotal: number; 
+        itemDiscountAmount: number; 
+        cartDiscountAmount: number; 
+        taxAmount: number;
+        serviceChargeAmount: number;
+        finalTotal: number 
+    };
     applyItemDiscount: (cartItemId: string, discount: Discount) => void;
     removeItemDiscount: (cartItemId: string) => void;
     applyCartDiscount: (discount: Discount) => void;
@@ -42,6 +53,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
     const { data, setData } = useData();
     const { showAlert } = useUI();
     const { currentUser } = useAuth();
+    const { receiptSettings } = useSettings();
     const { products, rawMaterials, inventorySettings, isProductAvailable } = useProduct();
     const { heldCarts = [] } = data;
 
@@ -49,6 +61,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
     const [cartDiscount, setCartDiscount] = useState<Discount | null>(null);
     const [activeHeldCartId, setActiveHeldCartId] = useState<string | null>(null);
     const [appliedReward, setAppliedReward] = useState<{ reward: Reward, cartItem: CartItem } | null>(null);
+    const [orderType, setOrderType] = useState<OrderType>('dine-in');
 
     const removeRewardFromCart = useCallback(() => {
         setCart(prev => prev.filter(item => !item.isReward));
@@ -94,7 +107,14 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                 showAlert({ type: 'alert', title: 'Gagal Menambahkan Produk', message: `Tidak dapat menambahkan ${product.name}. ${reason}.` });
                 return prevCart;
             }
-            const existingItem = prevCart.find(item => item.id === product.id && !item.isReward && (!item.selectedAddons || item.selectedAddons.length === 0));
+            // Check for existing item with SAME product ID, NO addons, and NO variant (implicit default)
+            const existingItem = prevCart.find(item => 
+                item.id === product.id && 
+                !item.isReward && 
+                (!item.selectedAddons || item.selectedAddons.length === 0) &&
+                !item.selectedVariant
+            );
+            
             if (existingItem) {
                 return prevCart.map(item => item.cartItemId === existingItem.cartItemId ? { ...item, quantity: item.quantity + 1 } : item);
             }
@@ -102,14 +122,27 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         });
     }, [isProductAvailable, showAlert]);
     
-    const addConfiguredItemToCart = useCallback((product: Product, addons: Addon[]) => {
+    const addConfiguredItemToCart = useCallback((product: Product, addons: Addon[], variant?: ProductVariant) => {
       setCart(prevCart => {
          const { available, reason } = isProductAvailable(product);
          if (!available) {
             showAlert({ type: 'alert', title: 'Gagal Menambahkan Produk', message: `Tidak dapat menambahkan ${product.name}. ${reason}.`});
             return prevCart;
          }
-         const newItem: CartItem = { ...product, quantity: 1, cartItemId: Date.now().toString(), selectedAddons: addons };
+         
+         const newItem: CartItem = { 
+             ...product, 
+             quantity: 1, 
+             cartItemId: Date.now().toString(), 
+             selectedAddons: addons,
+             selectedVariant: variant,
+             // If variant exists, override price and update name
+             price: variant ? variant.price : product.price,
+             name: variant ? `${product.name} (${variant.name})` : product.name,
+             // If variant has specific cost, use it, else use base product cost
+             costPrice: variant?.costPrice !== undefined ? variant.costPrice : product.costPrice
+         };
+         
          return [...prevCart, newItem];
       });
     }, [isProductAvailable, showAlert]);
@@ -131,6 +164,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         setCart([]);
         setAppliedReward(null);
         setCartDiscount(null);
+        setOrderType('dine-in'); // Reset order type
     }, [setAppliedReward]);
 
     const getCartTotals = useCallback(() => {
@@ -168,9 +202,22 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
             }
         }
         cartDiscountAmount = Math.min(cartDiscountAmount, subtotalAfterItemDiscounts);
-        const finalTotal = subtotalAfterItemDiscounts - cartDiscountAmount;
-        return { subtotal, itemDiscountAmount, cartDiscountAmount, finalTotal };
-    }, [cart, cartDiscount]);
+        
+        const taxableAmount = subtotalAfterItemDiscounts - cartDiscountAmount;
+        
+        // Calculate Service Charge (on taxable amount, before tax)
+        const serviceChargeRate = receiptSettings.serviceChargeRate || 0;
+        const serviceChargeAmount = Math.round(taxableAmount * (serviceChargeRate / 100));
+        
+        // Calculate Tax (on taxable amount + service charge)
+        const taxRate = receiptSettings.taxRate || 0;
+        const taxBase = taxableAmount + serviceChargeAmount;
+        const taxAmount = Math.round(taxBase * (taxRate / 100));
+
+        const finalTotal = taxableAmount + serviceChargeAmount + taxAmount;
+        
+        return { subtotal, itemDiscountAmount, cartDiscountAmount, taxAmount, serviceChargeAmount, finalTotal };
+    }, [cart, cartDiscount, receiptSettings.taxRate, receiptSettings.serviceChargeRate]);
 
     const applyItemDiscount = useCallback((cartItemId: string, discount: Discount) => {
         setCart(prev => prev.map(item => item.cartItemId === cartItemId ? { ...item, discount } : item));
@@ -198,16 +245,17 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         if (activeHeldCartId) {
             setData(prev => {
                 const currentCartInState = prev.heldCarts?.find(c => c.id === activeHeldCartId);
-                if (currentCartInState && JSON.stringify(currentCartInState.items) !== JSON.stringify(cart)) {
+                // Check if items OR orderType changed
+                if (currentCartInState && (JSON.stringify(currentCartInState.items) !== JSON.stringify(cart) || currentCartInState.orderType !== orderType)) {
                     return {
                         ...prev,
-                        heldCarts: (prev.heldCarts || []).map(hc => hc.id === activeHeldCartId ? { ...hc, items: cart } : hc)
+                        heldCarts: (prev.heldCarts || []).map(hc => hc.id === activeHeldCartId ? { ...hc, items: cart, orderType: orderType } : hc)
                     };
                 }
                 return prev;
             });
         }
-    }, [activeHeldCartId, cart, setData]);
+    }, [activeHeldCartId, cart, orderType, setData]);
 
     const switchActiveCart = useCallback((newCartId: string | null) => {
         saveCurrentCartState();
@@ -216,11 +264,13 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         
         if (newCartId === null) {
             setCart([]);
+            setOrderType('dine-in'); // Reset default
             setActiveHeldCartId(null);
         } else {
             const targetCart = data.heldCarts.find(c => c.id === newCartId);
             if (targetCart) {
                 setCart(targetCart.items);
+                setOrderType(targetCart.orderType || 'dine-in');
                 setActiveHeldCartId(newCartId);
             }
         }
@@ -232,11 +282,11 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
             return;
         }
         saveCurrentCartState();
-        const newHeldCart: HeldCart = { id: Date.now().toString(), name, items: cart };
+        const newHeldCart: HeldCart = { id: Date.now().toString(), name, items: cart, orderType };
         setData(prev => ({ ...prev, heldCarts: [...(prev.heldCarts || []), newHeldCart] }));
         switchActiveCart(newHeldCart.id);
         showAlert({ type: 'alert', title: 'Tersimpan', message: `Pesanan "${name}" berhasil disimpan.` });
-    }, [cart, saveCurrentCartState, setData, switchActiveCart, showAlert]);
+    }, [cart, orderType, saveCurrentCartState, setData, switchActiveCart, showAlert]);
 
     const deleteHeldCart = useCallback((cartId: string) => {
         showAlert({
@@ -268,7 +318,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         if (cart.length === 0) throw new Error("Cart is empty");
         if (!currentUser) throw new Error("No user is logged in");
 
-        const { subtotal, finalTotal } = getCartTotals();
+        const { subtotal, finalTotal, taxAmount, serviceChargeAmount } = getCartTotals();
         const amountPaid = payments.reduce((sum, p) => sum + p.amount, 0);
         let paymentStatus: PaymentStatus = amountPaid >= finalTotal - 0.01 ? 'paid' : (amountPaid > 0 ? 'partial' : 'unpaid');
         
@@ -281,16 +331,27 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
 
             if (inventorySettings.enabled && inventorySettings.trackIngredients && product?.recipe) {
                 const recipeCost = product.recipe.reduce((sum, recipeItem) => {
-                    const material = rawMaterials.find(rm => rm.id === recipeItem.rawMaterialId);
-                    return sum + ((material?.costPerUnit || 0) * recipeItem.quantity);
+                    // Check itemType
+                    if (recipeItem.itemType === 'product' && recipeItem.productId) {
+                        const subProduct = products.find(p => p.id === recipeItem.productId);
+                        return sum + ((subProduct?.costPrice || 0) * recipeItem.quantity);
+                    } else {
+                        // Raw Material
+                        const materialId = recipeItem.rawMaterialId || '';
+                        const material = rawMaterials.find(rm => rm.id === materialId);
+                        return sum + ((material?.costPerUnit || 0) * recipeItem.quantity);
+                    }
                 }, 0);
                 return { ...item, costPrice: recipeCost + addonsCost };
             }
-            return { ...item, costPrice: (product?.costPrice || 0) + addonsCost };
+            // Use existing costPrice (which might be from variant) or fallback to product cost
+            return { ...item, costPrice: (item.costPrice || product?.costPrice || 0) + addonsCost };
         });
 
         const newTransaction: TransactionType = {
-            id: now.getTime().toString(), items: cartWithCost, subtotal, cartDiscount, total: finalTotal, amountPaid,
+            id: now.getTime().toString(), items: cartWithCost, subtotal, cartDiscount, 
+            total: finalTotal, amountPaid,
+            tax: taxAmount, serviceCharge: serviceChargeAmount, orderType, // Added new fields
             paymentStatus, payments: fullPayments, createdAt: now.toISOString(), userId: currentUser.id,
             userName: currentUser.name, customerName, customerContact, customerId,
         };
@@ -342,23 +403,43 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
             
             if (prev.inventorySettings.enabled) {
                 const rawMaterialUpdates = new Map<string, number>();
+                const productUpdates = new Map<string, number>(); // Map for decrementing bundled product stocks
+
                 const cartWithoutFreeRewards = cart.filter(item => !(item.isReward && item.price === 0));
 
                 cartWithoutFreeRewards.forEach(item => {
                     const product = prev.products.find(p => p.id === item.id);
                     if (!product) return;
-                    if (prev.inventorySettings.trackIngredients && product.recipe?.length > 0) {
+                    if (prev.inventorySettings.trackIngredients && product.recipe && product.recipe.length > 0) {
                         product.recipe.forEach(recipeItem => {
-                            const totalToDecrement = recipeItem.quantity * item.quantity;
-                            rawMaterialUpdates.set(recipeItem.rawMaterialId, (rawMaterialUpdates.get(recipeItem.rawMaterialId) || 0) + totalToDecrement);
+                            if (recipeItem.itemType === 'product' && recipeItem.productId) {
+                                // It's a bundled product, decrement that product's stock
+                                const totalToDecrement = recipeItem.quantity * item.quantity;
+                                productUpdates.set(recipeItem.productId, (productUpdates.get(recipeItem.productId) || 0) + totalToDecrement);
+                            } else {
+                                // It's a raw material
+                                const materialId = recipeItem.rawMaterialId || '';
+                                const totalToDecrement = recipeItem.quantity * item.quantity;
+                                rawMaterialUpdates.set(materialId, (rawMaterialUpdates.get(materialId) || 0) + totalToDecrement);
+                            }
                         });
                     } else if (product.trackStock) {
-                        updatedProducts = updatedProducts.map(p => p.id === item.id ? { ...p, stock: (p.stock || 0) - item.quantity } : p);
+                        // Direct stock decrement
+                        productUpdates.set(product.id, (productUpdates.get(product.id) || 0) + item.quantity);
                     }
                 });
 
                 if (rawMaterialUpdates.size > 0) {
                     updatedRawMaterials = prev.rawMaterials.map(m => rawMaterialUpdates.has(m.id) ? { ...m, stock: m.stock - (rawMaterialUpdates.get(m.id) || 0) } : m);
+                }
+                
+                if (productUpdates.size > 0) {
+                    updatedProducts = prev.products.map(p => {
+                        if (productUpdates.has(p.id) && p.trackStock) {
+                            return { ...p, stock: (p.stock || 0) - (productUpdates.get(p.id) || 0) };
+                        }
+                        return p;
+                    });
                 }
             }
             // FIX: Update 'transactionRecords' instead of 'transactions'.
@@ -367,11 +448,11 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         
         switchActiveCart(null);
         return newTransaction;
-    }, [cart, getCartTotals, setData, currentUser, appliedReward, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, rawMaterials, products]);
+    }, [cart, getCartTotals, setData, currentUser, appliedReward, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, rawMaterials, products, orderType]);
     
     return (
         <CartContext.Provider value={{
-            cart, cartDiscount, heldCarts, activeHeldCartId, appliedReward,
+            cart, cartDiscount, heldCarts, activeHeldCartId, appliedReward, orderType, setOrderType,
             addToCart, addConfiguredItemToCart, updateCartQuantity, removeFromCart, clearCart, getCartTotals,
             applyItemDiscount, removeItemDiscount, applyCartDiscount, removeCartDiscount,
             holdActiveCart, switchActiveCart, deleteHeldCart, updateHeldCartName, saveTransaction,

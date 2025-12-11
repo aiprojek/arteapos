@@ -14,6 +14,7 @@
     "html5-qrcode": "^2.3.8",
     "dexie": "^4.0.7",
     "react-window": "1.8.10",
+    "crypto-js": "4.1.1",
     "react-dom": "^19.2.1"
   },
   "devDependencies": {

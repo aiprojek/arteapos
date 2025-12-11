@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { useUI } from '../context/UIContext';
-import type { Product, RecipeItem, Addon } from '../types';
+import type { Product, RecipeItem, Addon, ProductVariant } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Icon from '../components/Icon';
@@ -173,11 +174,11 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
     onOpenCamera: () => void,
     isCameraAvailable: boolean,
 }>(({ product, onSave, onCancel, onOpenCamera, isCameraAvailable }, ref) => {
-    const { inventorySettings, rawMaterials } = useProduct();
+    const { inventorySettings, rawMaterials, products } = useProduct();
     const { showAlert } = useUI();
     const [formData, setFormData] = useState({
         name: '', price: '', category: [] as string[], imageUrl: '', costPrice: '',
-        stock: '', trackStock: false, recipe: [] as RecipeItem[], isFavorite: false, barcode: '', addons: [] as Addon[]
+        stock: '', trackStock: false, recipe: [] as RecipeItem[], isFavorite: false, barcode: '', addons: [] as Addon[], variants: [] as ProductVariant[]
     });
     const [imageSource, setImageSource] = useState<ImageSource>('none');
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -193,10 +194,14 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 costPrice: product.costPrice?.toString() || '',
                 stock: product.stock?.toString() || '',
                 trackStock: product.trackStock || false,
-                recipe: product.recipe || [],
+                recipe: product.recipe?.map(r => ({
+                    ...r,
+                    itemType: r.itemType || 'raw_material' // Backward compatibility
+                })) || [],
                 isFavorite: product.isFavorite || false,
                 barcode: product.barcode || '',
                 addons: product.addons || [],
+                variants: product.variants || [],
             };
             
             setFormData(productData);
@@ -210,7 +215,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
             }
         } else {
             // Reset form for a new product
-            setFormData({ name: '', price: '', category: [], imageUrl: '', costPrice: '', stock: '', trackStock: false, recipe: [], isFavorite: false, barcode: '', addons: [] });
+            setFormData({ name: '', price: '', category: [], imageUrl: '', costPrice: '', stock: '', trackStock: false, recipe: [], isFavorite: false, barcode: '', addons: [], variants: [] });
             setImageSource('none');
         }
     }, [product]);
@@ -271,20 +276,20 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
 
     const handleRecipeChange = (index: number, field: keyof RecipeItem, value: string) => {
         const updatedRecipe = [...formData.recipe];
+        // @ts-ignore
         updatedRecipe[index] = { ...updatedRecipe[index], [field]: value };
+        
+        // Reset ID if type changes to prevent mismatch
+        if (field === 'itemType') {
+             updatedRecipe[index].rawMaterialId = '';
+             updatedRecipe[index].productId = '';
+        }
+        
         setFormData(prev => ({ ...prev, recipe: updatedRecipe }));
     };
 
     const addRecipeItem = () => {
-        if (rawMaterials.length === 0) {
-            showAlert({
-                type: 'alert',
-                title: 'Bahan Baku Kosong',
-                message: 'Silakan tambahkan bahan baku terlebih dahulu di halaman Bahan Baku sebelum membuat resep.'
-            });
-            return;
-        }
-        setFormData(prev => ({ ...prev, recipe: [...prev.recipe, { rawMaterialId: rawMaterials[0].id, quantity: 0 }] }));
+        setFormData(prev => ({ ...prev, recipe: [...prev.recipe, { itemType: 'raw_material', rawMaterialId: '', productId: '', quantity: 0 }] }));
     };
 
     const removeRecipeItem = (index: number) => {
@@ -305,6 +310,21 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
         setFormData(prev => ({ ...prev, addons: prev.addons.filter((_, i) => i !== index) }));
     };
 
+    // --- Variant Handlers ---
+    const handleVariantChange = (index: number, field: keyof ProductVariant, value: string | number) => {
+        const updatedVariants = [...formData.variants];
+        updatedVariants[index] = { ...updatedVariants[index], [field]: value };
+        setFormData(prev => ({ ...prev, variants: updatedVariants }));
+    };
+
+    const addVariantItem = () => {
+        setFormData(prev => ({ ...prev, variants: [...prev.variants, { id: Date.now().toString(), name: '', price: 0, costPrice: 0 }] }));
+    };
+
+    const removeVariantItem = (index: number) => {
+        setFormData(prev => ({ ...prev, variants: prev.variants.filter((_, i) => i !== index) }));
+    };
+
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
@@ -318,8 +338,15 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
             price: parseFloat(formData.price) || 0,
             costPrice: parseFloat(formData.costPrice) || 0,
             stock: parseInt(formData.stock, 10) || 0,
-            recipe: formData.recipe.map(r => ({ ...r, quantity: parseFloat(String(r.quantity)) || 0 })),
+            recipe: formData.recipe.map(r => ({
+                ...r,
+                quantity: parseFloat(String(r.quantity)) || 0,
+                // Ensure correct ID is set based on type
+                rawMaterialId: r.itemType === 'raw_material' ? r.rawMaterialId : undefined,
+                productId: r.itemType === 'product' ? r.productId : undefined,
+            })).filter(r => (r.itemType === 'raw_material' && r.rawMaterialId) || (r.itemType === 'product' && r.productId)),
             addons: formData.addons.filter(a => a.name.trim() !== '').map(a => ({...a, price: Number(a.price) || 0, costPrice: Number(a.costPrice) || 0})),
+            variants: formData.variants.filter(v => v.name.trim() !== '').map(v => ({...v, price: Number(v.price) || 0, costPrice: Number(v.costPrice) || 0})),
         };
         if (product && 'id' in product) {
             onSave({ ...productData, id: product.id });
@@ -341,15 +368,26 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
     const recipeCost = useMemo(() => {
         if (!showRecipe) return 0;
         return formData.recipe.reduce((sum, item) => {
-            const material = rawMaterials.find(rm => rm.id === item.rawMaterialId);
-            const cost = material?.costPerUnit || 0;
+            let cost = 0;
+            if (item.itemType === 'product' && item.productId) {
+                const subProduct = products.find(p => p.id === item.productId);
+                cost = subProduct?.costPrice || 0; // Use costPrice of component product
+            } else if (item.itemType === 'raw_material' || !item.itemType) {
+                const material = rawMaterials.find(rm => rm.id === item.rawMaterialId);
+                cost = material?.costPerUnit || 0;
+            }
             return sum + (cost * (parseFloat(String(item.quantity)) || 0));
         }, 0);
-    }, [formData.recipe, rawMaterials, showRecipe]);
+    }, [formData.recipe, rawMaterials, products, showRecipe]);
     
     const sellingPrice = parseFloat(formData.price) || 0;
     const profit = sellingPrice - recipeCost;
     const profitMargin = sellingPrice > 0 ? (profit / sellingPrice) * 100 : 0;
+
+    // Filter out current product from potential bundle components to avoid infinite recursion
+    const availableProductsForBundle = useMemo(() => {
+        return products.filter(p => !product || p.id !== product.id);
+    }, [products, product]);
 
     return (
         <form ref={ref} onSubmit={handleSubmit} className="space-y-4">
@@ -364,7 +402,12 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                      </label>
                 </div>
             </div>
-            <InputField name="price" label="Harga Jual (IDR)" type="number" required value={formData.price} onChange={handleChange} min="0"/>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <InputField name="price" label="Harga Jual Default (IDR)" type="number" required value={formData.price} onChange={handleChange} min="0"/>
+                {inventorySettings.enabled && (
+                    <InputField name="costPrice" label="Harga Modal Default (IDR)" type="number" value={formData.costPrice} onChange={handleChange} min="0"/>
+                )}
+            </div>
             
             <CategoryInput value={formData.category} onChange={(newCats) => setFormData(prev => ({ ...prev, category: newCats }))} />
             
@@ -426,6 +469,53 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                     </div>
                 )}
             </div>
+
+            {/* Varian Harga (Multi-Tier Pricing) */}
+            <div className="space-y-3 pt-4 border-t border-slate-700">
+                <h3 className="text-lg font-semibold text-white">Varian Harga (Opsional)</h3>
+                <p className="text-xs text-slate-400">Gunakan ini untuk ukuran berbeda (Regular/Jumbo) atau tipe (Panas/Dingin).</p>
+                {formData.variants.map((variant, index) => (
+                    <div key={index} className="flex flex-wrap items-center gap-2 bg-slate-900 p-2 rounded-md">
+                        <input
+                            type="text"
+                            value={variant.name}
+                            placeholder="Nama Varian (cth: Jumbo)"
+                            onChange={(e) => handleVariantChange(index, 'name', e.target.value)}
+                            className="flex-1 min-w-[150px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
+                        />
+                        <input
+                            type="number"
+                            min="0"
+                            value={variant.price}
+                            placeholder="Harga Jual"
+                            onChange={(e) => handleVariantChange(index, 'price', parseFloat(e.target.value) || 0)}
+                            className="flex-1 min-w-[120px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
+                        />
+                        {inventorySettings.enabled && (
+                            <input
+                                type="number"
+                                min="0"
+                                value={variant.costPrice || ''}
+                                placeholder="Harga Modal (Opsional)"
+                                onChange={(e) => handleVariantChange(index, 'costPrice', parseFloat(e.target.value) || 0)}
+                                className="flex-1 min-w-[120px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
+                            />
+                        )}
+                        <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            onClick={() => removeVariantItem(index)}
+                        >
+                            <Icon name="trash" className="w-4 h-4" />
+                        </Button>
+                    </div>
+                ))}
+                <Button type="button" variant="secondary" onClick={addVariantItem}>
+                    <Icon name="plus" className="w-4 h-4" /> Tambah Varian
+                </Button>
+            </div>
+
              <div className="space-y-3 pt-4 border-t border-slate-700">
                 <h3 className="text-lg font-semibold text-white">Add-ons / Topping (Opsional)</h3>
                 {formData.addons.map((addon, index) => (
@@ -445,14 +535,16 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                             onChange={(e) => handleAddonChange(index, 'price', parseFloat(e.target.value) || 0)}
                             className="flex-1 min-w-[120px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
                         />
-                        <input
-                            type="number"
-                            min="0"
-                            value={addon.costPrice || ''}
-                            placeholder="Harga Modal"
-                            onChange={(e) => handleAddonChange(index, 'costPrice', parseFloat(e.target.value) || 0)}
-                            className="flex-1 min-w-[120px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
-                        />
+                        {inventorySettings.enabled && (
+                            <input
+                                type="number"
+                                min="0"
+                                value={addon.costPrice || ''}
+                                placeholder="Harga Modal"
+                                onChange={(e) => handleAddonChange(index, 'costPrice', parseFloat(e.target.value) || 0)}
+                                className="flex-1 min-w-[120px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
+                            />
+                        )}
                         <Button
                             type="button"
                             variant="danger"
@@ -466,15 +558,8 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 <Button type="button" variant="secondary" onClick={addAddonItem}>Tambah Add-on</Button>
             </div>
 
-            {inventorySettings.enabled && (
-                <div className="space-y-4 pt-4 border-t border-slate-700">
-                    <InputField name="costPrice" label="Harga Modal Manual (IDR, Opsional)" type="number" value={formData.costPrice} onChange={handleChange} min="0"/>
-                    <p className="text-xs text-slate-500 -mt-2">Gunakan ini jika Anda tidak ingin menghitung HPP dari resep.</p>
-                </div>
-            )}
-
             {showSimpleStock && (
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 pt-4 border-t border-slate-700">
                     <div className="flex-1">
                         <InputField name="stock" label="Jumlah Stok (Opsional)" type="number" value={formData.stock} onChange={handleChange} min="0" />
                     </div>
@@ -489,25 +574,74 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
 
             {showRecipe && (
                 <div className="space-y-3 pt-4 border-t border-slate-700">
-                    <h3 className="text-lg font-semibold text-white">Resep / Komposisi Bahan</h3>
+                    <h3 className="text-lg font-semibold text-white">Resep / Komposisi & Bundling</h3>
+                    <p className="text-xs text-slate-400">
+                        Tentukan bahan baku atau produk lain yang membentuk produk ini. 
+                        Pilih <strong>"Produk Jadi"</strong> pada dropdown untuk membuat Paket Bundling.
+                    </p>
+                    
                     {formData.recipe.map((item, index) => (
-                        <div key={index} className="flex items-center gap-2 bg-slate-900 p-2 rounded-md">
-                            <select value={item.rawMaterialId} onChange={(e) => handleRecipeChange(index, 'rawMaterialId', e.target.value)} className="flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white">
-                                {rawMaterials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.unit})</option>)}
-                            </select>
-                            <input type="number" min="0" value={item.quantity} placeholder="Jumlah" onChange={(e) => handleRecipeChange(index, 'quantity', e.target.value)} className="w-24 bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white" />
-                            <Button type="button" variant="danger" size="sm" onClick={() => removeRecipeItem(index)}><Icon name="trash" className="w-4 h-4" /></Button>
+                        <div key={index} className="flex flex-col sm:flex-row gap-2 bg-slate-900 p-2 rounded-md items-start sm:items-center">
+                            <div className="flex-shrink-0 w-full sm:w-auto">
+                                <select 
+                                    value={item.itemType || 'raw_material'} 
+                                    onChange={(e) => handleRecipeChange(index, 'itemType', e.target.value)} 
+                                    className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-300"
+                                >
+                                    <option value="raw_material">Bahan Baku</option>
+                                    <option value="product">Produk Jadi</option>
+                                </select>
+                            </div>
+                            
+                            {item.itemType === 'product' ? (
+                                <select 
+                                    value={item.productId || ''} 
+                                    onChange={(e) => handleRecipeChange(index, 'productId', e.target.value)} 
+                                    className="flex-1 w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
+                                >
+                                    <option value="" disabled>Pilih Produk...</option>
+                                    {availableProductsForBundle.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                            ) : (
+                                <select 
+                                    value={item.rawMaterialId || ''} 
+                                    onChange={(e) => handleRecipeChange(index, 'rawMaterialId', e.target.value)} 
+                                    className="flex-1 w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
+                                >
+                                    <option value="" disabled>Pilih Bahan...</option>
+                                    {rawMaterials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.unit})</option>)}
+                                </select>
+                            )}
+
+                            <div className="flex gap-2 w-full sm:w-auto">
+                                <input 
+                                    type="number" 
+                                    min="0" 
+                                    step="0.01"
+                                    value={item.quantity} 
+                                    placeholder="Jumlah" 
+                                    onChange={(e) => handleRecipeChange(index, 'quantity', e.target.value)} 
+                                    className="w-24 flex-1 sm:flex-none bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white" 
+                                />
+                                <Button type="button" variant="danger" size="sm" onClick={() => removeRecipeItem(index)} className="flex-shrink-0">
+                                    <Icon name="trash" className="w-4 h-4" />
+                                </Button>
+                            </div>
                         </div>
                     ))}
-                    <Button type="button" variant="secondary" onClick={addRecipeItem}>Tambah Bahan</Button>
+                    
+                    <Button type="button" variant="secondary" onClick={addRecipeItem}>
+                        <Icon name="plus" className="w-4 h-4" /> Tambah Komposisi
+                    </Button>
+
                     {recipeCost > 0 && (
                         <div className="mt-4 space-y-2 text-sm bg-slate-900/50 p-3 rounded-lg border border-slate-700">
                             <div className="flex justify-between">
-                                <span className="text-slate-400">Harga Pokok Produksi (HPP) dari Resep:</span>
+                                <span className="text-slate-400">Total HPP (Bahan + Produk):</span>
                                 <span className="font-semibold text-white">{CURRENCY_FORMATTER.format(recipeCost)}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-slate-400">Estimasi Laba:</span>
+                                <span className="text-slate-400">Estimasi Laba (Harga Default):</span>
                                 <span className={`font-semibold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{CURRENCY_FORMATTER.format(profit)}</span>
                             </div>
                              <div className="flex justify-between">
@@ -688,15 +822,33 @@ const ProductsView: React.FC = () => {
     }
     
     const columns = useMemo(() => [
-        { label: 'Nama', width: '2fr', render: (p: Product) => (
-            <div className="font-medium flex items-center gap-3">
-               <ProductImage product={p} />
-               <div className="flex items-center gap-2">
-                   <span>{p.name}</span>
-                   {p.isFavorite && <Icon name="star" className="w-4 h-4 text-yellow-400" title="Produk Favorit" />}
-               </div>
-            </div>
-        )},
+        { label: 'Nama', width: '2fr', render: (p: Product) => {
+            const isBundle = p.recipe?.some(r => r.itemType === 'product');
+            const hasVariants = p.variants && p.variants.length > 0;
+            return (
+                <div className="font-medium flex items-center gap-3">
+                   <ProductImage product={p} />
+                   <div className="flex flex-col justify-center">
+                       <div className="flex items-center gap-2">
+                           <span>{p.name}</span>
+                           {p.isFavorite && <Icon name="star" className="w-4 h-4 text-yellow-400" title="Produk Favorit" />}
+                       </div>
+                       <div className="flex gap-1">
+                           {isBundle && (
+                               <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded w-fit mt-0.5">
+                                   Bundle
+                               </span>
+                           )}
+                           {hasVariants && (
+                               <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded w-fit mt-0.5">
+                                   {p.variants?.length} Varian
+                               </span>
+                           )}
+                       </div>
+                   </div>
+                </div>
+            )
+        }},
         { label: 'Kategori', width: '1.5fr', render: (p: Product) => (
             <div className="flex flex-wrap gap-1">
                 {p.category.map(cat => <span key={cat} className="text-xs bg-slate-700 px-2 py-0.5 rounded-full">{cat}</span>)}
@@ -721,7 +873,7 @@ const ProductsView: React.FC = () => {
                 </button>
             </div>
         )}
-    ], [inventorySettings.enabled, deleteProduct]);
+    ], [inventorySettings.enabled, inventorySettings.trackIngredients, deleteProduct]);
 
     return (
         <div className="flex flex-col h-full">

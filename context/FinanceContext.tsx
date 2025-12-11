@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useContext, ReactNode, useCallback } from 'react';
 import { useData } from './DataContext';
 import type { Expense, Supplier, Purchase, ExpenseStatus, PurchaseStatus, StockAdjustment, Transaction as TransactionType, Payment, OtherIncome, Product, RawMaterial } from '../types';
@@ -227,6 +228,8 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
             // 2. Restore Inventory (Logic reversed from saveTransaction)
             if (prev.inventorySettings.enabled) {
                 const rawMaterialUpdates = new Map<string, number>();
+                const productUpdates = new Map<string, number>(); // Map for restoring bundled/tracked product stock
+
                 const cartItems = targetTransaction.items.filter(item => !(item.isReward && item.price === 0));
 
                 cartItems.forEach(item => {
@@ -238,18 +241,33 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                     if (prev.inventorySettings.trackIngredients && recipeToRestore && recipeToRestore.length > 0) {
                         recipeToRestore.forEach(recipeItem => {
                             const totalToRestore = recipeItem.quantity * item.quantity;
-                            rawMaterialUpdates.set(recipeItem.rawMaterialId, (rawMaterialUpdates.get(recipeItem.rawMaterialId) || 0) + totalToRestore);
+                            
+                            if (recipeItem.itemType === 'product' && recipeItem.productId) {
+                                // Restore component product stock
+                                productUpdates.set(recipeItem.productId, (productUpdates.get(recipeItem.productId) || 0) + totalToRestore);
+                            } else {
+                                // Restore raw material stock
+                                const materialId = recipeItem.rawMaterialId || '';
+                                rawMaterialUpdates.set(materialId, (rawMaterialUpdates.get(materialId) || 0) + totalToRestore);
+                            }
                         });
                     } else if (product && product.trackStock) {
-                        const idx = updatedProducts.findIndex(p => p.id === item.id);
-                        if (idx > -1) {
-                            updatedProducts[idx] = { ...updatedProducts[idx], stock: (updatedProducts[idx].stock || 0) + item.quantity };
-                        }
+                        // Direct stock restore
+                        productUpdates.set(product.id, (productUpdates.get(product.id) || 0) + item.quantity);
                     }
                 });
 
                 if (rawMaterialUpdates.size > 0) {
                     updatedRawMaterials = prev.rawMaterials.map(m => rawMaterialUpdates.has(m.id) ? { ...m, stock: m.stock + (rawMaterialUpdates.get(m.id) || 0) } : m);
+                }
+                
+                if (productUpdates.size > 0) {
+                    updatedProducts = prev.products.map(p => {
+                        if (productUpdates.has(p.id) && p.trackStock) {
+                            return { ...p, stock: (p.stock || 0) + (productUpdates.get(p.id) || 0) };
+                        }
+                        return p;
+                    });
                 }
             }
 

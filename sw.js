@@ -1,6 +1,5 @@
 
-
-const CACHE_NAME = 'artea-pos-cache-v1';
+const CACHE_NAME = 'artea-pos-cache-v2';
 const urlsToCache = [
   '/',
   '/index.html',

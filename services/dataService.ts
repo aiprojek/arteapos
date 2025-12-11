@@ -1,5 +1,5 @@
 
-import type { AppData, Product, RawMaterial, Transaction as TransactionType, Expense, Purchase, Customer, StockAdjustment, Addon, CartItem } from '../types';
+import type { AppData, Product, RawMaterial, Transaction as TransactionType, Expense, Purchase, Customer, StockAdjustment, Addon, CartItem, ProductVariant } from '../types';
 import { db } from './db';
 
 const downloadCSV = (csvContent: string, filename: string) => {
@@ -26,7 +26,10 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 const generateTransactionsCSVString = (transactions: TransactionType[]) => {
     const headers = 'id,createdAt,customerName,userName,total,amountPaid,paymentStatus,items';
     const rows = transactions.map(t => {
-        const items = t.items.map(i => `${i.name} (qty: ${i.quantity}, price: ${i.price})`).join('; ');
+        const items = t.items.map(i => {
+            const variantStr = i.selectedVariant ? ` [${i.selectedVariant.name}]` : '';
+            return `${i.name}${variantStr} (qty: ${i.quantity}, price: ${i.price})`
+        }).join('; ');
         // Escape quotes in items string and others
         const escapedItems = items.replace(/"/g, '""');
         const escapedCustomer = (t.customerName || '').replace(/"/g, '""');
@@ -41,6 +44,7 @@ const exportTransactionsCSV = (transactions: TransactionType[]) => {
     downloadCSV(csvContent, 'transactions_report.csv');
 };
 
+// IMPROVED CSV PARSER: Handles quotes correctly
 const parseCSVLine = (line: string): string[] => {
     const values: string[] = [];
     let current = '';
@@ -97,16 +101,18 @@ const parseTransactionsCSV = (csvText: string): TransactionType[] => {
             // Reconstruct Items
             const itemsStr = vals[itemsIdx] || '';
             const items: CartItem[] = itemsStr.split(';').filter(Boolean).map((s, idx) => {
-                // Regex to match "Name (qty: 1, price: 1000)"
-                const match = s.trim().match(/(.+?) \(qty: (\d+), price: (\d+)\)/);
+                // Regex to match "Name [Variant] (qty: 1, price: 1000)" or "Name (qty: 1, price: 1000)"
+                const match = s.trim().match(/(.+?) (?:\[(.+?)\] )?\(qty: (\d+), price: (\d+)\)/);
                 if (match) {
                     return {
                         id: `imported-item-${Date.now()}-${idx}`,
                         cartItemId: `imported-cart-${Date.now()}-${idx}`,
                         name: match[1],
-                        quantity: parseInt(match[2]),
-                        price: parseFloat(match[3]),
+                        quantity: parseInt(match[3]),
+                        price: parseFloat(match[4]),
                         category: ['Imported'],
+                        // Note: Variant details beyond name are lost in simple CSV, but structure is kept
+                        selectedVariant: match[2] ? { id: 'imp', name: match[2], price: parseFloat(match[4]) } : undefined 
                     } as CartItem;
                 }
                 return null;
@@ -120,13 +126,6 @@ const parseTransactionsCSV = (csvText: string): TransactionType[] => {
                  const parsed = Date.parse(createdAtStr);
                  if (!isNaN(parsed)) {
                      createdAt = new Date(parsed).toISOString();
-                 } else {
-                     // Handle potential DD/MM/YYYY format if localeString was used
-                     const parts = createdAtStr.split(/[/\s,:]+/);
-                     if (parts.length >= 3) {
-                         // Very rough estimation, assume Day Month Year order for ID-ID locale
-                         // This is best effort.
-                     }
                  }
             }
 
@@ -142,15 +141,11 @@ const parseTransactionsCSV = (csvText: string): TransactionType[] => {
                 items: items,
                 subtotal: parseFloat(vals[totalIdx]) || 0, // Assume no discount for simplicity in import
                 payments: [], // Cannot reconstruct exact payment history easily
+                tax: 0,
+                serviceCharge: 0,
+                orderType: 'dine-in',
             };
             
-            // Re-validate totals to be safe
-            const calcTotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            if (Math.abs(calcTotal - transaction.total) > 1) {
-                // Warning: calculated total differs from imported total. 
-                // We keep imported total as truth for financial reports.
-            }
-
             transactions.push(transaction);
         } catch (e) {
             console.error(`Skipping row ${i}:`, e);
@@ -206,7 +201,7 @@ export const dataService = {
     await db.transaction('r', db.tables.map(t => t.name), async () => {
       const [
         products, categoriesObj, rawMaterials, transactionRecords, users, settings,
-        expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts
+        expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts, sessionHistory
       ] = await Promise.all([
         db.products.toArray(),
         db.appState.get('categories'),
@@ -221,7 +216,8 @@ export const dataService = {
         db.stockAdjustments.toArray(),
         db.customers.toArray(),
         db.discountDefinitions.toArray(),
-        db.heldCarts.toArray()
+        db.heldCarts.toArray(),
+        db.sessionHistory.toArray(),
       ]);
 
       const productsForExport = await Promise.all(
@@ -248,6 +244,7 @@ export const dataService = {
       data.customers = customers;
       data.discountDefinitions = discountDefinitions;
       data.heldCarts = heldCarts;
+      data.sessionHistory = sessionHistory;
 
       data.receiptSettings = settings.find(s => s.key === 'receiptSettings')?.value;
       data.inventorySettings = settings.find(s => s.key === 'inventorySettings')?.value;
@@ -291,17 +288,20 @@ export const dataService = {
   },
 
   exportProductsCSV: async (products: Product[]) => {
-    const headers = 'id,name,price,category,barcode,costPrice,stock,trackStock,isFavorite,imageUrl,addons';
+    const headers = 'id,name,price,category,barcode,costPrice,stock,trackStock,isFavorite,imageUrl,addons,variants';
     const rows = await Promise.all(products.map(async p => {
         const category = Array.isArray(p.category) ? p.category.join(';') : '';
         const addonsString = (p.addons || [])
             .map(a => `${a.name}:${a.price}:${a.costPrice || 0}`)
             .join('|');
+        const variantsString = (p.variants || [])
+            .map(v => `${v.name}:${v.price}:${v.costPrice || 0}`)
+            .join('|');
         let imageUrl = p.imageUrl || '';
         if (p.image instanceof Blob) {
             imageUrl = await blobToBase64(p.image);
         }
-        return `${p.id},"${p.name}",${p.price},"${category}",${p.barcode || ''},${p.costPrice || 0},${p.stock || 0},${p.trackStock || false},${p.isFavorite || false},"${imageUrl}","${addonsString}"`;
+        return `${p.id},"${p.name}",${p.price},"${category}",${p.barcode || ''},${p.costPrice || 0},${p.stock || 0},${p.trackStock || false},${p.isFavorite || false},"${imageUrl}","${addonsString}","${variantsString}"`;
     }));
     const csvContent = [headers, ...rows].join('\n');
     downloadCSV(csvContent, 'products_export.csv');
@@ -323,8 +323,9 @@ export const dataService = {
           
           for (let i = 1; i < lines.length; i++) {
             if (!lines[i].trim()) continue;
-            // A simple CSV parser, not robust for complex cases with commas in values
-            const values = lines[i].split(',');
+            
+            // Use improved CSV parser
+            const values = parseCSVLine(lines[i]);
             
             const productData = headers.reduce((acc, header, index) => {
                 const key = header as keyof Product;
@@ -357,6 +358,20 @@ export const dataService = {
                             return null;
                         }).filter((a: Addon | null): a is Addon => a !== null);
                         break;
+                    case 'variants':
+                        value = (value || '').split('|').filter(Boolean).map((varStr: string, idx: number) => {
+                            const parts = varStr.split(':');
+                            if (parts.length >= 2) {
+                                return {
+                                    id: `${Date.now()}-var-${idx}`,
+                                    name: parts[0] || '',
+                                    price: parseFloat(parts[1]) || 0,
+                                    costPrice: parseFloat(parts[2]) || 0,
+                                };
+                            }
+                            return null;
+                        }).filter((v: ProductVariant | null): v is ProductVariant => v !== null);
+                        break;
                     default:
                         break;
                 }
@@ -385,6 +400,23 @@ export const dataService = {
     });
   },
 
+  importTransactionsCSV: (file: File): Promise<TransactionType[]> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const csvText = event.target?.result as string;
+                const transactions = parseTransactionsCSV(csvText);
+                resolve(transactions);
+            } catch (error) {
+                reject(new Error('Gagal membaca file CSV transaksi.'));
+            }
+        };
+        reader.onerror = (error) => reject(error);
+        reader.readAsText(file);
+    });
+  },
+
   exportRawMaterialsCSV: (rawMaterials: RawMaterial[]) => {
     const headers = 'id,name,stock,unit';
     const rows = rawMaterials.map(rm => `${rm.id},"${rm.name}",${rm.stock},"${rm.unit}"`);
@@ -408,7 +440,7 @@ export const dataService = {
 
           for (let i = 1; i < lines.length; i++) {
             if (!lines[i].trim()) continue;
-            const values = lines[i].split(',');
+            const values = parseCSVLine(lines[i]);
 
             const materialData = headers.reduce((acc, header, index) => {
               const key = header as keyof RawMaterial;

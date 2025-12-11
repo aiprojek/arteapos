@@ -6,6 +6,13 @@ export interface Addon {
   costPrice?: number;
 }
 
+export interface ProductVariant {
+  id: string;
+  name: string; // e.g. "Regular", "Large"
+  price: number;
+  costPrice?: number;
+}
+
 export interface RawMaterial {
   id: string;
   name: string;
@@ -15,7 +22,9 @@ export interface RawMaterial {
 }
 
 export interface RecipeItem {
-  rawMaterialId: string;
+  itemType: 'raw_material' | 'product'; // New discriminator
+  rawMaterialId?: string; // Optional now
+  productId?: string; // New for bundling
   quantity: number;
 }
 
@@ -50,6 +59,7 @@ export interface Product {
   isFavorite?: boolean;
   barcode?: string;
   addons?: Addon[];
+  variants?: ProductVariant[]; // New: Multi-tier pricing
 }
 
 export interface CartItem extends Product {
@@ -59,6 +69,7 @@ export interface CartItem extends Product {
   rewardId?: string; // To link to the reward definition
   discount?: Discount;
   selectedAddons?: Addon[];
+  selectedVariant?: ProductVariant; // New: Selected variant
 }
 
 // New Type for Held Carts Feature
@@ -66,6 +77,7 @@ export interface HeldCart {
   id: string;
   name: string;
   items: CartItem[];
+  orderType?: OrderType; // Save order type in held cart
 }
 
 export interface User {
@@ -85,15 +97,19 @@ export interface Payment {
 }
 
 export type PaymentStatus = 'paid' | 'unpaid' | 'partial' | 'refunded';
+export type OrderType = 'dine-in' | 'take-away' | 'online';
 
 export interface Transaction {
   id: string;
   items: CartItem[];
   subtotal: number;
   cartDiscount?: Discount;
+  tax: number; // New: Tax amount
+  serviceCharge: number; // New: Service charge amount
   total: number;
   amountPaid: number;
   paymentStatus: PaymentStatus;
+  orderType: OrderType; // New: Order Type
   payments: Payment[];
   createdAt: string; // ISO string
   userId: string;
@@ -114,8 +130,10 @@ export interface ReceiptSettings {
     address: string;
     footerMessage: string;
     enableKitchenPrinter?: boolean;
-    adminWhatsapp?: string; // New: Admin WhatsApp Number
-    adminTelegram?: string; // New: Admin Telegram Username
+    adminWhatsapp?: string;
+    adminTelegram?: string;
+    taxRate?: number; // New: Percentage (e.g., 10 for 10%)
+    serviceChargeRate?: number; // New: Percentage (e.g., 5 for 5%)
 }
 
 export interface InventorySettings {
@@ -150,6 +168,17 @@ export interface SessionState {
   userId: string; // User who started the shift
   userName: string;
   cashMovements: CashMovement[]; // Log of cash in/out during shift
+}
+
+// NEW: Session History to archive closed sessions
+export interface SessionHistory extends SessionState {
+    endTime: string;
+    totalSales: number; // Cash sales specifically
+    cashInTotal: number;
+    cashOutTotal: number;
+    expectedCash: number;
+    actualCash: number;
+    variance: number; // Selisih
 }
 
 // --- New Finance Types ---
@@ -275,6 +304,7 @@ export interface AppData {
   membershipSettings: MembershipSettings;
   discountDefinitions: DiscountDefinition[];
   heldCarts?: HeldCart[];
+  sessionHistory: SessionHistory[]; // NEW: Archive
 }
 
 export type View = 'dashboard' | 'pos' | 'products' | 'raw-materials' | 'reports' | 'settings' | 'finance' | 'help';

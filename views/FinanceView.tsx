@@ -12,6 +12,7 @@ import Icon from '../components/Icon';
 import { CURRENCY_FORMATTER } from '../constants';
 import UpdatePaymentModal from '../components/UpdatePaymentModal';
 import Pagination from '../components/Pagination';
+import CustomerFormModal from '../components/CustomerFormModal';
 
 type FinanceSubTab = 'cashflow' | 'expenses' | 'other_income' | 'purchasing' | 'debt-receivables';
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
@@ -200,7 +201,7 @@ const CashFlowTab: React.FC = () => {
             <div className="bg-slate-800 rounded-lg shadow-md">
                  <h3 className="text-lg font-bold text-white p-4">Riwayat Arus Kas</h3>
                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
+                    <table className="w-full text-left min-w-[800px]">
                         <thead className="bg-slate-700 text-slate-200">
                              <tr>
                                 <th className="p-3">Tanggal</th>
@@ -356,7 +357,7 @@ const DebtReceivablesTab: React.FC = () => {
                 <div className="space-y-4">
                     <StatCard title="Total Piutang Pelanggan" value={totalReceivables} className="border-l-4 border-yellow-500" />
                     <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
-                         <table className="w-full text-left">
+                         <table className="w-full text-left min-w-[800px]">
                             <thead className="bg-slate-700 text-slate-200">
                                 <tr>
                                     <th className="p-3">Tanggal</th>
@@ -387,7 +388,7 @@ const DebtReceivablesTab: React.FC = () => {
                  <div className="space-y-4">
                     <StatCard title="Total Utang ke Pemasok" value={totalPayables} className="border-l-4 border-red-500" />
                      <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
-                        <table className="w-full text-left">
+                        <table className="w-full text-left min-w-[800px]">
                            <thead className="bg-slate-700 text-slate-200">
                                <tr>
                                    <th className="p-3">Tanggal</th>
@@ -401,10 +402,15 @@ const DebtReceivablesTab: React.FC = () => {
                                {payables.map(p => (
                                    <tr key={p.id} className="border-b border-slate-700 last:border-b-0">
                                        <td className="p-3 text-slate-400">{new Date(p.date).toLocaleDateString('id-ID')}</td>
-                                       <td className="p-3 font-semibold">{p.supplierName}</td>
-                                       <td className="p-3 text-right">{CURRENCY_FORMATTER.format(p.totalAmount)}</td>
-                                       <td className="p-3 text-right font-semibold text-red-400">{CURRENCY_FORMATTER.format(p.totalAmount - p.amountPaid)}</td>
-                                       <td className="p-3"><Button size="sm" onClick={() => setPayingPurchase(p)}>Bayar Utang</Button></td>
+                                       <td className="p-3">{p.supplierName}</td>
+                                       <td className="p-3 text-right font-medium">{CURRENCY_FORMATTER.format(p.totalAmount)}</td>
+                                       <td className="p-3 text-right text-slate-300">{CURRENCY_FORMATTER.format(p.amountPaid)}</td>
+                                       <td className="p-3">
+                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${p.status === 'lunas' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
+                                                {p.status === 'lunas' ? 'Lunas' : 'Belum Lunas'}
+                                            </span>
+                                        </td>
+                                        <td className="p-3"><Button size="sm" onClick={() => setPayingPurchase(p)}>Bayar Utang</Button></td>
                                    </tr>
                                ))}
                            </tbody>
@@ -418,7 +424,7 @@ const DebtReceivablesTab: React.FC = () => {
                  <div className="space-y-4">
                     <StatCard title="Total Utang Pengeluaran" value={totalExpensePayables} className="border-l-4 border-red-500" />
                      <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
-                        <table className="w-full text-left">
+                        <table className="w-full text-left min-w-[800px]">
                            <thead className="bg-slate-700 text-slate-200">
                                <tr>
                                    <th className="p-3">Tanggal</th>
@@ -462,50 +468,6 @@ const DebtReceivablesTab: React.FC = () => {
         </div>
     );
 };
-
-const CustomerFormModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    onSave: (customer: Omit<Customer, 'id' | 'memberId' | 'points' | 'createdAt'> | Customer) => void;
-    customer: Customer | null;
-}> = ({ isOpen, onClose, onSave, customer }) => {
-    const [form, setForm] = useState({ name: '', contact: '' });
-    useEffect(() => {
-        if (customer) {
-            setForm({ name: customer.name, contact: customer.contact || '' });
-        } else {
-            setForm({ name: '', contact: '' });
-        }
-    }, [customer, isOpen]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if(customer) {
-            onSave({ ...customer, ...form });
-        } else {
-            onSave(form);
-        }
-    }
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title={customer ? "Edit Pelanggan" : "Tambah Pelanggan Baru"}>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Nama Pelanggan</label>
-                    <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Kontak (No. HP/Email)</label>
-                    <input type="text" value={form.contact} onChange={e => setForm({...form, contact: e.target.value})} placeholder="Opsional" className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                </div>
-                <div className="flex justify-end gap-3 pt-2">
-                    <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
-                    <Button type="submit">Simpan</Button>
-                </div>
-            </form>
-        </Modal>
-    )
-}
 
 const CustomersTab: React.FC = () => {
     const { customers, addCustomer, updateCustomer, deleteCustomer } = useCustomer();
@@ -562,7 +524,7 @@ const CustomersTab: React.FC = () => {
                 </Button>
             </div>
              <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
-                <table className="w-full text-left">
+                <table className="w-full text-left min-w-[800px]">
                     <thead className="bg-slate-700 text-slate-200">
                         <tr>
                             <th className="p-3">Nama</th>
@@ -881,7 +843,7 @@ const PurchasesAndSuppliersTab: React.FC<{
                         <Button onClick={onAddSupplier} size="sm"><Icon name="plus" className="w-4 h-4"/> Tambah Pemasok</Button>
                     </div>
                     <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
-                        <table className="w-full text-left">
+                        <table className="w-full text-left min-w-[800px]">
                             <thead className="bg-slate-700 text-slate-200">
                                 <tr>
                                     <th className="p-3">Nama</th>
@@ -916,7 +878,7 @@ const PurchasesAndSuppliersTab: React.FC<{
                         <Button onClick={onAddPurchase} size="sm"><Icon name="plus" className="w-4 h-4"/> Catat Pembelian</Button>
                     </div>
                     <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
-                        <table className="w-full text-left">
+                        <table className="w-full text-left min-w-[800px]">
                             <thead className="bg-slate-700 text-slate-200">
                                 <tr>
                                     <th className="p-3">Tanggal</th>
@@ -1097,7 +1059,7 @@ const FinanceView: React.FC = () => {
                         </Button>
                     </div>
                      <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
-                        <table className="w-full text-left">
+                        <table className="w-full text-left min-w-[800px]">
                             <thead className="bg-slate-700 text-slate-200">
                                 <tr>
                                     <th className="p-3">Tanggal</th>
@@ -1138,7 +1100,7 @@ const FinanceView: React.FC = () => {
                         </Button>
                     </div>
                      <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
-                        <table className="w-full text-left">
+                        <table className="w-full text-left min-w-[800px]">
                             <thead className="bg-slate-700 text-slate-200">
                                 <tr>
                                     <th className="p-3">Tanggal</th>

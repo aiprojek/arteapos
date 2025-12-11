@@ -11,6 +11,7 @@ import { useDiscount } from '../context/DiscountContext';
 import { useFinance } from '../context/FinanceContext';
 import { useCart } from '../context/CartContext';
 import { dataService } from '../services/dataService';
+import { decryptReport } from '../utils/crypto';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
 import Modal from '../components/Modal';
@@ -18,9 +19,12 @@ import type { AppData, ReceiptSettings, InventorySettings, User, AuthSettings, M
 import { CURRENCY_FORMATTER } from '../constants';
 
 const SettingsCard: React.FC<{title: string, description: string, children: React.ReactNode}> = ({title, description, children}) => (
-    <div className="bg-slate-800 p-6 rounded-lg">
-        <h2 className="text-xl font-bold text-white">{title}</h2>
-        <p className="text-slate-400 mt-1 mb-4">{description}</p>
+    <div className="bg-slate-800 p-6 rounded-lg mb-6 shadow-sm border border-slate-700/50">
+        <h2 className="text-xl font-bold text-white border-b border-slate-700 pb-3 mb-3">{title}</h2>
+        <p className="text-slate-400 text-sm mb-6 bg-slate-900/50 p-3 rounded-lg border-l-4 border-slate-600">
+            <Icon name="info-circle" className="w-4 h-4 inline mr-2 text-slate-500"/>
+            {description}
+        </p>
         <div className="space-y-4">
             {children}
         </div>
@@ -219,7 +223,11 @@ const ReceiptSettingsForm: React.FC = () => {
     }, [receiptSettings]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSettings({ ...settings, [e.target.name]: e.target.value });
+        const { name, value, type } = e.target;
+        setSettings({ 
+            ...settings, 
+            [name]: type === 'number' ? parseFloat(value) || 0 : value 
+        });
     };
 
     const handleToggleChange = (key: keyof ReceiptSettings, value: boolean) => {
@@ -255,6 +263,22 @@ const ReceiptSettingsForm: React.FC = () => {
                 <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">Username Telegram Admin</label>
                     <input type="text" name="adminTelegram" value={settings.adminTelegram || ''} onChange={handleChange} placeholder="Tanpa '@'" className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-700">
+                <h3 className="text-sm font-bold text-white mb-3">Pajak & Biaya Layanan</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Pajak (PB1/PPN) dalam %</label>
+                        <input type="number" min="0" step="0.1" name="taxRate" value={settings.taxRate || ''} onChange={handleChange} placeholder="0" className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                        <p className="text-xs text-slate-500 mt-1">Contoh: Isi 10 untuk 10%.</p>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Biaya Layanan (Service Charge) dalam %</label>
+                        <input type="number" min="0" step="0.1" name="serviceChargeRate" value={settings.serviceChargeRate || ''} onChange={handleChange} placeholder="0" className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                        <p className="text-xs text-slate-500 mt-1">Contoh: Isi 5 untuk 5%.</p>
+                    </div>
                 </div>
             </div>
 
@@ -732,16 +756,67 @@ const DiscountManagement: React.FC = () => {
 };
 
 const ImportTransactionsModal: React.FC<{isOpen: boolean, onClose: () => void}> = ({isOpen, onClose}) => {
-    const [csvText, setCsvText] = useState('');
+    const [inputText, setInputText] = useState('');
     const [parsedData, setParsedData] = useState<Transaction[]>([]);
     const { importTransactions } = useFinance();
     const { showAlert } = useUI();
 
     const handlePreview = () => {
-        const transactions = dataService.parseTransactionsCSV(csvText);
+        const text = inputText.trim();
+        if (!text) return;
+
+        let transactions: Transaction[] = [];
+        const encPrefix = "ARTEA_ENC::";
+        const encIndex = text.indexOf(encPrefix);
+
+        // Check if the input contains the encrypted prefix anywhere
+        if (encIndex !== -1) {
+            // Smart Extract: Grab from prefix until a newline, close paren, or end of string.
+            // Reports usually format as ".... ARTEA_ENC::CODE (Salin..." or just ".... ARTEA_ENC::CODE"
+            let potentialCode = text.substring(encIndex);
+            
+            // Clean up: split by whitespace or closing parenthesis to isolate the code
+            potentialCode = potentialCode.split(/[\s)]+/)[0];
+
+            const rawData = decryptReport(potentialCode);
+            
+            if (rawData && Array.isArray(rawData)) {
+                // Map simplified encrypted objects back to full Transaction type
+                transactions = rawData.map((item: any) => ({
+                    id: item.id || `imported-${Date.now()}-${Math.random()}`,
+                    createdAt: item.createdAt || new Date().toISOString(),
+                    total: Number(item.total) || 0,
+                    amountPaid: Number(item.amountPaid) || 0,
+                    paymentStatus: item.paymentStatus || 'paid',
+                    userName: item.userName || 'Admin',
+                    userId: 'imported', // Placeholder
+                    subtotal: Number(item.total) || 0, // Assume subtotal = total if lost
+                    tax: 0,
+                    serviceCharge: 0,
+                    orderType: 'dine-in', // Default for legacy
+                    payments: [], // Payments details might be lost in summary
+                    // Reconstruct items as a single summary item if detail object is lost or stringified
+                    items: Array.isArray(item.items) ? item.items : [{
+                        id: 'imported-summary',
+                        cartItemId: `imp-${Math.random()}`,
+                        name: typeof item.items === 'string' ? item.items : 'Item Terimpor',
+                        price: Number(item.total) || 0,
+                        quantity: 1,
+                        category: ['Imported']
+                    }]
+                }));
+            } else {
+                showAlert({type: 'alert', title: 'Gagal Dekripsi', message: 'Kode tidak valid atau rusak.'});
+                return;
+            }
+        } else {
+            // Regular CSV parsing
+            transactions = dataService.parseTransactionsCSV(text);
+        }
+
         setParsedData(transactions);
         if (transactions.length === 0) {
-            showAlert({type: 'alert', title: 'Gagal Parsing', message: 'Format CSV tidak dikenali atau kosong.'});
+            showAlert({type: 'alert', title: 'Gagal Parsing', message: 'Format data tidak dikenali atau kosong.'});
         }
     };
 
@@ -750,7 +825,7 @@ const ImportTransactionsModal: React.FC<{isOpen: boolean, onClose: () => void}> 
             importTransactions(parsedData);
             showAlert({type: 'alert', title: 'Berhasil', message: `${parsedData.length} transaksi berhasil diimpor.`});
             setParsedData([]);
-            setCsvText('');
+            setInputText('');
             onClose();
         }
     };
@@ -758,16 +833,16 @@ const ImportTransactionsModal: React.FC<{isOpen: boolean, onClose: () => void}> 
     if (!isOpen) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Import Transaksi dari Text/CSV">
+        <Modal isOpen={isOpen} onClose={onClose} title="Import Transaksi (Teks/Encrypted)">
             <div className="space-y-4">
                 <p className="text-sm text-slate-400">
-                    Tempel (Paste) teks CSV laporan transaksi dari chat (WhatsApp/Telegram) ke kolom di bawah ini.
+                    Tempel (Paste) teks CSV atau <strong>Pesan Laporan Terenkripsi</strong> di bawah ini.
                 </p>
                 <textarea
-                    className="w-full h-40 bg-slate-900 border border-slate-600 rounded-lg p-3 text-white text-xs font-mono"
-                    placeholder={`id,createdAt,customerName,userName,total...\n...`}
-                    value={csvText}
-                    onChange={e => setCsvText(e.target.value)}
+                    className="w-full h-40 bg-slate-900 border border-slate-600 rounded-lg p-3 text-white text-xs font-mono focus:ring-1 focus:ring-[#347758]"
+                    placeholder={`Contoh CSV: id,createdAt,total...\nAtau Paste Pesan WhatsApp: "LAPORAN TERENKRIPSI... ARTEA_ENC::..."`}
+                    value={inputText}
+                    onChange={e => setInputText(e.target.value)}
                 ></textarea>
                 
                 {parsedData.length > 0 && (
@@ -776,7 +851,7 @@ const ImportTransactionsModal: React.FC<{isOpen: boolean, onClose: () => void}> 
                         <ul className="text-xs text-slate-300 space-y-1">
                             {parsedData.slice(0, 5).map(t => (
                                 <li key={t.id} className="truncate">
-                                    {new Date(t.createdAt).toLocaleDateString()} - {CURRENCY_FORMATTER.format(t.total)} ({t.items.length} items)
+                                    {new Date(t.createdAt).toLocaleDateString()} - {CURRENCY_FORMATTER.format(t.total)}
                                 </li>
                             ))}
                             {parsedData.length > 5 && <li>...dan {parsedData.length - 5} lainnya</li>}
@@ -785,9 +860,9 @@ const ImportTransactionsModal: React.FC<{isOpen: boolean, onClose: () => void}> 
                 )}
 
                 <div className="flex justify-end gap-3">
-                    <Button variant="secondary" onClick={() => { setParsedData([]); setCsvText(''); }}>Reset</Button>
+                    <Button variant="secondary" onClick={() => { setParsedData([]); setInputText(''); }}>Reset</Button>
                     {parsedData.length === 0 ? (
-                        <Button onClick={handlePreview} disabled={!csvText.trim()}>Preview Data</Button>
+                        <Button onClick={handlePreview} disabled={!inputText.trim()}>Preview & Dekripsi</Button>
                     ) : (
                         <Button variant="primary" onClick={handleImport}>Import Sekarang</Button>
                     )}
@@ -797,6 +872,9 @@ const ImportTransactionsModal: React.FC<{isOpen: boolean, onClose: () => void}> 
     );
 };
 
+// -- Main Settings View with Tabbed Layout --
+
+type SettingsTab = 'general' | 'operational' | 'inventory' | 'customer' | 'data';
 
 const SettingsView: React.FC = () => {
     const { data, restoreData } = useData();
@@ -807,11 +885,15 @@ const SettingsView: React.FC = () => {
     const { session, endSession, sessionSettings, updateSessionSettings } = useSession();
     const { membershipSettings, updateMembershipSettings } = useCustomer();
     const { heldCarts } = useCart();
+    const { importTransactions } = useFinance();
+    
+    const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+    const [isImportTransOpen, setIsImportTransOpen] = useState(false);
     
     const restoreInputRef = useRef<HTMLInputElement>(null);
     const importProductsInputRef = useRef<HTMLInputElement>(null);
+    const importTransactionsInputRef = useRef<HTMLInputElement>(null);
     const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
-    const [isImportTransOpen, setIsImportTransOpen] = useState(false);
 
     const handleBackup = async () => {
         await dataService.exportData();
@@ -861,6 +943,21 @@ const SettingsView: React.FC = () => {
             }
         }
     };
+
+    const handleImportTransactionsChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            try {
+                const newTransactions = await dataService.importTransactionsCSV(file);
+                importTransactions(newTransactions);
+                setMessage({ type: 'success', text: `${newTransactions.length} transaksi berhasil diimpor.` });
+            } catch (error) {
+                setMessage({ type: 'error', text: (error as Error).message });
+            } finally {
+                if(importTransactionsInputRef.current) importTransactionsInputRef.current.value = "";
+            }
+        }
+    };
     
     const handleInventoryToggle = (key: keyof InventorySettings, value: boolean) => {
         const newSettings = { ...inventorySettings, [key]: value };
@@ -902,153 +999,197 @@ const SettingsView: React.FC = () => {
         setMessage({ type: 'success', text: 'Semua laporan berhasil diunduh.' });
     };
 
+    const tabs = [
+        { id: 'general', label: 'Toko & Struk', icon: 'settings' },
+        { id: 'operational', label: 'Operasional', icon: 'cash' },
+        { id: 'inventory', label: 'Produk & Stok', icon: 'products' },
+        { id: 'customer', label: 'Pelanggan & Promo', icon: 'users' },
+        { id: 'data', label: 'Data & Sistem', icon: 'database' },
+    ];
+
+    if (currentUser?.role === 'staff') {
+        return (
+            <div className="text-center text-slate-400 p-8 bg-slate-800 rounded-lg max-w-lg mx-auto mt-10">
+                <Icon name="lock" className="w-12 h-12 mx-auto mb-4 text-slate-500" />
+                <h2 className="text-xl font-bold text-white mb-2">Akses Dibatasi</h2>
+                <p>Pengaturan hanya dapat diakses oleh Admin.</p>
+            </div>
+        );
+    }
 
     return (
-        <div className="max-w-4xl mx-auto space-y-8">
-            <h1 className="text-3xl font-bold text-white">Pengaturan</h1>
+        <div className="max-w-5xl mx-auto h-full flex flex-col">
+            <h1 className="text-3xl font-bold text-white mb-6">Pengaturan</h1>
             
+            {/* Tab Navigation */}
+            <div className="flex overflow-x-auto gap-2 pb-2 mb-4 border-b border-slate-700 flex-shrink-0">
+                {tabs.map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as SettingsTab)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-t-lg transition-colors whitespace-nowrap font-medium text-sm
+                            ${activeTab === tab.id 
+                                ? 'bg-[#347758] text-white border-b-2 border-white' 
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                            }`}
+                    >
+                        <Icon name={tab.icon as any} className="w-4 h-4" />
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Notification Area */}
             {message && (
-                <div className={`p-4 rounded-lg ${message.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+                <div className={`p-4 rounded-lg mb-6 flex-shrink-0 ${message.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
                     {message.text}
                 </div>
             )}
             
-            {currentUser?.role === 'admin' && (
-                <>
-                    <SettingsCard title="Keamanan & Akses Pengguna" description="Aktifkan fitur ini jika Anda memiliki staf dan ingin membatasi akses mereka hanya ke halaman kasir.">
-                        <ToggleSwitch
-                            checked={authSettings.enabled}
-                            onChange={handleAuthToggle}
-                            label={authSettings.enabled ? 'Multi-Pengguna & Login PIN Aktif' : 'Multi-Pengguna & Login PIN Nonaktif'}
-                        />
-                         <p className="text-xs text-slate-500 mt-2">
-                            Jika diaktifkan, aplikasi akan meminta PIN saat dibuka.
-                        </p>
-                        {authSettings.enabled && (
-                             <p className="text-xs text-slate-500 mt-2">
-                                <strong>Lupa PIN Admin?</strong> Ketuk logo aplikasi 5 kali di halaman login untuk mereset PIN admin pertama ke `1111`.
-                            </p>
-                        )}
-                    </SettingsCard>
-
-                    {authSettings.enabled && (
-                        <SettingsCard title="Manajemen Pengguna" description="Tambah, edit, atau hapus akun pengguna untuk staf Anda.">
-                           <UserManagement />
+            {/* Content Area - Scrollable */}
+            <div className="flex-1 overflow-y-auto pr-2 pb-10">
+                
+                {activeTab === 'general' && (
+                    <div className="animate-fade-in">
+                        <SettingsCard title="Pengaturan Struk & Toko" description="Sesuaikan informasi yang ditampilkan pada struk pelanggan dan kontak admin.">
+                            <ReceiptSettingsForm />
                         </SettingsCard>
-                    )}
-                    
-                    <SettingsCard title="Program Keanggotaan & Reward" description="Aktifkan sistem keanggotaan untuk memberikan poin dan reward kepada pelanggan setia.">
-                        <ToggleSwitch
-                            checked={membershipSettings.enabled}
-                            onChange={(enabled) => updateMembershipSettings({ ...membershipSettings, enabled })}
-                            label={membershipSettings.enabled ? 'Sistem Keanggotaan Aktif' : 'Sistem Keanggotaan Nonaktif'}
-                        />
-                        {membershipSettings.enabled && <MembershipManagement />}
-                    </SettingsCard>
+                    </div>
+                )}
 
-                    <SettingsCard title="Manajemen Diskon" description="Buat dan kelola diskon yang dapat digunakan kembali untuk item atau seluruh keranjang.">
-                        <DiscountManagement />
-                    </SettingsCard>
+                {activeTab === 'operational' && (
+                    <div className="animate-fade-in space-y-6">
+                        <SettingsCard title="Keamanan & Akses Pengguna" description="Batasi akses staf hanya ke halaman kasir dengan PIN.">
+                            <ToggleSwitch
+                                checked={authSettings.enabled}
+                                onChange={handleAuthToggle}
+                                label={authSettings.enabled ? 'Multi-Pengguna & Login PIN Aktif' : 'Multi-Pengguna & Login PIN Nonaktif'}
+                            />
+                            <p className="text-xs text-slate-500 mt-2">Jika aktif, aplikasi akan meminta PIN saat dibuka.</p>
+                            {authSettings.enabled && (
+                                <p className="text-xs text-slate-500 mt-2">
+                                    <strong>Lupa PIN Admin?</strong> Ketuk logo aplikasi 5 kali di halaman login untuk mereset PIN admin pertama ke `1111`.
+                                </p>
+                            )}
+                        </SettingsCard>
 
-                    <SettingsCard title="Manajemen Kategori Produk" description="Kelola semua kategori produk di satu tempat. Kategori ini akan muncul sebagai saran saat menambahkan atau mengedit produk.">
-                        <CategoryManagement />
-                    </SettingsCard>
+                        {authSettings.enabled && (
+                            <SettingsCard title="Manajemen Pengguna" description="Tambah, edit, atau hapus akun pengguna untuk staf Anda.">
+                                <UserManagement />
+                            </SettingsCard>
+                        )}
 
-                    <SettingsCard title="Manajemen Sesi Penjualan & Kasir" description="Aktifkan fitur-fitur lanjutan untuk alur kerja kasir dan pelaporan harian.">
-                        <ToggleSwitch
-                            checked={sessionSettings.enabled}
-                            onChange={(value) => handleSessionToggle('enabled', value)}
-                            label={sessionSettings.enabled ? 'Sesi Penjualan Aktif' : 'Sesi Penjualan Nonaktif'}
-                        />
-                        <p className="text-xs text-slate-500 mt-2">
-                            Jika diaktifkan, halaman Laporan akan meminta Anda untuk memulai dan mengakhiri sesi penjualan harian untuk rekon kas.
-                        </p>
-                        {sessionSettings.enabled && (
-                            <>
-                                <div className="pt-4 border-t border-slate-700">
+                        <SettingsCard title="Manajemen Sesi Penjualan" description="Wajibkan kasir memulai dan menutup shift (sesi) untuk rekon uang kas.">
+                            <ToggleSwitch
+                                checked={sessionSettings.enabled}
+                                onChange={(value) => handleSessionToggle('enabled', value)}
+                                label={sessionSettings.enabled ? 'Sesi Penjualan Aktif' : 'Sesi Penjualan Nonaktif'}
+                            />
+                            {sessionSettings.enabled && (
+                                <div className="pt-4 border-t border-slate-700 mt-4">
                                     <ToggleSwitch
                                         checked={sessionSettings.enableCartHolding ?? false}
                                         onChange={(enabled) => handleSessionToggle('enableCartHolding', enabled)}
-                                        label="Aktifkan Fitur Simpan Pesanan"
+                                        label="Aktifkan Fitur Simpan Pesanan (Open Bill)"
                                     />
-                                    <p className="text-xs text-slate-500 mt-2">
-                                        Memungkinkan kasir menyimpan beberapa pesanan yang sedang berjalan.
-                                    </p>
-                                </div>
-                            </>
-                        )}
-                    </SettingsCard>
-
-
-                    <SettingsCard title="Manajemen Inventaris & Laba" description="Aktifkan fitur ini untuk melacak stok produk dan menghitung laba penjualan.">
-                         <div className="space-y-4">
-                            <ToggleSwitch
-                                checked={inventorySettings.enabled}
-                                onChange={(checked) => handleInventoryToggle('enabled', checked)}
-                                label={inventorySettings.enabled ? 'Pelacakan Stok & Laba Aktif' : 'Pelacakan Stok & Laba Nonaktif'}
-                            />
-                            
-                            {inventorySettings.enabled && (
-                                <div className="pl-6 border-l-2 border-slate-700">
-                                     <ToggleSwitch
-                                        checked={inventorySettings.trackIngredients}
-                                        onChange={(checked) => handleInventoryToggle('trackIngredients', checked)}
-                                        label={inventorySettings.trackIngredients ? 'Pelacakan Bahan Baku & Resep Aktif' : 'Pelacakan Bahan Baku & Resep Nonaktif'}
-                                     />
-                                    <p className="text-xs text-slate-500 mt-2 ml-3">
-                                        Jika diaktifkan, stok akan dikurangi dari bahan baku berdasarkan resep produk, bukan dari stok produk itu sendiri.
-                                    </p>
+                                    <p className="text-xs text-slate-500 mt-2">Memungkinkan kasir menyimpan beberapa pesanan sekaligus (cth: untuk meja restoran).</p>
                                 </div>
                             )}
-                         </div>
-                    </SettingsCard>
-                    
-                    <SettingsCard title="Pengaturan Struk & Toko" description="Sesuaikan informasi yang ditampilkan pada struk pelanggan dan kontak admin.">
-                        <ReceiptSettingsForm />
-                    </SettingsCard>
-                    
-                    <SettingsCard title="Manajemen Data" description="Simpan semua data aplikasi (produk, transaksi, pengguna) ke file JSON, atau pulihkan dari file backup.">
-                        <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
-                            <Button onClick={handleBackup} variant="secondary">
-                                <Icon name="download" className="w-5 h-5"/>
-                                Backup Data (JSON)
-                            </Button>
-                            <Button onClick={() => restoreInputRef.current?.click()} variant="secondary">
-                                <Icon name="upload" className="w-5 h-5"/>
-                                Restore Data (JSON)
-                            </Button>
-                            <input type="file" ref={restoreInputRef} onChange={handleRestoreChange} className="hidden" accept=".json" />
-                             <Button onClick={handleExportAllReports} variant="secondary">
-                                <Icon name="download" className="w-5 h-5" />
-                                Export Semua Laporan (CSV)
-                            </Button>
-                             <Button onClick={() => setIsImportTransOpen(true)} variant="secondary">
-                                <Icon name="chat" className="w-5 h-5" />
-                                Import Transaksi dari Text/CSV
-                            </Button>
-                        </div>
-                    </SettingsCard>
+                        </SettingsCard>
+                    </div>
+                )}
 
-                    <SettingsCard title="Manajemen Produk Massal" description="Export semua produk ke file CSV untuk diedit, atau import dari file CSV untuk menambah/memperbarui produk dengan cepat.">
-                        <div className="flex flex-col sm:flex-row gap-3">
-                            <Button onClick={handleExportProducts} variant="secondary">
-                                <Icon name="download" className="w-5 h-5"/>
-                                Export Produk (CSV)
-                            </Button>
-                            <Button onClick={() => importProductsInputRef.current?.click()} variant="secondary">
-                                <Icon name="upload" className="w-5 h-5"/>
-                                Import Produk (CSV)
-                            </Button>
-                            <input type="file" ref={importProductsInputRef} onChange={handleImportProductsChange} className="hidden" accept=".csv" />
-                        </div>
-                    </SettingsCard>
-                </>
-            )}
-             {currentUser?.role === 'staff' && (
-                <div className="text-center text-slate-400 p-8 bg-slate-800 rounded-lg">
-                    <p>Pengaturan hanya dapat diakses oleh Admin.</p>
-                </div>
-            )}
+                {activeTab === 'inventory' && (
+                    <div className="animate-fade-in space-y-6">
+                        <SettingsCard title="Manajemen Inventaris" description="Aktifkan pelacakan stok produk dan penghitungan laba otomatis.">
+                             <div className="space-y-4">
+                                <ToggleSwitch
+                                    checked={inventorySettings.enabled}
+                                    onChange={(checked) => handleInventoryToggle('enabled', checked)}
+                                    label={inventorySettings.enabled ? 'Pelacakan Stok & Laba Aktif' : 'Pelacakan Stok & Laba Nonaktif'}
+                                />
+                                {inventorySettings.enabled && (
+                                    <div className="pl-6 border-l-2 border-slate-700">
+                                         <ToggleSwitch
+                                            checked={inventorySettings.trackIngredients}
+                                            onChange={(checked) => handleInventoryToggle('trackIngredients', checked)}
+                                            label={inventorySettings.trackIngredients ? 'Pelacakan Bahan Baku & Resep Aktif' : 'Pelacakan Bahan Baku & Resep Nonaktif'}
+                                         />
+                                        <p className="text-xs text-slate-500 mt-2 ml-3">
+                                            Jika aktif, stok produk akan dihitung berdasarkan bahan baku penyusunnya (Resep).
+                                        </p>
+                                    </div>
+                                )}
+                             </div>
+                        </SettingsCard>
+
+                        <SettingsCard title="Kategori Produk" description="Kelola daftar kategori agar produk lebih mudah ditemukan.">
+                            <CategoryManagement />
+                        </SettingsCard>
+
+                        <SettingsCard title="Import / Export Produk Massal" description="Gunakan file CSV untuk mengelola banyak produk sekaligus.">
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <Button onClick={handleExportProducts} variant="secondary">
+                                    <Icon name="download" className="w-5 h-5"/> Export Produk (CSV)
+                                </Button>
+                                <Button onClick={() => importProductsInputRef.current?.click()} variant="secondary">
+                                    <Icon name="upload" className="w-5 h-5"/> Import Produk (CSV)
+                                </Button>
+                                <input type="file" ref={importProductsInputRef} onChange={handleImportProductsChange} className="hidden" accept=".csv" />
+                            </div>
+                        </SettingsCard>
+                    </div>
+                )}
+
+                {activeTab === 'customer' && (
+                    <div className="animate-fade-in space-y-6">
+                        <SettingsCard title="Manajemen Diskon" description="Buat preset diskon untuk mempercepat proses di kasir.">
+                            <DiscountManagement />
+                        </SettingsCard>
+
+                        <SettingsCard title="Program Membership" description="Berikan poin kepada pelanggan setia untuk ditukar dengan hadiah.">
+                            <ToggleSwitch
+                                checked={membershipSettings.enabled}
+                                onChange={(enabled) => updateMembershipSettings({ ...membershipSettings, enabled })}
+                                label={membershipSettings.enabled ? 'Sistem Keanggotaan Aktif' : 'Sistem Keanggotaan Nonaktif'}
+                            />
+                            {membershipSettings.enabled && <div className="mt-4"><MembershipManagement /></div>}
+                        </SettingsCard>
+                    </div>
+                )}
+
+                {activeTab === 'data' && (
+                    <div className="animate-fade-in space-y-6">
+                        <SettingsCard title="Backup & Restore Data" description="Amankan data Anda. Unduh file backup JSON secara berkala dan simpan di tempat aman.">
+                            <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+                                <Button onClick={handleBackup} variant="secondary">
+                                    <Icon name="download" className="w-5 h-5"/> Backup Data (JSON)
+                                </Button>
+                                <Button onClick={() => restoreInputRef.current?.click()} variant="secondary">
+                                    <Icon name="upload" className="w-5 h-5"/> Restore Data (JSON)
+                                </Button>
+                                <input type="file" ref={restoreInputRef} onChange={handleRestoreChange} className="hidden" accept=".json" />
+                            </div>
+                        </SettingsCard>
+
+                        <SettingsCard title="Laporan & Transaksi Lama" description="Export semua data laporan atau import riwayat transaksi dari perangkat lain.">
+                             <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+                                <Button onClick={handleExportAllReports} variant="secondary">
+                                    <Icon name="download" className="w-5 h-5" /> Export Semua Laporan (CSV)
+                                </Button>
+                                <Button onClick={() => setIsImportTransOpen(true)} variant="secondary">
+                                    <Icon name="chat" className="w-5 h-5" /> Paste Teks (Encrypted)
+                                </Button>
+                                <Button onClick={() => importTransactionsInputRef.current?.click()} variant="secondary">
+                                    <Icon name="upload" className="w-5 h-5" /> Import File CSV
+                                </Button>
+                                <input type="file" ref={importTransactionsInputRef} onChange={handleImportTransactionsChange} className="hidden" accept=".csv" />
+                            </div>
+                        </SettingsCard>
+                    </div>
+                )}
+            </div>
+            
             <ImportTransactionsModal isOpen={isImportTransOpen} onClose={() => setIsImportTransOpen(false)} />
         </div>
     );

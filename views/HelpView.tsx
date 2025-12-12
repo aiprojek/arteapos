@@ -68,6 +68,7 @@ const HelpView: React.FC = () => {
         { title: 'Offline 100%', desc: 'Tanpa internet.', icon: 'wifi' },
         { title: 'POS Cepat', desc: 'Transaksi kilat.', icon: 'cash' },
         { title: 'Sync Dropbox', desc: 'Cloud Backup.', icon: 'upload' },
+        { title: 'Realtime DB', desc: 'Sync Supabase.', icon: 'database' },
         { title: 'AI Cerdas', desc: 'Analisis bisnis.', icon: 'chat' },
         { title: 'Stok & Resep', desc: 'Lacak bahan baku.', icon: 'database' },
         { title: 'Produk Bundling', desc: 'Paket hemat.', icon: 'products' },
@@ -454,6 +455,21 @@ const HelpView: React.FC = () => {
                                     <li><strong>Restore:</strong> Di HP lain, masukkan token yang sama, lalu tekan "Restore dari Cloud" untuk mengambil data.</li>
                                 </ol>
                                 <p className="mt-2 text-xs text-yellow-400"><strong>Perhatian:</strong> "Restore" akan menimpa seluruh data di HP target dengan data dari Cloud.</p>
+                            </AccordionItem>
+                            <AccordionItem title="Database Real-time (Supabase BYOB)" isOpen={openAccordion === 'supabase'} onToggle={() => toggleAccordion('supabase')} icon="database">
+                                <p><strong>Fitur Lanjutan untuk Admin / Pemilik Toko.</strong></p>
+                                <p>Berbeda dengan Dropbox yang hanya menyimpan file backup, fitur ini mengirim data transaksi per-item secara <em>live</em> ke database cloud pribadi Anda.</p>
+                                <ul className="list-disc pl-5 mt-2 space-y-1 text-sm text-slate-300">
+                                    <li><strong>Kegunaan:</strong> Memantau omzet toko secara real-time dari jarak jauh atau membuat Dashboard Web kustom sendiri.</li>
+                                    <li><strong>Privasi:</strong> Data disimpan di project Supabase milik Anda sendiri (Gratis), bukan di server kami.</li>
+                                </ul>
+                                <p className="mt-2 font-bold text-white">Cara Setup:</p>
+                                <ol className="list-decimal pl-5 space-y-1 text-sm text-slate-300">
+                                    <li>Daftar di <strong>Supabase.com</strong> dan buat project baru.</li>
+                                    <li>Salin <strong>Project URL</strong> dan <strong>Anon Key</strong> dari pengaturan API Supabase.</li>
+                                    <li>Tempel di aplikasi Artea POS menu <strong>Pengaturan {'>'} Data & Sistem</strong>.</li>
+                                    <li>Klik tombol "Panduan & SQL Script" di pengaturan untuk membuat tabel database secara otomatis.</li>
+                                </ol>
                             </AccordionItem>
                         </div>
                     </div>

@@ -234,13 +234,34 @@ const HelpView: React.FC = () => {
                             <h3 className="text-lg font-bold text-[#52a37c] mb-4 flex items-center gap-2 border-b border-slate-700 pb-2">
                                 <Icon name="users" className="w-5 h-5" /> Skenario Penggunaan Lapangan
                             </h3>
+                            <AccordionItem title="Panduan Memilih Metode Data" isOpen={openAccordion === 'method_compare'} onToggle={() => toggleAccordion('method_compare')} icon="question">
+                                <p className="mb-3">Aplikasi ini menyediakan 3 cara untuk memindahkan atau menyimpan data. Pilih sesuai kondisi lapangan Anda:</p>
+                                <div className="space-y-3">
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
+                                        <h5 className="font-bold text-green-400 text-sm mb-1">1. Laporan WhatsApp (Manual/Enkripsi)</h5>
+                                        <p className="text-xs text-slate-300"><strong>Cocok untuk:</strong> Harian, Sinyal Buruk, Pengguna Awam.</p>
+                                        <p className="text-xs text-slate-400 mt-1">Ini adalah metode paling tangguh (resilient). Tidak butuh server, pesan akan terkirim saat sinyal ada. Aman karena data shift dikunci.</p>
+                                    </div>
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
+                                        <h5 className="font-bold text-blue-400 text-sm mb-1">2. Dropbox (Backup File)</h5>
+                                        <p className="text-xs text-slate-300"><strong>Cocok untuk:</strong> Ganti HP, Backup Mingguan.</p>
+                                        <p className="text-xs text-slate-400 mt-1">Menyimpan 1 file besar berisi seluruh data toko. Tidak cocok untuk memantau penjualan harian secara live.</p>
+                                    </div>
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
+                                        <h5 className="font-bold text-purple-400 text-sm mb-1">3. Supabase (Database Real-time)</h5>
+                                        <p className="text-xs text-slate-300"><strong>Cocok untuk:</strong> Owner Teknis, Pemantauan Live, Multi-Cabang.</p>
+                                        <p className="text-xs text-slate-400 mt-1">Data dikirim otomatis tiap ada transaksi. Butuh koneksi internet stabil saat transaksi terjadi.</p>
+                                    </div>
+                                </div>
+                            </AccordionItem>
+
                             <AccordionItem title="Sistem Tunggal (Owner Jaga Sendiri)" isOpen={openAccordion === 'single_device'} onToggle={() => toggleAccordion('single_device')} icon="users">
                                 <p>Skenario ini paling sederhana. Anda menggunakan <strong>satu perangkat (HP/Tablet)</strong> untuk semuanya.</p>
                                 <ul className="list-disc pl-5 mt-2 space-y-1 text-slate-300">
                                     <li>Login sebagai <strong>Admin</strong>.</li>
                                     <li>Anda memiliki akses penuh: Kasir, Laporan, Stok, dan Keuangan dalam satu aplikasi.</li>
                                     <li>Data tersimpan aman di perangkat tersebut.</li>
-                                    <li>Jangan lupa rutin melakukan <strong>Backup Data</strong> ke Google Drive/WA untuk keamanan jika HP hilang/rusak.</li>
+                                    <li>Jangan lupa rutin melakukan <strong>Backup Data</strong> ke Dropbox atau File Lokal untuk keamanan jika HP hilang/rusak.</li>
                                 </ul>
                             </AccordionItem>
                             
@@ -254,6 +275,7 @@ const HelpView: React.FC = () => {
                                             <li>Staf melakukan penjualan seharian.</li>
                                             <li>Saat tutup toko, Staf klik tombol <strong>"Laporan"</strong> di pojok kanan atas kasir.</li>
                                             <li>Pilih <strong>"Laporan Aman (Anti-Edit)"</strong> dan kirim via WhatsApp ke Owner.</li>
+                                            <li><em>Opsional:</em> Jika Supabase aktif, data akan terkirim otomatis sepanjang hari.</li>
                                         </ul>
                                     </div>
                                     

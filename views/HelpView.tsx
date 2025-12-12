@@ -67,6 +67,7 @@ const HelpView: React.FC = () => {
     const featureList = [
         { title: 'Offline 100%', desc: 'Tanpa internet.', icon: 'wifi' },
         { title: 'POS Cepat', desc: 'Transaksi kilat.', icon: 'cash' },
+        { title: 'Sync Dropbox', desc: 'Cloud Backup.', icon: 'upload' },
         { title: 'AI Cerdas', desc: 'Analisis bisnis.', icon: 'chat' },
         { title: 'Stok & Resep', desc: 'Lacak bahan baku.', icon: 'database' },
         { title: 'Produk Bundling', desc: 'Paket hemat.', icon: 'products' },
@@ -437,12 +438,22 @@ const HelpView: React.FC = () => {
                                     <li>Pilih file CSV yang tadi dikirim. Riwayat transaksi akan digabungkan ke aplikasi ini.</li>
                                 </ol>
                             </AccordionItem>
-                            <AccordionItem title="Backup & Restore (Sangat Penting)" isOpen={openAccordion === 'backup'} onToggle={() => toggleAccordion('backup')} icon="warning">
+                            <AccordionItem title="Backup & Restore (Lokal)" isOpen={openAccordion === 'backup'} onToggle={() => toggleAccordion('backup')} icon="warning">
                                 <p className="text-yellow-300 font-bold mb-2">Aplikasi ini berjalan OFFLINE di browser Anda. Jika Anda menghapus cache browser atau ganti HP, data bisa hilang jika tidak dibackup.</p>
                                 <ul className="list-disc pl-5 space-y-1">
                                     <li><strong>Backup:</strong> Pergi ke Pengaturan {'>'} Manajemen Data {'>'} Backup Data. Simpan file JSON yang terunduh di tempat aman (Google Drive/WA).</li>
                                     <li><strong>Restore:</strong> Gunakan file JSON tersebut untuk mengembalikan data di perangkat baru.</li>
                                 </ul>
+                            </AccordionItem>
+                            <AccordionItem title="Sinkronisasi Cloud (Dropbox)" isOpen={openAccordion === 'dropbox'} onToggle={() => toggleAccordion('dropbox')} icon="upload">
+                                <p>Simpan dan sinkronkan data antar perangkat menggunakan akun Dropbox Anda.</p>
+                                <ol className="list-decimal pl-5 mt-2 space-y-1 text-sm text-slate-300">
+                                    <li><strong>Persiapan:</strong> Anda butuh "Access Token" dari Dropbox App Console. (Panduan link ada di menu Pengaturan).</li>
+                                    <li><strong>Setup:</strong> Masuk ke <strong>Pengaturan {'>'} Data & Sistem</strong>, tempel token di kolom "Dropbox Access Token".</li>
+                                    <li><strong>Upload:</strong> Tekan "Upload ke Cloud" untuk mencadangkan data HP ini ke Dropbox.</li>
+                                    <li><strong>Restore:</strong> Di HP lain, masukkan token yang sama, lalu tekan "Restore dari Cloud" untuk mengambil data.</li>
+                                </ol>
+                                <p className="mt-2 text-xs text-yellow-400"><strong>Perhatian:</strong> "Restore" akan menimpa seluruh data di HP target dengan data dari Cloud.</p>
                             </AccordionItem>
                         </div>
                     </div>

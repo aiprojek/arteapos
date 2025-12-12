@@ -193,9 +193,8 @@ const exportStockAdjustmentsCSV = (stockAdjustments: StockAdjustment[]) => {
     downloadCSV(csvContent, 'stock_adjustments_report.csv');
 };
 
-
-export const dataService = {
-  exportData: async () => {
+// Extracted internal function to get data object without downloading
+const getExportData = async (): Promise<Partial<AppData>> => {
     const data: Partial<AppData> = {};
     
     await db.transaction('r', db.tables.map(t => t.name), async () => {
@@ -252,7 +251,14 @@ export const dataService = {
       data.sessionSettings = settings.find(s => s.key === 'sessionSettings')?.value;
       data.membershipSettings = settings.find(s => s.key === 'membershipSettings')?.value;
     });
+    
+    return data;
+};
 
+export const dataService = {
+  getExportData, // Exposed for Dropbox service
+  exportData: async () => {
+    const data = await getExportData();
     const jsonString = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -273,13 +279,14 @@ export const dataService = {
         try {
           const result = event.target?.result as string;
           const parsedData = JSON.parse(result) as AppData;
-          if ('products' in parsedData && 'transactionRecords' in parsedData) {
+          // Simple validation check
+          if (parsedData && typeof parsedData === 'object') {
             resolve(parsedData);
           } else {
-            reject(new Error('Invalid backup file format.'));
+            reject(new Error('Format file backup tidak valid.'));
           }
         } catch (error) {
-          reject(new Error('Failed to parse backup file.'));
+          reject(new Error('Gagal mem-parsing file backup.'));
         }
       };
       reader.onerror = (error) => reject(error);

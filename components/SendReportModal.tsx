@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import Icon from './Icon';
@@ -8,6 +8,10 @@ import { dataService } from '../services/dataService';
 import { encryptReport } from '../utils/crypto';
 import { CURRENCY_FORMATTER } from '../constants';
 import type { Transaction as TransactionType } from '../types';
+import { supabaseService } from '../services/supabaseService';
+import { dropboxService } from '../services/dropboxService';
+import { useProduct } from '../context/ProductContext'; // Import context product
+import { useSettings } from '../context/SettingsContext';
 
 interface SendReportModalProps {
     isOpen: boolean;
@@ -25,6 +29,9 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
     startingCash = 0, cashIn = 0, cashOut = 0 
 }) => {
     const { showAlert } = useUI();
+    const { stockAdjustments } = useProduct(); // Access stock adjustment history
+    const { receiptSettings } = useSettings();
+    const [isSyncing, setIsSyncing] = useState(false);
 
     const summary = useMemo(() => {
         const totalSales = data.reduce((sum, t) => sum + t.total, 0);
@@ -39,8 +46,36 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
         const minTime = times.length ? new Date(Math.min(...times)) : new Date();
         const maxTime = times.length ? new Date(Math.max(...times)) : new Date();
 
-        return { totalSales, totalTransactions, cashSales, minTime, maxTime };
-    }, [data]);
+        // Calculate Stock Adjustments (Restock & Waste) for this session/day
+        const adjustmentsToday = stockAdjustments.filter(sa => {
+            const adjTime = new Date(sa.createdAt).getTime();
+            if (data.length > 0) {
+                // Add buffer to range
+                return adjTime >= minTime.getTime() - 600000 && adjTime <= maxTime.getTime() + 600000;
+            } else {
+                const todayStart = new Date();
+                todayStart.setHours(0,0,0,0);
+                return adjTime >= todayStart.getTime();
+            }
+        });
+
+        // Separate In (Restock) and Out (Waste)
+        const stockInSummary = adjustmentsToday
+            .filter(adj => adj.change > 0)
+            .map(adj => `- ${adj.productName}: +${adj.change}`)
+            .join('\n');
+
+        const stockOutSummary = adjustmentsToday
+            .filter(adj => adj.change < 0)
+            .map(adj => {
+                // Extract reason from notes if possible (e.g. "[Cacat] Note...")
+                // Or just show full note
+                return `- ${adj.productName}: ${adj.change} (${adj.notes || 'Rusak/Hilang'})`;
+            })
+            .join('\n');
+
+        return { totalSales, totalTransactions, cashSales, minTime, maxTime, stockInSummary, stockOutSummary };
+    }, [data, stockAdjustments]);
 
     if (!isOpen) return null;
 
@@ -56,8 +91,11 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
         }
 
         const finalCash = startingCash + summary.cashSales + cashIn - cashOut;
+        const storeName = receiptSettings.shopName;
+        const storeId = receiptSettings.storeId || '-';
 
         const message = `*LAPORAN SESI KASIR*\n` +
+            `🏢 ${storeName} (${storeId})\n` +
             `📅 ${fmtDate(summary.minTime)}\n` +
             `⏰ ${fmtTime(summary.minTime)} - ${fmtTime(summary.maxTime)}\n\n` +
             `📊 *RINGKASAN PENJUALAN*\n` +
@@ -69,8 +107,10 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
             (cashIn > 0 ? `➕ Kas Masuk Lain: ${CURRENCY_FORMATTER.format(cashIn)}\n` : '') +
             (cashOut > 0 ? `➖ Kas Keluar: ${CURRENCY_FORMATTER.format(cashOut)}\n` : '') +
             `-------------------\n` +
-            `✅ *TOTAL UANG FISIK: ${CURRENCY_FORMATTER.format(finalCash)}*\n\n` +
-            `_Dikirim dari Artea POS_`;
+            `✅ *TOTAL UANG FISIK: ${CURRENCY_FORMATTER.format(finalCash)}*\n` +
+            (summary.stockInSummary ? `\n📦 *BARANG MASUK (RESTOCK)*\n${summary.stockInSummary}\n` : '') +
+            (summary.stockOutSummary ? `\n🗑️ *BARANG KELUAR/WASTE*\n${summary.stockOutSummary}\n` : '') +
+            `\n_Dikirim dari Artea POS_`;
 
         const encodedMsg = encodeURIComponent(message);
         let url = '';
@@ -104,7 +144,7 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
         if (data.length === 0) return;
 
         const csvContent = dataService.generateTransactionsCSVString(data);
-        const fileName = `Laporan_Transaksi_${new Date().toISOString().slice(0, 10)}.csv`;
+        const fileName = `Laporan_Transaksi_${receiptSettings.storeId}_${new Date().toISOString().slice(0, 10)}.csv`;
         const file = new File([csvContent], fileName, { type: 'text/csv' });
 
         // Check if Web Share API supports files (Works on Android/iOS)
@@ -140,15 +180,18 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
             items: t.items.map(i => `${i.name} (x${i.quantity})`).join(', '),
             userName: t.userName,
             paymentStatus: t.paymentStatus,
-            amountPaid: t.amountPaid
+            amountPaid: t.amountPaid,
+            storeId: t.storeId || receiptSettings.storeId || 'LOCAL' // INCLUDE STORE ID
         }));
 
         const encryptedString = encryptReport(payload);
         
         const message = `🔐 *LAPORAN TERENKRIPSI*\n` +
+            `Cabang: ${receiptSettings.storeId}\n` +
             `Tanggal: ${fmtDate(summary.minTime)}\n` +
             `Omzet: ${CURRENCY_FORMATTER.format(summary.totalSales)}\n` +
             `Total Fisik: ${CURRENCY_FORMATTER.format(startingCash + summary.cashSales + cashIn - cashOut)}\n\n` +
+            (summary.stockOutSummary ? `🗑️ *WASTE HARI INI*\n${summary.stockOutSummary}\n\n` : '') +
             `*KODE DATA (Anti-Edit):*\n` +
             `${encryptedString}\n\n` +
             `(Salin pesan ini & tempel di menu Import Transaksi Admin)`;
@@ -197,17 +240,90 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
         onClose();
     };
 
+    // 4. Cloud Sync Handler (Accessible to Staff)
+    const handleCloudSync = async () => {
+        setIsSyncing(true);
+        let messages = [];
+        
+        // 1. Coba Dropbox
+        const dbxToken = localStorage.getItem('ARTEA_DBX_TOKEN');
+        if (dbxToken) {
+            try {
+                // A. Upload Full Backup (JSON) - Untuk Restore
+                await dropboxService.uploadBackup(dbxToken);
+                
+                // B. Upload Laporan CSV Harian (Transaksi & Stok) - Untuk Admin Baca
+                await dropboxService.uploadCSVReports(dbxToken);
+
+                messages.push("✅ Dropbox: Berhasil (Backup + Laporan CSV)");
+            } catch (e: any) {
+                messages.push(`❌ Dropbox: Gagal (${e.message})`);
+            }
+        }
+
+        // 2. Coba Supabase
+        const sbUrl = localStorage.getItem('ARTEA_SB_URL');
+        const sbKey = localStorage.getItem('ARTEA_SB_KEY');
+        if (sbUrl && sbKey) {
+            try {
+                supabaseService.init(sbUrl, sbKey);
+                const opRes = await supabaseService.syncOperationalDataUp();
+                
+                if (opRes.success) {
+                    messages.push("✅ Supabase: Berhasil (Data & Stok)");
+                } else {
+                    messages.push(`❌ Supabase: Gagal (${opRes.message})`);
+                }
+            } catch (e: any) {
+                messages.push(`❌ Supabase: Error (${e.message})`);
+            }
+        }
+
+        setIsSyncing(false);
+
+        if (messages.length === 0) {
+            showAlert({ 
+                type: 'alert', 
+                title: 'Belum Dikonfigurasi', 
+                message: 'Admin belum mengatur koneksi Dropbox atau Supabase di menu Pengaturan.' 
+            });
+        } else {
+            showAlert({
+                type: 'alert',
+                title: 'Status Sinkronisasi',
+                message: (
+                    <ul className="text-left list-disc pl-5">
+                        {messages.map((m, i) => <li key={i} className="mb-1">{m}</li>)}
+                    </ul>
+                )
+            });
+        }
+    };
+
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Kirim Laporan ke Admin">
             <div className="space-y-6">
                 
+                {/* Opsi 0: Sync Cloud (New for Staff) */}
+                <div className="bg-slate-700/50 p-3 rounded-lg border border-slate-600">
+                    <h4 className="text-white font-semibold text-sm mb-2 flex items-center gap-2">
+                        <Icon name="upload" className="w-4 h-4 text-purple-400"/> Sinkronisasi Cloud
+                    </h4>
+                    <p className="text-xs text-slate-400 mb-3">
+                        Kirim data transaksi dan stok terbaru ke server (Dropbox/Supabase) agar Admin bisa memantau dari jauh.
+                    </p>
+                    <Button onClick={handleCloudSync} disabled={isSyncing} className="w-full bg-purple-700 hover:bg-purple-600 text-white border-none">
+                        {isSyncing ? 'Sedang Mengirim...' : <><Icon name="wifi" className="w-4 h-4" /> Sync Sekarang</>}
+                    </Button>
+                </div>
+
                 {/* Option 1: Ringkasan */}
                 <div className="bg-slate-700/50 p-3 rounded-lg border border-slate-600">
                     <h4 className="text-white font-semibold text-sm mb-2 flex items-center gap-2">
                         <Icon name="chat" className="w-4 h-4 text-[#52a37c]"/> Opsi 1: Ringkasan Cepat
                     </h4>
                     <p className="text-xs text-slate-400 mb-3">
-                        Mengirim ringkasan omzet dan total setoran via pesan teks. Mudah dibaca tapi bisa diedit sebelum kirim.
+                        Mengirim ringkasan omzet dan total setoran via pesan teks.
                     </p>
                     <div className="grid grid-cols-2 gap-3">
                         <Button size="sm" onClick={() => handleSendSummary('whatsapp')} className="bg-[#25D366] hover:bg-[#1da851] text-white border-none">
@@ -225,7 +341,7 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
                         <Icon name="lock" className="w-4 h-4 text-yellow-400"/> Opsi 2: Laporan Aman (Anti-Edit)
                     </h4>
                     <p className="text-xs text-slate-400 mb-3">
-                        Mengirim kode terenkripsi. Staf tidak bisa mengubah angka penjualan. Admin harus copy-paste kode ini di menu <strong>Import Transaksi</strong>.
+                        Mengirim kode terenkripsi. Angka penjualan dijamin asli. Admin perlu mengimpor kode ini.
                     </p>
                     <div className="grid grid-cols-2 gap-3">
                         <Button size="sm" onClick={() => handleSendEncrypted('whatsapp')} variant="secondary" className="border-slate-500">

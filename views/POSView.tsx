@@ -23,7 +23,10 @@ import KitchenNoteModal from '../components/KitchenNoteModal';
 import EndSessionModal from '../components/EndSessionModal';
 import SendReportModal from '../components/SendReportModal';
 import CustomerFormModal from '../components/CustomerFormModal';
+import StaffRestockModal from '../components/StaffRestockModal';
+import StockOpnameModal from '../components/StockOpnameModal'; // NEW
 
+// ... (No changes to VariantModal, AddonModal, NameCartModal, HeldCartsTabs, CashManagementModal, SessionHistoryModal, PaymentModal, RewardsModal, DiscountModal, CustomerSelection, ProductListItem) ...
 // --- Variant Selection Modal ---
 const VariantModal: React.FC<{
     isOpen: boolean;
@@ -568,12 +571,15 @@ const DiscountModal: React.FC<{
     title: string;
 }> = ({ isOpen, onClose, onSave, onRemove, initialDiscount, title }) => {
     const { discountDefinitions } = useDiscount();
+    const { receiptSettings } = useSettings(); // Need this to check storeID
     const [mode, setMode] = useState<'select' | 'manual'>('select');
     const [manualType, setManualType] = useState<'percentage' | 'amount'>('percentage');
     const [manualValue, setManualValue] = useState('');
 
     const activeDiscounts = useMemo(() => {
         const now = new Date();
+        const currentStoreId = receiptSettings.storeId || '';
+
         return (discountDefinitions || []).filter(d => {
             if (!d.isActive) return false;
             const startDate = d.startDate ? new Date(d.startDate) : null;
@@ -584,9 +590,15 @@ const DiscountModal: React.FC<{
                 endOfDay.setHours(23, 59, 59, 999);
                 if (endOfDay < now) return false;
             }
+            
+            // Check Store validity
+            if (d.validStoreIds && d.validStoreIds.length > 0) {
+                if (!d.validStoreIds.includes(currentStoreId)) return false;
+            }
+
             return true;
         });
-    }, [discountDefinitions]);
+    }, [discountDefinitions, receiptSettings.storeId]);
 
     useEffect(() => {
         if (isOpen) {
@@ -762,7 +774,7 @@ const ProductListItem: React.FC<{
 
 const POSView: React.FC = () => {
     const { 
-        products, categories, findProductByBarcode, isProductAvailable
+        products, categories, findProductByBarcode, isProductAvailable, inventorySettings
     } = useProduct();
     const {
         addToCart, addConfiguredItemToCart, cart, getCartTotals, clearCart, saveTransaction, 
@@ -814,6 +826,8 @@ const POSView: React.FC = () => {
     const [isCustomerModalOpen, setCustomerModalOpen] = useState(false);
     const [isHistoryModalOpen, setHistoryModalOpen] = useState(false);
     const [receiptToView, setReceiptToView] = useState<TransactionType | null>(null);
+    const [isStaffRestockOpen, setStaffRestockOpen] = useState(false); 
+    const [isOpnameOpen, setIsOpnameOpen] = useState(false); // NEW: State for Stock Opname Modal
 
     const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -1203,6 +1217,30 @@ const POSView: React.FC = () => {
                                 </Button>
                             </div>
                         )}
+                        {/* New Buttons for Staff Inventory Management */}
+                        {inventorySettings.enabled && (
+                            <div className="flex gap-1">
+                                <Button 
+                                    variant="secondary" 
+                                    onClick={() => setStaffRestockOpen(true)}
+                                    disabled={isSessionLocked}
+                                    title="Terima Barang / Lapor Waste"
+                                    className="bg-slate-800 border border-slate-700 px-3"
+                                >
+                                    <Icon name="tag" className="w-5 h-5" /> 
+                                </Button>
+                                <Button 
+                                    variant="secondary" 
+                                    onClick={() => setIsOpnameOpen(true)}
+                                    disabled={isSessionLocked}
+                                    title="Stock Opname (Audit Stok)"
+                                    className="bg-slate-800 border border-slate-700 px-3"
+                                >
+                                    <Icon name="boxes" className="w-5 h-5" />
+                                </Button>
+                            </div>
+                        )}
+                        
                         <Button 
                             variant="secondary" 
                             onClick={() => setBarcodeScannerOpen(true)}
@@ -1447,6 +1485,17 @@ const POSView: React.FC = () => {
                 onClose={() => setCustomerModalOpen(false)} 
                 onSave={handleSaveCustomer} 
                 customer={null} 
+            />
+            
+            <StaffRestockModal 
+                isOpen={isStaffRestockOpen} 
+                onClose={() => setStaffRestockOpen(false)} 
+            />
+            
+            <StockOpnameModal 
+                isOpen={isOpnameOpen} 
+                onClose={() => setIsOpnameOpen(false)} 
+                initialTab="product"
             />
 
             {/* Start Session Modal (Added here for convenience) */}

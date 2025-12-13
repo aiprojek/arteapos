@@ -13,6 +13,7 @@ import { CURRENCY_FORMATTER } from '../constants';
 import UpdatePaymentModal from '../components/UpdatePaymentModal';
 import Pagination from '../components/Pagination';
 import CustomerFormModal from '../components/CustomerFormModal';
+import { supabaseService } from '../services/supabaseService';
 
 type FinanceSubTab = 'cashflow' | 'expenses' | 'other_income' | 'purchasing' | 'debt-receivables';
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
@@ -26,13 +27,18 @@ const StatCard: React.FC<{title: string; value: string | number; className?: str
 
 // --- Cash Flow Tab ---
 const CashFlowTab: React.FC = () => {
-    const { transactions, expenses, purchases, otherIncomes } = useFinance();
+    const { transactions: localTransactions, expenses: localExpenses, purchases, otherIncomes: localOtherIncomes } = useFinance();
     const [filter, setFilter] = useState<TimeFilter>('month');
     const [customStartDate, setCustomStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [customEndDate, setCustomEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [isFilterDropdownOpen, setFilterDropdownOpen] = useState(false);
     const filterDropdownRef = useRef<HTMLDivElement>(null);
     
+    // Cloud Mode State
+    const [dataSource, setDataSource] = useState<'local' | 'cloud'>('local');
+    const [cloudData, setCloudData] = useState<{ transactions: TransactionType[], expenses: Expense[], otherIncomes: OtherIncome[] }>({ transactions: [], expenses: [], otherIncomes: [] });
+    const [isCloudLoading, setIsCloudLoading] = useState(false);
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
@@ -45,11 +51,63 @@ const CashFlowTab: React.FC = () => {
         };
     }, []);
 
+    // Load Cloud Data Logic
+    useEffect(() => {
+        if (dataSource === 'cloud') {
+            const loadCloud = async () => {
+                const sbUrl = localStorage.getItem('ARTEA_SB_URL');
+                const sbKey = localStorage.getItem('ARTEA_SB_KEY');
+                if (!sbUrl || !sbKey) {
+                    setDataSource('local');
+                    return;
+                }
+
+                setIsCloudLoading(true);
+                supabaseService.init(sbUrl, sbKey);
+
+                const now = new Date();
+                let start = new Date();
+                let end = new Date();
+
+                if (filter === 'today') {
+                    start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                } else if (filter === 'week') {
+                    start.setDate(now.getDate() - 7);
+                } else if (filter === 'month') {
+                    start = new Date(now.getFullYear(), now.getMonth(), 1);
+                } else if (filter === 'custom') {
+                    start = new Date(customStartDate);
+                    end = new Date(customEndDate);
+                    end.setHours(23, 59, 59);
+                } else {
+                    start = new Date(0); // All time
+                }
+
+                const result = await supabaseService.fetchFinanceData(start, end);
+                // Map DB results
+                const mappedTransactions = result.transactions.map((t: any) => ({ ...t, createdAt: t.created_at, paymentStatus: t.payment_status }));
+                const mappedExpenses = result.expenses.map((e: any) => ({ ...e }));
+                const mappedIncomes = result.otherIncomes.map((i: any) => ({ ...i }));
+                
+                setCloudData({ transactions: mappedTransactions, expenses: mappedExpenses, otherIncomes: mappedIncomes });
+                setIsCloudLoading(false);
+            };
+            loadCloud();
+        }
+    }, [dataSource, filter, customStartDate, customEndDate]);
+
+    const activeTransactions = dataSource === 'local' ? localTransactions : cloudData.transactions;
+    const activeExpenses = dataSource === 'local' ? localExpenses : cloudData.expenses;
+    const activeOtherIncomes = dataSource === 'local' ? localOtherIncomes : cloudData.otherIncomes;
+
     const data = useMemo(() => {
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
         const filterPredicate = (itemDateStr: string): boolean => {
+            // If in cloud mode, data is already filtered by API query
+            if (dataSource === 'cloud') return true;
+
             const itemDate = new Date(itemDateStr);
             switch (filter) {
                 case 'today':
@@ -74,10 +132,11 @@ const CashFlowTab: React.FC = () => {
             }
         };
 
-        const filteredTransactions = transactions.filter(t => filterPredicate(t.createdAt) && t.paymentStatus !== 'refunded');
-        const filteredExpenses = expenses.filter(e => filterPredicate(e.date));
-        const filteredPurchases = purchases.filter(p => filterPredicate(p.date));
-        const filteredOtherIncome = otherIncomes.filter(i => filterPredicate(i.date));
+        const filteredTransactions = activeTransactions.filter(t => filterPredicate(t.createdAt) && t.paymentStatus !== 'refunded');
+        const filteredExpenses = activeExpenses.filter(e => filterPredicate(e.date));
+        const filteredOtherIncome = activeOtherIncomes.filter(i => filterPredicate(i.date));
+        // Purchases are strictly local for now in Cloud View context (until we add syncing)
+        const filteredPurchases = dataSource === 'local' ? purchases.filter(p => filterPredicate(p.date)) : [];
 
         const salesIncome = filteredTransactions.reduce((sum, t) => sum + t.total, 0);
         const otherIncomeTotal = filteredOtherIncome.reduce((sum, i) => sum + i.amount, 0);
@@ -89,14 +148,14 @@ const CashFlowTab: React.FC = () => {
         const netCashFlow = totalIncome - totalExpenses;
 
         const combinedFlow = [
-            ...filteredTransactions.map(t => ({ type: 'Penjualan', date: t.createdAt, description: `Penjualan #${t.id.slice(-4)}`, amount: t.total })),
-            ...filteredOtherIncome.map(i => ({ type: 'Pemasukan Lain', date: i.date, description: i.description, amount: i.amount })),
-            ...filteredExpenses.map(e => ({ type: 'Pengeluaran', date: e.date, description: e.description, amount: -e.amount })),
+            ...filteredTransactions.map(t => ({ type: 'Penjualan', date: t.createdAt, description: `Penjualan #${t.id.slice(-4)}`, amount: t.total, store: (t as any).store_id })),
+            ...filteredOtherIncome.map(i => ({ type: 'Pemasukan Lain', date: i.date, description: i.description, amount: i.amount, store: (i as any).store_id })),
+            ...filteredExpenses.map(e => ({ type: 'Pengeluaran', date: e.date, description: e.description, amount: -e.amount, store: (e as any).store_id })),
             ...filteredPurchases.map(p => ({ type: 'Pembelian', date: p.date, description: `Pembelian dari ${p.supplierName}`, amount: -p.totalAmount }))
         ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         return { totalIncome, totalExpenses, netCashFlow, combinedFlow };
-    }, [filter, transactions, expenses, purchases, otherIncomes, customStartDate, customEndDate]);
+    }, [filter, activeTransactions, activeExpenses, activeOtherIncomes, purchases, customStartDate, customEndDate, dataSource]);
     
     const filterLabels: Record<TimeFilter, string> = {
         today: 'Hari Ini',
@@ -114,14 +173,15 @@ const CashFlowTab: React.FC = () => {
     const exportCashFlowCSV = () => {
         if (data.combinedFlow.length === 0) return;
 
-        const headers = 'Tanggal,Tipe,Deskripsi,Jumlah (IDR)';
+        const headers = 'Tanggal,Tipe,Deskripsi,Jumlah (IDR),Store ID';
         
         const rows = data.combinedFlow.map(item => {
             const date = new Date(item.date).toLocaleDateString('id-ID');
             const type = item.type;
             const description = `"${item.description.replace(/"/g, '""')}"`; // Handle commas in description
             const amount = item.amount;
-            return [date, type, description, amount].join(',');
+            const store = (item as any).store || '-';
+            return [date, type, description, amount, store].join(',');
         });
 
         const csvContent = [headers, ...rows].join('\n');
@@ -143,7 +203,13 @@ const CashFlowTab: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                 <div className="flex items-center gap-2 flex-wrap">
+                 <div className="flex items-center gap-2 flex-wrap w-full">
+                    {/* Cloud Toggle */}
+                    <div className="bg-slate-700 p-1 rounded-lg flex items-center mr-2">
+                        <button onClick={() => setDataSource('local')} className={`p-2 rounded transition-colors ${dataSource === 'local' ? 'bg-slate-500 text-white' : 'text-slate-400 hover:text-white'}`} title="Data Lokal"><Icon name="database" className="w-4 h-4"/></button>
+                        <button onClick={() => setDataSource('cloud')} className={`p-2 rounded transition-colors ${dataSource === 'cloud' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`} title="Data Cloud (Gabungan)"><Icon name="wifi" className="w-4 h-4"/></button>
+                    </div>
+
                     <div className="relative" ref={filterDropdownRef}>
                         <Button variant="secondary" onClick={() => setFilterDropdownOpen(prev => !prev)}>
                             Filter: {filterLabels[filter]}
@@ -169,6 +235,13 @@ const CashFlowTab: React.FC = () => {
                     </Button>
                 </div>
             </div>
+            
+            {dataSource === 'cloud' && (
+                <div className="bg-sky-900/30 border border-sky-800 p-2 rounded text-xs text-sky-200 flex items-center gap-2">
+                    <Icon name="info-circle" className="w-4 h-4" /> Mode Cloud: Menampilkan gabungan data Transaksi, Pengeluaran, & Pemasukan Lain dari semua cabang.
+                </div>
+            )}
+
             {filter === 'custom' && (
                 <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-800 p-3 rounded-lg">
                     <div>
@@ -193,39 +266,50 @@ const CashFlowTab: React.FC = () => {
                     </div>
                 </div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatCard title="Total Pemasukan" value={data.totalIncome} className="border-l-4 border-green-500" />
-                <StatCard title="Total Pengeluaran" value={data.totalExpenses} className="border-l-4 border-red-500" />
-                <StatCard title="Arus Kas Bersih" value={data.netCashFlow} className={`border-l-4 ${data.netCashFlow >= 0 ? 'border-[#347758]' : 'border-yellow-500'}`} />
-            </div>
-            <div className="bg-slate-800 rounded-lg shadow-md">
-                 <h3 className="text-lg font-bold text-white p-4">Riwayat Arus Kas</h3>
-                 <div className="overflow-x-auto">
-                    <table className="w-full text-left min-w-[800px]">
-                        <thead className="bg-slate-700 text-slate-200">
-                             <tr>
-                                <th className="p-3">Tanggal</th>
-                                <th className="p-3">Tipe</th>
-                                <th className="p-3">Deskripsi</th>
-                                <th className="p-3 text-right">Jumlah</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {data.combinedFlow.map((item, index) => (
-                                <tr key={index} className="border-b border-slate-700 last:border-b-0">
-                                    <td className="p-3 text-slate-400 whitespace-nowrap">{new Date(item.date).toLocaleDateString('id-ID')}</td>
-                                    <td className="p-3"><span className={`text-xs px-2 py-1 rounded-full ${item.amount > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{item.type}</span></td>
-                                    <td className="p-3">{item.description}</td>
-                                    <td className={`p-3 text-right font-semibold ${item.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                        {CURRENCY_FORMATTER.format(Math.abs(item.amount))}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    {data.combinedFlow.length === 0 && <p className="p-4 text-center text-slate-500">Tidak ada data untuk periode ini.</p>}
+            
+            {isCloudLoading ? (
+                <div className="text-center py-12 bg-slate-800 rounded-lg">
+                    <span className="text-white animate-pulse">Mengambil data keuangan dari Cloud...</span>
                 </div>
-            </div>
+            ) : (
+                <>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <StatCard title="Total Pemasukan" value={data.totalIncome} className="border-l-4 border-green-500" />
+                        <StatCard title="Total Pengeluaran" value={data.totalExpenses} className="border-l-4 border-red-500" />
+                        <StatCard title="Arus Kas Bersih" value={data.netCashFlow} className={`border-l-4 ${data.netCashFlow >= 0 ? 'border-[#347758]' : 'border-yellow-500'}`} />
+                    </div>
+                    <div className="bg-slate-800 rounded-lg shadow-md">
+                        <h3 className="text-lg font-bold text-white p-4">Riwayat Arus Kas</h3>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left min-w-[800px]">
+                                <thead className="bg-slate-700 text-slate-200">
+                                    <tr>
+                                        <th className="p-3">Tanggal</th>
+                                        <th className="p-3">Tipe</th>
+                                        <th className="p-3">Deskripsi</th>
+                                        <th className="p-3 text-right">Jumlah</th>
+                                        {dataSource === 'cloud' && <th className="p-3 text-right">Cabang</th>}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.combinedFlow.map((item, index) => (
+                                        <tr key={index} className="border-b border-slate-700 last:border-b-0">
+                                            <td className="p-3 text-slate-400 whitespace-nowrap">{new Date(item.date).toLocaleDateString('id-ID')}</td>
+                                            <td className="p-3"><span className={`text-xs px-2 py-1 rounded-full ${item.amount > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{item.type}</span></td>
+                                            <td className="p-3">{item.description}</td>
+                                            <td className={`p-3 text-right font-semibold ${item.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                {CURRENCY_FORMATTER.format(Math.abs(item.amount))}
+                                            </td>
+                                            {dataSource === 'cloud' && <td className="p-3 text-right text-xs text-slate-400">{(item as any).store || '-'}</td>}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {data.combinedFlow.length === 0 && <p className="p-4 text-center text-slate-500">Tidak ada data untuk periode ini.</p>}
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 };
@@ -470,6 +554,7 @@ const DebtReceivablesTab: React.FC = () => {
 };
 
 const CustomersTab: React.FC = () => {
+    // ... [No changes needed in CustomersTab logic, purely local CRM for now]
     const { customers, addCustomer, updateCustomer, deleteCustomer } = useCustomer();
     const [isModalOpen, setModalOpen] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -912,6 +997,13 @@ const PurchasesAndSuppliersTab: React.FC<{
     );
 }
 
+const ExpenseStatusBadge: React.FC<{status: ExpenseStatus}> = ({status}) => {
+    const info = {
+        'lunas': { text: 'Lunas', className: 'bg-green-500/20 text-green-300' },
+        'belum-lunas': { text: 'Belum Lunas', className: 'bg-yellow-500/20 text-yellow-300' }
+    };
+    return <span className={`px-2 py-1 text-xs font-medium rounded-full ${info[status].className}`}>{info[status].text}</span>
+}
 
 // --- Main Finance View ---
 const FinanceView: React.FC = () => {
@@ -1021,30 +1113,21 @@ const FinanceView: React.FC = () => {
         }
     }
 
-
-    const SubTabButton: React.FC<{tab: FinanceSubTab, label: string}> = ({tab, label}) => (
+    const renderSubTabButton = (tab: FinanceSubTab, label: string) => (
         <button onClick={() => setActiveTab(tab)} className={`whitespace-nowrap px-4 py-2 text-sm font-medium rounded-t-lg transition-colors border-b-2 ${activeTab === tab ? 'text-[#52a37c] border-[#52a37c]' : 'text-slate-400 border-transparent hover:text-white'}`}>
             {label}
         </button>
     );
-    
-    const ExpenseStatusBadge: React.FC<{status: ExpenseStatus}> = ({status}) => {
-        const info = {
-            'lunas': { text: 'Lunas', className: 'bg-green-500/20 text-green-300' },
-            'belum-lunas': { text: 'Belum Lunas', className: 'bg-yellow-500/20 text-yellow-300' }
-        };
-        return <span className={`px-2 py-1 text-xs font-medium rounded-full ${info[status].className}`}>{info[status].text}</span>
-    }
 
-    const FinanceTabs = () => (
+    const renderFinanceTabs = () => (
         <div className="space-y-6">
              <div className="border-b border-slate-700 flex flex-nowrap overflow-x-auto -mb-px">
                 {/* Cash Flow Tab is strictly for Admins */}
-                {isAdmin && <SubTabButton tab="cashflow" label="Arus Kas" />}
-                <SubTabButton tab="other_income" label="Pemasukan Lain" />
-                <SubTabButton tab="expenses" label="Pengeluaran" />
-                <SubTabButton tab="purchasing" label="Pembelian & Pemasok" />
-                <SubTabButton tab="debt-receivables" label="Utang & Piutang" />
+                {isAdmin && renderSubTabButton('cashflow', 'Arus Kas')}
+                {renderSubTabButton('other_income', 'Pemasukan Lain')}
+                {renderSubTabButton('expenses', 'Pengeluaran')}
+                {renderSubTabButton('purchasing', 'Pembelian & Pemasok')}
+                {renderSubTabButton('debt-receivables', 'Utang & Piutang')}
             </div>
             
             {isAdmin && activeTab === 'cashflow' && <CashFlowTab />}
@@ -1144,45 +1227,29 @@ const FinanceView: React.FC = () => {
     );
 
     return (
-        <div className="max-w-7xl mx-auto pb-20">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-white">Keuangan & Pelanggan</h1>
-                <div className="flex bg-slate-800 p-1 rounded-lg">
-                    <button onClick={() => setMainView('finance')} className={`px-4 py-2 text-sm rounded-md transition-colors ${mainView === 'finance' ? 'bg-[#347758] text-white' : 'text-slate-400'}`}>
-                        Keuangan
+        <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <h1 className="text-3xl font-bold text-white">Keuangan</h1>
+                <div className="bg-slate-800 p-1 rounded-lg flex items-center border border-slate-700">
+                    <button onClick={() => setMainView('finance')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${mainView === 'finance' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
+                        Laporan Keuangan
                     </button>
-                    <button onClick={() => setMainView('customers')} className={`px-4 py-2 text-sm rounded-md transition-colors ${mainView === 'customers' ? 'bg-[#347758] text-white' : 'text-slate-400'}`}>
-                        Pelanggan
+                    <button onClick={() => setMainView('customers')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${mainView === 'customers' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
+                        Data Pelanggan
                     </button>
                 </div>
             </div>
 
-            {mainView === 'finance' && <FinanceTabs />}
-            {mainView === 'customers' && <CustomersTab />}
+            {mainView === 'customers' ? <CustomersTab /> : renderFinanceTabs()} 
 
-            <ExpenseFormModal 
-                isOpen={isExpenseModalOpen} 
-                onClose={() => setExpenseModalOpen(false)} 
-                onSave={handleSaveExpense} 
-                expense={editingExpense} 
-            />
-            <OtherIncomeFormModal
-                isOpen={isIncomeModalOpen}
-                onClose={() => setIncomeModalOpen(false)}
-                onSave={handleSaveIncome}
-                income={editingIncome}
-            />
-            <SupplierFormModal
-                isOpen={isSupplierModalOpen}
-                onClose={() => setSupplierModalOpen(false)}
-                onSave={handleSaveSupplier}
-                supplier={editingSupplier}
-            />
-            <PurchaseFormModal
-                isOpen={isPurchaseModalOpen}
-                onClose={() => setPurchaseModalOpen(false)}
-                onSave={handleSavePurchase}
-            />
+            {/* Modals */}
+            <ExpenseFormModal isOpen={isExpenseModalOpen} onClose={() => setExpenseModalOpen(false)} onSave={handleSaveExpense} expense={editingExpense} />
+            <OtherIncomeFormModal isOpen={isIncomeModalOpen} onClose={() => setIncomeModalOpen(false)} onSave={handleSaveIncome} income={editingIncome} />
+            <SupplierFormModal isOpen={isSupplierModalOpen} onClose={() => setSupplierModalOpen(false)} onSave={handleSaveSupplier} supplier={editingSupplier} />
+            <PurchaseFormModal isOpen={isPurchaseModalOpen} onClose={() => setPurchaseModalOpen(false)} onSave={handleSavePurchase} />
+            
+            {payingPurchase && <PayDebtModal isOpen={!!payingPurchase} onClose={() => setPayingPurchase(null)} onSave={handlePayPurchaseDebt} purchase={payingPurchase} />}
+            {payingExpense && <PayExpenseDebtModal isOpen={!!payingExpense} onClose={() => setPayingExpense(null)} onSave={handlePayExpenseDebt} expense={payingExpense} />}
         </div>
     );
 };

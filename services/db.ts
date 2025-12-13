@@ -4,7 +4,7 @@ import Dexie, { type EntityTable } from 'dexie';
 import type { 
     Product, RawMaterial, Transaction as TransactionType, User, Expense, Supplier, Purchase, 
     StockAdjustment, Customer, DiscountDefinition, HeldCart, ReceiptSettings, 
-    InventorySettings, AuthSettings, SessionSettings, MembershipSettings, AppData, SessionState, OtherIncome, SessionHistory
+    InventorySettings, AuthSettings, SessionSettings, MembershipSettings, AppData, SessionState, OtherIncome, SessionHistory, AuditLog
 } from '../types';
 import { INITIAL_PRODUCTS } from '../constants';
 
@@ -57,6 +57,7 @@ export const initialData: AppData = {
         adminTelegram: '',
         taxRate: 0,
         serviceChargeRate: 0,
+        storeId: 'CABANG-01', // Default value
     },
     inventorySettings: {
         enabled: false,
@@ -83,6 +84,7 @@ export const initialData: AppData = {
     discountDefinitions: [],
     heldCarts: [],
     sessionHistory: [],
+    auditLogs: [],
 };
 
 
@@ -104,7 +106,8 @@ export const db = new Dexie('ArteaPosDB') as Dexie & {
     customers: EntityTable<Customer, 'id'>;
     discountDefinitions: EntityTable<DiscountDefinition, 'id'>;
     heldCarts: EntityTable<HeldCart, 'id'>;
-    sessionHistory: EntityTable<SessionHistory, 'id'>; // New Table
+    sessionHistory: EntityTable<SessionHistory, 'id'>; 
+    auditLogs: EntityTable<AuditLog, 'id'>; // NEW TABLE
 
     // Key-value stores
     settings: EntityTable<KeyValueStore<ReceiptSettings | InventorySettings | AuthSettings | SessionSettings | MembershipSettings>, 'key'>;
@@ -146,6 +149,10 @@ db.version(3).stores({
 
 db.version(4).stores({
     sessionHistory: 'id, startTime, endTime, userId'
+});
+
+db.version(5).stores({
+    auditLogs: 'id, timestamp, action, userId'
 });
 
 

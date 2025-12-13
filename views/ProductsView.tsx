@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { useUI } from '../context/UIContext';
-import type { Product, RecipeItem, Addon, ProductVariant } from '../types';
+import type { Product, RecipeItem, Addon, ProductVariant, BranchPrice } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Icon from '../components/Icon';
@@ -11,6 +11,7 @@ import CameraCaptureModal from '../components/CameraCaptureModal';
 import { useCameraAvailability } from '../hooks/useCameraAvailability';
 import ProductPlaceholder from '../components/ProductPlaceholder';
 import VirtualizedTable from '../components/VirtualizedTable';
+import StockOpnameModal from '../components/StockOpnameModal';
 
 // Informasikan TypeScript tentang pustaka global JsBarcode
 declare const JsBarcode: any;
@@ -93,11 +94,9 @@ const CategoryInput: React.FC<{
         const trimmedCat = cat.trim();
         if (trimmedCat && !value.includes(trimmedCat)) {
             if (categories.some(c => c.toLowerCase() === trimmedCat.toLowerCase())) {
-                // Find the correct case and add it
                 const existingCategory = categories.find(c => c.toLowerCase() === trimmedCat.toLowerCase())!;
                 onChange([...value, existingCategory]);
             } else {
-                // New category, ask for confirmation
                 showAlert({
                     type: 'confirm',
                     title: 'Tambah Kategori Baru?',
@@ -173,14 +172,22 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
     onCancel: () => void,
     onOpenCamera: () => void,
     isCameraAvailable: boolean,
-}>(({ product, onSave, onCancel, onOpenCamera, isCameraAvailable }, ref) => {
+    capturedImage?: string | null
+}>(({ product, onSave, onCancel, onOpenCamera, isCameraAvailable, capturedImage }, ref) => {
     const { inventorySettings, rawMaterials, products } = useProduct();
     const { showAlert } = useUI();
     const [formData, setFormData] = useState({
         name: '', price: '', category: [] as string[], imageUrl: '', costPrice: '',
-        stock: '', trackStock: false, recipe: [] as RecipeItem[], isFavorite: false, barcode: '', addons: [] as Addon[], variants: [] as ProductVariant[]
+        stock: '', trackStock: false, recipe: [] as RecipeItem[], isFavorite: false, barcode: '', 
+        addons: [] as Addon[], variants: [] as ProductVariant[],
+        branchPrices: [] as BranchPrice[]
     });
     const [imageSource, setImageSource] = useState<ImageSource>('none');
+    
+    // New States for Branch Pricing
+    const [newBranchId, setNewBranchId] = useState('');
+    const [newBranchPrice, setNewBranchPrice] = useState('');
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const barcodeRef = useRef<SVGSVGElement>(null);
 
@@ -196,14 +203,14 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 trackStock: product.trackStock || false,
                 recipe: product.recipe?.map(r => ({
                     ...r,
-                    itemType: r.itemType || 'raw_material' // Backward compatibility
+                    itemType: r.itemType || 'raw_material' 
                 })) || [],
                 isFavorite: product.isFavorite || false,
                 barcode: product.barcode || '',
                 addons: product.addons || [],
                 variants: product.variants || [],
+                branchPrices: product.branchPrices || []
             };
-            
             setFormData(productData);
 
             if (productData.imageUrl.startsWith('data:')) {
@@ -214,26 +221,29 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 setImageSource('none');
             }
         } else {
-            // Reset form for a new product
-            setFormData({ name: '', price: '', category: [], imageUrl: '', costPrice: '', stock: '', trackStock: false, recipe: [], isFavorite: false, barcode: '', addons: [], variants: [] });
+            setFormData({ name: '', price: '', category: [], imageUrl: '', costPrice: '', stock: '', trackStock: false, recipe: [], isFavorite: false, barcode: '', addons: [], variants: [], branchPrices: [] });
             setImageSource('none');
         }
     }, [product]);
     
+    useEffect(() => {
+        if (capturedImage) {
+            setFormData(prev => ({ ...prev, imageUrl: capturedImage }));
+            setImageSource('camera');
+        }
+    }, [capturedImage]);
+
      useEffect(() => {
         if (barcodeRef.current && formData.barcode) {
             try {
                 JsBarcode(barcodeRef.current, formData.barcode, {
                     format: "CODE128",
                     displayValue: true,
-                    background: '#f1f5f9', // slate-100
-                    lineColor: '#0f172a', // slate-900
-                    width: 2,
-                    height: 50,
-                    fontSize: 14,
+                    background: '#f1f5f9',
+                    lineColor: '#0f172a',
+                    width: 2, height: 50, fontSize: 14,
                 });
             } catch (e) {
-                // Invalid barcode, clear the SVG
                  if(barcodeRef.current) barcodeRef.current.innerHTML = '';
             }
         }
@@ -252,24 +262,16 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
 
     const handleImageSourceChange = (source: ImageSource) => {
         setImageSource(source);
-        if (source === 'none') {
-            setFormData(prev => ({ ...prev, imageUrl: '' }));
-        }
-        if (source === 'upload') {
-            fileInputRef.current?.click();
-        }
-        if (source === 'camera') {
-            onOpenCamera();
-        }
+        if (source === 'none') setFormData(prev => ({ ...prev, imageUrl: '' }));
+        if (source === 'upload') fileInputRef.current?.click();
+        if (source === 'camera') onOpenCamera();
     };
     
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             const reader = new FileReader();
-            reader.onloadend = () => {
-                setFormData(prev => ({ ...prev, imageUrl: reader.result as string }));
-            };
+            reader.onloadend = () => setFormData(prev => ({ ...prev, imageUrl: reader.result as string }));
             reader.readAsDataURL(file);
         }
     };
@@ -278,13 +280,10 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
         const updatedRecipe = [...formData.recipe];
         // @ts-ignore
         updatedRecipe[index] = { ...updatedRecipe[index], [field]: value };
-        
-        // Reset ID if type changes to prevent mismatch
         if (field === 'itemType') {
              updatedRecipe[index].rawMaterialId = '';
              updatedRecipe[index].productId = '';
         }
-        
         setFormData(prev => ({ ...prev, recipe: updatedRecipe }));
     };
 
@@ -310,7 +309,6 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
         setFormData(prev => ({ ...prev, addons: prev.addons.filter((_, i) => i !== index) }));
     };
 
-    // --- Variant Handlers ---
     const handleVariantChange = (index: number, field: keyof ProductVariant, value: string | number) => {
         const updatedVariants = [...formData.variants];
         updatedVariants[index] = { ...updatedVariants[index], [field]: value };
@@ -325,6 +323,29 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
         setFormData(prev => ({ ...prev, variants: prev.variants.filter((_, i) => i !== index) }));
     };
 
+    // --- Branch Price Handlers ---
+    const addBranchPrice = () => {
+        if (!newBranchId || !newBranchPrice) return;
+        const price = parseFloat(newBranchPrice);
+        const storeId = newBranchId.toUpperCase().trim();
+        
+        // Remove existing if exists for this store
+        const filtered = formData.branchPrices.filter(bp => bp.storeId !== storeId);
+        
+        setFormData(prev => ({ 
+            ...prev, 
+            branchPrices: [...filtered, { storeId, price }] 
+        }));
+        setNewBranchId('');
+        setNewBranchPrice('');
+    };
+
+    const removeBranchPrice = (storeId: string) => {
+        setFormData(prev => ({
+            ...prev,
+            branchPrices: prev.branchPrices.filter(bp => bp.storeId !== storeId)
+        }));
+    };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
@@ -341,12 +362,12 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
             recipe: formData.recipe.map(r => ({
                 ...r,
                 quantity: parseFloat(String(r.quantity)) || 0,
-                // Ensure correct ID is set based on type
                 rawMaterialId: r.itemType === 'raw_material' ? r.rawMaterialId : undefined,
                 productId: r.itemType === 'product' ? r.productId : undefined,
             })).filter(r => (r.itemType === 'raw_material' && r.rawMaterialId) || (r.itemType === 'product' && r.productId)),
             addons: formData.addons.filter(a => a.name.trim() !== '').map(a => ({...a, price: Number(a.price) || 0, costPrice: Number(a.costPrice) || 0})),
             variants: formData.variants.filter(v => v.name.trim() !== '').map(v => ({...v, price: Number(v.price) || 0, costPrice: Number(v.costPrice) || 0})),
+            branchPrices: formData.branchPrices
         };
         if (product && 'id' in product) {
             onSave({ ...productData, id: product.id });
@@ -357,7 +378,6 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
     
     const generateBarcode = () => {
         const timestamp = Date.now().toString();
-        // Ambil 12 digit terakhir untuk barcode yang lebih pendek dan bersih
         const newBarcode = timestamp.substring(timestamp.length - 12);
         setFormData(prev => ({ ...prev, barcode: newBarcode }));
     };
@@ -371,7 +391,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
             let cost = 0;
             if (item.itemType === 'product' && item.productId) {
                 const subProduct = products.find(p => p.id === item.productId);
-                cost = subProduct?.costPrice || 0; // Use costPrice of component product
+                cost = subProduct?.costPrice || 0; 
             } else if (item.itemType === 'raw_material' || !item.itemType) {
                 const material = rawMaterials.find(rm => rm.id === item.rawMaterialId);
                 cost = material?.costPerUnit || 0;
@@ -384,7 +404,6 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
     const profit = sellingPrice - recipeCost;
     const profitMargin = sellingPrice > 0 ? (profit / sellingPrice) * 100 : 0;
 
-    // Filter out current product from potential bundle components to avoid infinite recursion
     const availableProductsForBundle = useMemo(() => {
         return products.filter(p => !product || p.id !== product.id);
     }, [products, product]);
@@ -468,6 +487,47 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                         </button>
                     </div>
                 )}
+            </div>
+
+            {/* Remote Branch Pricing Section */}
+            <div className="space-y-3 pt-4 border-t border-slate-700">
+                <h3 className="text-lg font-semibold text-yellow-400 flex items-center gap-2">
+                    <Icon name="share" className="w-5 h-5"/> Harga Khusus Cabang
+                </h3>
+                <p className="text-xs text-slate-400">Atur harga berbeda untuk cabang tertentu. Harga ini akan diterapkan saat cabang melakukan Sync dari Cloud.</p>
+                
+                <div className="flex gap-2">
+                    <input 
+                        type="text" 
+                        placeholder="Store ID (cth: BDG-01)" 
+                        value={newBranchId}
+                        onChange={(e) => setNewBranchId(e.target.value)}
+                        className="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-white uppercase"
+                    />
+                    <input 
+                        type="number" 
+                        placeholder="Harga (Rp)" 
+                        value={newBranchPrice}
+                        onChange={(e) => setNewBranchPrice(e.target.value)}
+                        className="w-24 bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-white"
+                    />
+                    <Button type="button" size="sm" onClick={addBranchPrice}>Tambah</Button>
+                </div>
+
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {formData.branchPrices.map((bp, idx) => (
+                        <div key={idx} className="flex justify-between items-center bg-slate-900 p-2 rounded border border-slate-700">
+                            <span className="font-mono text-sm text-yellow-300">{bp.storeId}</span>
+                            <div className="flex items-center gap-3">
+                                <span className="text-white font-bold">{CURRENCY_FORMATTER.format(bp.price)}</span>
+                                <button type="button" onClick={() => removeBranchPrice(bp.storeId)} className="text-red-400 hover:text-white">
+                                    <Icon name="close" className="w-4 h-4"/>
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                    {formData.branchPrices.length === 0 && <p className="text-xs text-slate-500 italic">Belum ada harga khusus cabang.</p>}
+                </div>
             </div>
 
             {/* Varian Harga (Multi-Tier Pricing) */}
@@ -555,105 +615,102 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                         </Button>
                     </div>
                 ))}
-                <Button type="button" variant="secondary" onClick={addAddonItem}>Tambah Add-on</Button>
+                <Button type="button" variant="secondary" onClick={addAddonItem}>
+                    <Icon name="plus" className="w-4 h-4" /> Tambah Add-on
+                </Button>
             </div>
 
-            {showSimpleStock && (
-                <div className="flex items-center gap-4 pt-4 border-t border-slate-700">
-                    <div className="flex-1">
-                        <InputField name="stock" label="Jumlah Stok (Opsional)" type="number" value={formData.stock} onChange={handleChange} min="0" />
-                    </div>
-                    <div className="pt-7">
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                            <input type="checkbox" name="trackStock" checked={formData.trackStock} onChange={handleChange} className="h-5 w-5 rounded bg-slate-900 border-slate-600 text-[#347758] focus:ring-[#347758]" />
-                            <span className="text-slate-300">Lacak Stok</span>
-                        </label>
-                    </div>
-                </div>
-            )}
+            {inventorySettings.enabled && (
+                <div className="pt-4 border-t border-slate-700 space-y-4">
+                    <label className="flex items-center space-x-3">
+                        <input
+                            type="checkbox"
+                            name="trackStock"
+                            checked={formData.trackStock}
+                            onChange={handleChange}
+                            className="h-5 w-5 rounded bg-slate-900 border-slate-600 text-[#347758] focus:ring-[#347758]"
+                        />
+                        <span className="text-sm text-slate-300">Lacak Stok Produk Ini</span>
+                    </label>
 
-            {showRecipe && (
-                <div className="space-y-3 pt-4 border-t border-slate-700">
-                    <h3 className="text-lg font-semibold text-white">Resep / Komposisi & Bundling</h3>
-                    <p className="text-xs text-slate-400">
-                        Tentukan bahan baku atau produk lain yang membentuk produk ini. 
-                        Pilih <strong>"Produk Jadi"</strong> pada dropdown untuk membuat Paket Bundling.
-                    </p>
-                    
-                    {formData.recipe.map((item, index) => (
-                        <div key={index} className="flex flex-col sm:flex-row gap-2 bg-slate-900 p-2 rounded-md items-start sm:items-center">
-                            <div className="flex-shrink-0 w-full sm:w-auto">
-                                <select 
-                                    value={item.itemType || 'raw_material'} 
-                                    onChange={(e) => handleRecipeChange(index, 'itemType', e.target.value)} 
-                                    className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-300"
-                                >
-                                    <option value="raw_material">Bahan Baku</option>
-                                    <option value="product">Produk Jadi</option>
-                                </select>
+                    {formData.trackStock && showSimpleStock && (
+                        <InputField name="stock" label="Stok Saat Ini" type="number" value={formData.stock} onChange={handleChange} min="0"/>
+                    )}
+
+                    {formData.trackStock && showRecipe && (
+                        <div className="space-y-3 bg-slate-800 p-4 rounded-lg border border-slate-700">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-md font-semibold text-white">Resep / Komposisi & Bundling</h3>
+                                <div className="text-right">
+                                    <p className="text-xs text-slate-400">Estimasi Modal (HPP)</p>
+                                    <p className="font-bold text-[#52a37c]">{CURRENCY_FORMATTER.format(recipeCost)}</p>
+                                    <p className="text-xs text-slate-500">Margin: {profitMargin.toFixed(1)}%</p>
+                                </div>
                             </div>
                             
-                            {item.itemType === 'product' ? (
-                                <select 
-                                    value={item.productId || ''} 
-                                    onChange={(e) => handleRecipeChange(index, 'productId', e.target.value)} 
-                                    className="flex-1 w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
-                                >
-                                    <option value="" disabled>Pilih Produk...</option>
-                                    {availableProductsForBundle.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                </select>
-                            ) : (
-                                <select 
-                                    value={item.rawMaterialId || ''} 
-                                    onChange={(e) => handleRecipeChange(index, 'rawMaterialId', e.target.value)} 
-                                    className="flex-1 w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
-                                >
-                                    <option value="" disabled>Pilih Bahan...</option>
-                                    {rawMaterials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.unit})</option>)}
-                                </select>
-                            )}
+                            {formData.recipe.map((item, index) => (
+                                <div key={index} className="flex flex-wrap items-center gap-2 bg-slate-900 p-2 rounded">
+                                    <select 
+                                        value={item.itemType || 'raw_material'} 
+                                        onChange={e => handleRecipeChange(index, 'itemType', e.target.value)}
+                                        className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                                    >
+                                        <option value="raw_material">Bahan Baku</option>
+                                        <option value="product">Produk Jadi</option>
+                                    </select>
 
-                            <div className="flex gap-2 w-full sm:w-auto">
-                                <input 
-                                    type="number" 
-                                    min="0" 
-                                    step="0.01"
-                                    value={item.quantity} 
-                                    placeholder="Jumlah" 
-                                    onChange={(e) => handleRecipeChange(index, 'quantity', e.target.value)} 
-                                    className="w-24 flex-1 sm:flex-none bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white" 
-                                />
-                                <Button type="button" variant="danger" size="sm" onClick={() => removeRecipeItem(index)} className="flex-shrink-0">
-                                    <Icon name="trash" className="w-4 h-4" />
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
-                    
-                    <Button type="button" variant="secondary" onClick={addRecipeItem}>
-                        <Icon name="plus" className="w-4 h-4" /> Tambah Komposisi
-                    </Button>
+                                    {item.itemType === 'product' ? (
+                                        <select
+                                            value={item.productId || ''}
+                                            onChange={e => handleRecipeChange(index, 'productId', e.target.value)}
+                                            className="flex-1 min-w-[150px] bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                                        >
+                                            <option value="">-- Pilih Produk --</option>
+                                            {availableProductsForBundle.map(p => (
+                                                <option key={p.id} value={p.id}>{p.name} ({p.trackStock ? `Stok: ${p.stock}` : 'No Stock'})</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <select
+                                            value={item.rawMaterialId || ''}
+                                            onChange={e => handleRecipeChange(index, 'rawMaterialId', e.target.value)}
+                                            className="flex-1 min-w-[150px] bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                                        >
+                                            <option value="">-- Pilih Bahan Baku --</option>
+                                            {rawMaterials.map(m => (
+                                                <option key={m.id} value={m.id}>{m.name} ({m.stock} {m.unit})</option>
+                                            ))}
+                                        </select>
+                                    )}
 
-                    {recipeCost > 0 && (
-                        <div className="mt-4 space-y-2 text-sm bg-slate-900/50 p-3 rounded-lg border border-slate-700">
-                            <div className="flex justify-between">
-                                <span className="text-slate-400">Total HPP (Bahan + Produk):</span>
-                                <span className="font-semibold text-white">{CURRENCY_FORMATTER.format(recipeCost)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-slate-400">Estimasi Laba (Harga Default):</span>
-                                <span className={`font-semibold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{CURRENCY_FORMATTER.format(profit)}</span>
-                            </div>
-                             <div className="flex justify-between">
-                                <span className="text-slate-400">Margin Laba:</span>
-                                <span className={`font-semibold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{profitMargin.toFixed(1)}%</span>
-                            </div>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={item.quantity}
+                                        onChange={e => handleRecipeChange(index, 'quantity', e.target.value)}
+                                        placeholder="Jml"
+                                        className="w-20 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                                    />
+                                    <span className="text-xs text-slate-400 w-10">
+                                        {item.itemType === 'product' 
+                                            ? 'Pcs' 
+                                            : (rawMaterials.find(m => m.id === item.rawMaterialId)?.unit || '')}
+                                    </span>
+                                    <Button type="button" variant="danger" size="sm" onClick={() => removeRecipeItem(index)}>
+                                        <Icon name="trash" className="w-3 h-3" />
+                                    </Button>
+                                </div>
+                            ))}
+                            
+                            <Button type="button" variant="secondary" size="sm" onClick={addRecipeItem}>
+                                <Icon name="plus" className="w-3 h-3" /> Tambah Komposisi
+                            </Button>
                         </div>
                     )}
                 </div>
             )}
 
-            <div className="flex justify-end gap-3 pt-4">
+            <div className="flex justify-end gap-3 pt-6 border-t border-slate-700">
                 <Button type="button" variant="secondary" onClick={onCancel}>Batal</Button>
                 <Button type="submit" variant="primary">Simpan</Button>
             </div>
@@ -661,226 +718,85 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
     );
 });
 
-
-const RestockModal: React.FC<{
-    product: Product | null,
-    onSave: (productId: string, quantity: number, notes?: string) => void,
-    onClose: () => void,
-}> = ({ product, onSave, onClose }) => {
-    const [quantity, setQuantity] = useState('');
-    const [notes, setNotes] = useState('');
-    
-    useEffect(() => {
-        if (!product) {
-            setQuantity('');
-            setNotes('');
-        }
-    }, [product]);
-
-    if (!product) return null;
-
-    const currentStock = product.stock || 0;
-    const incomingStock = parseFloat(quantity) || 0;
-    const newStock = currentStock + incomingStock;
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (incomingStock > 0) {
-            onSave(product.id, incomingStock, notes);
-            onClose();
-        }
-    };
-    
-    return (
-        <Modal isOpen={!!product} onClose={onClose} title={`Tambah Stok untuk ${product.name}`}>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-center">
-                    <div className="bg-slate-900 p-2 rounded-lg">
-                        <p className="text-slate-400 text-xs">Stok Saat Ini</p>
-                        <p className="text-lg font-bold text-slate-200">{currentStock}</p>
-                    </div>
-                     <div className="bg-slate-900 p-2 rounded-lg">
-                        <p className="text-slate-400 text-xs">Stok Baru Akan Menjadi</p>
-                        <p className="text-lg font-bold text-[#52a37c]">{newStock}</p>
-                    </div>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Jumlah Stok Masuk</label>
-                    <input type="number" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} required placeholder="0" className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-xl" />
-                </div>
-                 <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Catatan (Opsional)</label>
-                    <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="cth: Dari Supplier Cemerlang" className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white" />
-                </div>
-                 <div className="flex justify-end gap-3 pt-4">
-                    <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
-                    <Button type="submit" variant="primary">Simpan</Button>
-                </div>
-            </form>
-        </Modal>
-    );
-};
-
-const ProductImage: React.FC<{ product: Product, className?: string }> = ({ product, className }) => {
-    const [imageSrc, setImageSrc] = useState<string | undefined>();
-    
-    useEffect(() => {
-        let objectUrl: string | undefined;
-        if (product.image instanceof Blob) {
-            objectUrl = URL.createObjectURL(product.image);
-            setImageSrc(objectUrl);
-        } else {
-            setImageSrc(product.imageUrl);
-        }
-        return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
-    }, [product.image, product.imageUrl]);
-
-    if (imageSrc) {
-        return <img src={imageSrc} alt={product.name} className={`w-10 h-10 rounded-md object-cover ${className}`} />;
-    }
-    return (
-        <div className={`w-10 h-10 rounded-md overflow-hidden ${className}`}>
-           <ProductPlaceholder productName={product.name} size="small" className="w-full h-full" />
-        </div>
-    );
-};
-
 const ProductsView: React.FC = () => {
-    const { products, addProduct, updateProduct, deleteProduct, inventorySettings, addStockAdjustment } = useProduct();
-    const [isModalOpen, setModalOpen] = useState(false);
+    const { products, addProduct, updateProduct, deleteProduct, bulkAddProducts } = useProduct();
+    const { showAlert } = useUI();
+    const [isFormOpen, setFormOpen] = useState(false);
+    const [isCameraOpen, setCameraOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-    const [isCameraModalOpen, setCameraModalOpen] = useState(false);
-    const [restockingProduct, setRestockingProduct] = useState<Product | null>(null);
-    const productFormRef = useRef<HTMLFormElement>(null);
-    const isCameraAvailable = useCameraAvailability();
+    const [isOpnameOpen, setIsOpnameOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const formRef = useRef<HTMLFormElement>(null);
+    const isCameraAvailable = useCameraAvailability();
+    const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
     const filteredProducts = useMemo(() => {
-        return products.filter(product =>
-            product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            product.category.join(' ').toLowerCase().includes(searchTerm.toLowerCase())
-        ).sort((a,b) => a.name.localeCompare(b.name));
+        return products.filter(p => 
+            p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            (p.barcode && p.barcode.includes(searchTerm))
+        ).sort((a, b) => a.name.localeCompare(b.name));
     }, [products, searchTerm]);
 
-    const handleOpenModal = async (product: Product | null = null) => {
-        if (product && product.image instanceof Blob) {
-          const dataUrl = await blobToBase64(product.image);
-          const productForForm = { ...product, imageUrl: dataUrl };
-          delete productForForm.image;
-          setEditingProduct(productForForm);
-        } else {
-            setEditingProduct(product);
-        }
-        setModalOpen(true);
+    const handleEdit = (product: Product) => {
+        setEditingProduct(product);
+        setFormOpen(true);
     };
 
-    const handleCloseModal = () => {
+    const handleSave = (productData: Omit<Product, 'id'> | Product) => {
+        if ('id' in productData) {
+            updateProduct(productData as Product);
+        } else {
+            addProduct(productData);
+        }
+        setFormOpen(false);
         setEditingProduct(null);
-        setModalOpen(false);
+        setCapturedImage(null);
     };
 
-    const handleSaveProduct = (productData: Omit<Product, 'id'> | Product) => {
-        const productToSave: any = { ...productData };
-        
-        if (productToSave.imageUrl && productToSave.imageUrl.startsWith('data:')) {
-            productToSave.image = base64ToBlob(productToSave.imageUrl);
-            productToSave.imageUrl = undefined;
-        } else if (!productToSave.imageUrl) {
-             productToSave.imageUrl = undefined;
-        }
-
-
-        if ('id' in productToSave) {
-            updateProduct(productToSave);
-        } else {
-            addProduct(productToSave);
-        }
-        handleCloseModal();
-    };
-    
-    const handleImageCapture = (imageBase64: string) => {
-        setEditingProduct(prev => {
-            const newProductState = prev ? { ...prev, imageUrl: imageBase64 } : { 
-                id: 'new', name: '', price: 0, category: [], imageUrl: imageBase64
-            };
-            return newProductState as Product;
-        });
-        setCameraModalOpen(false);
+    const onCameraCapture = (image: string) => {
+        setCapturedImage(image);
+        setCameraOpen(false);
     };
 
-    const StockIndicator: React.FC<{ product: Product }> = ({ product }) => {
-        if (!inventorySettings.enabled || !product.trackStock) {
-            return <span className="text-slate-500">-</span>;
-        }
-        const stock = product.stock ?? 0;
-        let color = 'text-slate-300';
-        if (stock <= 0) color = 'text-red-400 font-bold';
-        else if (stock <= 5) color = 'text-yellow-400 font-semibold';
-
-        return <span className={color}>{stock}</span>
-    }
-    
     const columns = useMemo(() => [
-        { label: 'Nama', width: '2fr', render: (p: Product) => {
-            const isBundle = p.recipe?.some(r => r.itemType === 'product');
-            const hasVariants = p.variants && p.variants.length > 0;
-            return (
-                <div className="font-medium flex items-center gap-3">
-                   <ProductImage product={p} />
-                   <div className="flex flex-col justify-center">
-                       <div className="flex items-center gap-2">
-                           <span>{p.name}</span>
-                           {p.isFavorite && <Icon name="star" className="w-4 h-4 text-yellow-400" title="Produk Favorit" />}
-                       </div>
-                       <div className="flex gap-1">
-                           {isBundle && (
-                               <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded w-fit mt-0.5">
-                                   Bundle
-                               </span>
-                           )}
-                           {hasVariants && (
-                               <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded w-fit mt-0.5">
-                                   {p.variants?.length} Varian
-                               </span>
-                           )}
-                       </div>
-                   </div>
+        { label: 'Nama Produk', width: '2fr', render: (p: Product) => (
+            <div className="flex items-center gap-3">
+                {p.imageUrl ? (
+                    <img src={p.imageUrl} alt={p.name} className="w-8 h-8 rounded object-cover" />
+                ) : (
+                    <ProductPlaceholder productName={p.name} size="small" className="w-8 h-8 rounded" />
+                )}
+                <div>
+                    <p className="font-semibold text-white">{p.name}</p>
+                    <p className="text-xs text-slate-400">{p.category.join(', ')}</p>
                 </div>
-            )
-        }},
-        { label: 'Kategori', width: '1.5fr', render: (p: Product) => (
-            <div className="flex flex-wrap gap-1">
-                {p.category.map(cat => <span key={cat} className="text-xs bg-slate-700 px-2 py-0.5 rounded-full">{cat}</span>)}
             </div>
         )},
-        { label: 'Barcode', width: '1fr', render: (p: Product) => <span className="font-mono text-sm">{p.barcode || '-'}</span>},
-        ...(inventorySettings.enabled ? [{ label: 'Harga Modal', width: '1fr', render: (p: Product) => p.costPrice ? CURRENCY_FORMATTER.format(p.costPrice) : '-' }] : []),
-        { label: 'Harga Jual', width: '1fr', render: (p: Product) => CURRENCY_FORMATTER.format(p.price) },
-        ...(inventorySettings.enabled && !inventorySettings.trackIngredients ? [{ label: 'Stok', width: '0.5fr', render: (p: Product) => <StockIndicator product={p} /> }] : []),
-        { label: 'Aksi', width: '1fr', render: (p: Product) => (
+        { label: 'Harga', width: '1fr', render: (p: Product) => (
+            <div>
+                <p className="text-white">{CURRENCY_FORMATTER.format(p.price)}</p>
+                {p.variants && p.variants.length > 0 && <span className="text-[10px] text-blue-300">Ada Varian</span>}
+            </div>
+        )},
+        { label: 'Stok', width: '1fr', render: (p: Product) => (
+            <span className={p.trackStock && (p.stock || 0) <= 5 ? 'text-red-400 font-bold' : 'text-slate-300'}>
+                {p.trackStock ? p.stock : '-'}
+            </span>
+        )},
+        { label: 'Aksi', width: '1fr', className: 'overflow-visible', render: (p: Product) => (
             <div className="flex gap-2">
-                {p.trackStock && !inventorySettings.trackIngredients && (
-                    <button onClick={() => setRestockingProduct(p)} className="text-green-400 hover:text-green-300" title="Tambah Stok">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"></path></svg>
-                    </button>
-                )}
-                <button onClick={() => handleOpenModal(p)} className="text-[#52a37c] hover:text-[#7ac0a0]" title="Edit Produk">
-                    <Icon name="edit" className="w-5 h-5" />
-                </button>
-                <button onClick={() => deleteProduct(p.id)} className="text-red-500 hover:text-red-400" title="Hapus Produk">
-                    <Icon name="trash" className="w-5 h-5" />
-                </button>
+                <button onClick={() => handleEdit(p)} className="text-sky-400 hover:text-sky-300 bg-sky-400/10 p-1.5 rounded"><Icon name="edit" className="w-4 h-4" /></button>
+                <button onClick={() => deleteProduct(p.id)} className="text-red-400 hover:text-red-300 bg-red-400/10 p-1.5 rounded"><Icon name="trash" className="w-4 h-4" /></button>
             </div>
         )}
-    ], [inventorySettings.enabled, inventorySettings.trackIngredients, deleteProduct]);
+    ], [deleteProduct]);
 
     return (
         <div className="flex flex-col h-full">
             <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
                 <h1 className="text-2xl font-bold text-white self-start sm:self-center">Produk</h1>
-                <div className="flex items-center gap-4 w-full sm:w-auto">
-                     <div className="relative flex-grow sm:flex-grow-0">
+                <div className="flex gap-2 flex-wrap justify-end self-stretch sm:self-center">
+                    <div className="relative flex-grow sm:flex-grow-0">
                          <input
                             type="text"
                             placeholder="Cari produk..."
@@ -890,50 +806,53 @@ const ProductsView: React.FC = () => {
                         />
                          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     </div>
-                    <Button variant="primary" onClick={() => handleOpenModal()} className="flex-shrink-0">
-                        <Icon name="plus" className="w-5 h-5" />
+                    <Button variant="secondary" onClick={() => setIsOpnameOpen(true)} className="flex-shrink-0">
+                        <Icon name="boxes" className="w-5 h-5"/>
+                        <span className="hidden lg:inline">Stock Opname</span>
+                    </Button>
+                    <Button variant="primary" onClick={() => { setEditingProduct(null); setFormOpen(true); }} className="flex-shrink-0">
+                        <Icon name="plus" className="w-5 h-5"/>
                         <span className="hidden sm:inline">Tambah Produk</span>
                     </Button>
                 </div>
             </div>
 
             <div className="flex-1 min-h-0 bg-slate-800 rounded-lg shadow-md flex flex-col">
-                 {filteredProducts.length > 0 ? (
+                {filteredProducts.length > 0 ? (
                     <VirtualizedTable
                         data={filteredProducts}
                         columns={columns}
-                        rowHeight={68}
+                        rowHeight={60}
                     />
-                 ) : (
-                    <div className="flex-1 flex items-center justify-center text-center p-8 text-slate-500">
-                        {searchTerm ? `Tidak ada produk yang cocok dengan "${searchTerm}".` : 'Belum ada produk. Klik "Tambah Produk" untuk memulai.'}
+                ) : (
+                    <div className="flex-1 flex items-center justify-center p-8 text-slate-500">
+                        {searchTerm ? 'Produk tidak ditemukan.' : 'Belum ada produk. Tambahkan produk baru.'}
                     </div>
                 )}
             </div>
-            
-            <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingProduct ? 'Edit Produk' : 'Tambah Produk Baru'}>
-                <ProductForm
-                    ref={productFormRef}
-                    product={editingProduct}
-                    onSave={handleSaveProduct}
-                    onCancel={handleCloseModal}
-                    onOpenCamera={() => setCameraModalOpen(true)}
+
+            <Modal isOpen={isFormOpen} onClose={() => { setFormOpen(false); setEditingProduct(null); setCapturedImage(null); }} title={editingProduct ? 'Edit Produk' : 'Tambah Produk'}>
+                <ProductForm 
+                    product={editingProduct} 
+                    onSave={handleSave} 
+                    onCancel={() => { setFormOpen(false); setEditingProduct(null); setCapturedImage(null); }}
+                    onOpenCamera={() => setCameraOpen(true)}
                     isCameraAvailable={isCameraAvailable}
+                    capturedImage={capturedImage}
                 />
             </Modal>
-            
-            <CameraCaptureModal
-                isOpen={isCameraModalOpen}
-                onClose={() => setCameraModalOpen(false)}
-                onCapture={handleImageCapture}
+
+            <CameraCaptureModal 
+                isOpen={isCameraOpen} 
+                onClose={() => setCameraOpen(false)} 
+                onCapture={onCameraCapture} 
             />
 
-            <RestockModal
-                product={restockingProduct}
-                onClose={() => setRestockingProduct(null)}
-                onSave={addStockAdjustment}
+            <StockOpnameModal 
+                isOpen={isOpnameOpen} 
+                onClose={() => setIsOpnameOpen(false)} 
+                initialTab="product"
             />
-
         </div>
     );
 };

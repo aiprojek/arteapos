@@ -1,7 +1,7 @@
-
 import React, { useState } from 'react';
 import Icon from '../components/Icon';
 import Button from '../components/Button';
+import { APP_LICENSE_ID } from '../constants';
 
 // Types for Accordion
 interface AccordionItemProps {
@@ -9,7 +9,7 @@ interface AccordionItemProps {
     children: React.ReactNode;
     isOpen: boolean;
     onToggle: () => void;
-    icon?: 'question' | 'wifi' | 'database' | 'printer' | 'cash' | 'products' | 'users' | 'warning' | 'tag' | 'plus' | 'settings' | 'award' | 'download' | 'reports' | 'finance' | 'chat' | 'lock' | 'share' | 'upload';
+    icon?: React.ComponentProps<typeof Icon>['name'];
 }
 
 const AccordionItem: React.FC<AccordionItemProps> = ({ title, children, isOpen, onToggle, icon = 'question' }) => (
@@ -49,8 +49,69 @@ const FlowStep: React.FC<{ number: number; title: string; desc: string; icon: an
     </div>
 );
 
+// Changelog Data
+const releaseNotes = [
+    {
+        version: "v2.3.0",
+        date: "13 Desember 2025",
+        changes: [
+            "Fitur Baru: Sinkronisasi Cloud Otomatis (Background Sync) setiap kali transaksi selesai.",
+            "Fitur Baru: Audit Log (Mencatat aktivitas sensitif seperti hapus produk, ubah harga, refund & opname) untuk anti-fraud.",
+            "Fitur Baru: Strategi 'Black Box' untuk pengawasan toko offline.",
+            "Fitur Baru: Stock Opname (Audit Stok Fisik) Massal.",
+            "Update: Akses Stock Opname & Restock kini tersedia untuk Staf di menu Kasir.",
+            "Fitur Baru: Pencatatan otomatis nama pengguna pada log stok.",
+            "Fitur Baru: Harga Produk Khusus per Cabang (Remote Pricing).",
+            "Fitur Baru: Pengaturan Diskon & Promo Spesifik per Cabang.",
+            "Fitur Baru: Aturan Poin Membership Spesifik per Cabang.",
+            "Update: Logika sinkronisasi pintar (Mempertahankan harga lokal jika tidak di-override pusat).",
+            "Fix: Sinkronisasi data 'Pemasukan Lain' ke Cloud.",
+            "Fix: Pencatatan riwayat stok otomatis saat Refund transaksi."
+        ]
+    },
+    {
+        version: "v2.2.0",
+        date: "12 Desember 2024",
+        changes: [
+            "Fitur Baru: Dukungan Multi-Cabang dengan 'Store ID'.",
+            "Fitur Baru: Sinkronisasi Cloud (Dropbox & Supabase) per cabang.",
+            "Fitur Baru: Enkripsi Laporan untuk keamanan data via WhatsApp.",
+            "Update: UI baru pada Laporan & Pengaturan.",
+        ]
+    },
+    {
+        version: "v2.1.0",
+        date: "10 Mei 2024",
+        changes: [
+            "Fitur Baru: Manajemen Keuangan (Pemasukan Lain & Pengeluaran).",
+            "Fitur Baru: Manajemen Stok Bahan Baku & Resep.",
+            "Fitur Baru: Manajemen Utang Piutang & Supplier.",
+            "Update: AI Assistant Dashboard (Beta).",
+        ]
+    },
+    {
+        version: "v2.0.0",
+        date: "1 April 2024",
+        changes: [
+            "Major Update: Migrasi dari LocalStorage ke IndexedDB (Dexie.js).",
+            "UI/UX: Redesign tampilan dengan tema Dark Mode modern.",
+            "Fitur Baru: Dukungan PWA (Installable App).",
+            "Fitur Baru: Multi-user dengan PIN Access.",
+        ]
+    },
+    {
+        version: "v1.0.0",
+        date: "1 Januari 2024",
+        changes: [
+            "Rilis Awal Aplikasi.",
+            "Fitur Dasar: Kasir, Produk, Laporan Sederhana.",
+            "Penyimpanan data berbasis LocalStorage.",
+        ]
+    }
+];
+
 const HelpView: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'flow' | 'features' | 'about'>('flow');
+    const [activeTab, setActiveTab] = useState<'flow' | 'features' | 'about' | 'license'>('flow');
     const [openAccordion, setOpenAccordion] = useState<string | null>(null);
 
     const toggleAccordion = (id: string) => {
@@ -59,15 +120,40 @@ const HelpView: React.FC = () => {
 
     const tabs = [
         { id: 'flow', label: 'Mulai & Alur', icon: 'play' },
-        { id: 'features', label: 'Fitur & Panduan', icon: 'book' },
+        { id: 'features', label: 'Fitur', icon: 'book' },
+        { id: 'license', label: 'Lisensi', icon: 'lock' },
         { id: 'about', label: 'Tentang', icon: 'info-circle' },
     ] as const;
+
+    const renderMarkdown = (text: string) => {
+        const lines = text.split('\n');
+        return lines.map((line, idx) => {
+            let content = line.trim();
+            if(!content) return <br key={idx}/>;
+            
+            if (content.startsWith('###')) {
+                return <h3 key={idx} className="text-lg font-bold text-[#52a37c] mt-4 mb-2">{content.replace('###', '')}</h3>
+            }
+            if (content.startsWith('**')) {
+                // Handle bold headers (simple parser)
+                return <p key={idx} className="font-bold text-white mt-3 mb-1">{content.replace(/\*\*/g, '')}</p>
+            }
+            if (content.startsWith('---')) {
+                return <hr key={idx} className="border-slate-700 my-4"/>
+            }
+            
+            return <p key={idx} className="text-slate-300 leading-relaxed text-sm mb-1">{content.replace(/\*\*/g, '')}</p>
+        });
+    };
 
     // Comprehensive feature list based on actual codebase capabilities
     const featureList = [
         { title: 'Offline 100%', desc: 'Tanpa internet.', icon: 'wifi' },
         { title: 'POS Cepat', desc: 'Transaksi kilat.', icon: 'cash' },
-        { title: 'Sync Dropbox', desc: 'Cloud Backup.', icon: 'upload' },
+        { title: 'Stock Opname', desc: 'Audit stok fisik.', icon: 'boxes' },
+        { title: 'Audit Log', desc: 'Rekam jejak anti-fraud.', icon: 'lock' },
+        { title: 'Multi Cabang', desc: 'Kelola banyak toko.', icon: 'share' },
+        { title: 'Sync Dropbox', desc: 'Backup terpisah.', icon: 'upload' },
         { title: 'Realtime DB', desc: 'Sync Supabase.', icon: 'database' },
         { title: 'AI Cerdas', desc: 'Analisis bisnis.', icon: 'chat' },
         { title: 'Stok & Resep', desc: 'Lacak bahan baku.', icon: 'database' },
@@ -77,15 +163,11 @@ const HelpView: React.FC = () => {
         { title: 'Pajak & Service', desc: 'PB1 otomatis.', icon: 'finance' },
         { title: 'Promo & Diskon', desc: 'Atur potongan.', icon: 'tag' },
         { title: 'Laporan Aman', desc: 'Anti-edit staf.', icon: 'lock' },
-        { title: 'Laporan', desc: 'Analisis omzet.', icon: 'reports' },
         { title: 'Order Dapur', desc: 'Cetak pesanan.', icon: 'check-circle-fill' },
         { title: 'Multi User', desc: 'Admin & Kasir.', icon: 'users' },
         { title: 'Membership', desc: 'Poin pelanggan.', icon: 'award' },
         { title: 'Printer BT', desc: 'Cetak struk.', icon: 'printer' },
         { title: 'Data Pemasok', desc: 'Beli stok.', icon: 'ingredients' },
-        { title: 'Open Bill', desc: 'Simpan pesanan.', icon: 'plus' },
-        { title: 'Barcode', desc: 'Scan kamera.', icon: 'barcode' },
-        { title: 'Backup Data', desc: 'Aman & lokal.', icon: 'download' },
     ];
 
     return (
@@ -101,24 +183,27 @@ const HelpView: React.FC = () => {
                 </p>
             </div>
 
-            {/* Tab Navigation - Fixed Spacing Logic */}
-            <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 mb-8 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/50 flex justify-center transition-all shadow-sm">
-                <div className="bg-slate-800 p-1 rounded-xl flex gap-1 shadow-lg border border-slate-700">
-                    {tabs.map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
-                            className={`flex items-center gap-2 px-4 md:px-6 py-2 rounded-lg text-sm font-semibold transition-all duration-200
-                                ${activeTab === tab.id 
-                                    ? 'bg-[#347758] text-white shadow-md transform scale-105' 
-                                    : 'text-slate-400 hover:text-white hover:bg-slate-700'
-                                }`}
-                        >
-                            <Icon name={tab.icon as any} className="w-4 h-4" />
-                            <span className="hidden sm:inline">{tab.label}</span>
-                            <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
-                        </button>
-                    ))}
+            {/* Tab Navigation */}
+            <div className="sticky top-0 z-30 py-3 mb-8 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/50">
+                <div className="overflow-x-auto">
+                    <div className="flex justify-start md:justify-center px-4 md:px-6">
+                        <div className="bg-slate-800 p-1 rounded-xl flex gap-1 shadow-lg border border-slate-700">
+                            {tabs.map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id as any)}
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 whitespace-nowrap
+                                        ${activeTab === tab.id 
+                                            ? 'bg-[#347758] text-white shadow-md transform scale-105' 
+                                            : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                                        }`}
+                                >
+                                    <Icon name={tab.icon as any} className="w-4 h-4" />
+                                    <span>{tab.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -135,20 +220,20 @@ const HelpView: React.FC = () => {
                         {/* Scroll Container */}
                         <div className="w-full overflow-x-auto pb-4">
                             {/* Inner Container - Updated to be strictly horizontal (flex-row) with min-width */}
-                            <div className="flex flex-row gap-6 relative min-w-[950px] p-6">
+                            <div className="flex flex-row gap-6 relative min-w-[1200px] p-6">
                                 {/* Connector Line (Visible on all screens now) */}
                                 <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-700 z-0 -translate-y-1/2 mx-6"></div>
                                 
                                 <FlowStep 
                                     number={1} 
                                     title="Persiapan" 
-                                    desc="Atur Profil Toko, Keamanan, & Fitur di Pengaturan." 
+                                    desc="Atur Store ID, Keamanan, & Koneksi Cloud (Opsional)." 
                                     icon="settings" 
                                 />
                                 <FlowStep 
                                     number={2} 
                                     title="Data" 
-                                    desc="Input Kategori, Bahan Baku, & Produk." 
+                                    desc="Input Produk Baru atau Restore Data Lama." 
                                     icon="products" 
                                 />
                                 <FlowStep 
@@ -165,37 +250,57 @@ const HelpView: React.FC = () => {
                                 />
                                 <FlowStep 
                                     number={5} 
-                                    title="Tutup & Laporan" 
-                                    desc="Tutup Sesi, Rekap Kas, & Analisis Laporan." 
-                                    icon="reports" 
+                                    title="Tutup & Sync" 
+                                    desc="Tutup Sesi & Sync ke Cloud (Dropbox/Supabase)." 
+                                    icon="upload" 
+                                />
+                                <FlowStep 
+                                    number={6} 
+                                    title="Audit & Pantau" 
+                                    desc="Aktivitas sensitif direkam & disinkron ke Cloud." 
+                                    icon="lock" 
                                 />
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
-                        <h3 className="text-lg font-bold text-white mb-4">Langkah Pertama (Wajib)</h3>
-                        <ul className="space-y-4 text-sm text-slate-300">
-                            <li className="flex gap-3">
-                                <div className="bg-[#347758]/20 p-2 rounded-lg h-fit"><Icon name="wifi" className="w-5 h-5 text-[#52a37c]"/></div>
-                                <div>
-                                    <strong className="text-white block mb-1">1. Instalasi Aplikasi</strong>
-                                    Untuk performa terbaik, instal aplikasi ini ke perangkat Anda (PWA).
-                                    <ul className="list-disc pl-5 mt-1 text-xs text-slate-400">
-                                        <li>Android (Chrome): Menu {'>'} "Install App" / "Tambahkan ke Layar Utama".</li>
-                                        <li>iOS (Safari): Share {'>'} "Add to Home Screen".</li>
-                                        <li>PC (Chrome/Edge): Klik ikon instal di pojok kanan kolom alamat.</li>
-                                    </ul>
-                                </div>
-                            </li>
-                            <li className="flex gap-3">
-                                <div className="bg-[#347758]/20 p-2 rounded-lg h-fit"><Icon name="settings" className="w-5 h-5 text-[#52a37c]"/></div>
-                                <div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                <Icon name="wifi" className="w-5 h-5 text-[#52a37c]"/> Persiapan Perangkat (Wajib)
+                            </h3>
+                            <ul className="space-y-4 text-sm text-slate-300">
+                                <li>
+                                    <strong className="text-white block mb-1">1. Instalasi (PWA)</strong>
+                                    Aplikasi ini berjalan di browser. Untuk pengalaman terbaik, "Instal" ke layar utama.
+                                    <span className="block text-xs text-slate-500 mt-1">Android: Chrome {'>'} Install App. iOS: Safari {'>'} Add to Home Screen.</span>
+                                </li>
+                                <li>
                                     <strong className="text-white block mb-1">2. Konfigurasi Awal</strong>
-                                    Buka menu <strong>Pengaturan</strong> untuk mengatur Nama Toko, Alamat, dan mengaktifkan fitur-fitur penting seperti <strong>Sesi Kasir</strong> atau <strong>Inventaris</strong> sesuai kebutuhan bisnis Anda.
-                                </div>
-                            </li>
-                        </ul>
+                                    Buka menu <strong>Pengaturan</strong>. Atur Nama Toko, Alamat, dan fitur lain sesuai kebutuhan.
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 border-l-4 border-l-[#347758]">
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                <Icon name="share" className="w-5 h-5 text-[#52a37c]"/> Setup Cabang Baru
+                            </h3>
+                            <div className="space-y-3 text-sm text-slate-300">
+                                <p>Jika Anda membuka cabang baru, lakukan langkah ini di perangkat kasir cabang tersebut:</p>
+                                <ol className="list-decimal pl-5 space-y-2">
+                                    <li>Masuk sebagai <strong>Admin</strong>.</li>
+                                    <li>Buka <strong>Pengaturan {'>'} Toko & Struk</strong>.</li>
+                                    <li>
+                                        Isi <strong>ID Toko (Store ID)</strong> dengan kode unik. 
+                                        <br/><span className="text-xs text-yellow-400">Contoh: JKT-01, BDG-02. Jangan gunakan spasi.</span>
+                                    </li>
+                                    <li>
+                                        (Opsional) Masukkan <strong>Token Dropbox / Supabase</strong> yang sama dengan pusat agar data tersinkronisasi ke akun yang sama.
+                                    </li>
+                                </ol>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
@@ -229,67 +334,122 @@ const HelpView: React.FC = () => {
                     {/* Feature Details Accordion */}
                     <div className="max-w-3xl mx-auto space-y-10 border-t border-slate-700 pt-8">
                         
-                        {/* Section: Skenario Lapangan (NEW) */}
+                        {/* Section: Skenario Lapangan */}
                         <div>
                             <h3 className="text-lg font-bold text-[#52a37c] mb-4 flex items-center gap-2 border-b border-slate-700 pb-2">
                                 <Icon name="users" className="w-5 h-5" /> Skenario Penggunaan Lapangan
                             </h3>
-                            <AccordionItem title="Panduan Memilih Metode Data" isOpen={openAccordion === 'method_compare'} onToggle={() => toggleAccordion('method_compare')} icon="question">
-                                <p className="mb-3">Aplikasi ini menyediakan 3 cara untuk memindahkan atau menyimpan data. Pilih sesuai kondisi lapangan Anda:</p>
+                            
+                            {/* PANDUAN KHUSUS STAFF (New) */}
+                            <AccordionItem title="Panduan Staf: Cara Update Data Produk Baru" isOpen={openAccordion === 'staff_update'} onToggle={() => toggleAccordion('staff_update')} icon="wifi">
+                                <p className="mb-3">Jika Admin atau Owner menambahkan produk baru atau mengubah harga dari pusat, Staf dapat memperbarui data di kasir tanpa perlu login Admin.</p>
                                 <div className="space-y-3">
                                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
-                                        <h5 className="font-bold text-green-400 text-sm mb-1">1. Laporan WhatsApp (Manual/Enkripsi)</h5>
-                                        <p className="text-xs text-slate-300"><strong>Cocok untuk:</strong> Harian, Sinyal Buruk, Pengguna Awam.</p>
-                                        <p className="text-xs text-slate-400 mt-1">Ini adalah metode paling tangguh (resilient). Tidak butuh server, pesan akan terkirim saat sinyal ada. Aman karena data shift dikunci.</p>
-                                    </div>
-                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
-                                        <h5 className="font-bold text-blue-400 text-sm mb-1">2. Dropbox (Backup File)</h5>
-                                        <p className="text-xs text-slate-300"><strong>Cocok untuk:</strong> Ganti HP, Backup Mingguan.</p>
-                                        <p className="text-xs text-slate-400 mt-1">Menyimpan 1 file besar berisi seluruh data toko. Tidak cocok untuk memantau penjualan harian secara live.</p>
-                                    </div>
-                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
-                                        <h5 className="font-bold text-purple-400 text-sm mb-1">3. Supabase (Database Real-time)</h5>
-                                        <p className="text-xs text-slate-300"><strong>Cocok untuk:</strong> Owner Teknis, Pemantauan Live, Multi-Cabang.</p>
-                                        <p className="text-xs text-slate-400 mt-1">Data dikirim otomatis tiap ada transaksi. Butuh koneksi internet stabil saat transaksi terjadi.</p>
+                                        <h5 className="font-bold text-sky-400 text-sm mb-1">Langkah Update:</h5>
+                                        <ol className="list-decimal pl-5 text-xs text-slate-300 space-y-1">
+                                            <li>Lihat ke pojok kanan atas aplikasi (di sebelah tombol tanda tanya).</li>
+                                            <li>Klik ikon <strong>Database/Awan</strong> <span className="inline-block align-middle bg-slate-700 p-1 rounded mx-1"><Icon name="database" className="w-3 h-3"/></span>.</li>
+                                            <li>Pilih tombol <strong>"Update dari Pusat"</strong>.</li>
+                                            <li>Tunggu proses selesai. Halaman akan dimuat ulang otomatis.</li>
+                                        </ol>
+                                        <p className="text-[10px] text-yellow-400 mt-2">Catatan: Data penjualan lokal di HP ini AMAN dan tidak akan hilang saat update.</p>
                                     </div>
                                 </div>
                             </AccordionItem>
 
-                            <AccordionItem title="Sistem Tunggal (Owner Jaga Sendiri)" isOpen={openAccordion === 'single_device'} onToggle={() => toggleAccordion('single_device')} icon="users">
-                                <p>Skenario ini paling sederhana. Anda menggunakan <strong>satu perangkat (HP/Tablet)</strong> untuk semuanya.</p>
-                                <ul className="list-disc pl-5 mt-2 space-y-1 text-slate-300">
-                                    <li>Login sebagai <strong>Admin</strong>.</li>
-                                    <li>Anda memiliki akses penuh: Kasir, Laporan, Stok, dan Keuangan dalam satu aplikasi.</li>
-                                    <li>Data tersimpan aman di perangkat tersebut.</li>
-                                    <li>Jangan lupa rutin melakukan <strong>Backup Data</strong> ke Dropbox atau File Lokal untuk keamanan jika HP hilang/rusak.</li>
-                                </ul>
+                            <AccordionItem title="Panduan Memilih Metode Data" isOpen={openAccordion === 'method_compare'} onToggle={() => toggleAccordion('method_compare')} icon="question">
+                                <p className="mb-3">Aplikasi ini menyediakan 3 cara untuk memindahkan atau menyimpan data:</p>
+                                <div className="space-y-3">
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
+                                        <h5 className="font-bold text-green-400 text-sm mb-1">1. Laporan WhatsApp (Manual/Enkripsi)</h5>
+                                        <p className="text-xs text-slate-300"><strong>Cocok untuk:</strong> Harian, Sinyal Buruk, Pengguna Awam.</p>
+                                        <p className="text-xs text-slate-400 mt-1">Paling tangguh. Tidak butuh server, pesan terkirim saat sinyal ada. Aman karena data shift dikunci.</p>
+                                    </div>
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
+                                        <h5 className="font-bold text-blue-400 text-sm mb-1">2. Dropbox (Backup File)</h5>
+                                        <p className="text-xs text-slate-300"><strong>Cocok untuk:</strong> Ganti HP, Backup Mingguan, Multi-Cabang (Arsip).</p>
+                                        <p className="text-xs text-slate-400 mt-1">Setiap cabang akan mengupload file terpisah (misal: <code>backup_JKT01.json</code>). Aman dari saling menimpa.</p>
+                                    </div>
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
+                                        <h5 className="font-bold text-purple-400 text-sm mb-1">3. Supabase (Database Real-time)</h5>
+                                        <p className="text-xs text-slate-300"><strong>Cocok untuk:</strong> Owner Teknis, Pemantauan Live, Multi-Cabang.</p>
+                                        <p className="text-xs text-slate-400 mt-1">Data transaksi & stok dikirim per item ke database pusat. Owner bisa melihat stok seluruh cabang secara real-time.</p>
+                                    </div>
+                                </div>
                             </AccordionItem>
-                            
+
                             <AccordionItem title="Sistem Terpisah (Owner & Staf Beda Lokasi)" isOpen={openAccordion === 'split_device'} onToggle={() => toggleAccordion('split_device')} icon="share">
                                 <p>Skenario ini digunakan jika Owner tidak di toko, dan ada Staf yang menjaga kasir menggunakan HP Toko.</p>
                                 <div className="mt-3 space-y-4">
                                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
                                         <h5 className="font-bold text-white text-xs mb-2">1. Di Perangkat Toko (HP Staf):</h5>
                                         <ul className="list-disc pl-5 text-xs text-slate-300 space-y-1">
-                                            <li>Staf login sebagai <strong>Kasir/Staff</strong> (Akses terbatas).</li>
-                                            <li>Staf melakukan penjualan seharian.</li>
-                                            <li>Saat tutup toko, Staf klik tombol <strong>"Laporan"</strong> di pojok kanan atas kasir.</li>
-                                            <li>Pilih <strong>"Laporan Aman (Anti-Edit)"</strong> dan kirim via WhatsApp ke Owner.</li>
-                                            <li><em>Opsional:</em> Jika Supabase aktif, data akan terkirim otomatis sepanjang hari.</li>
+                                            <li>Staf login sebagai <strong>Kasir</strong>.</li>
+                                            <li>Saat tutup toko, klik <strong>"Laporan"</strong> -> <strong>"Laporan Aman (Anti-Edit)"</strong> dan kirim via WhatsApp ke Owner.</li>
+                                            <li>Atau klik <strong>"Sync Cloud"</strong> jika Dropbox/Supabase sudah disetting oleh Admin.</li>
                                         </ul>
                                     </div>
                                     
                                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
                                         <h5 className="font-bold text-white text-xs mb-2">2. Di Perangkat Owner (HP Rumah):</h5>
                                         <ul className="list-disc pl-5 text-xs text-slate-300 space-y-1">
-                                            <li>Owner menerima pesan WA berisi ringkasan dan <strong>KODE TERENKRIPSI</strong>.</li>
-                                            <li>Owner membuka aplikasi Artea POS di HP-nya sendiri (Login Admin).</li>
-                                            <li>Masuk ke <strong>Pengaturan {'>'} Laporan & Transaksi Lama</strong>.</li>
-                                            <li>Klik <strong>"Paste Teks (Encrypted)"</strong> dan tempel kode dari WA tadi.</li>
-                                            <li><strong>Hasil:</strong> Data penjualan hari itu akan masuk ke HP Owner, sehingga Owner bisa melihat grafik, laba, dan stok terkini tanpa perlu memegang HP Toko.</li>
+                                            <li>Owner menerima kode terenkripsi dari WA.</li>
+                                            <li>Owner membuka Artea POS -> <strong>Pengaturan {'>'} Laporan & Transaksi Lama</strong> -> <strong>"Paste Teks (Encrypted)"</strong>.</li>
+                                            <li><strong>Hasil:</strong> Data penjualan masuk ke HP Owner tanpa perlu login ke HP Toko.</li>
                                         </ul>
                                     </div>
                                 </div>
+                            </AccordionItem>
+                        </div>
+
+                        {/* Section: Multi-Cabang & Ekspansi */}
+                        <div>
+                            <h3 className="text-lg font-bold text-[#52a37c] mb-4 flex items-center gap-2 border-b border-slate-700 pb-2">
+                                <Icon name="share" className="w-5 h-5" /> Ekspansi & Multi-Cabang
+                            </h3>
+                            <AccordionItem title="Cara Kerja Multi-Cabang (Penting)" isOpen={openAccordion === 'multibranch'} onToggle={() => toggleAccordion('multibranch')} icon="info-circle">
+                                <p>Karena aplikasi ini <strong>Offline-First</strong>, setiap HP cabang memiliki database sendiri. Agar data tidak bentrok saat disatukan (Sync), Anda wajib mengatur <strong>Store ID</strong>.</p>
+                                <div className="mt-3 space-y-2">
+                                    <p className="text-sm font-bold text-white">Logika Penyimpanan:</p>
+                                    <ul className="list-disc pl-5 text-sm text-slate-300 space-y-1">
+                                        <li><strong>Dropbox:</strong> Nama file backup akan otomatis menyertakan ID Toko. <br/>Contoh: Cabang A -> <code>artea_backup_CABANG-A.json</code>, Cabang B -> <code>artea_backup_CABANG-B.json</code>. Tidak akan saling menimpa.</li>
+                                        <li><strong>Supabase:</strong> Setiap baris transaksi dan stok di database akan ditandai dengan kolom <code>store_id</code>. Anda bisa memfilter data per cabang di dashboard Supabase Anda.</li>
+                                    </ul>
+                                </div>
+                            </AccordionItem>
+                            <AccordionItem title="Manajemen Harga & Promo Multi-Cabang" isOpen={openAccordion === 'branch_pricing'} onToggle={() => toggleAccordion('branch_pricing')} icon="tag">
+                                <p>Admin di pusat dapat mengatur harga dan promosi yang berbeda untuk setiap cabang.</p>
+                                <div className="mt-3 space-y-3">
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
+                                        <h5 className="font-bold text-yellow-400 text-xs mb-1">1. Harga Khusus Cabang</h5>
+                                        <p className="text-xs text-slate-300">
+                                            Di menu Edit Produk, isi bagian "Harga Khusus Cabang" dengan <strong>Store ID</strong> cabang target (misal: <code>BDG-01</code>) dan harganya.
+                                        </p>
+                                    </div>
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
+                                        <h5 className="font-bold text-green-400 text-xs mb-1">2. Diskon & Poin Spesifik</h5>
+                                        <p className="text-xs text-slate-300">
+                                            Saat membuat Diskon atau Aturan Poin, isi kolom <strong>"Berlaku di Cabang"</strong> dengan kode Store ID (pisahkan koma jika banyak). Jika kosong, promo berlaku global.
+                                        </p>
+                                    </div>
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
+                                        <h5 className="font-bold text-blue-400 text-xs mb-1">3. Sinkronisasi</h5>
+                                        <p className="text-xs text-slate-300">
+                                            Saat cabang menekan tombol <strong>"Update dari Pusat"</strong>, sistem otomatis mendeteksi Store ID mereka dan menerapkan harga/promo yang sesuai. Harga lokal yang tidak diatur pusat akan tetap aman.
+                                        </p>
+                                    </div>
+                                </div>
+                            </AccordionItem>
+                            <AccordionItem title="Setup Teknis Cabang Baru" isOpen={openAccordion === 'setup_branch'} onToggle={() => toggleAccordion('setup_branch')} icon="settings">
+                                <ol className="list-decimal pl-5 space-y-2 text-sm text-slate-300">
+                                    <li>Siapkan HP/Tablet baru di lokasi cabang.</li>
+                                    <li>Buka aplikasi Artea POS, login sebagai Admin Default (PIN: 1111).</li>
+                                    <li>Masuk ke <strong>Pengaturan {'>'} Toko & Struk</strong>.</li>
+                                    <li>Isi kolom <strong>ID Toko / Kode Cabang</strong>. Gunakan kode singkat tanpa spasi (misal: <code>JKT-SELATAN</code>).</li>
+                                    <li>Masuk ke <strong>Pengaturan {'>'} Data & Sistem</strong>.</li>
+                                    <li>Masukkan Token Dropbox atau URL/Key Supabase yang <strong>SAMA</strong> dengan akun Owner pusat.</li>
+                                    <li>Sekarang, saat staf di cabang menekan tombol "Sync", data akan masuk ke akun Cloud pusat Anda dengan label cabang tersebut.</li>
+                                </ol>
                             </AccordionItem>
                         </div>
 
@@ -298,6 +458,41 @@ const HelpView: React.FC = () => {
                             <h3 className="text-lg font-bold text-[#52a37c] mb-4 flex items-center gap-2 border-b border-slate-700 pb-2">
                                 <Icon name="settings" className="w-5 h-5" /> Konfigurasi & Keamanan
                             </h3>
+                            <AccordionItem title="Audit Log (Riwayat Aktivitas Sensitif)" isOpen={openAccordion === 'audit'} onToggle={() => toggleAccordion('audit')} icon="lock">
+                                <p>Sistem ini secara otomatis merekam tindakan sensitif untuk mencegah kecurangan (fraud) oleh karyawan.</p>
+                                <p className="mt-2 text-sm font-bold text-white">Apa yang dicatat?</p>
+                                <ul className="list-disc pl-5 text-sm text-slate-300 mt-1">
+                                    <li><strong>Penghapusan Produk:</strong> Saat ada produk yang dihapus dari database.</li>
+                                    <li><strong>Perubahan Harga:</strong> Saat harga jual produk diubah (untuk mencegah markup/markdown ilegal).</li>
+                                    <li><strong>Stock Opname (Force Reset):</strong> Saat stok diubah secara manual tanpa melalui penjualan/pembelian.</li>
+                                    <li><strong>Refund Transaksi:</strong> Saat transaksi yang sudah selesai dibatalkan (void).</li>
+                                </ul>
+                                <p className="mt-2 text-xs text-yellow-400">Admin dapat melihat riwayat ini di menu <strong>Pengaturan {'>'} Audit & Keamanan</strong>.</p>
+                                
+                                <div className="mt-3 bg-blue-900/20 border-l-4 border-blue-500 p-3 rounded-r">
+                                    <h5 className="font-bold text-blue-300 text-xs mb-2 flex items-center gap-2">
+                                        <Icon name="info-circle" className="w-4 h-4"/> Strategi Penggunaan Offline (Tanpa Internet)
+                                    </h5>
+                                    <p className="text-xs text-slate-300 mb-2">
+                                        Meskipun Anda tidak menggunakan Cloud Sync, fitur ini bekerja seperti <strong>"Kotak Hitam" (Black Box)</strong> yang tersimpan aman di perangkat kasir:
+                                    </p>
+                                    <ul className="list-disc pl-5 text-xs text-slate-300 space-y-1">
+                                        <li><strong>Cek Harian (Spot Check):</strong> Saat tutup toko, Owner bisa memeriksa menu Audit untuk melihat apakah ada aktivitas mencurigakan hari itu.</li>
+                                        <li><strong>Investigasi Selisih Kas:</strong> Jika uang fisik kurang tapi laporan bersih, cek log "Refund". Modus umum adalah mencetak struk, menerima uang, lalu me-refund transaksi di sistem agar uang tidak tercatat sebagai penjualan.</li>
+                                        <li><strong>Kontrol Stok (Anti-Tuyul):</strong> Pastikan "Stock Opname" hanya dilakukan saat ada izin. Log akan mencatat siapa yang mengubah angka stok secara manual.</li>
+                                        <li><strong>Efek Psikologis:</strong> Staf yang mengetahui bahwa setiap perubahan harga dan penghapusan data "Terekam & Tidak Bisa Dihapus", akan cenderung bekerja lebih jujur dan disiplin.</li>
+                                    </ul>
+                                </div>
+
+                                <div className="mt-3 bg-red-900/20 border-l-4 border-red-500 p-3 rounded-r">
+                                    <p className="text-xs text-red-200 font-bold flex items-center gap-2">
+                                        <Icon name="wifi" className="w-4 h-4"/> Sinkronisasi Cloud
+                                    </p>
+                                    <p className="text-xs text-slate-300 mt-1">
+                                        Data Audit Log ini <strong>ikut terkirim</strong> saat proses Sync Cloud (Supabase/Dropbox). Ini berarti Owner/Admin Pusat dapat memantau aktivitas ini dari jarak jauh secara real-time, bahkan jika data lokal dihapus.
+                                    </p>
+                                </div>
+                            </AccordionItem>
                             <AccordionItem title="Keamanan & Multi-Pengguna (PIN)" isOpen={openAccordion === 'auth'} onToggle={() => toggleAccordion('auth')} icon="users">
                                 <p>Secara default, keamanan dimatikan untuk kemudahan awal. Untuk mengaktifkan:</p>
                                 <ol className="list-decimal pl-5 space-y-1 mb-3">
@@ -329,16 +524,6 @@ const HelpView: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-
-                                <p className="mt-4 text-xs text-yellow-400 flex gap-2 items-start">
-                                    <Icon name="warning" className="w-4 h-4 flex-shrink-0" />
-                                    <span><strong>Darurat Admin:</strong> Jika lupa PIN Admin, ketuk logo aplikasi di halaman login sebanyak 5 kali untuk mereset PIN Admin ke 1111.</span>
-                                </p>
-                            </AccordionItem>
-                            <AccordionItem title="Pengaturan Struk & Toko" isOpen={openAccordion === 'receipt'} onToggle={() => toggleAccordion('receipt')} icon="printer">
-                                <p>Informasi pada struk dapat diubah di <strong>Pengaturan {'>'} Pengaturan Struk & Toko</strong>.</p>
-                                <p>Anda bisa mengatur <strong>Pajak (PB1)</strong> dan <strong>Service Charge</strong> di menu ini.</p>
-                                <p>Anda juga bisa memasukkan nomor WhatsApp Admin agar kasir bisa mengirim laporan harian langsung ke WA pemilik melalui tombol di halaman Laporan.</p>
                             </AccordionItem>
                         </div>
 
@@ -367,13 +552,6 @@ const HelpView: React.FC = () => {
                                 <p><strong>Cara Mengaktifkan:</strong> Buka Pengaturan {'>'} Manajemen Sesi {'>'} Aktifkan "Fitur Simpan Pesanan".</p>
                                 <p>Di halaman kasir akan muncul tab baru. Klik tombol (+) untuk membuat pesanan baru (misal: "Meja 1"). Anda bisa berpindah antar pesanan dengan mudah.</p>
                             </AccordionItem>
-                            <AccordionItem title="Diskon Item & Diskon Total" isOpen={openAccordion === 'discount'} onToggle={() => toggleAccordion('discount')} icon="tag">
-                                <ul className="list-disc pl-5 space-y-1">
-                                    <li><strong>Diskon Item:</strong> Klik ikon tag pada produk di keranjang.</li>
-                                    <li><strong>Diskon Total:</strong> Klik tombol "Diskon Keranjang" di bawah total harga.</li>
-                                    <li><strong>Diskon Preset:</strong> Anda bisa membuat daftar diskon tetap (misal: "Diskon Karyawan 20%") di menu <strong>Pengaturan {'>'} Manajemen Diskon</strong> agar kasir tidak perlu input manual.</li>
-                                </ul>
-                            </AccordionItem>
                         </div>
 
                         {/* Section 3: Produk & Inventaris */}
@@ -381,6 +559,23 @@ const HelpView: React.FC = () => {
                             <h3 className="text-lg font-bold text-[#52a37c] mb-4 flex items-center gap-2 border-b border-slate-700 pb-2">
                                 <Icon name="products" className="w-5 h-5" /> Produk & Inventaris
                             </h3>
+                            <AccordionItem title="Stock Opname (Audit Stok)" isOpen={openAccordion === 'opname'} onToggle={() => toggleAccordion('opname')} icon="boxes">
+                                <p className="mb-2">Fitur ini digunakan untuk menyesuaikan stok sistem dengan stok fisik yang ada di rak/gudang.</p>
+                                <p><strong>Cara Akses:</strong></p>
+                                <ul className="list-disc pl-5 mb-2 text-sm text-slate-300">
+                                    <li><strong>Admin:</strong> Buka menu Produk atau Bahan Baku, klik tombol "Stock Opname" di bagian atas.</li>
+                                    <li><strong>Staf (Kasir):</strong> Di halaman Kasir, klik tombol "Boxes/Opname" <span className="inline-block align-middle bg-slate-700 p-1 rounded mx-1"><Icon name="boxes" className="w-3 h-3"/></span> di samping tombol scan barcode.</li>
+                                </ul>
+                                <p><strong>Cara Melakukan Opname:</strong></p>
+                                <ol className="list-decimal pl-5 space-y-1 text-sm text-slate-300">
+                                    <li>Pilih tab "Produk Jadi" atau "Bahan Baku".</li>
+                                    <li>Cari nama barang yang ingin diaudit.</li>
+                                    <li>Isi kolom <strong>"Fisik (Actual)"</strong> dengan jumlah yang Anda hitung secara manual.</li>
+                                    <li>Sistem akan otomatis menghitung selisih (+/-) dan menandainya dengan warna.</li>
+                                    <li>Isi catatan jika perlu (misal: "Audit Akhir Bulan").</li>
+                                    <li>Klik "Simpan Hasil Opname" untuk menerapkan perubahan stok.</li>
+                                </ol>
+                            </AccordionItem>
                             <AccordionItem title="Varian Harga & Ukuran" isOpen={openAccordion === 'variants'} onToggle={() => toggleAccordion('variants')} icon="tag">
                                 <p>Fitur ini memungkinkan satu produk memiliki beberapa variasi harga atau ukuran tanpa harus membuat banyak produk terpisah.</p>
                                 <p className="mb-2"><strong>Contoh:</strong> Kopi Susu (Regular: 15rb, Jumbo: 20rb) atau Mie Ayam (Biasa: 12rb, Spesial: 18rb).</p>
@@ -393,9 +588,6 @@ const HelpView: React.FC = () => {
                                     <li>Simpan produk.</li>
                                 </ol>
                                 <p className="mt-2"><strong>Cara Transaksi:</strong> Di halaman kasir, saat produk tersebut diklik, akan muncul pop-up untuk memilih varian yang diinginkan.</p>
-                            </AccordionItem>
-                            <AccordionItem title="Kategori Produk" isOpen={openAccordion === 'category'} onToggle={() => toggleAccordion('category')} icon="tag">
-                                <p>Kategori memudahkan pencarian produk. Anda bisa mengelola daftar kategori (Edit/Hapus) secara terpusat di <strong>Pengaturan {'>'} Manajemen Kategori Produk</strong>.</p>
                             </AccordionItem>
                             <AccordionItem title="Manajemen Inventaris & Laba" isOpen={openAccordion === 'inventory'} onToggle={() => toggleAccordion('inventory')} icon="database">
                                 <p>Fitur ini harus diaktifkan di <strong>Pengaturan</strong>.</p>
@@ -420,31 +612,6 @@ const HelpView: React.FC = () => {
                                     <li>Simpan. Saat paket ini terjual, stok produk penyusun (Es Kopi & Roti) akan otomatis berkurang.</li>
                                 </ol>
                             </AccordionItem>
-                            <AccordionItem title="Import & Export Produk Massal" isOpen={openAccordion === 'bulk'} onToggle={() => toggleAccordion('bulk')} icon="download">
-                                <p>Kelola ribuan produk dengan mudah menggunakan Excel/CSV.</p>
-                                <ol className="list-decimal pl-5 space-y-1">
-                                    <li>Buka <strong>Pengaturan {'>'} Manajemen Produk Massal</strong>.</li>
-                                    <li>Klik "Export Produk" untuk mendapatkan template CSV (atau backup data lama).</li>
-                                    <li>Edit file CSV di aplikasi spreadsheet (Excel/Google Sheets).</li>
-                                    <li>Simpan sebagai CSV, lalu "Import Produk" kembali ke aplikasi.</li>
-                                </ol>
-                            </AccordionItem>
-                        </div>
-
-                        {/* Section 4: CRM (Pelanggan) */}
-                        <div>
-                            <h3 className="text-lg font-bold text-[#52a37c] mb-4 flex items-center gap-2 border-b border-slate-700 pb-2">
-                                <Icon name="users" className="w-5 h-5" /> Pelanggan & Reward
-                            </h3>
-                            <AccordionItem title="Program Keanggotaan (Membership)" isOpen={openAccordion === 'member'} onToggle={() => toggleAccordion('member')} icon="award">
-                                <p>Bangun loyalitas pelanggan dengan poin.</p>
-                                <ol className="list-decimal pl-5 space-y-1">
-                                    <li>Aktifkan di <strong>Pengaturan {'>'} Program Keanggotaan</strong>.</li>
-                                    <li>Buat <strong>Aturan Poin</strong> (misal: Belanja 10.000 dapat 1 poin).</li>
-                                    <li>Buat <strong>Reward</strong> (misal: 50 poin = Diskon 5.000 atau Gratis Es Teh).</li>
-                                    <li>Saat transaksi, pilih pelanggan di menu Kasir. Poin akan masuk otomatis setelah bayar.</li>
-                                </ol>
-                            </AccordionItem>
                         </div>
 
                         {/* Section 5: Data */}
@@ -464,8 +631,8 @@ const HelpView: React.FC = () => {
                             <AccordionItem title="Backup & Restore (Lokal)" isOpen={openAccordion === 'backup'} onToggle={() => toggleAccordion('backup')} icon="warning">
                                 <p className="text-yellow-300 font-bold mb-2">Aplikasi ini berjalan OFFLINE di browser Anda. Jika Anda menghapus cache browser atau ganti HP, data bisa hilang jika tidak dibackup.</p>
                                 <ul className="list-disc pl-5 space-y-1">
-                                    <li><strong>Backup:</strong> Pergi ke Pengaturan {'>'} Manajemen Data {'>'} Backup Data. Simpan file JSON yang terunduh di tempat aman (Google Drive/WA).</li>
-                                    <li><strong>Restore:</strong> Gunakan file JSON tersebut untuk mengembalikan data di perangkat baru.</li>
+                                    <li><strong>Backup:</strong> Klik tombol database di kanan atas (sebelah tombol bantuan). Pilih "Backup Lokal". Simpan file JSON yang terunduh di tempat aman (Google Drive/WA).</li>
+                                    <li><strong>Restore:</strong> (Hanya Admin) Gunakan file JSON tersebut untuk mengembalikan data di perangkat baru.</li>
                                 </ul>
                             </AccordionItem>
                             <AccordionItem title="Sinkronisasi Cloud (Dropbox)" isOpen={openAccordion === 'dropbox'} onToggle={() => toggleAccordion('dropbox')} icon="upload">
@@ -474,17 +641,12 @@ const HelpView: React.FC = () => {
                                     <li><strong>Persiapan:</strong> Anda butuh "Access Token" dari Dropbox App Console. (Panduan link ada di menu Pengaturan).</li>
                                     <li><strong>Setup:</strong> Masuk ke <strong>Pengaturan {'>'} Data & Sistem</strong>, tempel token di kolom "Dropbox Access Token".</li>
                                     <li><strong>Upload:</strong> Tekan "Upload ke Cloud" untuk mencadangkan data HP ini ke Dropbox.</li>
-                                    <li><strong>Restore:</strong> Di HP lain, masukkan token yang sama, lalu tekan "Restore dari Cloud" untuk mengambil data.</li>
+                                    <li><strong>Update Data:</strong> Staf bisa menekan tombol database di kanan atas dan memilih "Update dari Pusat" untuk mengambil data terbaru.</li>
                                 </ol>
-                                <p className="mt-2 text-xs text-yellow-400"><strong>Perhatian:</strong> "Restore" akan menimpa seluruh data di HP target dengan data dari Cloud.</p>
                             </AccordionItem>
                             <AccordionItem title="Database Real-time (Supabase BYOB)" isOpen={openAccordion === 'supabase'} onToggle={() => toggleAccordion('supabase')} icon="database">
                                 <p><strong>Fitur Lanjutan untuk Admin / Pemilik Toko.</strong></p>
                                 <p>Berbeda dengan Dropbox yang hanya menyimpan file backup, fitur ini mengirim data transaksi per-item secara <em>live</em> ke database cloud pribadi Anda.</p>
-                                <ul className="list-disc pl-5 mt-2 space-y-1 text-sm text-slate-300">
-                                    <li><strong>Kegunaan:</strong> Memantau omzet toko secara real-time dari jarak jauh atau membuat Dashboard Web kustom sendiri.</li>
-                                    <li><strong>Privasi:</strong> Data disimpan di project Supabase milik Anda sendiri (Gratis), bukan di server kami.</li>
-                                </ul>
                                 <p className="mt-2 font-bold text-white">Cara Setup:</p>
                                 <ol className="list-decimal pl-5 space-y-1 text-sm text-slate-300">
                                     <li>Daftar di <strong>Supabase.com</strong> dan buat project baru.</li>
@@ -499,19 +661,35 @@ const HelpView: React.FC = () => {
                 </div>
             )}
 
+            {/* Content: License */}
+            {activeTab === 'license' && (
+                <div className="animate-fade-in max-w-3xl mx-auto space-y-6">
+                    <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <div className="text-center mb-6">
+                            <Icon name="lock" className="w-12 h-12 text-[#52a37c] mx-auto mb-2" />
+                            <h2 className="text-2xl font-bold text-white">Lisensi Perangkat Lunak</h2>
+                            <p className="text-slate-400 text-sm">Hak dan kewajiban Anda sebagai pengguna.</p>
+                        </div>
+                        <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700">
+                            {renderMarkdown(APP_LICENSE_ID)}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Content: About */}
             {activeTab === 'about' && (
                 <div className="max-w-2xl mx-auto text-center animate-fade-in space-y-8">
                     <div className="bg-slate-800 p-8 rounded-2xl shadow-lg border border-slate-700">
                         <Icon name="logo" className="w-20 h-20 text-[#52a37c] mx-auto mb-4" />
                         <h2 className="text-2xl font-bold text-white mb-2">Artea POS</h2>
-                        <p className="text-slate-400 font-mono text-sm mb-6">Versi 2.1.0</p>
+                        <p className="text-slate-400 font-mono text-sm mb-6">Versi 2.3.0 (13122025)</p>
                         
                         <p className="text-slate-300 mb-6 leading-relaxed">
                             Artea POS adalah aplikasi Point of Sale (POS) atau kasir yang dirancang untuk usaha kecil dan menengah di bidang makanan dan minuman. Aplikasi ini dapat berjalan di browser tanpa memerlukan koneksi internet untuk operasional sehari-hari, memastikan bisnis Anda tetap berjalan lancar kapan saja.
                         </p>
 
-                        {/* Disclaimer / Developer Note */}
+                        {/* Catatan dari Pengembang (Restored) */}
                         <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 mb-8 text-left">
                             <h4 className="font-bold text-white mb-2 flex items-center gap-2 text-sm">
                                 <Icon name="info-circle" className="w-4 h-4 text-[#52a37c]"/> Catatan dari Pengembang
@@ -519,6 +697,28 @@ const HelpView: React.FC = () => {
                             <p className="text-xs text-slate-400 leading-relaxed">
                                 Tujuan awal dibuatnya aplikasi ini adalah untuk membantu merapikan administrasi di usaha kami yang bernama <a href="https://arteagrup.my.id" target="_blank" rel="noopener noreferrer" className="text-[#52a37c] hover:underline hover:text-[#7ac0a0]">Artea</a>. Jadi, harap maklum jika fiturnya belum selengkap aplikasi kasir komersial. Dengan dipublikasikannya aplikasi ini, kami berharap bisa bermanfaat bagi yang membutuhkan dan dapat berkembang bersama melalui kolaborasi komunitas. Bagi anda yang merasa terbantu dan ingin mendukung proyek ini bisa memberikan traktir kopi atau merekomendasikan aplikasi ini ke saudara kita yang membutuhkan.
                             </p>
+                        </div>
+
+                        {/* Changelog Section */}
+                        <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 mb-8 text-left">
+                            <h4 className="font-bold text-white mb-4 flex items-center gap-2 text-sm border-b border-slate-700 pb-2">
+                                <Icon name="trending-up" className="w-4 h-4 text-[#52a37c]"/> Catatan Rilis (Changelog)
+                            </h4>
+                            <div className="space-y-4 max-h-60 overflow-y-auto pr-2">
+                                {releaseNotes.map((release, index) => (
+                                    <div key={index}>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="font-bold text-[#52a37c] text-xs">{release.version}</span>
+                                            <span className="text-[10px] text-slate-500">{release.date}</span>
+                                        </div>
+                                        <ul className="list-disc pl-4 text-xs text-slate-400 space-y-1">
+                                            {release.changes.map((change, idx) => (
+                                                <li key={idx}>{change}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4 text-left bg-slate-900/50 p-6 rounded-xl mb-8 border border-slate-700/50">
@@ -532,11 +732,13 @@ const HelpView: React.FC = () => {
                             </div>
                             <div>
                                 <span className="text-xs text-slate-500 uppercase tracking-wider font-bold">Privasi</span>
-                                <p className="text-white mt-1">Data Lokal (No Cloud)</p>
+                                <p className="text-white mt-1">Local-First (Cloud Opsional)</p>
                             </div>
                             <div>
                                 <span className="text-xs text-slate-500 uppercase tracking-wider font-bold">Developer</span>
-                                <p className="text-[#52a37c] font-semibold mt-1">AI Projek</p>
+                                <a href="https://aiprojek01.my.id" target="_blank" rel="noopener noreferrer" className="text-[#52a37c] font-semibold mt-1 hover:underline hover:text-[#7ac0a0] block">
+                                    AI Projek
+                                </a>
                             </div>
                         </div>
 

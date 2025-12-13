@@ -1,5 +1,5 @@
 
-import type { AppData, Product, RawMaterial, Transaction as TransactionType, Expense, Purchase, Customer, StockAdjustment, Addon, CartItem, ProductVariant } from '../types';
+import type { AppData, Product, RawMaterial, Transaction as TransactionType, Expense, Purchase, Customer, StockAdjustment, Addon, CartItem, ProductVariant, ReceiptSettings } from '../types';
 import { db } from './db';
 
 const downloadCSV = (csvContent: string, filename: string) => {
@@ -23,8 +23,10 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
     });
 };
 
-const generateTransactionsCSVString = (transactions: TransactionType[]) => {
-    const headers = 'id,createdAt,customerName,userName,total,amountPaid,paymentStatus,items';
+// Exported for external use (Dropbox/Supabase logging)
+// UPDATED: Now includes Store ID in CSV
+export const generateTransactionsCSVString = (transactions: TransactionType[]) => {
+    const headers = 'id,createdAt,customerName,userName,total,amountPaid,paymentStatus,storeId,items';
     const rows = transactions.map(t => {
         const items = t.items.map(i => {
             const variantStr = i.selectedVariant ? ` [${i.selectedVariant.name}]` : '';
@@ -33,8 +35,9 @@ const generateTransactionsCSVString = (transactions: TransactionType[]) => {
         // Escape quotes in items string and others
         const escapedItems = items.replace(/"/g, '""');
         const escapedCustomer = (t.customerName || '').replace(/"/g, '""');
+        const storeId = t.storeId || '';
         
-        return `${t.id},"${new Date(t.createdAt).toLocaleString('id-ID')}","${escapedCustomer}","${t.userName}",${t.total},${t.amountPaid},${t.paymentStatus},"${escapedItems}"`;
+        return `${t.id},"${new Date(t.createdAt).toLocaleString('id-ID')}","${escapedCustomer}","${t.userName}",${t.total},${t.amountPaid},${t.paymentStatus},"${storeId}","${escapedItems}"`;
     });
     return [headers, ...rows].join('\n');
 };
@@ -76,7 +79,7 @@ const parseTransactionsCSV = (csvText: string): TransactionType[] => {
     const headers = lines[0].split(',').map(h => h.trim());
     const transactions: TransactionType[] = [];
 
-    // Mapping index based on standard header: id,createdAt,customerName,userName,total,amountPaid,paymentStatus,items
+    // Mapping index based on standard header: id,createdAt,customerName,userName,total,amountPaid,paymentStatus,storeId,items
     const idIdx = headers.findIndex(h => h.includes('id'));
     const dateIdx = headers.findIndex(h => h.includes('createdAt') || h.includes('Date')); // flexible check
     const custIdx = headers.findIndex(h => h.includes('customerName'));
@@ -84,6 +87,7 @@ const parseTransactionsCSV = (csvText: string): TransactionType[] => {
     const totalIdx = headers.findIndex(h => h.includes('total'));
     const paidIdx = headers.findIndex(h => h.includes('amountPaid'));
     const statusIdx = headers.findIndex(h => h.includes('paymentStatus'));
+    const storeIdx = headers.findIndex(h => h.includes('storeId')); // New
     const itemsIdx = headers.findIndex(h => h.includes('items'));
 
     if (idIdx === -1 || totalIdx === -1) {
@@ -129,8 +133,15 @@ const parseTransactionsCSV = (csvText: string): TransactionType[] => {
                  }
             }
 
+            const rawId = vals[idIdx] || `imported-${Date.now()}-${i}`;
+            const importedStoreId = (storeIdx > -1 ? vals[storeIdx] : '') || 'EXTERNAL';
+            
+            // KEY CHANGE: Prefix ID with StoreID to avoid collisions
+            // If ID already contains storeID (re-import), keep it.
+            const finalId = rawId.startsWith(importedStoreId) ? rawId : `${importedStoreId}-${rawId}`;
+
             const transaction: TransactionType = {
-                id: vals[idIdx] || `imported-${Date.now()}-${i}`,
+                id: finalId,
                 createdAt: createdAt,
                 customerName: vals[custIdx],
                 userName: vals[userIdx] || 'Imported',
@@ -144,6 +155,7 @@ const parseTransactionsCSV = (csvText: string): TransactionType[] => {
                 tax: 0,
                 serviceCharge: 0,
                 orderType: 'dine-in',
+                storeId: importedStoreId // Store the ID for filtering later
             };
             
             transactions.push(transaction);
@@ -186,12 +198,31 @@ const exportCustomersCSV = (customers: Customer[]) => {
     downloadCSV(csvContent, 'customers_report.csv');
 };
 
-const exportStockAdjustmentsCSV = (stockAdjustments: StockAdjustment[]) => {
+// Exported for external use
+export const generateStockAdjustmentsCSVString = (stockAdjustments: StockAdjustment[]) => {
     const headers = 'id,createdAt,productName,change,newStock,notes';
     const rows = stockAdjustments.map(sa => `${sa.id},"${new Date(sa.createdAt).toLocaleString('id-ID')}","${sa.productName}",${sa.change},${sa.newStock},"${sa.notes || ''}"`);
-    const csvContent = [headers, ...rows].join('\n');
+    return [headers, ...rows].join('\n');
+};
+
+const exportStockAdjustmentsCSV = (stockAdjustments: StockAdjustment[]) => {
+    const csvContent = generateStockAdjustmentsCSVString(stockAdjustments);
     downloadCSV(csvContent, 'stock_adjustments_report.csv');
 };
+
+// Helper for image conversion
+function base64ToBlob(base64: string): Blob {
+    const [meta, data] = base64.split(',');
+    if (!meta || !data) return new Blob();
+    const mime = meta.match(/:(.*?);/)?.[1];
+    const bstr = atob(data);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+}
 
 // Extracted internal function to get data object without downloading
 const getExportData = async (): Promise<Partial<AppData>> => {
@@ -200,7 +231,7 @@ const getExportData = async (): Promise<Partial<AppData>> => {
     await db.transaction('r', db.tables.map(t => t.name), async () => {
       const [
         products, categoriesObj, rawMaterials, transactionRecords, users, settings,
-        expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts, sessionHistory
+        expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts, sessionHistory, auditLogs
       ] = await Promise.all([
         db.products.toArray(),
         db.appState.get('categories'),
@@ -217,6 +248,7 @@ const getExportData = async (): Promise<Partial<AppData>> => {
         db.discountDefinitions.toArray(),
         db.heldCarts.toArray(),
         db.sessionHistory.toArray(),
+        db.auditLogs.toArray(),
       ]);
 
       const productsForExport = await Promise.all(
@@ -244,6 +276,7 @@ const getExportData = async (): Promise<Partial<AppData>> => {
       data.discountDefinitions = discountDefinitions;
       data.heldCarts = heldCarts;
       data.sessionHistory = sessionHistory;
+      data.auditLogs = auditLogs; // INCLUDE AUDIT LOGS IN EXPORT
 
       data.receiptSettings = settings.find(s => s.key === 'receiptSettings')?.value;
       data.inventorySettings = settings.find(s => s.key === 'inventorySettings')?.value;
@@ -255,8 +288,85 @@ const getExportData = async (): Promise<Partial<AppData>> => {
     return data;
 };
 
+// NEW: Function to merge master data (Products, Discounts, Rules) into local DB
+// Used by Dropbox 'Pull Master Data'
+const mergeMasterData = async (masterData: AppData) => {
+    // 1. Get current Store ID
+    const settings = await db.settings.get('receiptSettings');
+    const receiptSettings = settings?.value as ReceiptSettings;
+    const myStoreId = receiptSettings?.storeId || 'UNKNOWN';
+
+    await db.transaction('rw', db.products, db.customers, db.discountDefinitions, db.settings, db.appState, db.suppliers, async () => {
+        // A. Products: Smart Merge with Price Override
+        if (masterData.products && masterData.products.length > 0) {
+            const masterProducts = await Promise.all(masterData.products.map(async (mp) => {
+                // Restore image blob if needed
+                const prod: any = { ...mp };
+                if (prod.imageUrl && prod.imageUrl.startsWith('data:')) {
+                    prod.image = base64ToBlob(prod.imageUrl);
+                    delete prod.imageUrl;
+                }
+
+                // --- KEY LOGIC: Check for Branch Specific Price ---
+                if (prod.branchPrices && Array.isArray(prod.branchPrices)) {
+                    const branchPrice = prod.branchPrices.find((bp: any) => bp.storeId === myStoreId);
+                    if (branchPrice) {
+                        prod.price = branchPrice.price; // OVERRIDE LOCAL PRICE
+                    }
+                }
+                
+                // Keep local stock if tracking is enabled (don't overwrite with master's 0 stock)
+                const localProd = await db.products.get(mp.id);
+                if (localProd && localProd.trackStock) {
+                    prod.stock = localProd.stock;
+                }
+
+                return prod;
+            }));
+            
+            // Put all Master Products (Overwriting definitions, keeping stock logic above)
+            await db.products.bulkPut(masterProducts);
+        }
+
+        // B. Categories
+        if (masterData.categories) {
+            await db.appState.put({ key: 'categories', value: masterData.categories });
+        }
+
+        // C. Discounts
+        if (masterData.discountDefinitions) {
+            await db.discountDefinitions.clear(); // Replace old rules with new master rules
+            await db.discountDefinitions.bulkPut(masterData.discountDefinitions);
+        }
+
+        // D. Membership Rules (Inside Settings)
+        if (masterData.membershipSettings) {
+            const currentMemSettings = await db.settings.get('membershipSettings');
+            const mergedMemSettings = {
+                ...(currentMemSettings?.value || {}),
+                enabled: masterData.membershipSettings.enabled,
+                pointRules: masterData.membershipSettings.pointRules,
+                rewards: masterData.membershipSettings.rewards
+            };
+            await db.settings.put({ key: 'membershipSettings', value: mergedMemSettings });
+        }
+
+        // E. Customers (Merge, don't delete local ones)
+        if (masterData.customers && masterData.customers.length > 0) {
+            await db.customers.bulkPut(masterData.customers);
+        }
+        
+        // F. Suppliers
+        if(masterData.suppliers) {
+            await db.suppliers.bulkPut(masterData.suppliers);
+        }
+    });
+};
+
 export const dataService = {
   getExportData, // Exposed for Dropbox service
+  mergeMasterData, // Exposed for Dropbox service
+  
   exportData: async () => {
     const data = await getExportData();
     const jsonString = JSON.stringify(data, null, 2);
@@ -265,7 +375,7 @@ export const dataService = {
     const link = document.createElement('a');
     link.href = url;
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-    link.download = `ai-projek-pos-backup-${timestamp}.json`;
+    link.download = `artea-pos-backup-${timestamp}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -482,6 +592,7 @@ export const dataService = {
     if (data.stockAdjustments.length > 0) exportStockAdjustmentsCSV(data.stockAdjustments);
   },
 
-  generateTransactionsCSVString, // Exported to be used in Report View for sending to admin
+  generateTransactionsCSVString, 
+  generateStockAdjustmentsCSVString, // NEW Export
   parseTransactionsCSV
 };

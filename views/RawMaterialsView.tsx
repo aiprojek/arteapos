@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { useUI } from '../context/UIContext';
@@ -8,6 +9,7 @@ import Icon from '../components/Icon';
 import { dataService } from '../services/dataService';
 import { CURRENCY_FORMATTER } from '../constants';
 import VirtualizedTable from '../components/VirtualizedTable';
+import StockOpnameModal from '../components/StockOpnameModal';
 
 const InputField: React.FC<{
     name: string;
@@ -94,6 +96,7 @@ const RawMaterialsView: React.FC = () => {
     const { showAlert } = useUI();
     const [isModalOpen, setModalOpen] = useState(false);
     const [editingMaterial, setEditingMaterial] = useState<RawMaterial | null>(null);
+    const [isOpnameOpen, setIsOpnameOpen] = useState(false); // NEW
     const importInputRef = useRef<HTMLInputElement>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -188,6 +191,10 @@ const RawMaterialsView: React.FC = () => {
                         />
                          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     </div>
+                    <Button variant="secondary" onClick={() => setIsOpnameOpen(true)} className="flex-shrink-0">
+                        <Icon name="database" className="w-5 h-5"/>
+                        <span className="hidden lg:inline">Stock Opname</span>
+                    </Button>
                     <Button variant="secondary" onClick={handleExport} className="flex-shrink-0">
                         <Icon name="download" className="w-5 h-5"/>
                         <span className="hidden sm:inline">Export</span>
@@ -221,6 +228,12 @@ const RawMaterialsView: React.FC = () => {
             <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingMaterial ? 'Edit Bahan Baku' : 'Tambah Bahan Baku'}>
                 <RawMaterialForm material={editingMaterial} onSave={handleSaveMaterial} onCancel={handleCloseModal} />
             </Modal>
+
+            <StockOpnameModal 
+                isOpen={isOpnameOpen} 
+                onClose={() => setIsOpnameOpen(false)} 
+                initialTab="raw_material"
+            />
         </div>
     );
 };

@@ -50,7 +50,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 // FIX: Change to React.FC to fix children prop type error
 export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children }) => {
-    const { data, setData } = useData();
+    const { data, setData, triggerAutoSync } = useData(); // Added triggerAutoSync
     const { showAlert } = useUI();
     const { currentUser } = useAuth();
     const { receiptSettings } = useSettings();
@@ -134,7 +134,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
              ...product, 
              quantity: 1, 
              cartItemId: Date.now().toString(), 
-             selectedAddons: addons,
+             selectedAddons: addons, 
              selectedVariant: variant,
              // If variant exists, override price and update name
              price: variant ? variant.price : product.price,
@@ -354,6 +354,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
             tax: taxAmount, serviceCharge: serviceChargeAmount, orderType, // Added new fields
             paymentStatus, payments: fullPayments, createdAt: now.toISOString(), userId: currentUser.id,
             userName: currentUser.name, customerName, customerContact, customerId,
+            storeId: receiptSettings.storeId || 'LOCAL' // NEW: Simpan Store ID
         };
 
         setData(prev => {
@@ -364,6 +365,8 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
 
             if (prev.membershipSettings.enabled && customerId) {
                 const customer = prev.customers.find(c => c.id === customerId);
+                const currentStoreId = receiptSettings.storeId || '';
+
                 if(customer) {
                     let pointsEarned = 0;
                     const cartWithoutRewards = cart.filter(item => !item.isReward);
@@ -374,6 +377,11 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                     }, 0);
                     
                     prev.membershipSettings.pointRules.forEach(rule => {
+                        // FILTER RULES BY STORE ID
+                        if (rule.validStoreIds && rule.validStoreIds.length > 0) {
+                            if (!rule.validStoreIds.includes(currentStoreId)) return;
+                        }
+
                         if(rule.type === 'spend' && rule.spendAmount && rule.spendAmount > 0 && rule.pointsEarned) {
                             pointsEarned += Math.floor(spendTotal / rule.spendAmount) * rule.pointsEarned;
                         } else if ((rule.type === 'product' || rule.type === 'category') && rule.targetId && rule.pointsPerItem) {
@@ -447,8 +455,12 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         });
         
         switchActiveCart(null);
+        
+        // Trigger Auto Sync after save
+        setTimeout(() => triggerAutoSync(), 500);
+
         return newTransaction;
-    }, [cart, getCartTotals, setData, currentUser, appliedReward, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, rawMaterials, products, orderType]);
+    }, [cart, getCartTotals, setData, currentUser, appliedReward, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, rawMaterials, products, orderType, receiptSettings.storeId, triggerAutoSync]);
     
     return (
         <CartContext.Provider value={{

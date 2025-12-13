@@ -43,6 +43,13 @@ export interface DiscountDefinition {
   startDate?: string; // ISO string
   endDate?: string; // ISO string
   isActive: boolean;
+  validStoreIds?: string[]; // NEW: Empty = Global, otherwise specific Store IDs
+}
+
+// NEW: Interface for Branch Specific Pricing
+export interface BranchPrice {
+    storeId: string; // The target store ID (e.g., "BDG-01")
+    price: number;
 }
 
 export interface Product {
@@ -60,6 +67,7 @@ export interface Product {
   barcode?: string;
   addons?: Addon[];
   variants?: ProductVariant[]; // New: Multi-tier pricing
+  branchPrices?: BranchPrice[]; // NEW: Remote pricing configuration
 }
 
 export interface CartItem extends Product {
@@ -101,6 +109,7 @@ export type OrderType = 'dine-in' | 'take-away' | 'online';
 
 export interface Transaction {
   id: string;
+  storeId?: string; // NEW: Identification for Multi-Branch Import
   items: CartItem[];
   subtotal: number;
   cartDiscount?: Discount;
@@ -134,6 +143,7 @@ export interface ReceiptSettings {
     adminTelegram?: string;
     taxRate?: number; // New: Percentage (e.g., 10 for 10%)
     serviceChargeRate?: number; // New: Percentage (e.g., 5 for 5%)
+    storeId?: string; // NEW: Identifier for Multi-Branch
 }
 
 export interface InventorySettings {
@@ -264,6 +274,7 @@ export interface PointRule {
   // for 'product' or 'category'
   targetId?: string; // productId or categoryName
   pointsPerItem?: number;
+  validStoreIds?: string[]; // NEW: Specific store rule
 }
 
 export type RewardType = 'discount_amount' | 'free_product';
@@ -285,6 +296,19 @@ export interface MembershipSettings {
   rewards: Reward[];
 }
 
+// --- AUDIT LOG ---
+export type AuditAction = 'DELETE_PRODUCT' | 'UPDATE_PRICE' | 'STOCK_OPNAME' | 'REFUND_TRANSACTION' | 'LOGIN_ATTEMPT' | 'OTHER';
+
+export interface AuditLog {
+    id: string;
+    timestamp: string;
+    userId: string;
+    userName: string;
+    action: AuditAction;
+    targetId?: string; // ID produk atau transaksi terkait
+    details: string; // Deskripsi detail (misal: "Harga berubah dari 10k ke 12k")
+}
+
 export interface AppData {
   products: Product[];
   categories: string[];
@@ -304,7 +328,8 @@ export interface AppData {
   membershipSettings: MembershipSettings;
   discountDefinitions: DiscountDefinition[];
   heldCarts?: HeldCart[];
-  sessionHistory: SessionHistory[]; // NEW: Archive
+  sessionHistory: SessionHistory[];
+  auditLogs?: AuditLog[]; // NEW: Audit Trail
 }
 
 export type View = 'dashboard' | 'pos' | 'products' | 'raw-materials' | 'reports' | 'settings' | 'finance' | 'help';

@@ -1,9 +1,18 @@
 
-
 import React, { createContext, useContext, ReactNode, useCallback } from 'react';
 import { useData } from './DataContext';
 import { useUI } from './UIContext';
+import { useAuth } from './AuthContext'; // Import Auth
 import type { Product, RawMaterial, InventorySettings, StockAdjustment } from '../types';
+import { CURRENCY_FORMATTER } from '../constants';
+
+interface OpnameItem {
+    id: string;
+    type: 'product' | 'raw_material';
+    systemStock: number;
+    actualStock: number;
+    name: string;
+}
 
 interface ProductContextType {
   products: Product[];
@@ -22,6 +31,7 @@ interface ProductContextType {
   deleteRawMaterial: (materialId: string) => void;
   updateInventorySettings: (settings: InventorySettings) => void;
   addStockAdjustment: (productId: string, quantity: number, notes?: string) => void;
+  performStockOpname: (items: OpnameItem[], notes?: string) => void;
   bulkAddProducts: (newProducts: Product[]) => void;
   bulkAddRawMaterials: (newRawMaterials: RawMaterial[]) => void;
   isProductAvailable: (product: Product) => { available: boolean, reason: string };
@@ -45,9 +55,10 @@ function base64ToBlob(base64: string): Blob {
 }
 
 export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
-  const { data, setData } = useData();
+  const { data, setData, logAudit, triggerAutoSync } = useData(); // Added triggerAutoSync
   const { products, categories, rawMaterials, inventorySettings, stockAdjustments } = data;
   const { showAlert } = useUI();
+  const { currentUser } = useAuth();
 
   const addProduct = useCallback((product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: Date.now().toString() };
@@ -55,24 +66,36 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
   }, [setData]);
 
   const updateProduct = useCallback((updatedProduct: Product) => {
+    // Audit Price Change
+    const oldProduct = products.find(p => p.id === updatedProduct.id);
+    if (oldProduct && oldProduct.price !== updatedProduct.price) {
+        const oldFmt = CURRENCY_FORMATTER.format(oldProduct.price);
+        const newFmt = CURRENCY_FORMATTER.format(updatedProduct.price);
+        logAudit(currentUser, 'UPDATE_PRICE', `Harga produk '${updatedProduct.name}' diubah dari ${oldFmt} menjadi ${newFmt}`, updatedProduct.id);
+    }
+
     setData(prev => ({
       ...prev,
       products: prev.products.map(p => p.id === updatedProduct.id ? updatedProduct : p)
     }));
-  }, [setData]);
+  }, [setData, products, logAudit, currentUser]);
 
   const deleteProduct = useCallback((productId: string) => {
+    const product = products.find(p => p.id === productId);
     showAlert({
       type: 'confirm',
       title: 'Hapus Produk?',
       message: 'Apakah Anda yakin ingin menghapus produk ini? Tindakan ini tidak dapat diurungkan.',
       onConfirm: () => {
+        if(product) {
+            logAudit(currentUser, 'DELETE_PRODUCT', `Produk '${product.name}' dihapus permanen.`, productId);
+        }
         setData(prev => ({ ...prev, products: prev.products.filter(p => p.id !== productId) }));
       },
       confirmVariant: 'danger',
       confirmText: 'Ya, Hapus'
     });
-  }, [setData, showAlert]);
+  }, [setData, showAlert, products, logAudit, currentUser]);
 
   const addCategory = useCallback((category: string) => {
     setData(prev => {
@@ -124,7 +147,33 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
   const addStockAdjustment = useCallback((productId: string, quantity: number, notes?: string) => {
     setData(prev => {
         const productIndex = prev.products.findIndex(p => p.id === productId);
-        if (productIndex === -1) return prev;
+        if (productIndex === -1) {
+            // Try find raw material
+            const materialIndex = prev.rawMaterials.findIndex(m => m.id === productId);
+            if (materialIndex === -1) return prev;
+
+            const material = prev.rawMaterials[materialIndex];
+            const newStock = (material.stock || 0) + quantity;
+            const updatedMaterial = { ...material, stock: newStock };
+            const updatedMaterials = [...prev.rawMaterials];
+            updatedMaterials[materialIndex] = updatedMaterial;
+
+            const newAdjustment: StockAdjustment = {
+                id: Date.now().toString(),
+                productId: material.id,
+                productName: material.name, // Reusing field
+                change: quantity,
+                newStock,
+                notes,
+                createdAt: new Date().toISOString(),
+            };
+            
+            return {
+                ...prev,
+                rawMaterials: updatedMaterials,
+                stockAdjustments: [newAdjustment, ...(prev.stockAdjustments || [])]
+            }
+        }
 
         const product = prev.products[productIndex];
         const newStock = (product.stock || 0) + quantity;
@@ -151,7 +200,58 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
             stockAdjustments: [newAdjustment, ...currentAdjustments],
         };
     });
-  }, [setData]);
+    setTimeout(() => triggerAutoSync(), 500);
+  }, [setData, triggerAutoSync]);
+
+  const performStockOpname = useCallback((items: OpnameItem[], notes: string = '') => {
+      // Audit Log
+      const count = items.filter(i => i.systemStock !== i.actualStock).length;
+      if (count > 0) {
+          logAudit(currentUser, 'STOCK_OPNAME', `Melakukan stock opname massal. ${count} item disesuaikan. ${notes}`, 'BATCH-OPNAME');
+      }
+
+      setData(prev => {
+          let updatedProducts = [...prev.products];
+          let updatedMaterials = [...prev.rawMaterials];
+          let newAdjustments: StockAdjustment[] = [];
+          const now = new Date().toISOString();
+
+          items.forEach((item, index) => {
+              const diff = item.actualStock - item.systemStock;
+              if (diff === 0) return; // No change
+
+              if (item.type === 'product') {
+                  const pIdx = updatedProducts.findIndex(p => p.id === item.id);
+                  if (pIdx > -1) {
+                      updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: item.actualStock };
+                  }
+              } else {
+                  const mIdx = updatedMaterials.findIndex(m => m.id === item.id);
+                  if (mIdx > -1) {
+                      updatedMaterials[mIdx] = { ...updatedMaterials[mIdx], stock: item.actualStock };
+                  }
+              }
+
+              newAdjustments.push({
+                  id: `${Date.now()}-${index}`,
+                  productId: item.id,
+                  productName: item.name,
+                  change: diff,
+                  newStock: item.actualStock,
+                  notes: `[Stock Opname] ${notes}`,
+                  createdAt: now
+              });
+          });
+
+          return {
+              ...prev,
+              products: updatedProducts,
+              rawMaterials: updatedMaterials,
+              stockAdjustments: [...newAdjustments, ...(prev.stockAdjustments || [])]
+          };
+      });
+      setTimeout(() => triggerAutoSync(), 500);
+  }, [setData, logAudit, currentUser, triggerAutoSync]);
 
   const bulkAddProducts = useCallback((newProducts: Product[]) => {
     setData(prev => {
@@ -241,6 +341,7 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       deleteRawMaterial,
       updateInventorySettings,
       addStockAdjustment,
+      performStockOpname,
       bulkAddProducts,
       bulkAddRawMaterials,
       isProductAvailable

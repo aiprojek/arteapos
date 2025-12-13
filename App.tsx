@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import AppProviders from './context/AppProviders';
 import { useAuth } from './context/AuthContext';
@@ -17,6 +18,7 @@ import Header from './components/Header';
 import Icon from './components/Icon';
 import AlertModal from './components/AlertModal';
 import DashboardView from './views/DashboardView';
+import OnboardingModals from './components/OnboardingModals'; // Import komponen baru
 
 const Nav = ({ activeView, setActiveView, onNavigate }: { 
   activeView: View, 
@@ -104,6 +106,9 @@ const AppContent = () => {
 
   return (
     <div className="flex flex-col md:flex-row h-screen font-sans bg-slate-900 text-slate-100">
+      {/* Modals for Welcome/Briefing */}
+      <OnboardingModals setActiveView={setActiveView} />
+
       {/* Overlay for mobile */}
       {isSidebarOpen && (
         <div 

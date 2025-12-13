@@ -1,13 +1,18 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import type { AppData } from '../types';
+import type { AppData, AuditAction, AuditLog, User } from '../types';
 import { db, initialData } from '../services/db';
+import { supabaseService } from '../services/supabaseService';
+import { dropboxService } from '../services/dropboxService';
 
 interface DataContextType {
   data: AppData;
   setData: (value: AppData | ((val: AppData) => AppData)) => void;
   restoreData: (backupData: AppData) => Promise<void>;
   isDataLoading: boolean;
+  logAudit: (user: User | null, action: AuditAction, details: string, targetId?: string) => Promise<void>;
+  triggerAutoSync: () => Promise<void>; // New Auto Sync Function
+  syncStatus: 'idle' | 'syncing' | 'success' | 'error'; // Sync Status State
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -31,23 +36,22 @@ function base64ToBlob(base64: string): Blob {
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isDataLoading, setIsLoading] = useState(true);
   const [data, _setData] = useState<AppData>(initialData);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const prevDataRef = useRef<AppData | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        // FIX: Replaced 'db.open()'. The Dexie instance methods were not being found due to a likely name collision. Renaming the 'transactions' table resolves this.
         await db.open();
         console.log("Database opened successfully");
         
         const [
           products, categoriesObj, rawMaterials, transactionRecords, users, settings,
-          expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts, sessionHistory
+          expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts, sessionHistory, auditLogs
         ] = await Promise.all([
           db.products.toArray(),
           db.appState.get('categories'),
           db.rawMaterials.toArray(),
-          // FIX: Renamed table from 'transactions' to 'transactionRecords'.
           db.transactionRecords.toArray(),
           db.users.toArray(),
           db.settings.toArray(),
@@ -60,13 +64,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           db.discountDefinitions.toArray(),
           db.heldCarts.toArray(),
           db.sessionHistory.toArray(),
+          db.auditLogs.toArray(),
         ]);
         
         const loadedData = {
           products,
           categories: categoriesObj?.value || initialData.categories,
           rawMaterials,
-          // FIX: Renamed property from 'transactions' to 'transactionRecords'.
           transactionRecords,
           users,
           expenses,
@@ -78,6 +82,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           discountDefinitions,
           heldCarts,
           sessionHistory: sessionHistory || [],
+          auditLogs: auditLogs || [], // Load logs
           receiptSettings: settings.find(s => s.key === 'receiptSettings')?.value || initialData.receiptSettings,
           inventorySettings: settings.find(s => s.key === 'inventorySettings')?.value || initialData.inventorySettings,
           authSettings: settings.find(s => s.key === 'authSettings')?.value || initialData.authSettings,
@@ -89,7 +94,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         prevDataRef.current = loadedData as AppData;
       } catch (error) {
         console.error("Failed to load data from IndexedDB:", error);
-        // Fallback to initial data if loading fails
         _setData(initialData);
         prevDataRef.current = initialData;
       } finally {
@@ -106,7 +110,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     const persist = async () => {
       try {
-        // FIX: Corrected Dexie instance method calls.
         await db.transaction('rw', db.tables.map(t => t.name), async () => {
           const promises: Promise<any>[] = [];
           
@@ -119,7 +122,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               switch(key) {
                 case 'products':
                 case 'rawMaterials':
-                // FIX: Renamed case from 'transactions' to 'transactionRecords'.
                 case 'transactionRecords':
                 case 'users':
                 case 'expenses':
@@ -131,7 +133,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 case 'discountDefinitions':
                 case 'heldCarts':
                 case 'sessionHistory':
-                  // FIX: Corrected Dexie instance method call 'table'.
+                case 'auditLogs': // Persist logs
                   promises.push(db.table(key).clear().then(() => db.table(key).bulkAdd(value as any[])));
                   break;
                 case 'categories':
@@ -188,6 +190,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await db.discountDefinitions.bulkAdd(backupData.discountDefinitions || []);
       await db.heldCarts.bulkAdd(backupData.heldCarts || []);
       await db.sessionHistory.bulkAdd(backupData.sessionHistory || []);
+      await db.auditLogs.bulkAdd(backupData.auditLogs || []); // Restore logs
       
       await db.appState.put({ key: 'categories', value: backupData.categories || [] });
 
@@ -203,8 +206,62 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.location.reload();
   }, []);
 
+  // --- NEW: Audit Logging Utility ---
+  const logAudit = useCallback(async (user: User | null, action: AuditAction, details: string, targetId?: string) => {
+      const newLog: AuditLog = {
+          id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+          userId: user?.id || 'system',
+          userName: user?.name || 'System/Guest',
+          action,
+          details,
+          targetId
+      };
+      
+      _setData(prev => ({
+          ...prev,
+          auditLogs: [newLog, ...(prev.auditLogs || [])]
+      }));
+  }, []);
+
+  // --- NEW: Automatic Cloud Sync ---
+  const triggerAutoSync = useCallback(async () => {
+      const sbUrl = localStorage.getItem('ARTEA_SB_URL');
+      const sbKey = localStorage.getItem('ARTEA_SB_KEY');
+      const dbxToken = localStorage.getItem('ARTEA_DBX_TOKEN');
+
+      // If no cloud configured, do nothing silently
+      if (!sbUrl && !dbxToken) return;
+
+      setSyncStatus('syncing');
+      
+      try {
+          // Priority 1: Supabase (Fast & Realtime)
+          if (sbUrl && sbKey) {
+              supabaseService.init(sbUrl, sbKey);
+              await supabaseService.syncOperationalDataUp();
+          }
+
+          // Priority 2: Dropbox (CSV Only for speed)
+          // We avoid uploading the full JSON backup on every transaction to prevent lag/bandwidth usage
+          if (dbxToken) {
+              await dropboxService.uploadCSVReports(dbxToken);
+          }
+
+          setSyncStatus('success');
+          // Reset status after 3 seconds
+          setTimeout(() => setSyncStatus('idle'), 3000);
+
+      } catch (error) {
+          console.error("Auto Sync Failed:", error);
+          setSyncStatus('error');
+          // Reset status after 5 seconds
+          setTimeout(() => setSyncStatus('idle'), 5000);
+      }
+  }, []);
+
   return (
-    <DataContext.Provider value={{ data, setData, restoreData, isDataLoading }}>
+    <DataContext.Provider value={{ data, setData, restoreData, isDataLoading, logAudit, triggerAutoSync, syncStatus }}>
       {children}
     </DataContext.Provider>
   );

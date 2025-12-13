@@ -1,8 +1,9 @@
 
-
 import React, { createContext, useContext, ReactNode, useCallback } from 'react';
 import { useData } from './DataContext';
+import { useAuth } from './AuthContext'; // Import Auth
 import type { Expense, Supplier, Purchase, ExpenseStatus, PurchaseStatus, StockAdjustment, Transaction as TransactionType, Payment, OtherIncome, Product, RawMaterial } from '../types';
+import { CURRENCY_FORMATTER } from '../constants';
 
 interface FinanceContextType {
     expenses: Expense[];
@@ -31,7 +32,8 @@ const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
 // FIX: Change to React.FC to fix children prop type error
 export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ children }) => {
-    const { data, setData } = useData();
+    const { data, setData, logAudit, triggerAutoSync } = useData(); // Added triggerAutoSync
+    const { currentUser } = useAuth();
     // FIX: Use 'transactionRecords' from data and alias it to 'transactions' for context consumers.
     const { expenses, otherIncomes = [], suppliers, purchases, transactionRecords: transactions } = data;
 
@@ -39,17 +41,20 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
         const status: ExpenseStatus = expenseData.amountPaid >= expenseData.amount ? 'lunas' : 'belum-lunas';
         const newExpense = { ...expenseData, id: Date.now().toString(), status };
         setData(prev => ({ ...prev, expenses: [newExpense, ...prev.expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
-    }, [setData]);
+        setTimeout(() => triggerAutoSync(), 500);
+    }, [setData, triggerAutoSync]);
 
     const updateExpense = useCallback((updatedExpenseData: Expense) => {
         const status: ExpenseStatus = updatedExpenseData.amountPaid >= updatedExpenseData.amount ? 'lunas' : 'belum-lunas';
         const updatedExpense = { ...updatedExpenseData, status };
         setData(prev => ({ ...prev, expenses: prev.expenses.map(e => e.id === updatedExpense.id ? updatedExpense : e).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
-    }, [setData]);
+        setTimeout(() => triggerAutoSync(), 500);
+    }, [setData, triggerAutoSync]);
 
     const deleteExpense = useCallback((expenseId: string) => {
         setData(prev => ({ ...prev, expenses: prev.expenses.filter(e => e.id !== expenseId) }));
-    }, [setData]);
+        setTimeout(() => triggerAutoSync(), 500);
+    }, [setData, triggerAutoSync]);
 
     const addPaymentToExpense = useCallback((expenseId: string, amount: number) => {
         setData(prev => {
@@ -63,20 +68,24 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
             });
             return { ...prev, expenses: updatedExpenses };
         });
-    }, [setData]);
+        setTimeout(() => triggerAutoSync(), 500);
+    }, [setData, triggerAutoSync]);
 
     const addOtherIncome = useCallback((incomeData: Omit<OtherIncome, 'id'>) => {
         const newIncome = { ...incomeData, id: Date.now().toString() };
         setData(prev => ({ ...prev, otherIncomes: [newIncome, ...(prev.otherIncomes || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
-    }, [setData]);
+        setTimeout(() => triggerAutoSync(), 500);
+    }, [setData, triggerAutoSync]);
 
     const updateOtherIncome = useCallback((updatedIncome: OtherIncome) => {
         setData(prev => ({ ...prev, otherIncomes: (prev.otherIncomes || []).map(i => i.id === updatedIncome.id ? updatedIncome : i).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
-    }, [setData]);
+        setTimeout(() => triggerAutoSync(), 500);
+    }, [setData, triggerAutoSync]);
 
     const deleteOtherIncome = useCallback((incomeId: string) => {
         setData(prev => ({ ...prev, otherIncomes: (prev.otherIncomes || []).filter(i => i.id !== incomeId) }));
-    }, [setData]);
+        setTimeout(() => triggerAutoSync(), 500);
+    }, [setData, triggerAutoSync]);
 
     const addSupplier = useCallback((supplier: Omit<Supplier, 'id'>) => {
         const newSupplier = { ...supplier, id: Date.now().toString() };
@@ -151,7 +160,8 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                 stockAdjustments: updatedStockAdjustments,
             };
         });
-    }, [setData]);
+        setTimeout(() => triggerAutoSync(), 500);
+    }, [setData, triggerAutoSync]);
 
     const addPaymentToPurchase = useCallback((purchaseId: string, amount: number) => {
         setData(prev => {
@@ -165,7 +175,8 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
             });
             return { ...prev, purchases: updatedPurchases };
         });
-    }, [setData]);
+        setTimeout(() => triggerAutoSync(), 500);
+    }, [setData, triggerAutoSync]);
 
     const addPaymentToTransaction = useCallback((transactionId: string, payments: Array<Omit<Payment, 'id' | 'createdAt'>>) => {
         setData(prev => {
@@ -210,12 +221,16 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
             // FIX: Update 'transactionRecords' in the data state.
             return { ...prev, transactionRecords: updatedTransactions };
         });
-    }, [setData]);
+        setTimeout(() => triggerAutoSync(), 500);
+    }, [setData, triggerAutoSync]);
 
     const refundTransaction = useCallback((transactionId: string) => {
         setData(prev => {
             const targetTransaction = prev.transactionRecords.find(t => t.id === transactionId);
             if (!targetTransaction || targetTransaction.paymentStatus === 'refunded') return prev;
+
+            // Audit Log
+            logAudit(currentUser, 'REFUND_TRANSACTION', `Refund transaksi #${transactionId.slice(-4)}. Total: ${CURRENCY_FORMATTER.format(targetTransaction.total)}`, transactionId);
 
             // 1. Mark Transaction as Refunded
             const updatedTransaction: TransactionType = { ...targetTransaction, paymentStatus: 'refunded' };
@@ -224,12 +239,10 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
             let updatedProducts = [...prev.products];
             let updatedRawMaterials = [...prev.rawMaterials];
             let updatedCustomers = [...prev.customers];
+            let updatedStockAdjustments = [...(prev.stockAdjustments || [])];
             
             // 2. Restore Inventory (Logic reversed from saveTransaction)
             if (prev.inventorySettings.enabled) {
-                const rawMaterialUpdates = new Map<string, number>();
-                const productUpdates = new Map<string, number>(); // Map for restoring bundled/tracked product stock
-
                 const cartItems = targetTransaction.items.filter(item => !(item.isReward && item.price === 0));
 
                 cartItems.forEach(item => {
@@ -244,31 +257,55 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                             
                             if (recipeItem.itemType === 'product' && recipeItem.productId) {
                                 // Restore component product stock
-                                productUpdates.set(recipeItem.productId, (productUpdates.get(recipeItem.productId) || 0) + totalToRestore);
+                                const pIdx = updatedProducts.findIndex(p => p.id === recipeItem.productId);
+                                if (pIdx > -1) {
+                                    const currentStock = updatedProducts[pIdx].stock || 0;
+                                    const newStock = currentStock + totalToRestore;
+                                    updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: newStock };
+                                    
+                                    // Log Adjustment
+                                    if(updatedProducts[pIdx].trackStock) {
+                                        updatedStockAdjustments.unshift({
+                                            id: `${Date.now()}-ref-${recipeItem.productId}`,
+                                            productId: recipeItem.productId!,
+                                            productName: updatedProducts[pIdx].name,
+                                            change: totalToRestore,
+                                            newStock: newStock,
+                                            notes: `Refund Transaksi #${transactionId.slice(-4)}`,
+                                            createdAt: new Date().toISOString()
+                                        });
+                                    }
+                                }
                             } else {
                                 // Restore raw material stock
                                 const materialId = recipeItem.rawMaterialId || '';
-                                rawMaterialUpdates.set(materialId, (rawMaterialUpdates.get(materialId) || 0) + totalToRestore);
+                                const mIdx = updatedRawMaterials.findIndex(m => m.id === materialId);
+                                if (mIdx > -1) {
+                                    updatedRawMaterials[mIdx].stock += totalToRestore;
+                                }
                             }
                         });
                     } else if (product && product.trackStock) {
                         // Direct stock restore
-                        productUpdates.set(product.id, (productUpdates.get(product.id) || 0) + item.quantity);
+                        const pIdx = updatedProducts.findIndex(p => p.id === product.id);
+                        if (pIdx > -1) {
+                            const currentStock = updatedProducts[pIdx].stock || 0;
+                            const newStock = currentStock + item.quantity;
+                            updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: newStock };
+
+                            // Log Adjustment
+                            updatedStockAdjustments.unshift({
+                                id: `${Date.now()}-ref-${product.id}`,
+                                productId: product.id,
+                                productName: product.name,
+                                change: item.quantity,
+                                newStock: newStock,
+                                notes: `Refund Transaksi #${transactionId.slice(-4)}`,
+                                createdAt: new Date().toISOString()
+                            });
+                        }
                     }
                 });
-
-                if (rawMaterialUpdates.size > 0) {
-                    updatedRawMaterials = prev.rawMaterials.map(m => rawMaterialUpdates.has(m.id) ? { ...m, stock: m.stock + (rawMaterialUpdates.get(m.id) || 0) } : m);
-                }
-                
-                if (productUpdates.size > 0) {
-                    updatedProducts = prev.products.map(p => {
-                        if (productUpdates.has(p.id) && p.trackStock) {
-                            return { ...p, stock: (p.stock || 0) + (productUpdates.get(p.id) || 0) };
-                        }
-                        return p;
-                    });
-                }
             }
 
             // 3. Revert Customer Points (if earned)
@@ -292,10 +329,12 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                 transactionRecords: updatedTransactions,
                 products: updatedProducts,
                 rawMaterials: updatedRawMaterials,
-                customers: updatedCustomers
+                customers: updatedCustomers,
+                stockAdjustments: updatedStockAdjustments
             };
         });
-    }, [setData]);
+        setTimeout(() => triggerAutoSync(), 500);
+    }, [setData, logAudit, currentUser, triggerAutoSync]);
 
     const importTransactions = useCallback((newTransactions: TransactionType[]) => {
         setData(prev => {

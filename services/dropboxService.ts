@@ -42,6 +42,9 @@ export const dropboxService = {
         } catch (error: any) {
             console.error('Dropbox Upload Error:', error);
             if (error.status === 401) throw new Error('Access Token tidak valid atau kadaluarsa.');
+            if (error.status === 507 || (error.error && error.error.error_summary && error.error.error_summary.includes('insufficient_space'))) {
+                throw new Error('QUOTA_EXCEEDED: Penyimpanan Dropbox Penuh.');
+            }
             throw new Error('Gagal mengunggah ke Dropbox. Periksa koneksi internet.');
         }
     },
@@ -103,8 +106,9 @@ export const dropboxService = {
 
         } catch (error: any) {
             console.error('Dropbox CSV Upload Error:', error);
-            // Don't throw error here to avoid blocking the main sync process, just log it.
-            // Or rethrow if strict
+            if (error.status === 507 || (error.error && error.error.error_summary && error.error.error_summary.includes('insufficient_space'))) {
+                throw new Error('QUOTA_EXCEEDED: Penyimpanan Dropbox Penuh.');
+            }
         }
     },
 
@@ -162,6 +166,22 @@ export const dropboxService = {
             }
             if (error.status === 401) throw new Error('Access Token tidak valid.');
             throw new Error('Gagal menarik master data dari Dropbox.');
+        }
+    },
+
+    // --- MAINTENANCE: Delete Reports Folder (Quota Management) ---
+    clearOldBackups: async (accessToken: string): Promise<{ success: boolean; message: string }> => {
+        try {
+            const dbx = new Dropbox({ accessToken });
+            // Deletes the entire Laporan folder. Simple & effective for free tier cleanup.
+            await dbx.filesDeleteV2({ path: '/Laporan' });
+            return { success: true, message: 'Folder Laporan di Dropbox berhasil dikosongkan.' };
+        } catch (error: any) {
+            // Path not found is fine (already empty)
+            if (error.status === 409 || (error.error && error.error.error_summary && error.error.error_summary.includes('path_lookup/not_found'))) {
+                return { success: true, message: 'Folder Laporan sudah kosong.' };
+            }
+            return { success: false, message: `Gagal menghapus: ${error.message}` };
         }
     }
 };

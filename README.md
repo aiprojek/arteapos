@@ -1,3 +1,4 @@
+
 # Artea POS - Aplikasi Kasir Offline
 
 ![Lisensi](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
@@ -82,6 +83,7 @@ Artea POS dilengkapi dengan berbagai fitur untuk membantu mengelola operasional 
 - **Antarmuka Kasir Intuitif:** Proses transaksi dengan cepat dan mudah.
 - **Keranjang Dinamis:** Tambah, hapus, dan ubah kuantitas produk dengan mudah.
 - **Pemindai Barcode:** Gunakan kamera perangkat untuk memindai barcode produk.
+- **Manajemen Sesi (Shift):** Kelola modal awal, catat kas masuk/keluar, dan ringkasan tutup buku kasir per sesi.
 - **Simpan Pesanan (Tab):** Simpan beberapa pesanan yang sedang berjalan dan beralih di antaranya (berguna untuk restoran/kafe).
 - **Beragam Metode Pembayaran:** Catat pembayaran tunai dan non-tunai dalam satu transaksi.
 - **Cetak & Bagikan Struk:** Cetak struk ke printer termal atau bagikan sebagai gambar ke pelanggan.
@@ -92,7 +94,7 @@ Artea POS dilengkapi dengan berbagai fitur untuk membantu mengelola operasional 
 - **Pelacakan Stok:**
     - **Stok Sederhana:** Lacak jumlah stok produk jadi.
     - **Stok Bahan Baku (Resep):** Definisikan resep untuk setiap produk dan lacak stok bahan baku secara otomatis saat penjualan.
-- **Penyesuaian Stok:** Catat penambahan atau pengurangan stok secara manual.
+- **Penyesuaian Stok & Opname:** Catat penambahan/pengurangan stok dan lakukan audit stok fisik (Stock Opname).
 - **Impor/Ekspor Produk:** Kelola data produk secara massal menggunakan file CSV.
 
 #### 💰 Manajemen Keuangan
@@ -117,12 +119,14 @@ Artea POS dilengkapi dengan berbagai fitur untuk membantu mengelola operasional 
 
 #### ⚙️ Pengaturan & Keamanan
 - **Manajemen Pengguna:** Buat akun dengan peran berbeda (Admin & Staf) dengan akses terbatas melalui PIN.
+- **Audit Log (Log Aktivitas):** Rekam jejak aktivitas sensitif (seperti penghapusan produk, perubahan harga, stock opname, atau refund) untuk mencegah kecurangan.
 - **Reset PIN Darurat:** Fitur untuk mereset PIN admin jika terlupa.
 - **Kustomisasi Struk:** Atur nama toko, alamat, dan pesan di struk.
 
 #### 💾 Manajemen Data
-- **100% Offline:** Semua data disimpan di `localStorage` browser. Aplikasi tetap berfungsi tanpa internet.
-- **Backup & Restore:** Amankan seluruh data aplikasi ke dalam satu file JSON dan pulihkan kapan saja.
+- **100% Offline:** Semua data disimpan di `IndexedDB` browser. Aplikasi tetap berfungsi tanpa internet.
+- **Backup & Restore Lokal:** Amankan seluruh data aplikasi ke dalam satu file JSON dan pulihkan kapan saja.
+- **Cloud Sync (Opsional):** Dukungan sinkronisasi data ke Dropbox (Backup) dan Supabase (Real-time Dashboard) untuk pemantauan jarak jauh atau multi-cabang.
 - **Progressive Web App (PWA):** "Instal" aplikasi ke layar utama perangkat Anda untuk akses seperti aplikasi native.
 
 ## 🛠️ Teknologi yang Digunakan
@@ -132,7 +136,7 @@ Artea POS dilengkapi dengan berbagai fitur untuk membantu mengelola operasional 
 - **Bahasa:** [TypeScript](https://www.typescriptlang.org/)
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/)
 - **Grafik & Laporan:** [Recharts](https://recharts.org/)
-- **Penyimpanan Data:** `localStorage` Browser
+- **Penyimpanan Data:** `Dexie.js` (IndexedDB Wrapper)
 
 ## 🚀 Instalasi & Menjalankan Secara Lokal
 

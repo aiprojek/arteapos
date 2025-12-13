@@ -122,6 +122,60 @@ const OrderTypeManager: React.FC<{
 
 
 // --- Form Modals ---
+const StaffFormModal: React.FC<{
+    isOpen: boolean,
+    onClose: () => void,
+    onSave: (name: string, pin: string) => void
+}> = ({ isOpen, onClose, onSave }) => {
+    const [name, setName] = useState('');
+    const [pin, setPin] = useState('0000');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (name && pin.length >= 4) {
+            onSave(name, pin);
+            setName('');
+            setPin('0000');
+            onClose();
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Tambah Staf Baru">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Nama Staf</label>
+                    <input 
+                        type="text" 
+                        value={name} 
+                        onChange={e => setName(e.target.value)} 
+                        required 
+                        placeholder="Nama Panggilan..."
+                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" 
+                        autoFocus
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">PIN Akses (4-6 digit)</label>
+                    <input 
+                        type="text" 
+                        value={pin} 
+                        onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} 
+                        required 
+                        placeholder="0000"
+                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-mono tracking-widest" 
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Default PIN: 0000 (Bisa diganti nanti)</p>
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                    <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
+                    <Button type="submit">Simpan Staf</Button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
 const DiscountFormModal: React.FC<{
     isOpen: boolean, onClose: () => void, onSave: (d: Omit<DiscountDefinition, 'id'> | DiscountDefinition) => void, discount: DiscountDefinition | null
 }> = ({ isOpen, onClose, onSave, discount }) => {
@@ -365,7 +419,11 @@ const SettingsView: React.FC = () => {
     const [editingReward, setEditingReward] = useState<Reward | null>(null);
     const [isPointRuleModalOpen, setPointRuleModalOpen] = useState(false);
     const [editingPointRule, setEditingPointRule] = useState<PointRule | null>(null);
+    const [isCleaning, setIsCleaning] = useState(false); // For maintenance loading state
     
+    // Staff Modal State
+    const [isStaffModalOpen, setStaffModalOpen] = useState(false);
+
     // Sync local state with context on initial load or external changes
     useEffect(() => setReceiptForm(originalReceiptSettings), [originalReceiptSettings]);
     useEffect(() => setInventoryForm(originalInventorySettings), [originalInventorySettings]);
@@ -509,6 +567,63 @@ const SettingsView: React.FC = () => {
         }
     };
     
+    // --- Cloud Maintenance (Purge) Logic ---
+    const handleCloudPurge = () => {
+        showAlert({
+            type: 'confirm',
+            title: 'Kosongkan Riwayat Cloud?',
+            message: (
+                <div className="text-left text-sm space-y-2">
+                    <p>Tindakan ini akan <strong>MENGHAPUS SEMUA</strong> riwayat transaksi, log stok, dan audit di Supabase & Dropbox untuk mengatasi penyimpanan penuh.</p>
+                    <p className="bg-slate-700 p-2 rounded border border-slate-600">
+                        ⚠️ Data Master (Produk, Pelanggan, Diskon) di Cloud <strong>TIDAK</strong> akan dihapus.
+                    </p>
+                    <p>Sebelum menghapus, sistem akan otomatis mengunduh <strong>Backup Lokal (JSON)</strong> ke perangkat ini sebagai arsip.</p>
+                </div>
+            ),
+            confirmVariant: 'danger',
+            confirmText: 'Unduh Backup & Hapus',
+            onConfirm: async () => {
+                setIsCleaning(true);
+                try {
+                    // 1. Force Backup Local
+                    await dataService.exportData(); // This triggers download in browser
+
+                    let messages = [];
+
+                    // 2. Clear Supabase
+                    if (supabaseUrl && supabaseKey) {
+                        supabaseService.init(supabaseUrl, supabaseKey);
+                        const res = await supabaseService.clearOperationalData();
+                        messages.push(res.success ? "✅ Supabase: Berhasil dibersihkan" : `❌ Supabase: ${res.message}`);
+                    }
+
+                    // 3. Clear Dropbox
+                    if (dropboxToken) {
+                        const res = await dropboxService.clearOldBackups(dropboxToken);
+                        messages.push(res.success ? "✅ Dropbox: Berhasil dibersihkan" : `❌ Dropbox: ${res.message}`);
+                    }
+
+                    showAlert({
+                        type: 'alert',
+                        title: 'Proses Selesai',
+                        message: (
+                            <ul className="list-disc pl-5 text-left text-sm">
+                                <li>File Backup telah diunduh. Simpan baik-baik.</li>
+                                {messages.map((m, i) => <li key={i}>{m}</li>)}
+                            </ul>
+                        )
+                    });
+
+                } catch (e: any) {
+                    showAlert({ type: 'alert', title: 'Gagal', message: e.message });
+                } finally {
+                    setIsCleaning(false);
+                }
+            }
+        });
+    };
+    
     // CRUD Handlers for Modals
     const handleSaveDiscount = (d: Omit<DiscountDefinition, 'id'> | DiscountDefinition) => {
         if ('id' in d) updateDiscountDefinition(d); else addDiscountDefinition(d);
@@ -542,6 +657,20 @@ const SettingsView: React.FC = () => {
             pointRules: membershipForm.pointRules.filter(r => r.id !== id)
         });
     }
+
+    const handleAddStaff = async (name: string, pin: string) => {
+        try {
+            await addUser({ name, pin, role: 'staff' });
+            showAlert({ type: 'alert', title: 'Berhasil', message: `Staf ${name} berhasil ditambahkan.` });
+        } catch (e: any) {
+            console.error(e);
+            showAlert({ 
+                type: 'alert', 
+                title: 'Error', 
+                message: 'Gagal menambah user. Pastikan Anda menggunakan HTTPS atau Localhost (diperlukan untuk enkripsi PIN).' 
+            });
+        }
+    };
 
     return (
         <div className="space-y-6 pb-20">
@@ -815,10 +944,7 @@ const SettingsView: React.FC = () => {
                                         </div>
                                     ))}
                                     <div className="flex gap-2 mt-2">
-                                        <Button type="button" size="sm" onClick={() => {
-                                            const name = prompt("Nama User Baru:");
-                                            if(name) addUser({name, pin: '0000', role: 'staff'});
-                                        }}>+ Tambah Staf</Button>
+                                        <Button type="button" size="sm" onClick={() => setStaffModalOpen(true)}>+ Tambah Staf</Button>
                                     </div>
                                 </div>
                             </div>
@@ -829,6 +955,30 @@ const SettingsView: React.FC = () => {
 
             {activeTab === 'data' && (
                 <div className="space-y-6 animate-fade-in">
+                    {/* NEW: Cloud Storage Management (Quota Handling) */}
+                    <SettingsCard title="Manajemen Penyimpanan Cloud" description="Gunakan jika penyimpanan Cloud (Supabase/Dropbox) penuh atau mencapai kuota.">
+                        <div className="bg-orange-900/20 border-l-4 border-orange-500 p-4 rounded-r mb-4">
+                            <div className="flex items-start gap-3">
+                                <Icon name="warning" className="w-5 h-5 text-orange-400 mt-0.5" />
+                                <div>
+                                    <h4 className="font-bold text-orange-300 text-sm">Pembersihan Berkala</h4>
+                                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                                        Layanan Cloud gratis memiliki batas penyimpanan. Tombol di bawah ini akan:
+                                    </p>
+                                    <ol className="list-decimal pl-4 text-xs text-slate-400 mt-2 space-y-1">
+                                        <li>Memaksa unduh <strong>Backup Lokal (.json)</strong> untuk arsip Anda.</li>
+                                        <li>Menghapus semua riwayat transaksi & log lama di Cloud (Supabase & Dropbox).</li>
+                                        <li>Mengembalikan kapasitas penyimpanan Cloud menjadi kosong.</li>
+                                        <li>Data Produk & Pelanggan di Cloud <strong>TIDAK</strong> akan dihapus.</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                        <Button onClick={handleCloudPurge} disabled={isCleaning} variant="danger" className="w-full sm:w-auto">
+                            {isCleaning ? 'Sedang Memproses...' : <><Icon name="trash" className="w-4 h-4"/> Kosongkan Riwayat Cloud (Reset)</>}
+                        </Button>
+                    </SettingsCard>
+
                     <SettingsCard title="Backup & Restore Lokal" description="Unduh file database (.json) ke perangkat ini atau pulihkan data dari file cadangan.">
                         <div className="flex flex-wrap gap-3">
                             <Button onClick={dataService.exportData} variant="secondary">
@@ -954,7 +1104,7 @@ const SettingsView: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <ul className="list-disc pl-4 text-xs text-slate-400 space-y-1">
                                     <li><strong>Cek Harian (Spot Check):</strong> Periksa log ini setiap tutup toko untuk melihat aktivitas mencurigakan hari itu.</li>
-                                    <li><strong>Investigasi Selisih Kas:</strong> Jika uang kurang, cari log <em>"REFUND_TRANSACTION"</em>. (Modus: Struk dicetak -> Uang diterima -> Transaksi di-refund di sistem).</li>
+                                    <li><strong>Investigasi Selisih Kas:</strong> Jika uang kurang, cari log <em>"REFUND_TRANSACTION"</em>. (Modus: Struk dicetak &rarr; Uang diterima &rarr; Transaksi di-refund di sistem).</li>
                                 </ul>
                                 <ul className="list-disc pl-4 text-xs text-slate-400 space-y-1">
                                     <li><strong>Kontrol Stok (Anti-Tuyul):</strong> Pantau log <em>"STOCK_OPNAME"</em>. Pastikan perubahan stok manual hanya dilakukan oleh orang yang berwenang.</li>
@@ -1002,6 +1152,12 @@ const SettingsView: React.FC = () => {
                 onClose={() => setPointRuleModalOpen(false)}
                 onSave={handleSavePointRule}
                 rule={editingPointRule}
+            />
+            
+            <StaffFormModal
+                isOpen={isStaffModalOpen}
+                onClose={() => setStaffModalOpen(false)}
+                onSave={handleAddStaff}
             />
 
             <Modal isOpen={showSqlModal} onClose={() => setShowSqlModal(false)} title="Panduan Setup Supabase">

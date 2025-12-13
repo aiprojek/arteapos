@@ -216,7 +216,7 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
                                 <div>
                                     <h5 className="font-bold text-white">Peringatan Penyimpanan</h5>
                                     <p className="text-sm text-slate-400 mt-1">
-                                        Data tersimpan di HP ini. <strong>DILARANG</strong> menghapus cache browser atau data penjualan bisa hilang.
+                                        Data tersimpan di <strong>perangkat ini</strong>. <strong>DILARANG</strong> menghapus cache browser atau data penjualan bisa hilang.
                                     </p>
                                 </div>
                             </div>

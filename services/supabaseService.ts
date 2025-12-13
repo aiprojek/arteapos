@@ -333,6 +333,10 @@ export const supabaseService = {
 
         } catch (e: any) {
             console.error("Sync Up Error:", e);
+            // Detect Quota/Full Error
+            if (e.message && (e.message.includes('quota') || e.message.includes('full') || e.message.includes('exceeded'))) {
+                throw new Error("QUOTA_EXCEEDED: Penyimpanan Cloud Penuh.");
+            }
             return { success: false, message: e.message };
         }
     },
@@ -356,7 +360,7 @@ export const supabaseService = {
                 addons: p.addons,
                 recipe: p.recipe,
                 image_url: p.imageUrl,
-                track_stock: p.track_stock,
+                track_stock: p.trackStock,
                 updated_at: new Date().toISOString()
             }));
             if (prodPayload.length > 0) await supabase.from(TABLE_PRODUCTS).upsert(prodPayload);
@@ -471,7 +475,7 @@ export const supabaseService = {
             if (remoteRules) {
                 const rules: PointRule[] = remoteRules.map((r: any) => ({
                     id: r.id, type: r.type, description: r.description,
-                    spendAmount: r.spend_amount, pointsEarned: r.points_earned,
+                    spendAmount: r.spend_amount, points_earned: r.points_earned,
                     targetId: r.target_id, pointsPerItem: r.points_per_item,
                     validStoreIds: r.valid_store_ids
                 }));
@@ -529,5 +533,22 @@ export const supabaseService = {
         const { data: transactions } = await supabase.from(TABLE_TRANSACTIONS).select('*').gte('created_at', startDate.toISOString()).lte('created_at', endDate.toISOString());
         const { data: purchases } = await supabase.from(TABLE_PURCHASES).select('*').gte('date', startDate.toISOString()).lte('date', endDate.toISOString());
         return { expenses: expenses || [], otherIncomes: incomes || [], transactions: transactions || [], purchases: purchases || [] };
+    },
+
+    // --- MAINTENANCE: Clear Operational Data (Quota Management) ---
+    clearOperationalData: async (): Promise<{ success: boolean; message: string }> => {
+        if (!supabase) return { success: false, message: 'Supabase belum diinisialisasi.' };
+        try {
+            // Delete all records from high-volume tables. 
+            // Note: We leave Master Data (Products, Customers) intact.
+            await supabase.from(TABLE_TRANSACTIONS).delete().neq('id', '0');
+            await supabase.from(TABLE_STOCK_ADJUSTMENTS).delete().neq('id', '0');
+            await supabase.from(TABLE_AUDIT_LOGS).delete().neq('id', '0');
+            await supabase.from(TABLE_INVENTORY).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+            
+            return { success: true, message: "Data Transaksi & Log berhasil dihapus dari Cloud." };
+        } catch (e: any) {
+            return { success: false, message: e.message };
+        }
     }
 };

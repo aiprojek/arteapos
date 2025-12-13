@@ -11,8 +11,9 @@ interface DataContextType {
   restoreData: (backupData: AppData) => Promise<void>;
   isDataLoading: boolean;
   logAudit: (user: User | null, action: AuditAction, details: string, targetId?: string) => Promise<void>;
-  triggerAutoSync: () => Promise<void>; // New Auto Sync Function
-  syncStatus: 'idle' | 'syncing' | 'success' | 'error'; // Sync Status State
+  triggerAutoSync: () => Promise<void>;
+  syncStatus: 'idle' | 'syncing' | 'success' | 'error';
+  syncErrorMessage: string | null; // NEW: To store specific error reason
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -37,6 +38,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isDataLoading, setIsLoading] = useState(true);
   const [data, _setData] = useState<AppData>(initialData);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   const prevDataRef = useRef<AppData | null>(null);
 
   useEffect(() => {
@@ -234,12 +236,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!sbUrl && !dbxToken) return;
 
       setSyncStatus('syncing');
+      setSyncErrorMessage(null);
       
       try {
           // Priority 1: Supabase (Fast & Realtime)
           if (sbUrl && sbKey) {
               supabaseService.init(sbUrl, sbKey);
-              await supabaseService.syncOperationalDataUp();
+              const result = await supabaseService.syncOperationalDataUp();
+              if (!result.success) throw new Error(`Supabase: ${result.message}`);
           }
 
           // Priority 2: Dropbox (CSV Only for speed)
@@ -252,16 +256,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Reset status after 3 seconds
           setTimeout(() => setSyncStatus('idle'), 3000);
 
-      } catch (error) {
+      } catch (error: any) {
           console.error("Auto Sync Failed:", error);
           setSyncStatus('error');
+          // Capture specific quota error messages
+          const msg = error.message || "Unknown error";
+          setSyncErrorMessage(msg);
+          
           // Reset status after 5 seconds
           setTimeout(() => setSyncStatus('idle'), 5000);
       }
   }, []);
 
   return (
-    <DataContext.Provider value={{ data, setData, restoreData, isDataLoading, logAudit, triggerAutoSync, syncStatus }}>
+    <DataContext.Provider value={{ data, setData, restoreData, isDataLoading, logAudit, triggerAutoSync, syncStatus, syncErrorMessage }}>
       {children}
     </DataContext.Provider>
   );

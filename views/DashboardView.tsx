@@ -255,7 +255,7 @@ const DashboardView: React.FC = () => {
                         onClick={() => setDataSource('local')}
                         className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
                     >
-                        <span className="flex items-center gap-2"><Icon name="database" className="w-4 h-4" /> Lokal (HP Ini)</span>
+                        <span className="flex items-center gap-2"><Icon name="database" className="w-4 h-4" /> Lokal (Perangkat Ini)</span>
                     </button>
                     <button
                         onClick={() => setDataSource('cloud')}

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import type { View } from '../types';
 import Icon from './Icon';
@@ -29,7 +30,7 @@ const viewTitles: Record<View, string> = {
 
 const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick }) => {
     const { currentUser, logout, authSettings } = useAuth();
-    const { restoreData, syncStatus } = useData(); // Get sync status
+    const { restoreData, syncStatus, syncErrorMessage } = useData(); // Get sync status & error
     const { showAlert } = useUI();
     const [isDataModalOpen, setDataModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -108,6 +109,28 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
         }
     };
 
+    const handleSyncErrorClick = () => {
+        if (syncErrorMessage && (syncErrorMessage.includes('QUOTA') || syncErrorMessage.includes('Penuh'))) {
+            showAlert({
+                type: 'alert',
+                title: 'Penyimpanan Cloud Penuh!',
+                message: (
+                    <div className="text-left">
+                        <p className="mb-2 text-sm text-slate-300">Sinkronisasi gagal karena batas penyimpanan akun gratis (Dropbox/Supabase) telah tercapai.</p>
+                        <p className="font-bold text-yellow-400 text-sm mb-2">Solusi:</p>
+                        <ol className="list-decimal pl-5 text-xs text-slate-400 space-y-1">
+                            <li>Buka menu <strong>Pengaturan</strong> {'>'} <strong>Data & Cloud</strong>.</li>
+                            <li>Gunakan fitur <strong>"Kosongkan Riwayat Cloud"</strong>.</li>
+                            <li>Fitur ini akan mengarsipkan data ke lokal lalu membersihkan Cloud agar sinkronisasi bisa berjalan kembali.</li>
+                        </ol>
+                    </div>
+                )
+            });
+        } else {
+            showAlert({ type: 'alert', title: 'Gagal Sinkronisasi', message: syncErrorMessage || 'Terjadi kesalahan jaringan.' });
+        }
+    }
+
     return (
         <header className="flex items-center justify-between p-4 bg-slate-800 border-b border-slate-700 flex-shrink-0">
             <div className="flex items-center">
@@ -131,10 +154,12 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                         </div>
                     )}
                     {syncStatus === 'error' && (
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-900/30 border border-red-800">
+                        <button onClick={handleSyncErrorClick} className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-900/30 border border-red-800 hover:bg-red-900/50 transition-colors">
                             <Icon name="warning" className="w-3 h-3 text-red-400" />
-                            <span className="text-[10px] text-red-300 font-medium">Gagal Sync</span>
-                        </div>
+                            <span className="text-[10px] text-red-300 font-medium">
+                                {syncErrorMessage && syncErrorMessage.includes('QUOTA') ? 'Cloud Penuh' : 'Gagal Sync'}
+                            </span>
+                        </button>
                     )}
                 </div>
             </div>

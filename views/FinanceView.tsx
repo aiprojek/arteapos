@@ -1227,6 +1227,47 @@ const FinanceView: React.FC = () => {
             />}
         </div>
     );
+
+    return (
+        <div className="flex flex-col h-full">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <h1 className="text-2xl font-bold text-white">Keuangan & Pelanggan</h1>
+                <div className="bg-slate-700 p-1 rounded-lg flex">
+                    <button onClick={() => setMainView('finance')} className={`px-4 py-2 text-sm rounded-md transition-colors ${mainView === 'finance' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Keuangan</button>
+                    <button onClick={() => setMainView('customers')} className={`px-4 py-2 text-sm rounded-md transition-colors ${mainView === 'customers' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Pelanggan</button>
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+                {mainView === 'finance' ? renderFinanceTabs() : <CustomersTab />}
+            </div>
+
+            {/* Modals */}
+            <ExpenseFormModal 
+                isOpen={isExpenseModalOpen} 
+                onClose={() => setExpenseModalOpen(false)} 
+                onSave={handleSaveExpense} 
+                expense={editingExpense} 
+            />
+            <OtherIncomeFormModal
+                isOpen={isIncomeModalOpen}
+                onClose={() => setIncomeModalOpen(false)}
+                onSave={handleSaveIncome}
+                income={editingIncome}
+            />
+            <SupplierFormModal
+                isOpen={isSupplierModalOpen}
+                onClose={() => setSupplierModalOpen(false)}
+                onSave={handleSaveSupplier}
+                supplier={editingSupplier}
+            />
+            <PurchaseFormModal
+                isOpen={isPurchaseModalOpen}
+                onClose={() => setPurchaseModalOpen(false)}
+                onSave={handleSavePurchase}
+            />
+        </div>
+    );
 };
 
 export default FinanceView;

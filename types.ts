@@ -92,7 +92,7 @@ export interface User {
   id: string;
   name: string;
   pin: string; // 4-digit PIN
-  role: 'admin' | 'staff';
+  role: 'admin' | 'manager' | 'staff'; // Added 'manager'
 }
 
 export type PaymentMethod = 'cash' | 'non-cash';

@@ -27,7 +27,7 @@ const Nav = ({ activeView, setActiveView, onNavigate }: {
 }) => {
   const { currentUser } = useAuth();
   const { inventorySettings } = useProduct();
-  const isAdmin = currentUser?.role === 'admin';
+  const isManagement = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
   const handleNavigation = (view: View) => {
     setActiveView(view);
@@ -55,11 +55,11 @@ const Nav = ({ activeView, setActiveView, onNavigate }: {
         <h1 className="text-xl font-bold text-white">Artea POS</h1>
       </div>
       
-      {isAdmin && <NavItem view="dashboard" label="Dashboard" icon="reports" />}
+      {isManagement && <NavItem view="dashboard" label="Dashboard" icon="reports" />}
       <NavItem view="pos" label="Kasir" icon="cash" />
       <NavItem view="finance" label="Keuangan" icon="finance" />
       
-      {isAdmin && (
+      {isManagement && (
         <>
           <NavItem view="products" label="Produk" icon="products" />
           {inventorySettings.enabled && <NavItem view="raw-materials" label="Bahan Baku" icon="ingredients" />}
@@ -74,15 +74,15 @@ const Nav = ({ activeView, setActiveView, onNavigate }: {
 
 const AppContent = () => {
   const { currentUser } = useAuth();
-  const isAdmin = currentUser?.role === 'admin';
-  const [activeView, setActiveView] = useState<View>(isAdmin ? 'dashboard' : 'pos');
+  const isManagement = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+  const [activeView, setActiveView] = useState<View>(isManagement ? 'dashboard' : 'pos');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   
   const closeSidebar = () => setSidebarOpen(false);
   const toggleSidebar = () => setSidebarOpen(prev => !prev);
 
   const renderView = () => {
-    if (isAdmin) {
+    if (isManagement) {
       switch (activeView) {
         case 'dashboard': return <DashboardView />;
         case 'pos': return <POSView />;

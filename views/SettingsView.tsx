@@ -16,7 +16,7 @@ import { dataService } from '../services/dataService';
 import { supabaseService, SETUP_SQL_SCRIPT } from '../services/supabaseService'; 
 import { dropboxService } from '../services/dropboxService';
 import { decryptReport } from '../utils/crypto';
-import type { AuditLog, Transaction as TransactionType, CartItem, DiscountDefinition, PointRule, Reward, AuthSettings, InventorySettings, ReceiptSettings, SessionSettings, MembershipSettings, PointRuleType } from '../types';
+import type { AuditLog, Transaction as TransactionType, CartItem, DiscountDefinition, PointRule, Reward, AuthSettings, InventorySettings, ReceiptSettings, SessionSettings, MembershipSettings, PointRuleType, User } from '../types';
 import VirtualizedTable from '../components/VirtualizedTable';
 import { CURRENCY_FORMATTER } from '../constants';
 
@@ -122,29 +122,54 @@ const OrderTypeManager: React.FC<{
 
 
 // --- Form Modals ---
-const StaffFormModal: React.FC<{
+const UserFormModal: React.FC<{
     isOpen: boolean,
     onClose: () => void,
-    onSave: (name: string, pin: string) => void
-}> = ({ isOpen, onClose, onSave }) => {
+    onSave: (data: { id?: string, name: string, pin: string, role: 'admin' | 'manager' | 'staff' }) => void,
+    user: User | null
+}> = ({ isOpen, onClose, onSave, user }) => {
     const [name, setName] = useState('');
-    const [pin, setPin] = useState('0000');
+    const [pin, setPin] = useState('');
+    const [role, setRole] = useState<'admin' | 'manager' | 'staff'>('staff');
+
+    useEffect(() => {
+        if (isOpen) {
+            if (user) {
+                setName(user.name);
+                setRole(user.role);
+                setPin(''); // Reset PIN field on edit (keep empty to not change)
+            } else {
+                setName('');
+                setRole('staff');
+                setPin('0000'); // Default PIN for new user
+            }
+        }
+    }, [isOpen, user]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (name && pin.length >= 4) {
-            onSave(name, pin);
-            setName('');
-            setPin('0000');
-            onClose();
-        }
+        // Validation
+        if (!name.trim()) return;
+        
+        // If editing and PIN is empty, it means "don't change". 
+        // Logic handled in parent, here we just pass what we have.
+        // If creating new user, PIN is required.
+        if (!user && pin.length < 4) return;
+
+        onSave({ 
+            id: user?.id, 
+            name, 
+            pin, 
+            role 
+        });
+        onClose();
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Tambah Staf Baru">
+        <Modal isOpen={isOpen} onClose={onClose} title={user ? "Edit Pengguna" : "Tambah Pengguna Baru"}>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Nama Staf</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Nama</label>
                     <input 
                         type="text" 
                         value={name} 
@@ -155,21 +180,41 @@ const StaffFormModal: React.FC<{
                         autoFocus
                     />
                 </div>
+                
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Peran (Role)</label>
+                    <select 
+                        value={role} 
+                        onChange={e => setRole(e.target.value as any)}
+                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                    >
+                        <option value="staff">Staf (Kasir)</option>
+                        <option value="manager">Manajer (Supervisor)</option>
+                        <option value="admin">Admin (Akses Penuh)</option>
+                    </select>
+                    <p className="text-xs text-slate-500 mt-1">
+                        <strong>Manajer:</strong> Bisa kelola Produk, Laporan & Keuangan, tapi TIDAK BISA hapus user/reset database.
+                    </p>
+                </div>
+
                 <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">PIN Akses (4-6 digit)</label>
                     <input 
                         type="text" 
                         value={pin} 
                         onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} 
-                        required 
-                        placeholder="0000"
+                        required={!user} // Required only for new users
+                        placeholder={user ? "Kosongkan jika tidak diubah" : "0000"}
                         className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-mono tracking-widest" 
                     />
-                    <p className="text-xs text-slate-500 mt-1">Default PIN: 0000 (Bisa diganti nanti)</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                        {user ? 'Isi hanya jika ingin mengganti PIN.' : 'Default PIN: 0000'}
+                    </p>
                 </div>
+                
                 <div className="flex justify-end gap-3 pt-2">
                     <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
-                    <Button type="submit">Simpan Staf</Button>
+                    <Button type="submit">Simpan</Button>
                 </div>
             </form>
         </Modal>
@@ -383,7 +428,7 @@ const SettingsView: React.FC = () => {
     // Original context data
     const { receiptSettings: originalReceiptSettings, updateReceiptSettings } = useSettings();
     const { inventorySettings: originalInventorySettings, updateInventorySettings, products } = useProduct();
-    const { authSettings: originalAuthSettings, updateAuthSettings, users, addUser, deleteUser, resetUserPin } = useAuth();
+    const { authSettings: originalAuthSettings, updateAuthSettings, users, currentUser, addUser, updateUser, deleteUser, resetUserPin } = useAuth();
     const { sessionSettings: originalSessionSettings, updateSessionSettings } = useSession();
     const { membershipSettings: originalMembershipSettings, updateMembershipSettings } = useCustomer();
     const { discountDefinitions, addDiscountDefinition, updateDiscountDefinition, deleteDiscountDefinition } = useDiscount();
@@ -391,6 +436,8 @@ const SettingsView: React.FC = () => {
     const { importTransactions } = useFinance();
     const { showAlert } = useUI();
     
+    const isAdmin = currentUser?.role === 'admin';
+
     // Local form state
     const [receiptForm, setReceiptForm] = useState<ReceiptSettings>(originalReceiptSettings);
     const [inventoryForm, setInventoryForm] = useState<InventorySettings>(originalInventorySettings);
@@ -422,7 +469,8 @@ const SettingsView: React.FC = () => {
     const [isCleaning, setIsCleaning] = useState(false); // For maintenance loading state
     
     // Staff Modal State
-    const [isStaffModalOpen, setStaffModalOpen] = useState(false);
+    const [isUserModalOpen, setUserModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
 
     // Sync local state with context on initial load or external changes
     useEffect(() => setReceiptForm(originalReceiptSettings), [originalReceiptSettings]);
@@ -658,16 +706,37 @@ const SettingsView: React.FC = () => {
         });
     }
 
-    const handleAddStaff = async (name: string, pin: string) => {
+    const handleSaveUser = async (data: { id?: string, name: string, pin: string, role: 'admin' | 'manager' | 'staff' }) => {
         try {
-            await addUser({ name, pin, role: 'staff' });
-            showAlert({ type: 'alert', title: 'Berhasil', message: `Staf ${name} berhasil ditambahkan.` });
+            if (data.id) {
+                // Update Logic: Need to handle partial PIN update (if PIN empty, use old one logic handled in Context/Modal)
+                // But modal passes empty string if unchanged.
+                // We rely on Context updateUser to check if pin changed. 
+                // However, Context expects full object.
+                // We must find original user to keep old pin if new pin is empty.
+                const originalUser = users.find(u => u.id === data.id);
+                if (!originalUser) return;
+
+                const pinToUpdate = data.pin ? data.pin : originalUser.pin;
+                
+                await updateUser({
+                    id: data.id,
+                    name: data.name,
+                    role: data.role,
+                    pin: pinToUpdate
+                });
+                showAlert({ type: 'alert', title: 'Berhasil', message: `Data pengguna ${data.name} berhasil diperbarui.` });
+            } else {
+                // Add Logic
+                await addUser({ name: data.name, pin: data.pin, role: data.role });
+                showAlert({ type: 'alert', title: 'Berhasil', message: `Pengguna ${data.name} berhasil ditambahkan.` });
+            }
         } catch (e: any) {
             console.error(e);
             showAlert({ 
                 type: 'alert', 
                 title: 'Error', 
-                message: 'Gagal menambah user. Pastikan Anda menggunakan HTTPS atau Localhost (diperlukan untuk enkripsi PIN).' 
+                message: 'Gagal menyimpan data pengguna. Pastikan PIN valid.' 
             });
         }
     };
@@ -679,13 +748,14 @@ const SettingsView: React.FC = () => {
             {/* Tabs */}
             <div className="flex flex-nowrap overflow-x-auto gap-2 border-b border-slate-700 pb-2">
                 {[
-                    { id: 'general', label: 'Toko & Struk', icon: 'settings' },
-                    { id: 'features', label: 'Fitur Kasir', icon: 'star' },
-                    { id: 'inventory', label: 'Inventaris', icon: 'boxes' },
-                    { id: 'auth', label: 'Keamanan', icon: 'lock' },
-                    { id: 'data', label: 'Data & Cloud', icon: 'database' },
-                    { id: 'audit', label: 'Audit Log', icon: 'file-lock' },
-                ].map(tab => (
+                    { id: 'general', label: 'Toko & Struk', icon: 'settings', restricted: false },
+                    { id: 'features', label: 'Fitur Kasir', icon: 'star', restricted: false },
+                    { id: 'inventory', label: 'Inventaris', icon: 'boxes', restricted: false },
+                    // Restrict 'auth' and 'data' to Admin only. Manager cannot see them.
+                    { id: 'auth', label: 'Keamanan', icon: 'lock', restricted: true }, 
+                    { id: 'data', label: 'Data & Cloud', icon: 'database', restricted: true },
+                    { id: 'audit', label: 'Audit Log', icon: 'file-lock', restricted: false },
+                ].filter(tab => !tab.restricted || isAdmin).map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as any)}
@@ -930,9 +1000,17 @@ const SettingsView: React.FC = () => {
                                         <div key={u.id} className="flex justify-between items-center bg-slate-900 p-2 rounded">
                                             <div>
                                                 <span className="font-bold text-white">{u.name}</span>
-                                                <span className="text-xs text-slate-400 ml-2 uppercase">({u.role})</span>
+                                                <span className={`text-xs ml-2 uppercase ${u.role === 'manager' ? 'text-yellow-400' : 'text-slate-400'}`}>({u.role})</span>
                                             </div>
                                             <div className="flex gap-2">
+                                                <Button 
+                                                    type="button" 
+                                                    size="sm" 
+                                                    variant="secondary" 
+                                                    onClick={() => { setEditingUser(u); setUserModalOpen(true); }}
+                                                >
+                                                    <Icon name="edit" className="w-4 h-4"/> Edit
+                                                </Button>
                                                 <Button type="button" size="sm" variant="secondary" onClick={async () => {
                                                     await resetUserPin(u.id);
                                                     showAlert({type:'alert', title:'Reset PIN', message: `PIN untuk ${u.name} direset menjadi 0000`});
@@ -944,7 +1022,7 @@ const SettingsView: React.FC = () => {
                                         </div>
                                     ))}
                                     <div className="flex gap-2 mt-2">
-                                        <Button type="button" size="sm" onClick={() => setStaffModalOpen(true)}>+ Tambah Staf</Button>
+                                        <Button type="button" size="sm" onClick={() => { setEditingUser(null); setUserModalOpen(true); }}>+ Tambah Pengguna</Button>
                                     </div>
                                 </div>
                             </div>
@@ -1154,10 +1232,11 @@ const SettingsView: React.FC = () => {
                 rule={editingPointRule}
             />
             
-            <StaffFormModal
-                isOpen={isStaffModalOpen}
-                onClose={() => setStaffModalOpen(false)}
-                onSave={handleAddStaff}
+            <UserFormModal
+                isOpen={isUserModalOpen}
+                onClose={() => setUserModalOpen(false)}
+                onSave={handleSaveUser}
+                user={editingUser}
             />
 
             <Modal isOpen={showSqlModal} onClose={() => setShowSqlModal(false)} title="Panduan Setup Supabase">

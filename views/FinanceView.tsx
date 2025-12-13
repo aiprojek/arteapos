@@ -1008,10 +1008,12 @@ const ExpenseStatusBadge: React.FC<{status: ExpenseStatus}> = ({status}) => {
 // --- Main Finance View ---
 const FinanceView: React.FC = () => {
     const { currentUser } = useAuth();
-    const isAdmin = currentUser?.role === 'admin';
+    // Allow Managers to access full finance capabilities like Admins
+    const isManagement = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+    
     const [mainView, setMainView] = useState<'finance' | 'customers'>('finance');
-    // Set default tab based on role: Admin -> Cashflow, Staff -> Expenses
-    const [activeTab, setActiveTab] = useState<FinanceSubTab>(isAdmin ? 'cashflow' : 'expenses');
+    // Set default tab based on role: Management -> Cashflow, Staff -> Expenses
+    const [activeTab, setActiveTab] = useState<FinanceSubTab>(isManagement ? 'cashflow' : 'expenses');
     
     const { products, rawMaterials } = useProduct();
     const { 
@@ -1122,15 +1124,15 @@ const FinanceView: React.FC = () => {
     const renderFinanceTabs = () => (
         <div className="space-y-6">
              <div className="border-b border-slate-700 flex flex-nowrap overflow-x-auto -mb-px">
-                {/* Cash Flow Tab is strictly for Admins */}
-                {isAdmin && renderSubTabButton('cashflow', 'Arus Kas')}
+                {/* Cash Flow Tab is strictly for Admin/Managers */}
+                {isManagement && renderSubTabButton('cashflow', 'Arus Kas')}
                 {renderSubTabButton('other_income', 'Pemasukan Lain')}
                 {renderSubTabButton('expenses', 'Pengeluaran')}
                 {renderSubTabButton('purchasing', 'Pembelian & Pemasok')}
                 {renderSubTabButton('debt-receivables', 'Utang & Piutang')}
             </div>
             
-            {isAdmin && activeTab === 'cashflow' && <CashFlowTab />}
+            {isManagement && activeTab === 'cashflow' && <CashFlowTab />}
             {activeTab === 'debt-receivables' && <DebtReceivablesTab />}
 
             {activeTab === 'other_income' && (
@@ -1223,33 +1225,6 @@ const FinanceView: React.FC = () => {
                 onDeleteSupplier={handleDeleteSupplier}
                 onAddPurchase={handleOpenPurchaseModal}
             />}
-        </div>
-    );
-
-    return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                <h1 className="text-3xl font-bold text-white">Keuangan</h1>
-                <div className="bg-slate-800 p-1 rounded-lg flex items-center border border-slate-700">
-                    <button onClick={() => setMainView('finance')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${mainView === 'finance' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
-                        Laporan Keuangan
-                    </button>
-                    <button onClick={() => setMainView('customers')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${mainView === 'customers' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
-                        Data Pelanggan
-                    </button>
-                </div>
-            </div>
-
-            {mainView === 'customers' ? <CustomersTab /> : renderFinanceTabs()} 
-
-            {/* Modals */}
-            <ExpenseFormModal isOpen={isExpenseModalOpen} onClose={() => setExpenseModalOpen(false)} onSave={handleSaveExpense} expense={editingExpense} />
-            <OtherIncomeFormModal isOpen={isIncomeModalOpen} onClose={() => setIncomeModalOpen(false)} onSave={handleSaveIncome} income={editingIncome} />
-            <SupplierFormModal isOpen={isSupplierModalOpen} onClose={() => setSupplierModalOpen(false)} onSave={handleSaveSupplier} supplier={editingSupplier} />
-            <PurchaseFormModal isOpen={isPurchaseModalOpen} onClose={() => setPurchaseModalOpen(false)} onSave={handleSavePurchase} />
-            
-            {payingPurchase && <PayDebtModal isOpen={!!payingPurchase} onClose={() => setPayingPurchase(null)} onSave={handlePayPurchaseDebt} purchase={payingPurchase} />}
-            {payingExpense && <PayExpenseDebtModal isOpen={!!payingExpense} onClose={() => setPayingExpense(null)} onSave={handlePayExpenseDebt} expense={payingExpense} />}
         </div>
     );
 };

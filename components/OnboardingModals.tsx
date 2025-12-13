@@ -13,7 +13,7 @@ interface OnboardingModalsProps {
 
 const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) => {
     const { currentUser } = useAuth();
-    const [showAdminWelcome, setShowAdminWelcome] = useState(false);
+    const [showManagementWelcome, setShowManagementWelcome] = useState(false);
     const [showStaffBriefing, setShowStaffBriefing] = useState(false);
     const [showLicenseModal, setShowLicenseModal] = useState(false);
     const [cloudMode, setCloudMode] = useState<'cloud' | 'local'>('local');
@@ -21,11 +21,14 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
     useEffect(() => {
         if (!currentUser) return;
 
-        if (currentUser.role === 'admin') {
-            // Cek apakah admin sudah pernah melihat welcome screen
-            const hasSeenWelcome = localStorage.getItem('ARTEA_WELCOME_SEEN');
-            if (!hasSeenWelcome) {
-                setShowAdminWelcome(true);
+        // Admin & Manager melihat Welcome Screen yang sama (sekali saja)
+        if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+            const hasSeenWelcome = localStorage.getItem(`ARTEA_WELCOME_SEEN_${currentUser.id}`);
+            // Fallback for old admin key style
+            const legacySeen = localStorage.getItem('ARTEA_WELCOME_SEEN');
+            
+            if (!hasSeenWelcome && !legacySeen) {
+                setShowManagementWelcome(true);
             }
         } else if (currentUser.role === 'staff') {
             // Cek konfigurasi cloud owner untuk menentukan pesan briefing
@@ -41,14 +44,17 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
         }
     }, [currentUser]);
 
-    const handleDismissAdmin = () => {
+    const handleDismissManagement = () => {
+        if (currentUser) {
+            localStorage.setItem(`ARTEA_WELCOME_SEEN_${currentUser.id}`, 'true');
+        }
+        // Also set legacy key to prevent double popup for single admin setups
         localStorage.setItem('ARTEA_WELCOME_SEEN', 'true');
-        setShowAdminWelcome(false);
+        setShowManagementWelcome(false);
     };
 
     const handleGoToHelp = () => {
-        localStorage.setItem('ARTEA_WELCOME_SEEN', 'true');
-        setShowAdminWelcome(false);
+        handleDismissManagement();
         setActiveView('help');
     };
 
@@ -72,10 +78,10 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
         });
     };
 
-    // --- RENDER ADMIN WELCOME ---
-    if (showAdminWelcome) {
+    // --- RENDER MANAGEMENT WELCOME (ADMIN & MANAGER) ---
+    if (showManagementWelcome) {
         return (
-            <Modal isOpen={true} onClose={handleDismissAdmin} title="Selamat Datang di Artea POS!">
+            <Modal isOpen={true} onClose={handleDismissManagement} title={`Halo, ${currentUser?.name}!`}>
                 <div className="text-center space-y-6">
                     <div className="flex flex-col items-center">
                         <div className="bg-[#347758]/20 p-4 rounded-full mb-3">
@@ -84,23 +90,32 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
                         <div className="font-arabic text-xl text-[#52a37c] font-medium tracking-wide mb-2">
                             بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيم
                         </div>
+                        <p className="text-white font-bold text-lg">Selamat Datang di Artea POS</p>
+                        <p className="text-slate-400 text-sm capitalize">Role: {currentUser?.role === 'manager' ? 'Manager (Supervisor)' : 'Administrator'}</p>
                     </div>
                     
-                    <div className="space-y-2 text-slate-300">
+                    <div className="space-y-2 text-slate-300 text-sm">
                         <p>
-                            Terima kasih telah memilih <strong>Artea POS</strong>. Aplikasi kasir ini didesain untuk bekerja 100% Offline di perangkat Anda, namun tetap memiliki fitur canggih seperti manajemen stok, laporan keuangan, dan sinkronisasi cloud opsional.
+                            Anda memiliki akses ke fitur manajemen operasional. Gunakan dashboard untuk memantau penjualan, mengelola stok produk, dan melihat laporan keuangan.
                         </p>
-                        <p className="text-sm bg-slate-900 p-3 rounded-lg border border-slate-700 mt-4">
-                            💡 <strong>Tips Awal:</strong> Pastikan Anda mengatur <strong>"Store ID"</strong> di menu Pengaturan jika Anda berencana memiliki lebih dari satu cabang.
-                        </p>
+                        {currentUser?.role === 'manager' && (
+                            <p className="bg-slate-900 p-2 rounded border border-slate-700 text-xs mt-2">
+                                ℹ️ <strong>Catatan:</strong> Sebagai Manager, akses Anda ke menu Keamanan (User) dan Reset Database dibatasi untuk menjaga integritas sistem.
+                            </p>
+                        )}
+                        {currentUser?.role === 'admin' && (
+                            <p className="bg-slate-900 p-2 rounded border border-slate-700 text-xs mt-2">
+                                💡 <strong>Tips:</strong> Atur "Store ID" di Pengaturan jika Anda mengelola banyak cabang.
+                            </p>
+                        )}
                     </div>
 
                     <div className="flex flex-col gap-3">
                         <Button onClick={handleGoToHelp} variant="secondary" className="w-full justify-center">
-                            <Icon name="book" className="w-5 h-5"/> Baca Panduan Pengguna (Disarankan)
+                            <Icon name="book" className="w-5 h-5"/> Baca Panduan
                         </Button>
-                        <Button onClick={handleDismissAdmin} className="w-full justify-center">
-                            Mulai Gunakan Aplikasi
+                        <Button onClick={handleDismissManagement} className="w-full justify-center">
+                            Mulai Bekerja
                         </Button>
                         
                         <div className="mt-2 text-center">
@@ -108,7 +123,7 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
                                 onClick={() => setShowLicenseModal(true)}
                                 className="text-[10px] text-slate-500 hover:text-[#52a37c] underline underline-offset-2 transition-colors"
                             >
-                                Lisensi: GNU General Public License v3.0 (Klik untuk detail)
+                                Lisensi: GNU GPL v3.0
                             </button>
                         </div>
                     </div>
@@ -165,9 +180,9 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
                                         Pastikan harga & produk sinkron dengan pusat sebelum berjualan.
                                     </p>
                                     <div className="mt-2 bg-slate-800 p-2 rounded border border-slate-700 text-xs text-slate-300 flex items-center gap-2">
-                                        <span>👉 Caranya: Klik ikon</span>
+                                        <span>👉 Klik ikon</span>
                                         <span className="bg-slate-700 border border-slate-600 p-1 rounded"><Icon name="database" className="w-3 h-3"/></span>
-                                        <span>di pojok kanan atas header, lalu pilih <strong>"Update dari Pusat"</strong>.</span>
+                                        <span>di pojok kanan atas, pilih <strong>"Update dari Pusat"</strong>.</span>
                                     </div>
                                 </div>
                             </div>
@@ -195,7 +210,7 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
                                         Saat tutup toko, kirim data penjualan ke server pusat agar Owner bisa memantau.
                                     </p>
                                     <div className="mt-2 bg-slate-800 p-2 rounded border border-slate-700 text-xs text-slate-300">
-                                        <span>👉 Caranya: Menu Laporan (tombol di atas daftar produk) {'>'} Kirim Laporan {'>'} Klik tombol <strong>"Sync Cloud"</strong>.</span>
+                                        <span>👉 Menu Laporan (tombol di atas daftar produk) {'>'} Kirim Laporan {'>'} Klik <strong>"Sync Cloud"</strong>.</span>
                                     </div>
                                 </div>
                             </div>

@@ -54,18 +54,15 @@ const FlowStep: React.FC<{ number: number; title: string; desc: string; icon: an
 const releaseNotes = [
     {
         version: "v2.3.1",
-        date: "14 Desember 2025",
+        date: "13 Desember 2025",
         changes: [
+            "Fitur Baru: Role Pengguna 'Manager' (Supervisor).",
+            "Update: Pembedaan hak akses yang lebih detail (Admin vs Manager vs Staf).",
+            "Update: Staf dapat melihat stok barang saat melakukan pelaporan waste/restock.",
             "Perbaikan: Mengembalikan menu pengaturan 'Aturan Poin' (Loyalty) yang sempat hilang.",
             "Fitur Baru: 'Manajemen Penyimpanan Cloud' untuk mengatasi masalah kuota penuh pada akun gratis (Supabase/Dropbox).",
             "Fitur Baru: Tombol 'Kosongkan Riwayat Cloud' yang secara otomatis membackup data lokal sebelum membersihkan server.",
             "Update: Deteksi pesan error yang lebih spesifik saat sinkronisasi gagal (misal: Quota Exceeded).",
-        ]
-    },
-    {
-        version: "v2.3.0",
-        date: "13 Desember 2025",
-        changes: [
             "Fitur Baru: Pengaturan Tipe Pesanan (Order Type) yang bisa dikustomisasi.",
             "Fitur Baru: Sinkronisasi Cloud Otomatis (Background Sync) setiap kali transaksi selesai.",
             "Fitur Baru: Audit Log (Mencatat aktivitas sensitif seperti hapus produk, ubah harga, refund & opname) untuk anti-fraud.",
@@ -517,26 +514,35 @@ const HelpView: React.FC = () => {
                                     <li>PIN Default Admin pertama: <strong>1111</strong>.</li>
                                 </ol>
 
-                                {/* Added Role Comparison Table */}
-                                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <h4 className="font-bold text-white mt-4 mb-2">Tingkatan Akses (Role)</h4>
+                                <div className="mt-2 grid grid-cols-1 gap-4">
                                     <div className="bg-slate-900/50 p-3 rounded-lg border border-purple-500/30">
                                         <h5 className="font-bold text-purple-400 mb-2 flex items-center gap-2"><Icon name="lock" className="w-4 h-4"/> Admin (Owner)</h5>
                                         <ul className="list-disc pl-4 text-xs text-slate-300 space-y-1">
                                             <li>Akses Penuh ke semua menu.</li>
                                             <li>Mengubah Pengaturan Toko & Printer.</li>
-                                            <li>Mengelola Produk (Tambah/Edit/Hapus).</li>
-                                            <li>Melihat Dashboard & Laporan Lengkap.</li>
-                                            <li>Manajemen User & Reset PIN.</li>
-                                            <li>Backup & Restore Database.</li>
+                                            <li>Mengelola Produk & User.</li>
+                                            <li>Manajemen Data (Backup/Reset/Cloud).</li>
                                         </ul>
                                     </div>
+                                    
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-yellow-500/30">
+                                        <h5 className="font-bold text-yellow-400 mb-2 flex items-center gap-2"><Icon name="star" className="w-4 h-4"/> Manager (Supervisor)</h5>
+                                        <ul className="list-disc pl-4 text-xs text-slate-300 space-y-1">
+                                            <li>Akses Dashboard & Laporan Lengkap.</li>
+                                            <li>Mengelola Produk & Bahan Baku.</li>
+                                            <li>Melihat Keuangan & Arus Kas.</li>
+                                            <li>Mengubah Pengaturan Toko (Struk/Printer).</li>
+                                            <li><strong>DIBATASI:</strong> Tidak bisa akses menu Keamanan (User) & Reset Data Cloud.</li>
+                                        </ul>
+                                    </div>
+
                                     <div className="bg-slate-900/50 p-3 rounded-lg border border-sky-500/30">
                                         <h5 className="font-bold text-sky-400 mb-2 flex items-center gap-2"><Icon name="users" className="w-4 h-4"/> Staf (Kasir)</h5>
                                         <ul className="list-disc pl-4 text-xs text-slate-300 space-y-1">
                                             <li>Fokus pada halaman Kasir (POS).</li>
                                             <li>Memulai & Menutup Sesi (Shift).</li>
                                             <li>Mencatat Kas Masuk/Keluar.</li>
-                                            <li>Melakukan Transaksi & Refund (tercatat).</li>
                                             <li>Stock Opname & Restock (jika diizinkan).</li>
                                             <li><strong>DIBATASI:</strong> Tidak bisa masuk menu Pengaturan, Laporan Analitik, atau Edit Produk.</li>
                                         </ul>
@@ -625,12 +631,33 @@ const HelpView: React.FC = () => {
                                     <li><strong>Laba:</strong> Sistem menghitung laba berdasarkan (Harga Jual - Harga Modal/HPP Resep).</li>
                                 </ul>
                             </AccordionItem>
+                            
+                            {/* NEW: Staff Restock Documentation */}
+                            <AccordionItem title="Lapor Stok Masuk & Barang Rusak (Waste)" isOpen={openAccordion === 'staff_restock'} onToggle={() => toggleAccordion('staff_restock')} icon="tag">
+                                <p>Fitur ini memungkinkan Staf untuk mencatat penerimaan barang (Restock) atau melaporkan barang rusak/hilang (Waste) langsung dari halaman Kasir.</p>
+                                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50 mt-2">
+                                    <h5 className="font-bold text-white text-xs mb-2">Cara Penggunaan:</h5>
+                                    <ol className="list-decimal pl-5 text-xs text-slate-300 space-y-2">
+                                        <li>Di halaman Kasir (Header), klik ikon <strong>Tag</strong> <span className="inline-block align-middle bg-slate-700 p-1 rounded mx-1"><Icon name="tag" className="w-3 h-3"/></span> yang ada di sebelah tombol scan.</li>
+                                        <li>Pilih Mode:
+                                            <ul className="list-disc pl-4 mt-1 space-y-1">
+                                                <li><span className="text-green-400 font-bold">Terima Barang</span> (Untuk stok masuk dari supplier).</li>
+                                                <li><span className="text-red-400 font-bold">Lapor Kerusakan</span> (Untuk stok keluar karena rusak, expired, pecah, dll).</li>
+                                            </ul>
+                                        </li>
+                                        <li>Cari nama barang dan masukkan jumlahnya.</li>
+                                        <li>Jika melaporkan kerusakan, pilih <strong>Alasan</strong> (Cacat, Kadaluarsa, dll) dan tambahkan catatan jika perlu.</li>
+                                        <li>Klik Simpan. Stok akan otomatis diperbarui dan tercatat di laporan.</li>
+                                    </ol>
+                                </div>
+                            </AccordionItem>
+
                             <AccordionItem title="Stock Opname (Audit Stok)" isOpen={openAccordion === 'opname'} onToggle={() => toggleAccordion('opname')} icon="boxes">
                                 <p className="mb-2">Fitur ini digunakan untuk menyesuaikan stok sistem dengan stok fisik yang ada di rak/gudang.</p>
                                 <p><strong>Cara Akses:</strong></p>
                                 <ul className="list-disc pl-5 mb-2 text-sm text-slate-300">
                                     <li><strong>Admin:</strong> Buka menu Produk atau Bahan Baku, klik tombol "Stock Opname" di bagian atas.</li>
-                                    <li><strong>Staf (Kasir):</strong> Di halaman Kasir, klik tombol "Boxes/Opname" <span className="inline-block align-middle bg-slate-700 p-1 rounded mx-1"><Icon name="boxes" className="w-3 h-3"/></span> di samping tombol scan barcode.</li>
+                                    <li><strong>Staf (Kasir):</strong> Di halaman Kasir, klik tombol <strong>"Boxes/Opname"</strong> <span className="inline-block align-middle bg-slate-700 p-1 rounded mx-1"><Icon name="boxes" className="w-3 h-3"/></span> di samping tombol Tag/Restock.</li>
                                 </ul>
                                 <p><strong>Cara Melakukan Opname:</strong></p>
                                 <ol className="list-decimal pl-5 space-y-1 text-sm text-slate-300">
@@ -776,7 +803,7 @@ const HelpView: React.FC = () => {
                     <div className="bg-slate-800 p-8 rounded-2xl shadow-lg border border-slate-700">
                         <Icon name="logo" className="w-20 h-20 text-[#52a37c] mx-auto mb-4" />
                         <h2 className="text-2xl font-bold text-white mb-2">Artea POS</h2>
-                        <p className="text-slate-400 font-mono text-sm mb-6">Versi 2.3.1 (14122025)</p>
+                        <p className="text-slate-400 font-mono text-sm mb-6">Versi 2.4.0 (15122025)</p>
                         
                         <p className="text-slate-300 mb-6 leading-relaxed">
                             Artea POS adalah aplikasi Point of Sale (POS) atau kasir yang dirancang untuk usaha kecil dan menengah di bidang makanan dan minuman. Aplikasi ini dapat berjalan di browser tanpa memerlukan koneksi internet untuk operasional sehari-hari, memastikan bisnis Anda tetap berjalan lancar kapan saja.

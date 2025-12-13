@@ -718,6 +718,60 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
     );
 });
 
+const CategoryManagerModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
+    const { categories, addCategory, deleteCategory } = useProduct();
+    const { showAlert } = useUI();
+    const [newCategory, setNewCategory] = useState('');
+
+    const handleAdd = () => {
+        const trimmed = newCategory.trim();
+        if (trimmed && !categories.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
+            addCategory(trimmed);
+            setNewCategory('');
+        }
+    };
+    
+    const handleDelete = (category: string) => {
+        showAlert({
+            type: 'confirm',
+            title: 'Hapus Kategori?',
+            message: `Anda yakin ingin menghapus kategori "${category}"? Produk yang menggunakan kategori ini tidak akan terpengaruh.`,
+            confirmVariant: 'danger',
+            confirmText: 'Ya, Hapus',
+            onConfirm: () => deleteCategory(category)
+        });
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Kelola Kategori Produk">
+            <div className="space-y-4">
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        value={newCategory}
+                        onChange={e => setNewCategory(e.target.value)}
+                        onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); handleAdd(); }}}
+                        placeholder="Nama Kategori Baru"
+                        className="flex-1 w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                        autoFocus
+                    />
+                    <Button onClick={handleAdd}>Tambah</Button>
+                </div>
+                <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+                    {categories.length > 0 ? categories.map(cat => (
+                        <div key={cat} className="flex justify-between items-center bg-slate-900 p-2 rounded-lg">
+                            <span className="text-slate-200">{cat}</span>
+                            <button onClick={() => handleDelete(cat)} className="text-red-400 hover:text-red-300">
+                                <Icon name="trash" className="w-4 h-4" />
+                            </button>
+                        </div>
+                    )) : <p className="text-slate-500 text-center text-sm py-4">Belum ada kategori.</p>}
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
 const ProductsView: React.FC = () => {
     const { products, addProduct, updateProduct, deleteProduct, bulkAddProducts } = useProduct();
     const { showAlert } = useUI();
@@ -725,6 +779,7 @@ const ProductsView: React.FC = () => {
     const [isCameraOpen, setCameraOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [isOpnameOpen, setIsOpnameOpen] = useState(false);
+    const [isCategoryModalOpen, setCategoryModalOpen] = useState(false); // State for category modal
     const [searchTerm, setSearchTerm] = useState('');
     const formRef = useRef<HTMLFormElement>(null);
     const isCameraAvailable = useCameraAvailability();
@@ -806,6 +861,11 @@ const ProductsView: React.FC = () => {
                         />
                          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     </div>
+                    {/* FIX: Changed `setIsCategoryModalOpen` to `setCategoryModalOpen` to match the state setter function name. */}
+                    <Button variant="secondary" onClick={() => setCategoryModalOpen(true)} className="flex-shrink-0">
+                        <Icon name="tag" className="w-5 h-5"/>
+                        <span className="hidden lg:inline">Kelola Kategori</span>
+                    </Button>
                     <Button variant="secondary" onClick={() => setIsOpnameOpen(true)} className="flex-shrink-0">
                         <Icon name="boxes" className="w-5 h-5"/>
                         <span className="hidden lg:inline">Stock Opname</span>
@@ -841,6 +901,8 @@ const ProductsView: React.FC = () => {
                     capturedImage={capturedImage}
                 />
             </Modal>
+            
+            <CategoryManagerModal isOpen={isCategoryModalOpen} onClose={() => setCategoryModalOpen(false)} />
 
             <CameraCaptureModal 
                 isOpen={isCameraOpen} 

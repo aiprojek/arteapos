@@ -57,11 +57,12 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
     const { products, rawMaterials, inventorySettings, isProductAvailable } = useProduct();
     const { heldCarts = [] } = data;
 
+    const defaultOrderType = receiptSettings.orderTypes && receiptSettings.orderTypes.length > 0 ? receiptSettings.orderTypes[0] : 'Makan di Tempat';
     const [cart, setCart] = useState<CartItem[]>([]);
     const [cartDiscount, setCartDiscount] = useState<Discount | null>(null);
     const [activeHeldCartId, setActiveHeldCartId] = useState<string | null>(null);
     const [appliedReward, setAppliedReward] = useState<{ reward: Reward, cartItem: CartItem } | null>(null);
-    const [orderType, setOrderType] = useState<OrderType>('dine-in');
+    const [orderType, setOrderType] = useState<OrderType>(defaultOrderType);
 
     const removeRewardFromCart = useCallback(() => {
         setCart(prev => prev.filter(item => !item.isReward));
@@ -164,8 +165,8 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         setCart([]);
         setAppliedReward(null);
         setCartDiscount(null);
-        setOrderType('dine-in'); // Reset order type
-    }, [setAppliedReward]);
+        setOrderType(defaultOrderType); // Reset order type
+    }, [setAppliedReward, defaultOrderType]);
 
     const getCartTotals = useCallback(() => {
         let subtotal = 0;
@@ -264,17 +265,17 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         
         if (newCartId === null) {
             setCart([]);
-            setOrderType('dine-in'); // Reset default
+            setOrderType(defaultOrderType); // Reset default
             setActiveHeldCartId(null);
         } else {
             const targetCart = data.heldCarts.find(c => c.id === newCartId);
             if (targetCart) {
                 setCart(targetCart.items);
-                setOrderType(targetCart.orderType || 'dine-in');
+                setOrderType(targetCart.orderType || defaultOrderType);
                 setActiveHeldCartId(newCartId);
             }
         }
-    }, [saveCurrentCartState, removeRewardFromCart, data.heldCarts, removeCartDiscount]);
+    }, [saveCurrentCartState, removeRewardFromCart, data.heldCarts, removeCartDiscount, defaultOrderType]);
       
     const holdActiveCart = useCallback((name: string) => {
         if (cart.length === 0) {

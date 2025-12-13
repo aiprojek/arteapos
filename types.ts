@@ -105,7 +105,7 @@ export interface Payment {
 }
 
 export type PaymentStatus = 'paid' | 'unpaid' | 'partial' | 'refunded';
-export type OrderType = 'dine-in' | 'take-away' | 'online';
+export type OrderType = string;
 
 export interface Transaction {
   id: string;
@@ -144,6 +144,7 @@ export interface ReceiptSettings {
     taxRate?: number; // New: Percentage (e.g., 10 for 10%)
     serviceChargeRate?: number; // New: Percentage (e.g., 5 for 5%)
     storeId?: string; // NEW: Identifier for Multi-Branch
+    orderTypes?: string[]; // NEW: Customizable order types
 }
 
 export interface InventorySettings {

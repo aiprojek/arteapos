@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import Icon from '../components/Icon';
 import Button from '../components/Button';
@@ -55,6 +56,8 @@ const releaseNotes = [
         version: "v2.3.0",
         date: "13 Desember 2025",
         changes: [
+            "Fitur Baru: Pengaturan Tipe Pesanan (Order Type) yang bisa dikustomisasi.",
+            "Fitur Baru: UI untuk Manajemen Aturan Poin (Point Rules) telah dikembalikan.",
             "Fitur Baru: Sinkronisasi Cloud Otomatis (Background Sync) setiap kali transaksi selesai.",
             "Fitur Baru: Audit Log (Mencatat aktivitas sensitif seperti hapus produk, ubah harga, refund & opname) untuk anti-fraud.",
             "Fitur Baru: Strategi 'Black Box' untuk pengawasan toko offline.",
@@ -532,6 +535,19 @@ const HelpView: React.FC = () => {
                             <h3 className="text-lg font-bold text-[#52a37c] mb-4 flex items-center gap-2 border-b border-slate-700 pb-2">
                                 <Icon name="cash" className="w-5 h-5" /> Operasional Kasir
                             </h3>
+                            <AccordionItem title="Mengatur Tipe Pesanan (Dine In, Take Away, dll)" isOpen={openAccordion === 'order_types'} onToggle={() => toggleAccordion('order_types')} icon="edit">
+                                <p>Anda dapat menyesuaikan pilihan tipe pesanan (misal: "Dine In", "Take Away") agar sesuai dengan kebutuhan bisnis Anda, seperti toko retail atau grosir.</p>
+                                <p className="mt-2 font-bold text-white">Cara Mengatur:</p>
+                                <ol className="list-decimal pl-5 space-y-1 text-sm text-slate-300">
+                                    <li>Buka menu <strong>Pengaturan</strong> {'>'} tab <strong>Toko & Struk</strong>.</li>
+                                    <li>Scroll ke bawah ke bagian <strong>"Tipe Pesanan"</strong>.</li>
+                                    <li>Ketik nama tipe baru (cth: "Grosir", "Reservasi") di kolom input, lalu klik <strong>Tambah</strong>.</li>
+                                    <li>Untuk menghapus, klik ikon silang (x) pada tipe yang sudah ada.</li>
+                                </ol>
+                                <p className="mt-2 text-xs text-yellow-400">
+                                    Perubahan akan langsung terlihat pada tombol pilihan di halaman Kasir.
+                                </p>
+                            </AccordionItem>
                             <AccordionItem title="Manajemen Sesi / Shift (Penting)" isOpen={openAccordion === 'shift'} onToggle={() => toggleAccordion('shift')} icon="users">
                                 <p>Fitur ini <strong>sangat disarankan</strong> untuk mencegah kecurangan atau selisih uang kas.</p>
                                 <p><strong>Cara Mengaktifkan:</strong> Buka Pengaturan {'>'} Manajemen Sesi Penjualan {'>'} Aktifkan.</p>
@@ -559,6 +575,17 @@ const HelpView: React.FC = () => {
                             <h3 className="text-lg font-bold text-[#52a37c] mb-4 flex items-center gap-2 border-b border-slate-700 pb-2">
                                 <Icon name="products" className="w-5 h-5" /> Produk & Inventaris
                             </h3>
+                            <AccordionItem title="Manajemen Inventaris & Laba" isOpen={openAccordion === 'inventory'} onToggle={() => toggleAccordion('inventory')} icon="database">
+                                <p>Fitur ini harus diaktifkan di <strong>Pengaturan</strong>.</p>
+                                <ul className="list-disc pl-5 mt-2 space-y-2">
+                                    <li><strong>Stok Sederhana:</strong> Centang "Lacak Stok" pada produk. Stok berkurang saat dijual.</li>
+                                    <li><strong>Resep / Bahan Baku:</strong> Untuk produk racikan (cth: Kopi Susu). 
+                                        <br/>1. Input bahan mentah di menu "Bahan Baku" (Susu, Biji Kopi).
+                                        <br/>2. Di menu Produk, edit Kopi Susu, tambahkan "Resep".
+                                        <br/>3. Saat Kopi Susu terjual, stok Susu & Biji Kopi yang berkurang otomatis.</li>
+                                    <li><strong>Laba:</strong> Sistem menghitung laba berdasarkan (Harga Jual - Harga Modal/HPP Resep).</li>
+                                </ul>
+                            </AccordionItem>
                             <AccordionItem title="Stock Opname (Audit Stok)" isOpen={openAccordion === 'opname'} onToggle={() => toggleAccordion('opname')} icon="boxes">
                                 <p className="mb-2">Fitur ini digunakan untuk menyesuaikan stok sistem dengan stok fisik yang ada di rak/gudang.</p>
                                 <p><strong>Cara Akses:</strong></p>
@@ -589,17 +616,6 @@ const HelpView: React.FC = () => {
                                 </ol>
                                 <p className="mt-2"><strong>Cara Transaksi:</strong> Di halaman kasir, saat produk tersebut diklik, akan muncul pop-up untuk memilih varian yang diinginkan.</p>
                             </AccordionItem>
-                            <AccordionItem title="Manajemen Inventaris & Laba" isOpen={openAccordion === 'inventory'} onToggle={() => toggleAccordion('inventory')} icon="database">
-                                <p>Fitur ini harus diaktifkan di <strong>Pengaturan</strong>.</p>
-                                <ul className="list-disc pl-5 mt-2 space-y-2">
-                                    <li><strong>Stok Sederhana:</strong> Centang "Lacak Stok" pada produk. Stok berkurang saat dijual.</li>
-                                    <li><strong>Resep / Bahan Baku:</strong> Untuk produk racikan (cth: Kopi Susu). 
-                                        <br/>1. Input bahan mentah di menu "Bahan Baku" (Susu, Biji Kopi).
-                                        <br/>2. Di menu Produk, edit Kopi Susu, tambahkan "Resep".
-                                        <br/>3. Saat Kopi Susu terjual, stok Susu & Biji Kopi yang berkurang otomatis.</li>
-                                    <li><strong>Laba:</strong> Sistem menghitung laba berdasarkan (Harga Jual - Harga Modal/HPP Resep).</li>
-                                </ul>
-                            </AccordionItem>
                             <AccordionItem title="Produk Komposit / Bundling" isOpen={openAccordion === 'bundling'} onToggle={() => toggleAccordion('bundling')} icon="tag">
                                 <p>Fitur ini memungkinkan Anda membuat produk paket (Bundling) yang terdiri dari campuran produk lain yang sudah ada.</p>
                                 <ol className="list-decimal pl-5 mt-2 space-y-1">
@@ -611,6 +627,29 @@ const HelpView: React.FC = () => {
                                     <li>Pilih produk yang ingin dimasukkan ke dalam paket (misal: Es Kopi + Roti).</li>
                                     <li>Simpan. Saat paket ini terjual, stok produk penyusun (Es Kopi & Roti) akan otomatis berkurang.</li>
                                 </ol>
+                            </AccordionItem>
+                        </div>
+
+                        {/* Section 4: Loyalty Program */}
+                        <div>
+                            <h3 className="text-lg font-bold text-[#52a37c] mb-4 flex items-center gap-2 border-b border-slate-700 pb-2">
+                                <Icon name="award" className="w-5 h-5" /> Program Loyalitas
+                            </h3>
+                             <AccordionItem title="Mengatur Aturan Perolehan Poin" isOpen={openAccordion === 'point_rules'} onToggle={() => toggleAccordion('point_rules')} icon="star">
+                                <p>Atur bagaimana pelanggan Anda mendapatkan poin setiap kali mereka berbelanja.</p>
+                                <p className="mt-2 font-bold text-white">Cara Mengatur:</p>
+                                <ol className="list-decimal pl-5 space-y-1 text-sm text-slate-300">
+                                    <li>Buka menu <strong>Pengaturan</strong> {'>'} tab <strong>Fitur Kasir</strong>.</li>
+                                    <li>Aktifkan "Membership & Poin" jika belum.</li>
+                                    <li>Di bagian "Program Loyalitas Pelanggan", klik <strong>"+ Tambah Aturan Poin"</strong>.</li>
+                                </ol>
+                                <p className="mt-2 font-bold text-white">Tipe Aturan:</p>
+                                <ul className="list-disc pl-5 mt-1 space-y-1 text-sm text-slate-300">
+                                    <li><strong>Berdasarkan Total Belanja:</strong> Beri poin untuk setiap kelipatan jumlah tertentu. Contoh: Dapat 10 poin setiap belanja Rp 10.000.</li>
+                                    <li><strong>Berdasarkan Produk Spesifik:</strong> Beri poin tambahan jika pelanggan membeli produk tertentu. Contoh: Beli "Kopi Spesial" dapat 25 poin.</li>
+                                    <li><strong>Berdasarkan Kategori:</strong> Beri poin untuk setiap item dalam kategori tertentu. Contoh: Setiap pembelian item dari kategori "Makanan" dapat 5 poin.</li>
+                                </ul>
+                                 <p className="text-xs text-yellow-400 mt-2">Anda bisa membuat beberapa aturan sekaligus. Sistem akan mengakumulasi poin dari semua aturan yang cocok.</p>
                             </AccordionItem>
                         </div>
 

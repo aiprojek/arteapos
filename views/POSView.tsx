@@ -703,13 +703,24 @@ const CustomerSelection: React.FC<{
     orderType: OrderType;
 }> = ({ selectedCustomer, onSelectCustomer, onOpenAddModal, onSelectOrderType, orderType }) => {
     const { customers, membershipSettings } = useCustomer();
+    const { receiptSettings } = useSettings();
+    
+    const availableOrderTypes = receiptSettings.orderTypes && receiptSettings.orderTypes.length > 0
+        ? receiptSettings.orderTypes
+        : ['Makan di Tempat', 'Bawa Pulang', 'Pesan Antar']; // Fallback
 
     return (
         <div className="space-y-3">
             <div className="flex bg-slate-700 p-1 rounded-lg">
-                <button onClick={() => onSelectOrderType('dine-in')} className={`flex-1 py-1 text-xs rounded-md transition-colors ${orderType === 'dine-in' ? 'bg-[#347758] text-white font-semibold' : 'text-slate-300'}`}>Dine-In</button>
-                <button onClick={() => onSelectOrderType('take-away')} className={`flex-1 py-1 text-xs rounded-md transition-colors ${orderType === 'take-away' ? 'bg-[#347758] text-white font-semibold' : 'text-slate-300'}`}>Take-Away</button>
-                <button onClick={() => onSelectOrderType('online')} className={`flex-1 py-1 text-xs rounded-md transition-colors ${orderType === 'online' ? 'bg-[#347758] text-white font-semibold' : 'text-slate-300'}`}>Online</button>
+                {availableOrderTypes.map(type => (
+                    <button 
+                        key={type}
+                        onClick={() => onSelectOrderType(type)} 
+                        className={`flex-1 py-1 text-xs rounded-md transition-colors ${orderType === type ? 'bg-[#347758] text-white font-semibold' : 'text-slate-300'}`}
+                    >
+                        {type}
+                    </button>
+                ))}
             </div>
             
             {membershipSettings.enabled && (

@@ -58,6 +58,7 @@ export const initialData: AppData = {
         taxRate: 0,
         serviceChargeRate: 0,
         storeId: 'CABANG-01', // Default value
+        orderTypes: ['Makan di Tempat', 'Bawa Pulang', 'Pesan Antar'],
     },
     inventorySettings: {
         enabled: false,

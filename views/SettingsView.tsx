@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useProduct } from '../context/ProductContext';
@@ -15,7 +16,7 @@ import { dataService } from '../services/dataService';
 import { supabaseService, SETUP_SQL_SCRIPT } from '../services/supabaseService'; 
 import { dropboxService } from '../services/dropboxService';
 import { decryptReport } from '../utils/crypto';
-import type { AuditLog, Transaction as TransactionType, CartItem, DiscountDefinition, PointRule, Reward, AuthSettings, InventorySettings, ReceiptSettings, SessionSettings, MembershipSettings } from '../types';
+import type { AuditLog, Transaction as TransactionType, CartItem, DiscountDefinition, PointRule, Reward, AuthSettings, InventorySettings, ReceiptSettings, SessionSettings, MembershipSettings, PointRuleType } from '../types';
 import VirtualizedTable from '../components/VirtualizedTable';
 import { CURRENCY_FORMATTER } from '../constants';
 
@@ -69,6 +70,52 @@ const AuditLogViewer: React.FC<{ logs: AuditLog[] }> = ({ logs }) => {
             ) : (
                 <div className="flex items-center justify-center h-full text-slate-500">Belum ada log audit.</div>
             )}
+        </div>
+    );
+};
+
+const OrderTypeManager: React.FC<{
+    types: string[];
+    onChange: (newTypes: string[]) => void;
+}> = ({ types, onChange }) => {
+    const [newType, setNewType] = useState('');
+
+    const handleAdd = () => {
+        if (newType.trim() && !types.map(t => t.toLowerCase()).includes(newType.trim().toLowerCase())) {
+            onChange([...types, newType.trim()]);
+            setNewType('');
+        }
+    };
+
+    const handleRemove = (typeToRemove: string) => {
+        onChange(types.filter(t => t !== typeToRemove));
+    };
+
+    return (
+        <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Tipe Pesanan</label>
+            <div className="flex flex-wrap gap-2 p-2 bg-slate-900 border border-slate-600 rounded-lg mb-2 min-h-[44px]">
+                {types.map(type => (
+                    <div key={type} className="flex items-center gap-1 bg-[#347758]/20 text-[#7ac0a0] text-sm font-medium px-2 py-1 rounded-full">
+                        {type}
+                        <button type="button" onClick={() => handleRemove(type)} className="text-[#a0d9bf] hover:text-white">
+                            <Icon name="close" className="w-3 h-3"/>
+                        </button>
+                    </div>
+                ))}
+            </div>
+            <div className="flex gap-2">
+                <input
+                    type="text"
+                    value={newType}
+                    onChange={e => setNewType(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
+                    placeholder="cth: Reservasi"
+                    className="flex-grow w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                />
+                <Button type="button" variant="secondary" onClick={handleAdd}>Tambah</Button>
+            </div>
+             <p className="text-xs text-slate-500 mt-1">Tipe pesanan ini akan muncul sebagai pilihan di halaman kasir.</p>
         </div>
     );
 };
@@ -188,6 +235,93 @@ const RewardFormModal: React.FC<{
     )
 }
 
+const PointRuleFormModal: React.FC<{
+    isOpen: boolean, onClose: () => void, onSave: (r: Omit<PointRule, 'id'> | PointRule) => void, rule: PointRule | null
+}> = ({ isOpen, onClose, onSave, rule }) => {
+    const { products, categories } = useProduct();
+    const [form, setForm] = useState({
+        type: 'spend' as PointRuleType,
+        description: '',
+        spendAmount: '',
+        pointsEarned: '',
+        targetId: '',
+        pointsPerItem: '',
+        validStoreIds: ''
+    });
+
+    useEffect(() => {
+        if(rule) setForm({
+            type: rule.type,
+            description: rule.description,
+            spendAmount: String(rule.spendAmount || ''),
+            pointsEarned: String(rule.pointsEarned || ''),
+            targetId: rule.targetId || '',
+            pointsPerItem: String(rule.pointsPerItem || ''),
+            validStoreIds: (rule.validStoreIds || []).join(', ')
+        });
+        else setForm({ type: 'spend', description: '', spendAmount: '', pointsEarned: '', targetId: '', pointsPerItem: '', validStoreIds: '' });
+    }, [rule, isOpen]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const data = {
+            ...form,
+            spendAmount: form.type === 'spend' ? Number(form.spendAmount) : undefined,
+            pointsEarned: form.type === 'spend' ? Number(form.pointsEarned) : undefined,
+            targetId: (form.type === 'product' || form.type === 'category') ? form.targetId : undefined,
+            pointsPerItem: (form.type === 'product' || form.type === 'category') ? Number(form.pointsPerItem) : undefined,
+            validStoreIds: form.validStoreIds.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
+        };
+        if (rule) onSave({ ...data, id: rule.id }); else onSave(data);
+        onClose();
+    }
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={rule ? "Edit Aturan Poin" : "Tambah Aturan Poin"}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <input type="text" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Deskripsi Aturan (cth: Poin per 10rb)" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <select value={form.type} onChange={e => setForm({...form, type: e.target.value as any})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white">
+                    <option value="spend">Berdasarkan Total Belanja</option>
+                    <option value="product">Berdasarkan Produk Spesifik</option>
+                    <option value="category">Berdasarkan Kategori Produk</option>
+                </select>
+                
+                {form.type === 'spend' && (
+                    <div className="grid grid-cols-2 gap-2">
+                        <input type="number" value={form.spendAmount} onChange={e => setForm({...form, spendAmount: e.target.value})} placeholder="Setiap (Rp)" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                        <input type="number" value={form.pointsEarned} onChange={e => setForm({...form, pointsEarned: e.target.value})} placeholder="Dapat Poin" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                    </div>
+                )}
+                
+                {(form.type === 'product' || form.type === 'category') && (
+                     <div className="grid grid-cols-2 gap-2">
+                        {form.type === 'product' ? (
+                             <select value={form.targetId} onChange={e => setForm({...form, targetId: e.target.value})} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white">
+                                <option value="">-- Pilih Produk --</option>
+                                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                        ) : (
+                             <select value={form.targetId} onChange={e => setForm({...form, targetId: e.target.value})} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white">
+                                <option value="">-- Pilih Kategori --</option>
+                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        )}
+                        <input type="number" value={form.pointsPerItem} onChange={e => setForm({...form, pointsPerItem: e.target.value})} placeholder="Poin per item" required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                    </div>
+                )}
+                
+                <input type="text" value={form.validStoreIds} onChange={e => setForm({...form, validStoreIds: e.target.value})} placeholder="Berlaku di Cabang (ID, pisah koma)" className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+                <p className="text-xs text-slate-500 -mt-2">Kosongkan agar berlaku di semua cabang.</p>
+
+                <div className="flex justify-end gap-3 pt-2">
+                    <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
+                    <Button type="submit">Simpan</Button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
 
 // --- Main Component ---
 
@@ -229,6 +363,8 @@ const SettingsView: React.FC = () => {
     const [editingDiscount, setEditingDiscount] = useState<DiscountDefinition | null>(null);
     const [isRewardModalOpen, setRewardModalOpen] = useState(false);
     const [editingReward, setEditingReward] = useState<Reward | null>(null);
+    const [isPointRuleModalOpen, setPointRuleModalOpen] = useState(false);
+    const [editingPointRule, setEditingPointRule] = useState<PointRule | null>(null);
     
     // Sync local state with context on initial load or external changes
     useEffect(() => setReceiptForm(originalReceiptSettings), [originalReceiptSettings]);
@@ -385,11 +521,25 @@ const SettingsView: React.FC = () => {
             : [...membershipForm.rewards, { ...r, id: Date.now().toString() }];
         setMembershipForm({ ...membershipForm, rewards: newRewards });
     };
+    
+    const handleSavePointRule = (r: Omit<PointRule, 'id'> | PointRule) => {
+        const newRules = 'id' in r
+            ? membershipForm.pointRules.map(oldR => oldR.id === r.id ? r : oldR)
+            : [...membershipForm.pointRules, { ...r, id: Date.now().toString() }];
+        setMembershipForm({ ...membershipForm, pointRules: newRules });
+    };
 
     const handleDeleteReward = (id: string) => {
         setMembershipForm({
             ...membershipForm,
             rewards: membershipForm.rewards.filter(r => r.id !== id)
+        });
+    }
+
+    const handleDeletePointRule = (id: string) => {
+        setMembershipForm({
+            ...membershipForm,
+            pointRules: membershipForm.pointRules.filter(r => r.id !== id)
         });
     }
 
@@ -459,6 +609,12 @@ const SettingsView: React.FC = () => {
                                     value={receiptForm.footerMessage} 
                                     onChange={(e) => setReceiptForm({...receiptForm, footerMessage: e.target.value})}
                                     className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2 pt-4 border-t border-slate-700">
+                                <OrderTypeManager
+                                    types={receiptForm.orderTypes || []}
+                                    onChange={(newTypes) => setReceiptForm({ ...receiptForm, orderTypes: newTypes })}
                                 />
                             </div>
                         </div>
@@ -588,8 +744,18 @@ const SettingsView: React.FC = () => {
                                 </div>
                                 <div className="pt-4 border-t border-slate-700">
                                     <h4 className="font-semibold text-white mb-2">Aturan Poin</h4>
-                                    <p className="text-sm text-slate-400">Segera hadir: Form untuk aturan poin.</p>
-                                    <Button type="button" size="sm" variant="secondary" disabled>+ Tambah Aturan Poin</Button>
+                                     <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                                        {membershipForm.pointRules.map(r => (
+                                            <div key={r.id} className="flex justify-between items-center bg-slate-900 p-2 rounded">
+                                                <p className="font-semibold text-white text-sm">{r.description}</p>
+                                                <div className="flex gap-2">
+                                                    <Button type="button" size="sm" variant="secondary" onClick={() => { setEditingPointRule(r); setPointRuleModalOpen(true); }}>Edit</Button>
+                                                    <Button type="button" size="sm" variant="danger" onClick={() => handleDeletePointRule(r.id)}>Hapus</Button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <Button type="button" size="sm" onClick={() => { setEditingPointRule(null); setPointRuleModalOpen(true); }} className="mt-2">+ Tambah Aturan Poin</Button>
                                 </div>
                             </div>
                         )}
@@ -663,7 +829,7 @@ const SettingsView: React.FC = () => {
 
             {activeTab === 'data' && (
                 <div className="space-y-6 animate-fade-in">
-                    <SettingsCard title="Backup & Restore Lokal" description="Simpan data ke file JSON atau pulihkan data dari file sebelumnya.">
+                    <SettingsCard title="Backup & Restore Lokal" description="Unduh file database (.json) ke perangkat ini atau pulihkan data dari file cadangan.">
                         <div className="flex flex-wrap gap-3">
                             <Button onClick={dataService.exportData} variant="secondary">
                                 <Icon name="download" className="w-4 h-4"/> Backup (JSON)
@@ -829,6 +995,13 @@ const SettingsView: React.FC = () => {
                 onClose={() => setRewardModalOpen(false)}
                 onSave={handleSaveReward}
                 reward={editingReward}
+            />
+            
+            <PointRuleFormModal
+                isOpen={isPointRuleModalOpen}
+                onClose={() => setPointRuleModalOpen(false)}
+                onSave={handleSavePointRule}
+                rule={editingPointRule}
             />
 
             <Modal isOpen={showSqlModal} onClose={() => setShowSqlModal(false)} title="Panduan Setup Supabase">

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import Icon from '../components/Icon';
 import Button from '../components/Button';
@@ -398,7 +397,7 @@ const HelpView: React.FC = () => {
                                         <h5 className="font-bold text-white text-xs mb-2">1. Di Perangkat Toko (Tablet/PC):</h5>
                                         <ul className="list-disc pl-5 text-xs text-slate-300 space-y-1">
                                             <li>Staf login sebagai <strong>Kasir</strong>.</li>
-                                            <li>Saat tutup toko, klik <strong>"Laporan"</strong> -> <strong>"Laporan Aman (Anti-Edit)"</strong> dan kirim via WhatsApp ke Owner.</li>
+                                            <li>Saat tutup toko, klik <strong>"Laporan"</strong> {'->'} <strong>"Laporan Aman (Anti-Edit)"</strong> dan kirim via WhatsApp ke Owner.</li>
                                             <li>Atau klik <strong>"Sync Cloud"</strong> jika Dropbox/Supabase sudah disetting oleh Admin.</li>
                                         </ul>
                                     </div>
@@ -407,7 +406,7 @@ const HelpView: React.FC = () => {
                                         <h5 className="font-bold text-white text-xs mb-2">2. Di Perangkat Owner (Laptop/HP):</h5>
                                         <ul className="list-disc pl-5 text-xs text-slate-300 space-y-1">
                                             <li>Owner menerima kode terenkripsi dari WA.</li>
-                                            <li>Owner membuka Artea POS -> <strong>Pengaturan {'>'} Laporan & Transaksi Lama</strong> -> <strong>"Paste Teks (Encrypted)"</strong>.</li>
+                                            <li>Owner membuka Artea POS {'->'} <strong>Pengaturan {'>'} Laporan & Transaksi Lama</strong> {'->'} <strong>"Paste Teks (Encrypted)"</strong>.</li>
                                             <li><strong>Hasil:</strong> Data penjualan masuk ke perangkat Owner tanpa perlu login ke perangkat Toko.</li>
                                         </ul>
                                     </div>
@@ -425,7 +424,7 @@ const HelpView: React.FC = () => {
                                 <div className="mt-3 space-y-2">
                                     <p className="text-sm font-bold text-white">Logika Penyimpanan:</p>
                                     <ul className="list-disc pl-5 text-sm text-slate-300 space-y-1">
-                                        <li><strong>Dropbox:</strong> Nama file backup akan otomatis menyertakan ID Toko. <br/>Contoh: Cabang A -> <code>artea_backup_CABANG-A.json</code>, Cabang B -> <code>artea_backup_CABANG-B.json</code>. Tidak akan saling menimpa.</li>
+                                        <li><strong>Dropbox:</strong> Nama file backup akan otomatis menyertakan ID Toko. <br/>Contoh: Cabang A {'->'} <code>artea_backup_CABANG-A.json</code>, Cabang B {'->'} <code>artea_backup_CABANG-B.json</code>. Tidak akan saling menimpa.</li>
                                         <li><strong>Supabase:</strong> Setiap baris transaksi dan stok di database akan ditandai dengan kolom <code>store_id</code>. Anda bisa memfilter data per cabang di dashboard Supabase Anda.</li>
                                     </ul>
                                 </div>
@@ -486,7 +485,7 @@ const HelpView: React.FC = () => {
                                     <h5 className="font-bold text-blue-300 text-xs mb-2 flex items-center gap-2">
                                         <Icon name="info-circle" className="w-4 h-4"/> Strategi Penggunaan Offline (Tanpa Internet)
                                     </h5>
-                                    <p className="text-xs text-slate-300 mb-2">
+                                    <p className="text-xs text-slate-300 mb-2 leading-relaxed">
                                         Meskipun Anda tidak menggunakan Cloud Sync, fitur ini bekerja seperti <strong>"Kotak Hitam" (Black Box)</strong> yang tersimpan aman di perangkat kasir:
                                     </p>
                                     <ul className="list-disc pl-5 text-xs text-slate-300 space-y-1">

@@ -18,6 +18,8 @@ const urlsToCache = [
   'https://aistudiocdn.com/html5-qrcode@^2.3.8',
   'https://aistudiocdn.com/dexie@^4.0.7',
   'https://esm.sh/crypto-js@4.1.1',
+  'https://esm.sh/jspdf@2.5.1',
+  'https://esm.sh/jspdf-autotable@3.8.2'
 ];
 
 self.addEventListener('install', event => {

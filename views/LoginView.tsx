@@ -46,7 +46,22 @@ const LoginView: React.FC = () => {
     const handleLogin = async (user: User, currentPin: string) => {
         if (!user) return;
         const success = await login(user, currentPin);
-        if (!success) {
+        if (success) {
+            // Show Security Audit Alert upon successful login
+            showAlert({
+                type: 'alert',
+                title: 'Login Berhasil',
+                message: (
+                    <div className="text-left space-y-2">
+                        <p>Selamat datang, <strong>{user.name}</strong>.</p>
+                        <div className="bg-yellow-900/20 border-l-4 border-yellow-500 p-2 rounded text-xs text-yellow-200">
+                            <strong>⚠️ Peringatan Keamanan:</strong><br/>
+                            Segala aktivitas sensitif (Perubahan Harga, Stok, Refund, Hapus Data) pada sesi ini akan <strong>direkam secara otomatis</strong> ke dalam Audit Log sistem.
+                        </div>
+                    </div>
+                )
+            });
+        } else {
             setError('PIN salah. Silakan coba lagi.');
             setTimeout(() => setPin(''), 500);
         }

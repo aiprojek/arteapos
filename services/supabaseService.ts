@@ -535,6 +535,27 @@ export const supabaseService = {
         return { expenses: expenses || [], otherIncomes: incomes || [], transactions: transactions || [], purchases: purchases || [] };
     },
 
+    // --- NEW: Fetch Audit Logs ---
+    fetchAuditLogs: async (limit: number = 100) => {
+        if (!supabase) return [];
+        const { data } = await supabase.from(TABLE_AUDIT_LOGS)
+            .select('*')
+            .order('timestamp', { ascending: false })
+            .limit(limit);
+        
+        // Map back to internal type
+        return (data || []).map((l: any) => ({
+            id: l.id,
+            timestamp: l.timestamp,
+            userId: l.user_id,
+            userName: l.user_name,
+            action: l.action,
+            targetId: l.target_id,
+            details: l.details,
+            storeId: l.store_id // Add store info
+        }));
+    },
+
     // --- MAINTENANCE: Clear Operational Data (Quota Management) ---
     clearOperationalData: async (): Promise<{ success: boolean; message: string }> => {
         if (!supabase) return { success: false, message: 'Supabase belum diinisialisasi.' };

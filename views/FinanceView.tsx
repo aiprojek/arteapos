@@ -2,11 +2,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useFinance } from '../context/FinanceContext';
+import { useSettings } from '../context/SettingsContext';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
 import { supabaseService } from '../services/supabaseService';
 import { dropboxService } from '../services/dropboxService';
 import { useUI } from '../context/UIContext';
+import { generateTablePDF } from '../utils/pdfGenerator';
+import { CURRENCY_FORMATTER } from '../constants';
 
 // Modular Imports
 import CashFlowTab from '../components/finance/CashFlowTab';
@@ -20,6 +23,8 @@ import type { Expense, OtherIncome, Transaction as TransactionType, Purchase } f
 
 const FinanceView: React.FC = () => {
     const { currentUser } = useAuth();
+    const { receiptSettings } = useSettings();
+    const { transactions: localTransactions, expenses: localExpenses, purchases: localPurchases, otherIncomes: localIncomes, suppliers } = useFinance();
     const { showAlert } = useUI();
     const isManagement = currentUser?.role === 'admin' || currentUser?.role === 'manager';
     
@@ -127,6 +132,148 @@ const FinanceView: React.FC = () => {
         </button>
     );
 
+    // --- DATA PREPARATION FOR EXPORT ---
+    const getDataForExport = () => {
+        const source = dataSource === 'local' ? {
+            tx: localTransactions,
+            exp: localExpenses,
+            inc: localIncomes,
+            purch: localPurchases
+        } : {
+            tx: cloudData.transactions,
+            exp: cloudData.expenses,
+            inc: cloudData.otherIncomes,
+            purch: cloudData.purchases
+        };
+
+        return source;
+    }
+
+    const handleExportPDF = () => {
+        const { tx, exp, inc, purch } = getDataForExport();
+        const mode = mainView === 'finance' ? activeTab : 'customers';
+
+        if (mode === 'cashflow') {
+            // Aggregate Logic (Simplified from CashFlowTab)
+            const flows = [
+                ...tx.filter(t => t.paymentStatus !== 'refunded').map(t => ({ date: t.createdAt, desc: `Penjualan #${t.id.slice(-4)}`, amount: t.total, type: 'Masuk' })),
+                ...inc.map(i => ({ date: i.date, desc: i.description, amount: i.amount, type: 'Masuk' })),
+                ...exp.map(e => ({ date: e.date, desc: e.description, amount: -e.amount, type: 'Keluar' })),
+                ...purch.map(p => ({ date: p.date, desc: `Beli: ${p.supplierName}`, amount: -p.totalAmount, type: 'Keluar' }))
+            ].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+            const headers = ['Tanggal', 'Tipe', 'Keterangan', 'Jumlah'];
+            const rows = flows.map(f => [
+                new Date(f.date).toLocaleDateString('id-ID'),
+                f.type,
+                f.desc,
+                CURRENCY_FORMATTER.format(Math.abs(f.amount))
+            ]);
+            generateTablePDF('Laporan Arus Kas', headers, rows, receiptSettings);
+        } 
+        else if (mode === 'expenses') {
+            const headers = ['Tanggal', 'Keterangan', 'Kategori', 'Jumlah'];
+            const rows = exp.map(e => [
+                new Date(e.date).toLocaleDateString('id-ID'),
+                e.description,
+                e.category,
+                CURRENCY_FORMATTER.format(e.amount)
+            ]);
+            generateTablePDF('Laporan Pengeluaran', headers, rows, receiptSettings);
+        }
+        else if (mode === 'other_income') {
+            const headers = ['Tanggal', 'Keterangan', 'Kategori', 'Jumlah'];
+            const rows = inc.map(i => [
+                new Date(i.date).toLocaleDateString('id-ID'),
+                i.description,
+                i.category,
+                CURRENCY_FORMATTER.format(i.amount)
+            ]);
+            generateTablePDF('Laporan Pemasukan Lain', headers, rows, receiptSettings);
+        }
+        else if (mode === 'purchasing') {
+            const headers = ['Tanggal', 'Supplier', 'Status', 'Total'];
+            const rows = purch.map(p => [
+                new Date(p.date).toLocaleDateString('id-ID'),
+                p.supplierName,
+                p.status.toUpperCase(),
+                CURRENCY_FORMATTER.format(p.totalAmount)
+            ]);
+            generateTablePDF('Riwayat Pembelian', headers, rows, receiptSettings);
+        }
+        else if (mode === 'debt-receivables') {
+            const unpaid = tx.filter(t => t.paymentStatus === 'unpaid' || t.paymentStatus === 'partial');
+            const headers = ['Tanggal', 'Pelanggan', 'Total Tagihan', 'Sisa Utang'];
+            const rows = unpaid.map(t => [
+                new Date(t.createdAt).toLocaleDateString('id-ID'),
+                t.customerName || 'Umum',
+                CURRENCY_FORMATTER.format(t.total),
+                CURRENCY_FORMATTER.format(t.total - t.amountPaid)
+            ]);
+            generateTablePDF('Laporan Piutang', headers, rows, receiptSettings);
+        }
+    };
+
+    const handleExportCSV = () => {
+        const { tx, exp, inc, purch } = getDataForExport();
+        const mode = mainView === 'finance' ? activeTab : 'customers';
+        let csvContent = '';
+        let fileName = '';
+
+        const download = (content: string, fname: string) => {
+            const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fname;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        if (mode === 'cashflow') {
+            // Aggregate
+            const flows = [
+                ...tx.filter(t => t.paymentStatus !== 'refunded').map(t => ({ date: t.createdAt, desc: `Penjualan #${t.id.slice(-4)}`, amount: t.total, type: 'Penjualan' })),
+                ...inc.map(i => ({ date: i.date, desc: i.description, amount: i.amount, type: 'Pemasukan Lain' })),
+                ...exp.map(e => ({ date: e.date, desc: e.description, amount: -e.amount, type: 'Pengeluaran' })),
+                ...purch.map(p => ({ date: p.date, desc: `Pembelian dari ${p.supplierName}`, amount: -p.totalAmount, type: 'Pembelian' }))
+            ].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+            csvContent = 'Tanggal,Tipe,Keterangan,Jumlah\n' + flows.map(f => 
+                `${new Date(f.date).toLocaleDateString('id-ID')},${f.type},"${f.desc}",${f.amount}`
+            ).join('\n');
+            fileName = 'arus_kas.csv';
+        }
+        else if (mode === 'expenses') {
+            csvContent = 'Tanggal,Keterangan,Kategori,Jumlah\n' + exp.map(e => 
+                `${new Date(e.date).toLocaleDateString('id-ID')},"${e.description}",${e.category},${e.amount}`
+            ).join('\n');
+            fileName = 'pengeluaran.csv';
+        }
+        else if (mode === 'other_income') {
+            csvContent = 'Tanggal,Keterangan,Kategori,Jumlah\n' + inc.map(i => 
+                `${new Date(i.date).toLocaleDateString('id-ID')},"${i.description}",${i.category},${i.amount}`
+            ).join('\n');
+            fileName = 'pemasukan_lain.csv';
+        }
+        else if (mode === 'purchasing') {
+            csvContent = 'Tanggal,Supplier,Status,Total\n' + purch.map(p => 
+                `${new Date(p.date).toLocaleDateString('id-ID')},"${p.supplierName}",${p.status},${p.totalAmount}`
+            ).join('\n');
+            fileName = 'pembelian.csv';
+        }
+        else if (mode === 'debt-receivables') {
+            const unpaid = tx.filter(t => t.paymentStatus === 'unpaid' || t.paymentStatus === 'partial');
+            csvContent = 'Tanggal,Pelanggan,Total_Tagihan,Sisa_Utang\n' + unpaid.map(t => 
+                `${new Date(t.createdAt).toLocaleDateString('id-ID')},"${t.customerName || 'Umum'}",${t.total},${t.total - t.amountPaid}`
+            ).join('\n');
+            fileName = 'piutang.csv';
+        }
+
+        if (csvContent) download(csvContent, fileName);
+    };
+
     return (
         <div className="flex flex-col h-full">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
@@ -140,6 +287,18 @@ const FinanceView: React.FC = () => {
                 </h1>
                 
                 <div className="flex gap-2 items-center flex-wrap">
+                    {/* Export Buttons */}
+                    {mainView === 'finance' && (
+                        <div className="flex gap-2 mr-2">
+                            <Button variant="secondary" size="sm" onClick={handleExportPDF} title="Export PDF Tabel Aktif">
+                                <Icon name="printer" className="w-4 h-4"/> PDF
+                            </Button>
+                            <Button variant="secondary" size="sm" onClick={handleExportCSV} title="Export CSV Tabel Aktif">
+                                <Icon name="download" className="w-4 h-4"/> CSV
+                            </Button>
+                        </div>
+                    )}
+
                     {/* Data Source Toggle */}
                     <div className="bg-slate-700 p-1 rounded-lg flex items-center border border-slate-600">
                         <button

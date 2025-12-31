@@ -42,7 +42,7 @@ const AccordionItem: React.FC<AccordionItemProps> = ({ title, children, isOpen, 
 );
 
 const SectionHeader: React.FC<{ title: string; icon: any; desc: string }> = ({ title, icon, desc }) => (
-    <div className="mb-4 mt-8 pb-2 border-b border-slate-700">
+    <div className="mb-4 mt-10 pb-2 border-b border-slate-700 first:mt-0">
         <div className="flex items-center gap-2">
             <Icon name={icon} className="w-6 h-6 text-[#52a37c]" />
             <h2 className="text-xl font-bold text-white">{title}</h2>
@@ -58,7 +58,6 @@ const ScenarioCard: React.FC<{
     desc: string; 
     steps: string[] 
 }> = ({ title, icon, color, desc, steps }) => {
-    // Mapping color names to tailwind classes explicitly to ensure safelist
     const colorMap: Record<string, string> = {
         'green-400': 'text-green-400',
         'pink-400': 'text-pink-400',
@@ -91,7 +90,7 @@ const ScenarioCard: React.FC<{
 };
 
 const HelpView: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'scenarios' | 'manual' | 'license' | 'about'>('scenarios');
+    const [activeTab, setActiveTab] = useState<'scenarios' | 'manual' | 'faq' | 'license' | 'about'>('scenarios');
     const [openAccordion, setOpenAccordion] = useState<string | null>(null);
 
     const toggleAccordion = (id: string) => {
@@ -99,8 +98,9 @@ const HelpView: React.FC = () => {
     };
 
     const tabs = [
-        { id: 'scenarios', label: 'Skenario & Alur', icon: 'share' },
-        { id: 'manual', label: 'Buku Manual', icon: 'book' },
+        { id: 'scenarios', label: 'Skenario', icon: 'share' },
+        { id: 'manual', label: 'Panduan Menu', icon: 'book' },
+        { id: 'faq', label: 'FAQ', icon: 'question' },
         { id: 'license', label: 'Lisensi', icon: 'lock' },
         { id: 'about', label: 'Tentang', icon: 'info-circle' },
     ] as const;
@@ -122,7 +122,6 @@ const HelpView: React.FC = () => {
                 return <p key={idx} className="font-bold text-white mt-3 mb-1">{content.replace(/\*\*/g, '')}</p>;
             }
 
-            // URL handling
             if (content.match(urlRegex)) {
                 const parts = content.split(urlRegex);
                 return (
@@ -149,7 +148,7 @@ const HelpView: React.FC = () => {
                 </div>
                 <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">Pusat Bantuan</h1>
                 <p className="text-slate-400 mt-2 max-w-xl mx-auto text-sm sm:text-base">
-                    Dokumentasi lengkap penggunaan Artea POS, mulai dari persiapan awal hingga manajemen multi-cabang.
+                    Panduan lengkap penggunaan setiap fitur dan menu di Artea POS.
                 </p>
             </div>
 
@@ -172,241 +171,286 @@ const HelpView: React.FC = () => {
                 </div>
             </div>
 
-            {/* --- TAB 1: SKENARIO PENGGUNAAN (Workflow) --- */}
+            {/* --- TAB 1: SKENARIO (WORKFLOW) --- */}
             {activeTab === 'scenarios' && (
                 <div className="animate-fade-in space-y-8">
                     <div className="bg-slate-800/50 border border-slate-700 p-6 rounded-2xl text-center max-w-3xl mx-auto">
                         <h2 className="text-xl font-bold text-white mb-2">Pilih Model Operasional Anda</h2>
                         <p className="text-slate-400 text-sm">
-                            Aplikasi ini dirancang fleksibel. Anda tidak perlu menggunakan semua fitur. Cukup ikuti alur yang sesuai dengan kebutuhan bisnis Anda.
+                            Pahami cara kerja aplikasi berdasarkan kebutuhan bisnis Anda.
                         </p>
                     </div>
 
                     <div className="grid gap-6 md:grid-cols-2">
                         <ScenarioCard 
-                            title="1. Solo / Mandiri (100% Offline)" 
+                            title="1. Offline Mandiri (Single Device)" 
                             icon="users" 
                             color="green-400"
                             desc="Cocok untuk pemilik toko yang menjaga kasir sendiri. Tidak butuh internet."
                             steps={[
-                                "Login sebagai Admin.",
                                 "Input Produk langsung di menu 'Produk'.",
-                                "Jualan seperti biasa di menu 'Kasir'.",
-                                "Lihat laporan harian langsung di menu 'Laporan'.",
-                                "Wajib: Lakukan 'Backup Lokal (JSON)' seminggu sekali untuk keamanan data."
+                                "Jualan di menu 'Kasir'. Data tersimpan di browser.",
+                                "Lihat laporan harian di menu 'Laporan'.",
+                                "Wajib: Lakukan 'Backup Lokal' (Settings > Data) seminggu sekali untuk keamanan."
                             ]}
                         />
-
                         <ScenarioCard 
-                            title="2. Satu Device, Banyak User" 
-                            icon="lock" 
-                            color="pink-400"
-                            desc="Satu tablet/PC dipakai bergantian oleh Owner dan Staf (Shift). Cocok untuk 1 Toko."
-                            steps={[
-                                "Admin membuat akun 'Staf' di menu Pengaturan > Keamanan.",
-                                "Tidak perlu isi 'Data Cabang' jika hanya punya 1 toko (otomatis Pusat).",
-                                "Staf login menggunakan PIN-nya untuk berjualan (Akses Terbatas).",
-                                "Saat ganti shift, klik Logout. Owner login dengan PIN Admin untuk cek laporan.",
-                            ]}
-                        />
-
-                        <ScenarioCard 
-                            title="3. Owner + Staf (Laporan & Import)" 
+                            title="2. Owner + Staff (Remote Report)" 
                             icon="whatsapp" 
                             color="yellow-400"
-                            desc="Owner memantau dari jauh tanpa Cloud. Staf kirim file, Owner import di HP sendiri."
+                            desc="Owner memantau dari jauh tanpa Cloud. Staff kirim laporan via WA."
                             steps={[
-                                "Staf berjualan dan melakukan Tutup Shift seperti biasa.",
-                                "Di menu Laporan, Staf klik 'Kirim Laporan' -> Pilih 'Laporan Aman' (Kode) atau 'File CSV'.",
-                                "Owner menerima kode enkripsi atau file laporan via WhatsApp.",
-                                "Owner buka Artea POS di HP sendiri -> Masuk ke Pengaturan > Data > 'Import Transaksi' (CSV) atau 'Paste Teks' (Kode) untuk melihat detail lengkap."
+                                "Staff berjualan & Tutup Shift seperti biasa.",
+                                "Di menu Laporan, Staff klik 'Kirim Laporan' -> Pilih 'Laporan Aman' (Kode) atau 'File CSV'.",
+                                "Kirim ke WA Owner.",
+                                "Owner buka Artea POS di HP sendiri -> 'Import Transaksi' -> Paste Kode/Upload CSV untuk melihat data."
                             ]}
                         />
-
                         <ScenarioCard 
-                            title="4. Cloud Sync (Multi-Cabang)" 
+                            title="3. Cloud Sync (Multi-Cabang)" 
                             icon="wifi" 
                             color="sky-400"
-                            desc="Hubungkan banyak cabang secara terpusat. Gunakan Dropbox (Mudah) atau Supabase (Realtime)."
+                            desc="Sinkronisasi otomatis antar cabang menggunakan Dropbox/Supabase."
                             steps={[
-                                "Admin (Pusat): Daftarkan semua ID cabang (misal: JKT-01, BDG-01) di menu Pengaturan > Toko.",
-                                "Admin (Pusat): Hubungkan Cloud (Dropbox/Supabase) di menu Data, lalu data konfigurasi akan terkirim otomatis.",
-                                "Cabang: Cukup hubungkan akun Cloud yang sama di menu Pengaturan > Data.",
-                                "Cabang: Klik tombol 'Update dari Pusat' di menu atas. Popup pilihan cabang akan muncul otomatis."
+                                "Admin: Atur koneksi Cloud di Pengaturan > Data.",
+                                "Admin: Upload 'Master Data' (Produk/Harga).",
+                                "Cabang: Hubungkan akun Cloud yang sama -> Klik 'Update dari Pusat'.",
+                                "Data penjualan cabang akan terkirim otomatis ke Cloud untuk dipantau Admin."
+                            ]}
+                        />
+                        <ScenarioCard 
+                            title="4. Shift & Keamanan (Anti-Fraud)" 
+                            icon="lock" 
+                            color="pink-400"
+                            desc="Mencegah kecurangan kasir dengan sistem sesi dan audit."
+                            steps={[
+                                "Aktifkan 'Wajibkan Sesi' di Pengaturan.",
+                                "Staff harus input modal awal saat login.",
+                                "Semua aktivitas sensitif (Hapus produk, Refund, Edit Stok) tercatat di 'Audit Log'.",
+                                "Saat tutup, sistem menghitung selisih (Variance) uang di laci vs sistem."
                             ]}
                         />
                     </div>
                 </div>
             )}
 
-            {/* --- TAB 2: MANUAL FITUR LENGKAP --- */}
+            {/* --- TAB 2: PANDUAN PER MENU (MANUAL) --- */}
             {activeTab === 'manual' && (
-                <div className="animate-fade-in max-w-4xl mx-auto">
+                <div className="animate-fade-in max-w-4xl mx-auto space-y-12">
                     
-                    {/* 1. SETUP */}
-                    <SectionHeader title="1. Persiapan Awal (Setup)" icon="settings" desc="Konfigurasi dasar sebelum mulai berjualan." />
-                    <div className="space-y-2">
-                        <AccordionItem title="Identitas Toko & Pajak" isOpen={openAccordion === 'setup_1'} onToggle={() => toggleAccordion('setup_1')} icon="printer" colorClass="text-blue-400">
-                            <ul className="list-disc pl-5 space-y-2">
-                                <li>Masuk ke <strong>Pengaturan {'>'} Toko & Struk</strong>.</li>
-                                <li><strong>Store ID:</strong> Kode unik toko Anda (misal `TOKO-01`). Jika Anda hanya punya 1 toko, biarkan default atau isi `PUSAT`.</li>
-                                <li><strong>Pajak & Service:</strong> Isi persentase (misal PPN 10%). Sistem akan otomatis menghitung pajak di setiap transaksi.</li>
-                                <li><strong>Kontak Admin:</strong> Isi nomor WhatsApp Admin (format 628...) agar staf bisa mengirim laporan atau meminta reset PIN via WhatsApp.</li>
-                            </ul>
-                        </AccordionItem>
-                        <AccordionItem title="Manajemen User (Admin, Manager, Staf)" isOpen={openAccordion === 'setup_2'} onToggle={() => toggleAccordion('setup_2')} icon="users" colorClass="text-red-400">
-                            <p>Artea POS mendukung 3 level akses:</p>
-                            <ul className="list-disc pl-5 space-y-1 mt-2 mb-2">
-                                <li><strong>Admin:</strong> Akses penuh (termasuk reset data).</li>
-                                <li><strong>Manager:</strong> Bisa edit produk & lihat laporan, tapi tidak bisa hapus data/user.</li>
-                                <li><strong>Staf:</strong> Hanya bisa transaksi kasir & laporan shift sendiri.</li>
-                            </ul>
-                            <div className="bg-slate-800 p-2 rounded border border-slate-600 mt-2">
-                                💡 <strong>Tips:</strong> Segera ganti PIN default Admin (1111) di menu Pengaturan > Keamanan untuk mencegah akses tidak sah.
+                    {/* MENU 1: DASHBOARD */}
+                    <div>
+                        <SectionHeader title="Menu: Dashboard" icon="reports" desc="Pusat pemantauan performa bisnis secara visual." />
+                        <div className="space-y-2">
+                            <AccordionItem title="Statistik & Grafik" isOpen={openAccordion === 'dash_1'} onToggle={() => toggleAccordion('dash_1')} icon="trending-up" colorClass="text-sky-400">
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li><strong>Kartu Atas:</strong> Ringkasan Penjualan Hari Ini, Jumlah Transaksi, Total Piutang Belum Dibayar, dan Peringatan Stok Menipis.</li>
+                                    <li><strong>Grafik Tren:</strong> Menampilkan pergerakan omzet selama 7 hari terakhir.</li>
+                                    <li><strong>Produk Terlaris:</strong> Top 5 produk dengan penjualan tertinggi minggu ini.</li>
+                                    <li><strong>Mode Cloud:</strong> Jika Cloud aktif, dashboard bisa difilter per Cabang untuk melihat performa outlet lain.</li>
+                                </ul>
+                            </AccordionItem>
+                            <AccordionItem title="Artea AI (Analisis Cerdas)" isOpen={openAccordion === 'dash_2'} onToggle={() => toggleAccordion('dash_2')} icon="chat" colorClass="text-purple-400" badge="AI">
+                                <p>Asisten cerdas yang menganalisis data penjualan Anda.</p>
+                                <ul className="list-disc pl-5 space-y-1 mt-2">
+                                    <li>Ketik pertanyaan seperti "Bagaimana cara meningkatkan omzet?" atau "Analisis tren minggu ini".</li>
+                                    <li>AI akan membaca data grafik dan memberikan saran strategi bisnis praktis dalam Bahasa Indonesia.</li>
+                                </ul>
+                            </AccordionItem>
+                        </div>
+                    </div>
+
+                    {/* MENU 2: KASIR */}
+                    <div>
+                        <SectionHeader title="Menu: Kasir (POS)" icon="cash" desc="Halaman utama untuk melakukan transaksi penjualan." />
+                        <div className="space-y-2">
+                            <AccordionItem title="Alur Transaksi Dasar" isOpen={openAccordion === 'pos_1'} onToggle={() => toggleAccordion('pos_1')} icon="pay" colorClass="text-green-400">
+                                <ol className="list-decimal pl-5 space-y-1">
+                                    <li><strong>Pilih Produk:</strong> Klik produk di daftar atau gunakan scan barcode.</li>
+                                    <li><strong>Edit Keranjang:</strong> Klik item di keranjang kiri untuk mengubah jumlah, memberi diskon per item, atau menghapus.</li>
+                                    <li><strong>Pilih Pelanggan (Opsional):</strong> Di bagian bawah keranjang, pilih pelanggan untuk mencatat poin member.</li>
+                                    <li><strong>Bayar:</strong> Klik tombol "Bayar", pilih Tunai/Non-Tunai, masukkan nominal.</li>
+                                    <li><strong>Struk:</strong> Setelah sukses, struk muncul. Bisa dicetak atau dibagikan gambar via WA.</li>
+                                </ol>
+                            </AccordionItem>
+                            <AccordionItem title="Modifier & Varian (Topping/Level)" isOpen={openAccordion === 'pos_2'} onToggle={() => toggleAccordion('pos_2')} icon="tag" colorClass="text-blue-400">
+                                <p>Jika produk memiliki varian (misal: Ukuran) atau modifier (misal: Topping, Gula):</p>
+                                <ul className="list-disc pl-5 space-y-1 mt-2">
+                                    <li>Pop-up akan muncul otomatis saat produk diklik.</li>
+                                    <li><strong>Radio Button:</strong> Harus pilih satu (misal: Panas/Dingin).</li>
+                                    <li><strong>Checkbox:</strong> Bisa pilih banyak (misal: Topping).</li>
+                                    <li>Harga akan otomatis bertambah sesuai pilihan.</li>
+                                </ul>
+                            </AccordionItem>
+                            <AccordionItem title="Split Bill (Pisah Bayar)" isOpen={openAccordion === 'pos_3'} onToggle={() => toggleAccordion('pos_3')} icon="share" colorClass="text-orange-400" badge="Baru">
+                                <p>Fitur untuk memecah satu pesanan menjadi beberapa pembayaran.</p>
+                                <ol className="list-decimal pl-5 space-y-1 mt-2">
+                                    <li>Masukkan semua pesanan ke keranjang.</li>
+                                    <li>Klik tombol <strong>Split</strong> di bawah keranjang.</li>
+                                    <li>Centang item mana saja yang mau dibayar <strong>sekarang</strong>.</li>
+                                    <li>Klik "Pisahkan & Bayar". Item sisanya akan otomatis disimpan ke tab "Sisa Split" untuk dibayar orang berikutnya.</li>
+                                </ol>
+                            </AccordionItem>
+                            <AccordionItem title="Simpan Pesanan (Open Bill)" isOpen={openAccordion === 'pos_4'} onToggle={() => toggleAccordion('pos_4')} icon="clipboard" colorClass="text-slate-400">
+                                <p>Berguna untuk sistem meja (Restoran) atau pelanggan yang belum selesai belanja.</p>
+                                <ul className="list-disc pl-5 mt-1 space-y-1">
+                                    <li>Klik tombol <strong>"Simpan Pesanan"</strong>. Beri nama (misal: Meja 1).</li>
+                                    <li>Keranjang akan bersih. Anda bisa melayani pelanggan lain.</li>
+                                    <li>Untuk membuka kembali, klik tab nama pesanan di bagian atas keranjang.</li>
+                                </ul>
+                            </AccordionItem>
+                        </div>
+                    </div>
+
+                    {/* MENU 3: PRODUK */}
+                    <div>
+                        <SectionHeader title="Menu: Produk & Bahan" icon="boxes" desc="Mengelola inventaris, harga, dan resep." />
+                        <div className="space-y-2">
+                            <AccordionItem title="Menambah & Mengedit Produk" isOpen={openAccordion === 'prod_1'} onToggle={() => toggleAccordion('prod_1')} icon="edit" colorClass="text-yellow-400">
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li><strong>Info Dasar:</strong> Nama, Harga Jual, Kategori.</li>
+                                    <li><strong>Gambar:</strong> Bisa upload file atau ambil foto langsung pakai kamera HP.</li>
+                                    <li><strong>Barcode:</strong> Bisa diketik manual atau generate otomatis untuk diprint.</li>
+                                    <li><strong>Harga Cabang:</strong> Anda bisa mengatur harga yang berbeda untuk Store ID tertentu (berguna saat sinkronisasi cloud).</li>
+                                </ul>
+                            </AccordionItem>
+                            <AccordionItem title="Resep & HPP (Tracking Bahan)" isOpen={openAccordion === 'prod_2'} onToggle={() => toggleAccordion('prod_2')} icon="ingredients" colorClass="text-red-400">
+                                <p>Hubungkan produk dengan bahan baku untuk otomatisasi stok.</p>
+                                <ol className="list-decimal pl-5 mt-2 space-y-1">
+                                    <li>Masuk ke menu <strong>Bahan Baku</strong>, input stok mentah (misal: Kopi Bubuk, Susu).</li>
+                                    <li>Di menu Produk, edit produk (misal: Kopi Susu). Aktifkan "Lacak Stok".</li>
+                                    <li>Di bagian Resep, tambahkan komponen: 15gr Kopi + 100ml Susu.</li>
+                                    <li><strong>HPP Otomatis:</strong> Sistem akan menghitung modal per cup berdasarkan harga bahan baku.</li>
+                                    <li>Saat Kopi Susu terjual, stok Kopi Bubuk & Susu berkurang otomatis.</li>
+                                </ol>
+                            </AccordionItem>
+                            <AccordionItem title="Stock Opname (Audit)" isOpen={openAccordion === 'prod_3'} onToggle={() => toggleAccordion('prod_3')} icon="file-lock" colorClass="text-blue-400">
+                                <p>Fitur untuk mencocokkan stok di aplikasi dengan fisik di gudang.</p>
+                                <ul className="list-disc pl-5 mt-1 space-y-1">
+                                    <li>Klik tombol <strong>Stock Opname</strong>.</li>
+                                    <li>Isi kolom "Fisik (Actual)" sesuai hitungan riil.</li>
+                                    <li>Sistem akan menghitung selisih (Variance) dan mencatatnya di Log Audit.</li>
+                                    <li>Stok di aplikasi akan diperbarui mengikuti angka Fisik.</li>
+                                </ul>
+                            </AccordionItem>
+                        </div>
+                    </div>
+
+                    {/* MENU 4: KEUANGAN */}
+                    <div>
+                        <SectionHeader title="Menu: Keuangan" icon="finance" desc="Pusat pencatatan arus kas, utang, dan belanja." />
+                        <div className="space-y-2">
+                            <AccordionItem title="Arus Kas (Cash Flow)" isOpen={openAccordion === 'fin_1'} onToggle={() => toggleAccordion('fin_1')} icon="trending-up" colorClass="text-green-400">
+                                <p>Tab ini adalah rangkuman dari semua aktivitas uang:</p>
+                                <ul className="list-disc pl-5 mt-2 space-y-1">
+                                    <li><strong>Masuk:</strong> Penjualan Tunai + Pemasukan Lain.</li>
+                                    <li><strong>Keluar:</strong> Pengeluaran Operasional + Pembelian Stok.</li>
+                                    <li><strong>Saldo Bersih:</strong> Uang yang seharusnya ada di tangan saat ini (diluar modal kasir).</li>
+                                </ul>
+                            </AccordionItem>
+                            <AccordionItem title="Pembelian & Supplier (Kulakan)" isOpen={openAccordion === 'fin_2'} onToggle={() => toggleAccordion('fin_2')} icon="boxes" colorClass="text-blue-400">
+                                <p>Gunakan fitur ini saat Anda belanja stok barang.</p>
+                                <ul className="list-disc pl-5 mt-1 space-y-1">
+                                    <li>Tambah Supplier dulu.</li>
+                                    <li>Klik "Catat Pembelian". Masukkan barang apa saja yang dibeli dan harganya.</li>
+                                    <li><strong>Otomatisasi:</strong> Stok barang akan bertambah, dan uang kas akan berkurang (tercatat sebagai pengeluaran).</li>
+                                    <li>Bisa catat DP (Utang ke Supplier).</li>
+                                </ul>
+                            </AccordionItem>
+                            <AccordionItem title="Utang & Piutang (Kasbon)" isOpen={openAccordion === 'fin_3'} onToggle={() => toggleAccordion('fin_3')} icon="book" colorClass="text-red-400">
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li><strong>Piutang (Kasbon Pelanggan):</strong> Terjadi jika saat transaksi kasir metode bayarnya "Non-Tunai" atau nominal bayar 0.</li>
+                                    <li><strong>Cara Melunasi:</strong> Masuk tab Utang & Piutang -> Klik "Bayar" pada transaksi tersebut.</li>
+                                    <li>Pelunasan akan masuk ke Arus Kas hari itu.</li>
+                                </ul>
+                            </AccordionItem>
+                        </div>
+                    </div>
+
+                    {/* MENU 5: PENGATURAN */}
+                    <div>
+                        <SectionHeader title="Menu: Pengaturan" icon="settings" desc="Konfigurasi sistem, user, dan data." />
+                        <div className="space-y-2">
+                            <AccordionItem title="Data & Cloud (Sync)" isOpen={openAccordion === 'set_1'} onToggle={() => toggleAccordion('set_1')} icon="wifi" colorClass="text-sky-400">
+                                <p>Menghubungkan aplikasi dengan penyimpanan luar.</p>
+                                <ul className="list-disc pl-5 mt-2 space-y-1">
+                                    <li><strong>Dropbox:</strong> Disarankan untuk Backup File (JSON/CSV). Murah & Mudah.</li>
+                                    <li><strong>Supabase:</strong> Disarankan untuk Database Real-time (Dashboard Live). Lebih canggih.</li>
+                                    <li><strong>Backup Lokal:</strong> Tombol wajib ditekan rutin jika Anda tidak memakai Cloud. Menyimpan data ke file di HP/Laptop.</li>
+                                </ul>
+                            </AccordionItem>
+                            <AccordionItem title="Keamanan & User" isOpen={openAccordion === 'set_2'} onToggle={() => toggleAccordion('set_2')} icon="lock" colorClass="text-red-400">
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li><strong>Buat User Baru:</strong> Tambahkan akun Staf atau Manager.</li>
+                                    <li><strong>PIN:</strong> Setiap user punya PIN 4 digit. Jangan gunakan PIN standar (1111).</li>
+                                    <li><strong>Security Question:</strong> Jawaban rahasia untuk mereset PIN Admin jika lupa.</li>
+                                </ul>
+                            </AccordionItem>
+                            <AccordionItem title="Audit Log (Jejak Aktivitas)" isOpen={openAccordion === 'set_3'} onToggle={() => toggleAccordion('set_3')} icon="file-lock" colorClass="text-slate-400">
+                                <p>Fitur keamanan untuk pemilik toko.</p>
+                                <p className="text-xs text-slate-400">Mencatat siapa yang menghapus produk, mengubah harga, melakukan refund, atau mengedit stok secara manual. Data ini tidak bisa dihapus oleh staf.</p>
+                            </AccordionItem>
+                        </div>
+                    </div>
+
+                </div>
+            )}
+
+            {/* --- TAB 3: FAQ --- */}
+            {activeTab === 'faq' && (
+                <div className="animate-fade-in max-w-3xl mx-auto space-y-4">
+                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                        <h3 className="font-bold text-white mb-2 text-lg">Tanya Jawab & Masalah Umum</h3>
+                        <div className="space-y-4">
+                            
+                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Bagaimana cara print struk via Bluetooth?</h4>
+                                <p className="text-slate-300 text-sm">
+                                    A: Pastikan Anda menggunakan browser <strong>Google Chrome</strong> di Android atau Desktop. 
+                                    Hidupkan Bluetooth dan pasangkan (pair) printer di pengaturan HP dulu. 
+                                    Di aplikasi, klik "Cetak BT" -> Pilih printer Anda.
+                                </p>
                             </div>
-                        </AccordionItem>
-                    </div>
 
-                    {/* 2. PRODUK & STOK */}
-                    <SectionHeader title="2. Manajemen Produk & Stok" icon="boxes" desc="Mengatur menu, varian, dan inventaris." />
-                    <div className="space-y-2">
-                        <AccordionItem title="Modifier & Varian (Baru!)" isOpen={openAccordion === 'inv_1'} onToggle={() => toggleAccordion('inv_1')} icon="tag" colorClass="text-purple-400" badge="Fitur Baru">
-                            <p>Fitur <strong>Modifier</strong> menggantikan Varian lama dengan sistem yang lebih fleksibel.</p>
-                            <ul className="list-disc pl-5 space-y-2 mt-2">
-                                <li><strong>Grup Modifier:</strong> Contoh "Level Gula" atau "Topping".</li>
-                                <li><strong>Single Selection (Radio):</strong> Gunakan untuk opsi yang harus dipilih satu (misal: Panas/Dingin). Set Max Pilih = 1.</li>
-                                <li><strong>Multi Selection (Checkbox):</strong> Gunakan untuk topping (bisa pilih Keju DAN Coklat). Set Max Pilih > 1.</li>
-                                <li>Harga pada opsi modifier akan otomatis ditambahkan ke harga dasar produk.</li>
-                            </ul>
-                        </AccordionItem>
-                        <AccordionItem title="Resep & Bundling (Potong Stok Bahan)" isOpen={openAccordion === 'inv_2'} onToggle={() => toggleAccordion('inv_2')} icon="ingredients" colorClass="text-orange-400">
-                            <p>Gunakan fitur ini jika Anda ingin stok berkurang otomatis berdasarkan bahan baku.</p>
-                            <ol className="list-decimal pl-5 space-y-1 mt-2">
-                                <li>Input dulu bahan mentah di menu <strong>Bahan Baku</strong> (cth: Kopi Bubuk, Susu).</li>
-                                <li>Di menu Produk, edit produk (cth: Kopi Susu).</li>
-                                <li>Aktifkan "Lacak Stok" -> "Mode Resep".</li>
-                                <li>Tambahkan komposisi: 1 Kopi Susu = 15gr Kopi Bubuk + 100ml Susu.</li>
-                                <li>Saat Kopi Susu terjual, stok Kopi Bubuk & Susu akan berkurang.</li>
-                            </ol>
-                        </AccordionItem>
-                        <AccordionItem title="Stock Opname (Audit Stok)" isOpen={openAccordion === 'inv_3'} onToggle={() => toggleAccordion('inv_3')} icon="file-lock" colorClass="text-sky-400">
-                            <p>Lakukan ini secara berkala (mingguan/bulanan) untuk mencocokkan stok aplikasi dengan gudang.</p>
-                            <ul className="list-disc pl-5 mt-2 space-y-1">
-                                <li>Klik tombol <strong>Stock Opname</strong> di menu Produk/Bahan Baku.</li>
-                                <li>Isi kolom "Fisik" sesuai hitungan riil di gudang.</li>
-                                <li>Sistem akan menghitung selisih dan mencatatnya di <strong>Laporan > Riwayat Stok</strong>.</li>
-                                <li>Catatan audit akan menyertakan siapa yang melakukan opname.</li>
-                            </ul>
-                        </AccordionItem>
-                    </div>
-
-                    {/* 3. KASIR & TRANSAKSI */}
-                    <SectionHeader title="3. Operasional Kasir (POS)" icon="cash" desc="Cara melakukan transaksi penjualan." />
-                    <div className="space-y-2">
-                        <AccordionItem title="Split Bill (Pisah Bayar)" isOpen={openAccordion === 'pos_split'} onToggle={() => toggleAccordion('pos_split')} icon="share" colorClass="text-blue-400" badge="Baru">
-                            <p>Berguna jika satu meja ingin bayar masing-masing.</p>
-                            <ol className="list-decimal pl-5 space-y-1 mt-2">
-                                <li>Masukkan semua pesanan ke keranjang.</li>
-                                <li>Klik tombol <strong>Split</strong> di bawah keranjang.</li>
-                                <li>Pilih item mana saja yang mau dibayar <strong>sekarang</strong>.</li>
-                                <li>Klik "Pisahkan & Bayar".</li>
-                                <li>Item yang <strong>tidak dipilih</strong> akan otomatis dipindahkan ke "Pesanan Disimpan" (Tab Baru) untuk dibayar nanti.</li>
-                            </ol>
-                        </AccordionItem>
-                        <AccordionItem title="Simpan Pesanan (Open Bill/Tab)" isOpen={openAccordion === 'pos_hold'} onToggle={() => toggleAccordion('pos_hold')} icon="clipboard" colorClass="text-yellow-400">
-                            <p>Untuk restoran (sistem meja) atau pelanggan yang belum selesai belanja.</p>
-                            <ul className="list-disc pl-5 mt-2 space-y-1">
-                                <li>Klik <strong>"Simpan Pesanan"</strong> (ikon + di atas keranjang). Beri nama (misal: "Meja 5").</li>
-                                <li>Keranjang akan kosong dan siap untuk pelanggan lain.</li>
-                                <li>Untuk memanggil kembali, klik tab nama pesanan di bagian atas keranjang.</li>
-                                <li>Anda bisa punya banyak pesanan tersimpan sekaligus.</li>
-                            </ul>
-                        </AccordionItem>
-                        <AccordionItem title="Diskon & Potongan Harga" isOpen={openAccordion === 'pos_disc'} onToggle={() => toggleAccordion('pos_disc')} icon="tag" colorClass="text-green-400">
-                            <ul className="list-disc pl-5 space-y-1">
-                                <li><strong>Diskon Per Item:</strong> Klik ikon tag pada item di keranjang.</li>
-                                <li><strong>Diskon Total (Keranjang):</strong> Klik tombol "Diskon Total" di bawah keranjang.</li>
-                                <li>Anda bisa memilih diskon preset (diatur di Pengaturan) atau diskon manual (Rp atau %).</li>
-                            </ul>
-                        </AccordionItem>
-                    </div>
-
-                    {/* 4. KEUANGAN */}
-                    <SectionHeader title="4. Keuangan & Laporan" icon="finance" desc="Memantau arus kas, utang, dan laba." />
-                    <div className="space-y-2">
-                        <AccordionItem title="Manajemen Shift (Buka/Tutup Kasir)" isOpen={openAccordion === 'fin_shift'} onToggle={() => toggleAccordion('fin_shift')} icon="clock-history" colorClass="text-slate-400">
-                            <p>Fitur wajib untuk mencegah kecurangan kasir.</p>
-                            <ol className="list-decimal pl-5 space-y-1 mt-2">
-                                <li><strong>Mulai Sesi:</strong> Masukkan modal awal (recehan) di laci.</li>
-                                <li><strong>Transaksi:</strong> Jualan seperti biasa.</li>
-                                <li><strong>Kas Keluar:</strong> Jika ambil uang laci (beli bensin/es), catat di menu 'Kas' -> 'Kas Keluar'.</li>
-                                <li><strong>Tutup Sesi:</strong> Hitung fisik uang di laci -> Input ke aplikasi. Sistem akan menghitung selisih (Variance).</li>
-                            </ol>
-                        </AccordionItem>
-                        <AccordionItem title="Utang & Piutang (Kasbon)" isOpen={openAccordion === 'fin_debt'} onToggle={() => toggleAccordion('fin_debt')} icon="book" colorClass="text-red-400" badge="Penting">
-                            <p>Mencatat pelanggan yang bayar belakangan.</p>
-                            <ul className="list-disc pl-5 space-y-1 mt-2">
-                                <li>Saat bayar, pilih metode "Non-Tunai" atau masukkan nominal bayar 0 jika belum bayar sama sekali.</li>
-                                <li>Status transaksi akan menjadi <strong>Unpaid</strong> atau <strong>Partial</strong>.</li>
-                                <li>Untuk melunasi: Pergi ke menu <strong>Keuangan > Utang & Piutang</strong>. Klik "Bayar" pada transaksi tersebut.</li>
-                                <li>Pelunasan tunai akan otomatis tercatat sebagai "Kas Masuk" di sesi kasir yang sedang aktif.</li>
-                            </ul>
-                        </AccordionItem>
-                    </div>
-
-                    {/* 5. DATA & CLOUD */}
-                    <SectionHeader title="5. Data, Cloud & Keamanan" icon="database" desc="Backup, Restore, dan Sinkronisasi." />
-                    <div className="space-y-2">
-                        <AccordionItem title="Backup & Restore (Wajib Dibaca)" isOpen={openAccordion === 'data_1'} onToggle={() => toggleAccordion('data_1')} icon="download" colorClass="text-blue-500">
-                            <p className="text-red-400 font-bold mb-1">PERINGATAN:</p>
-                            <p>Secara default, data tersimpan di browser (Offline). Jika HP hilang/rusak atau cache dihapus, data hilang.</p>
-                            <ul className="list-disc pl-5 mt-2 space-y-1">
-                                <li>Rutinlah melakukan <strong>Backup Lokal</strong> di menu Pengaturan > Data.</li>
-                                <li>Simpan file <code>.json</code> yang diunduh ke tempat aman (Google Drive pribadi / WA).</li>
-                                <li>Untuk memindahkan data ke HP baru, copy file json tersebut dan gunakan fitur <strong>Restore</strong> di HP baru.</li>
-                            </ul>
-                        </AccordionItem>
-                        <AccordionItem title="Cloud Sync: Dropbox vs Supabase" isOpen={openAccordion === 'data_cloud'} onToggle={() => toggleAccordion('data_cloud')} icon="wifi" colorClass="text-sky-500">
-                            <p className="text-sm mb-2">Anda tidak wajib menggunakan keduanya. Pilih salah satu sesuai kebutuhan:</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-                                <div className="bg-slate-800 p-3 rounded border border-slate-600">
-                                    <strong className="text-blue-400 block mb-1">Dropbox (Semi-Realtime)</strong>
-                                    <ul className="list-disc pl-4 text-xs text-slate-400 space-y-1">
-                                        <li>Berbasis File (JSON/CSV).</li>
-                                        <li>Update dikirim otomatis setiap kali transaksi selesai atau stok berubah.</li>
-                                        <li>Mudah disetting, gratis, dan cukup untuk laporan harian.</li>
-                                        <li>Juga berfungsi sebagai backup otomatis.</li>
-                                    </ul>
-                                </div>
-                                <div className="bg-slate-800 p-3 rounded border border-slate-600">
-                                    <strong className="text-green-400 block mb-1">Supabase (Realtime DB)</strong>
-                                    <ul className="list-disc pl-4 text-xs text-slate-400 space-y-1">
-                                        <li>Berbasis Database SQL (Lebih Canggih).</li>
-                                        <li>Data muncul di Dashboard Pusat detik itu juga (Live).</li>
-                                        <li>Butuh setup teknis (SQL Script) di awal.</li>
-                                        <li>Cocok untuk memantau traffic tinggi secara live.</li>
-                                    </ul>
-                                </div>
+                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Saya lupa PIN Admin, bagaimana cara masuk?</h4>
+                                <p className="text-slate-300 text-sm">
+                                    A: Di layar Login, ketuk <strong>Logo Aplikasi</strong> di atas sebanyak <strong>5 kali</strong> dengan cepat. 
+                                    Anda akan diminta menjawab "Pertanyaan Keamanan" yang dibuat di pengaturan. Jika benar, Anda bisa membuat PIN baru.
+                                </p>
                             </div>
-                        </AccordionItem>
-                        <AccordionItem title="Reset Darurat & Lupa PIN" isOpen={openAccordion === 'data_2'} onToggle={() => toggleAccordion('data_2')} icon="warning" colorClass="text-red-500">
-                            <p>Jika Admin lupa PIN dan tidak bisa masuk:</p>
-                            <ol className="list-decimal pl-5 mt-2 space-y-1">
-                                <li>Di layar Login, ketuk <strong>Logo Aplikasi</strong> sebanyak <strong>5 kali</strong> dengan cepat.</li>
-                                <li>Jawab <strong>Pertanyaan Keamanan</strong> yang telah diatur Admin (Default: "artea").</li>
-                                <li>Jika jawaban benar, Menu Pemulihan akan terbuka.</li>
-                                <li>Pilih opsi utama <strong>"Atur PIN Admin Baru"</strong> untuk mengganti sandi tanpa menghapus data.</li>
-                                <li>Jika database rusak, tersedia opsi lanjutan untuk Restore Backup atau Factory Reset.</li>
-                            </ol>
-                            <div className="bg-slate-800 p-2 rounded border border-slate-600 mt-2 text-xs">
-                                💡 <strong>Tips untuk Staf:</strong> Jika Staf lupa PIN, cukup klik tombol "Lupa PIN" di layar login untuk menghubungi Admin via WhatsApp.
+
+                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah data saya hilang jika HP rusak?</h4>
+                                <p className="text-slate-300 text-sm">
+                                    A: <strong>YA</strong>, jika Anda tidak pernah backup. Aplikasi ini Offline-first (data di HP). 
+                                    Solusi: Rutin lakukan "Backup Lokal" (download file JSON) dan simpan di Google Drive/WA, atau aktifkan fitur Cloud Sync (Dropbox).
+                                </p>
                             </div>
-                        </AccordionItem>
+
+                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Kenapa stok tidak berkurang saat transaksi?</h4>
+                                <p className="text-slate-300 text-sm">
+                                    A: Cek menu Produk -> Edit Produk tersebut. Pastikan centang <strong>"Lacak Stok"</strong> sudah aktif. 
+                                    Jika menggunakan resep, pastikan bahan baku penyusunnya juga memiliki stok yang cukup.
+                                </p>
+                            </div>
+
+                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Sinkronisasi Cloud gagal / Error Quota?</h4>
+                                <p className="text-slate-300 text-sm">
+                                    A: Penyimpanan gratis Dropbox/Supabase mungkin penuh. 
+                                    Masuk ke Pengaturan -> Data -> Klik tombol merah <strong>"Kosongkan Riwayat Cloud"</strong>. 
+                                    Ini akan menghapus log transaksi lama di cloud (tapi data di HP aman) agar sync bisa berjalan lagi.
+                                </p>
+                            </div>
+
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* --- TAB 3: LICENSE --- */}
+            {/* --- TAB 4: LICENSE --- */}
             {activeTab === 'license' && (
                 <div className="animate-fade-in max-w-3xl mx-auto space-y-6">
                     <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
@@ -422,7 +466,7 @@ const HelpView: React.FC = () => {
                 </div>
             )}
 
-            {/* --- TAB 4: ABOUT --- */}
+            {/* --- TAB 5: ABOUT --- */}
             {activeTab === 'about' && (
                 <div className="max-w-2xl mx-auto text-center animate-fade-in space-y-8">
                     <div className="bg-slate-800 p-8 rounded-2xl shadow-lg border border-slate-700">

@@ -116,7 +116,6 @@ export const dropboxService = {
             const storeId = receiptSettings?.storeId ? receiptSettings.storeId.replace(/[^a-zA-Z0-9-_]/g, '') : 'MAIN';
             
             // Get Only Operational Data (No Master Products needed in branch file if separate)
-            // But currently simpler to just grab what's needed for reports
             const data = await dataService.getExportData();
             
             const branchPayload = {
@@ -125,9 +124,10 @@ export const dropboxService = {
                 transactionRecords: data.transactionRecords,
                 expenses: data.expenses,
                 otherIncomes: data.otherIncomes,
-                customers: data.customers, // Customers grow per branch but synchronized via master usually
+                customers: data.customers, 
                 stockAdjustments: data.stockAdjustments,
                 sessionHistory: data.sessionHistory,
+                auditLogs: data.auditLogs, // INCLUDE AUDIT LOGS
                 // Inventory Snapshot
                 currentStock: data.products?.filter(p => p.trackStock).map(p => ({id: p.id, name: p.name, stock: p.stock}))
             };

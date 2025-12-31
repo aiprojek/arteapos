@@ -18,6 +18,7 @@ import { useUI } from '../context/UIContext';
 import { supabaseService } from '../services/supabaseService';
 import { dropboxService } from '../services/dropboxService';
 import ReportCharts from '../components/reports/ReportCharts';
+import { generateSalesReportPDF } from '../utils/pdfGenerator'; // Import PDF Generator
 
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
 type ReportScope = 'session' | 'historical' | 'session_history';
@@ -519,6 +520,23 @@ const ReportsView: React.FC = () => {
         return Array.from(categoryMap.entries()).map(([name, value]) => ({ name, value }));
     }, [activeTransactions]);
 
+    // Updated Export Logic with PDF
+    const handleExportPDF = () => {
+        // Construct a readable period label
+        let label = 'Semua Transaksi';
+        if (filter === 'today') label = `Hari Ini (${new Date().toLocaleDateString('id-ID')})`;
+        if (filter === 'week') label = 'Minggu Ini';
+        if (filter === 'month') label = 'Bulan Ini';
+        if (filter === 'custom') label = `${customStartDate} s/d ${customEndDate}`;
+        if (isSessionMode && reportScope === 'session') label = 'Sesi Aktif';
+
+        generateSalesReportPDF(filteredTransactions, receiptSettings, label, {
+            totalSales: reportData.totalSales,
+            totalProfit: reportData.totalProfit,
+            totalTransactions: reportData.totalTransactions
+        });
+    }
+
     const exportReport = () => {
         if (activeTab === 'stock_logs') {
             const stockCsv = dataService.generateStockAdjustmentsCSVString(filteredStockLogs);
@@ -724,7 +742,12 @@ const ReportsView: React.FC = () => {
                             </div>
                         )}
                         
-                        <Button variant="secondary" size="sm" onClick={exportReport}>
+                        {activeTab === 'sales' && (
+                            <Button variant="secondary" size="sm" onClick={handleExportPDF} title="Cetak Laporan PDF">
+                                <Icon name="printer" className="w-4 h-4" /> Export PDF
+                            </Button>
+                        )}
+                        <Button variant="secondary" size="sm" onClick={exportReport} title="Export data mentah (CSV)">
                             <Icon name="download" className="w-4 h-4" /> Export CSV
                         </Button>
                     </div>

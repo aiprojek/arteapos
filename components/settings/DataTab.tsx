@@ -26,7 +26,7 @@ const SettingsCard: React.FC<{ title: string; description?: string; children: Re
 );
 
 const DataTab: React.FC = () => {
-    const { restoreData } = useData();
+    const { data, restoreData } = useData();
     const { importTransactions } = useFinance();
     const { showAlert } = useUI();
     
@@ -52,6 +52,55 @@ const DataTab: React.FC = () => {
     // Health Check State
     const [healthStatus, setHealthStatus] = useState<any>(null);
     const [isChecking, setIsChecking] = useState(false);
+
+    // Storage Stats State
+    const [storageStats, setStorageStats] = useState({
+        localDataSize: 0,
+        dropboxUsed: 0,
+        dropboxTotal: 0,
+        dropboxChecking: false
+    });
+
+    useEffect(() => {
+        // Calculate estimated local JSON size
+        try {
+            const json = JSON.stringify(data);
+            const bytes = new Blob([json]).size;
+            setStorageStats(prev => ({...prev, localDataSize: bytes}));
+        } catch (e) {
+            console.error("Failed to calc size", e);
+        }
+
+        // Check Dropbox Quota if connected
+        if (dbxRefreshToken && dbxKey && dbxSecret) {
+            checkDropboxQuota();
+        }
+    }, [data, dbxRefreshToken]);
+
+    const checkDropboxQuota = async () => {
+        setStorageStats(prev => ({...prev, dropboxChecking: true}));
+        try {
+            const usage = await dropboxService.getSpaceUsage();
+            setStorageStats(prev => ({
+                ...prev, 
+                dropboxUsed: usage.used, 
+                dropboxTotal: usage.allocated,
+                dropboxChecking: false
+            }));
+        } catch (e) {
+            console.error("Failed to check quota", e);
+            setStorageStats(prev => ({...prev, dropboxChecking: false}));
+        }
+    };
+
+    const formatBytes = (bytes: number, decimals = 2) => {
+        if (!+bytes) return '0 Bytes';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+    };
 
     const saveCloudSettings = () => {
         localStorage.setItem('ARTEA_DBX_KEY', dbxKey);
@@ -331,20 +380,68 @@ const DataTab: React.FC = () => {
                 </div>
             </SettingsCard>
 
-            <SettingsCard title="Manajemen Penyimpanan Cloud" description="Gunakan jika penyimpanan Cloud (Supabase/Dropbox) penuh atau mencapai kuota.">
+            <SettingsCard title="Manajemen Penyimpanan Cloud" description="Pantau kuota penyimpanan dan lakukan pembersihan jika penuh.">
+                {/* Storage Stats Dashboard */}
+                <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 mb-4">
+                    <div className="space-y-4">
+                        {/* Row 1: Local Data Estimation */}
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-slate-300">Est. Ukuran Data Aplikasi (JSON)</span>
+                            <span className="text-white font-bold">{formatBytes(storageStats.localDataSize)}</span>
+                        </div>
+
+                        {/* Row 2: Dropbox Quota (If connected) */}
+                        {dbxRefreshToken ? (
+                            <div className="space-y-1">
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-slate-300 flex items-center gap-2">
+                                        <Icon name="share" className="w-3 h-3 text-blue-400"/>
+                                        Kuota Dropbox
+                                    </span>
+                                    {storageStats.dropboxChecking ? (
+                                        <span className="text-xs text-slate-500 animate-pulse">Memuat...</span>
+                                    ) : (
+                                        <span className="text-white font-bold">
+                                            {formatBytes(storageStats.dropboxUsed)} / {formatBytes(storageStats.dropboxTotal)}
+                                        </span>
+                                    )}
+                                </div>
+                                {!storageStats.dropboxChecking && storageStats.dropboxTotal > 0 && (
+                                    <div className="w-full bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                                        <div 
+                                            className={`h-2.5 rounded-full ${
+                                                (storageStats.dropboxUsed / storageStats.dropboxTotal) > 0.9 ? 'bg-red-500' :
+                                                (storageStats.dropboxUsed / storageStats.dropboxTotal) > 0.75 ? 'bg-yellow-500' :
+                                                'bg-blue-500'
+                                            }`} 
+                                            style={{ width: `${Math.min((storageStats.dropboxUsed / storageStats.dropboxTotal) * 100, 100)}%` }}
+                                        ></div>
+                                    </div>
+                                )}
+                                {!storageStats.dropboxChecking && storageStats.dropboxTotal > 0 && (
+                                    <p className="text-[10px] text-right text-slate-500">
+                                        Sisa: {formatBytes(storageStats.dropboxTotal - storageStats.dropboxUsed)}
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="text-xs text-slate-500 italic">Hubungkan Dropbox untuk melihat kuota.</div>
+                        )}
+                    </div>
+                </div>
+
                 <div className="bg-orange-900/20 border-l-4 border-orange-500 p-4 rounded-r mb-4">
                     <div className="flex items-start gap-3">
                         <Icon name="warning" className="w-5 h-5 text-orange-400 mt-0.5" />
                         <div>
                             <h4 className="font-bold text-orange-300 text-sm">Pembersihan Berkala</h4>
                             <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                                Layanan Cloud gratis memiliki batas penyimpanan. Tombol di bawah ini akan:
+                                Jika indikator di atas berwarna merah atau penuh, gunakan tombol ini. Aksi ini akan:
                             </p>
                             <ol className="list-decimal pl-4 text-xs text-slate-400 mt-2 space-y-1">
                                 <li>Memaksa unduh <strong>Backup Lokal (.json)</strong> untuk arsip Anda.</li>
-                                <li>Menghapus semua riwayat transaksi & log lama di Cloud (Supabase & Dropbox).</li>
-                                <li>Mengembalikan kapasitas penyimpanan Cloud menjadi kosong.</li>
-                                <li>Data Produk & Pelanggan di Cloud <strong>TIDAK</strong> akan dihapus.</li>
+                                <li>Menghapus riwayat transaksi & log lama di Cloud (Supabase & Dropbox) untuk mengosongkan ruang.</li>
+                                <li>Data Master (Produk & Pelanggan) <strong>TIDAK</strong> akan dihapus.</li>
                             </ol>
                         </div>
                     </div>

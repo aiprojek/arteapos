@@ -106,11 +106,36 @@ const HelpView: React.FC = () => {
     ] as const;
 
     const renderMarkdown = (text: string) => {
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+
         return text.split('\n').map((line, idx) => {
             const content = line.trim();
             if (!content) return <br key={idx} />;
-            if (content.startsWith('###')) return <h3 key={idx} className="text-lg font-bold text-[#52a37c] mt-4 mb-2">{content.replace('###', '')}</h3>;
-            if (content.startsWith('**')) return <p key={idx} className="font-bold text-white mt-3 mb-1">{content.replace(/\*\*/g, '')}</p>;
+            
+            if (content.startsWith('###')) {
+                return <h3 key={idx} className="text-lg font-bold text-[#52a37c] mt-4 mb-2">{content.replace('###', '')}</h3>;
+            }
+            if (content.startsWith('####')) {
+                return <h4 key={idx} className="text-md font-bold text-white mt-3 mb-2">{content.replace('####', '')}</h4>;
+            }
+            if (content.startsWith('**')) {
+                return <p key={idx} className="font-bold text-white mt-3 mb-1">{content.replace(/\*\*/g, '')}</p>;
+            }
+
+            // URL handling
+            if (content.match(urlRegex)) {
+                const parts = content.split(urlRegex);
+                return (
+                    <p key={idx} className="text-slate-300 leading-relaxed text-sm mb-1">
+                        {parts.map((part, i) => 
+                            part.match(urlRegex) ? 
+                                <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-[#52a37c] hover:underline break-all font-medium">{part}</a> 
+                                : part.replace(/\*\*/g, '')
+                        )}
+                    </p>
+                );
+            }
+
             return <p key={idx} className="text-slate-300 leading-relaxed text-sm mb-1">{content.replace(/\*\*/g, '')}</p>;
         });
     };

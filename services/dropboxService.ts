@@ -58,6 +58,30 @@ export const dropboxService = {
         }
     },
 
+    // --- NEW: Check Quota ---
+    getSpaceUsage: async (): Promise<{ used: number; allocated: number }> => {
+        try {
+            const dbx = dropboxService.getClient();
+            const response = await dbx.usersGetSpaceUsage();
+            
+            const used = response.result.used;
+            // Handle differences in allocation types (individual vs team)
+            let allocated = 0;
+            const allocation = response.result.allocation;
+            
+            if (allocation['.tag'] === 'individual') {
+                allocated = allocation.allocated;
+            } else if (allocation['.tag'] === 'team') {
+                allocated = allocation.allocated;
+            }
+
+            return { used, allocated };
+        } catch (error: any) {
+            console.error('Dropbox Quota Check Error:', error);
+            throw new Error('Gagal mengecek kuota Dropbox.');
+        }
+    },
+
     // Upload data saat ini ke Dropbox (Full Backup)
     uploadBackup: async (): Promise<void> => {
         try {

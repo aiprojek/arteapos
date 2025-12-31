@@ -5,7 +5,7 @@ import { useUI } from './UIContext';
 import { useAuth } from './AuthContext';
 import { useProduct } from './ProductContext';
 import { useSettings } from './SettingsContext';
-import type { CartItem, Discount, Product, HeldCart, Transaction as TransactionType, Payment, PaymentMethod, PaymentStatus, Addon, Reward, Customer, OrderType, ProductVariant } from '../types';
+import type { CartItem, Discount, Product, HeldCart, Transaction as TransactionType, Payment, PaymentMethod, PaymentStatus, Addon, Reward, Customer, OrderType, ProductVariant, SelectedModifier } from '../types';
 
 interface CartContextType {
     cart: CartItem[];
@@ -16,7 +16,7 @@ interface CartContextType {
     orderType: OrderType;
     setOrderType: (type: OrderType) => void;
     addToCart: (product: Product) => void;
-    addConfiguredItemToCart: (product: Product, addons: Addon[], variant?: ProductVariant) => void;
+    addConfiguredItemToCart: (product: Product, addons: Addon[], variant?: ProductVariant, modifiers?: SelectedModifier[]) => void;
     updateCartQuantity: (cartItemId: string, quantity: number) => void;
     removeFromCart: (cartItemId: string) => void;
     clearCart: () => void;
@@ -44,6 +44,7 @@ interface CartContextType {
     }) => TransactionType;
     applyRewardToCart: (reward: Reward, customer: Customer) => void;
     removeRewardFromCart: () => void;
+    splitCart: (itemsToKeep: string[]) => void; // New Logic
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -108,12 +109,13 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                 showAlert({ type: 'alert', title: 'Gagal Menambahkan Produk', message: `Tidak dapat menambahkan ${product.name}. ${reason}.` });
                 return prevCart;
             }
-            // Check for existing item with SAME product ID, NO addons, and NO variant (implicit default)
+            // Check for existing item with SAME product ID, NO addons, NO variant, NO modifiers (implicit default)
             const existingItem = prevCart.find(item => 
                 item.id === product.id && 
                 !item.isReward && 
                 (!item.selectedAddons || item.selectedAddons.length === 0) &&
-                !item.selectedVariant
+                !item.selectedVariant &&
+                (!item.selectedModifiers || item.selectedModifiers.length === 0)
             );
             
             if (existingItem) {
@@ -123,7 +125,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         });
     }, [isProductAvailable, showAlert]);
     
-    const addConfiguredItemToCart = useCallback((product: Product, addons: Addon[], variant?: ProductVariant) => {
+    const addConfiguredItemToCart = useCallback((product: Product, addons: Addon[], variant?: ProductVariant, modifiers?: SelectedModifier[]) => {
       setCart(prevCart => {
          const { available, reason } = isProductAvailable(product);
          if (!available) {
@@ -137,7 +139,10 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
              cartItemId: Date.now().toString(), 
              selectedAddons: addons, 
              selectedVariant: variant,
-             // If variant exists, override price and update name
+             selectedModifiers: modifiers, // NEW
+             // If variant exists, override price. 
+             // IMPORTANT: We do NOT add addon/modifier price here to base price, 
+             // getCartTotals calculates that dynamically. We store base price.
              price: variant ? variant.price : product.price,
              name: variant ? `${product.name} (${variant.name})` : product.name,
              // If variant has specific cost, use it, else use base product cost
@@ -178,8 +183,13 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                 subtotal += item.price * item.quantity;
                 return;
             }
+            // Add legacy Addons
             const addonsTotal = item.selectedAddons?.reduce((sum, addon) => sum + addon.price, 0) || 0;
-            const itemOriginalTotal = (item.price + addonsTotal) * item.quantity;
+            // Add NEW Modifiers
+            const modifiersTotal = item.selectedModifiers?.reduce((sum, mod) => sum + mod.price, 0) || 0;
+
+            const itemOriginalTotal = (item.price + addonsTotal + modifiersTotal) * item.quantity;
+            
             let currentItemDiscount = 0;
             if (item.discount) {
                 if (item.discount.type === 'amount') {
@@ -313,6 +323,36 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         }));
     }, [setData]);
 
+    // NEW: Split Cart Function
+    const splitCart = useCallback((itemsToKeep: string[]) => {
+        // Items NOT in itemsToKeep will be moved to a new Held Cart
+        const itemsToMove = cart.filter(item => !itemsToKeep.includes(item.cartItemId));
+        const keptItems = cart.filter(item => itemsToKeep.includes(item.cartItemId));
+
+        if (itemsToMove.length === 0) return;
+
+        const timestamp = new Date();
+        const timeStr = timestamp.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        const newCartName = `Sisa Split ${timeStr}`;
+
+        // Create new held cart for unselected items
+        const newHeldCart: HeldCart = {
+            id: `split-${Date.now()}`,
+            name: newCartName,
+            items: itemsToMove,
+            orderType: orderType
+        };
+
+        // Update active cart
+        setCart(keptItems);
+
+        // Save new held cart
+        setData(prev => ({ ...prev, heldCarts: [...(prev.heldCarts || []), newHeldCart] }));
+        
+        showAlert({ type: 'alert', title: 'Split Berhasil', message: `${itemsToMove.length} item dipindahkan ke "${newCartName}".` });
+
+    }, [cart, orderType, setData, showAlert]);
+
     const saveTransaction = useCallback(({ payments, customerName, customerContact, customerId }: {
         payments: Array<Omit<Payment, 'id' | 'createdAt'>>; customerName?: string; customerContact?: string; customerId?: string;
     }) => {
@@ -373,7 +413,8 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                     const cartWithoutRewards = cart.filter(item => !item.isReward);
                     const spendTotal = cartWithoutRewards.reduce((sum, item) => {
                         const addonsTotal = item.selectedAddons?.reduce((s, addon) => s + addon.price, 0) || 0;
-                        const itemTotal = (item.price + addonsTotal) * item.quantity;
+                        const modifierTotal = item.selectedModifiers?.reduce((s, mod) => s + mod.price, 0) || 0;
+                        const itemTotal = (item.price + addonsTotal + modifierTotal) * item.quantity;
                         return sum + itemTotal;
                     }, 0);
                     
@@ -469,7 +510,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
             addToCart, addConfiguredItemToCart, updateCartQuantity, removeFromCart, clearCart, getCartTotals,
             applyItemDiscount, removeItemDiscount, applyCartDiscount, removeCartDiscount,
             holdActiveCart, switchActiveCart, deleteHeldCart, updateHeldCartName, saveTransaction,
-            applyRewardToCart, removeRewardFromCart
+            applyRewardToCart, removeRewardFromCart, splitCart
         }}>
             {children}
         </CartContext.Provider>

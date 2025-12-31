@@ -8,6 +8,7 @@ import Button from '../components/Button';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import type { Transaction } from '../types';
 import { supabaseService } from '../services/supabaseService';
+import { dropboxService } from '../services/dropboxService';
 import { useUI } from '../context/UIContext';
 
 const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'products' | 'reports' | 'finance'; iconClass: string; children?: React.ReactNode }> = ({ title, value, icon, iconClass, children }) => (
@@ -30,22 +31,23 @@ const DashboardView: React.FC = () => {
     const { products, inventorySettings } = useProduct();
     const { showAlert } = useUI();
 
-    const [dataSource, setDataSource] = useState<'local' | 'cloud'>('local');
+    const [dataSource, setDataSource] = useState<'local' | 'cloud' | 'dropbox'>('local');
     const [cloudData, setCloudData] = useState<{ transactions: any[], inventory: any[] }>({ transactions: [], inventory: [] });
     const [isCloudLoading, setIsCloudLoading] = useState(false);
+    const [selectedBranch, setSelectedBranch] = useState('ALL');
 
     const [isLoadingAI, setIsLoadingAI] = useState(false);
     const [aiResponse, setAiResponse] = useState('');
     const [aiError, setAiError] = useState('');
     const [aiQuestion, setAiQuestion] = useState('');
 
-    // Load Cloud Data Logic
-    const loadCloudData = async () => {
+    // Load Cloud Data Logic (Supabase)
+    const loadSupabaseData = async () => {
         const sbUrl = localStorage.getItem('ARTEA_SB_URL');
         const sbKey = localStorage.getItem('ARTEA_SB_KEY');
 
         if (!sbUrl || !sbKey) {
-            showAlert({ type: 'alert', title: 'Konfigurasi Belum Ada', message: 'Harap atur URL dan API Key Supabase di menu Pengaturan terlebih dahulu untuk melihat data Cloud.' });
+            showAlert({ type: 'alert', title: 'Konfigurasi Belum Ada', message: 'Harap atur URL dan API Key Supabase di menu Pengaturan.' });
             setDataSource('local');
             return;
         }
@@ -53,37 +55,88 @@ const DashboardView: React.FC = () => {
         setIsCloudLoading(true);
         try {
             supabaseService.init(sbUrl, sbKey);
-            
-            // Fetch last 30 days for dashboard context
             const endDate = new Date();
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - 30);
-
             const data = await supabaseService.fetchDashboardData(startDate, endDate);
             setCloudData(data);
         } catch (error: any) {
             console.error(error);
-            showAlert({ type: 'alert', title: 'Gagal Memuat Data', message: 'Gagal mengambil data dari Cloud. Periksa koneksi internet atau konfigurasi Supabase Anda.' });
+            showAlert({ type: 'alert', title: 'Gagal Memuat Data', message: 'Gagal mengambil data dari Supabase.' });
             setDataSource('local');
         } finally {
             setIsCloudLoading(false);
         }
     };
 
-    useEffect(() => {
-        if (dataSource === 'cloud') {
-            loadCloudData();
+    // Load Dropbox Data Logic (Aggregation)
+    const loadDropboxData = async () => {
+        const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
+        if (!dbxToken) {
+             showAlert({ type: 'alert', title: 'Dropbox Belum Terhubung', message: 'Hubungkan Dropbox di menu Pengaturan terlebih dahulu.' });
+             setDataSource('local');
+             return;
         }
-    }, [dataSource]);
+
+        setIsCloudLoading(true);
+        try {
+            const allBranchesData = await dropboxService.fetchAllBranchData();
+            
+            // Consolidate Data
+            let allTxns: any[] = [];
+            let allInv: any[] = [];
+
+            allBranchesData.forEach(branch => {
+                if (branch.transactionRecords) {
+                    const txns = branch.transactionRecords.map((t: any) => ({ ...t, store_id: branch.storeId })); // Add source
+                    allTxns = [...allTxns, ...txns];
+                }
+                if (branch.currentStock) {
+                    const inv = branch.currentStock.map((i: any) => ({ ...i, store_id: branch.storeId }));
+                    allInv = [...allInv, ...inv];
+                }
+            });
+
+            setCloudData({ transactions: allTxns, inventory: allInv });
+            showAlert({ type: 'alert', title: 'Sync Selesai', message: `Berhasil menarik data dari ${allBranchesData.length} cabang via Dropbox.` });
+
+        } catch (error: any) {
+            console.error(error);
+            showAlert({ type: 'alert', title: 'Gagal Sync Dropbox', message: error.message });
+            setDataSource('local');
+        } finally {
+            setIsCloudLoading(false);
+        }
+    };
+
+    const handleSourceChange = (source: 'local' | 'cloud' | 'dropbox') => {
+        setDataSource(source);
+        if (source === 'cloud') loadSupabaseData();
+        if (source === 'dropbox') loadDropboxData();
+    };
+
+    // Available Branches for Filter
+    const availableBranches = useMemo(() => {
+        if (dataSource === 'local') return [];
+        const branches = new Set<string>();
+        cloudData.transactions.forEach(t => {
+            if (t.store_id || t.storeId) branches.add(t.store_id || t.storeId);
+        });
+        return Array.from(branches).sort();
+    }, [cloudData, dataSource]);
 
     // Derived Data Calculation
     const dashboardData = useMemo(() => {
-        // Source selection
-        const sourceTransactions = dataSource === 'local' ? localTransactions : cloudData.transactions.map(t => ({
+        let sourceTransactions = dataSource === 'local' ? localTransactions : cloudData.transactions.map(t => ({
             ...t,
-            createdAt: t.created_at, // Map Supabase snake_case to camelCase
-            // Supabase stores items as JSONB, usually comes parsed, but ensure type safety if needed
+            createdAt: t.created_at || t.createdAt, // Handle both Supabase & Local/Dropbox field names
+            store_id: t.store_id || t.storeId
         }));
+
+        // Apply Branch Filter
+        if (dataSource !== 'local' && selectedBranch !== 'ALL') {
+            sourceTransactions = sourceTransactions.filter((t: any) => t.store_id === selectedBranch);
+        }
 
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -98,18 +151,21 @@ const DashboardView: React.FC = () => {
         const todaySales = todayTransactions.reduce((sum: number, t: any) => sum + (t.total || 0), 0);
         const transactionCount = todayTransactions.length;
 
-        // Inventory Logic: Local uses context, Cloud uses fetched table
+        // Inventory Logic
         let lowStockProducts: any[] = [];
         if (dataSource === 'local') {
             lowStockProducts = inventorySettings.enabled
                 ? products.filter(p => p.trackStock && (p.stock ?? 0) <= 5).sort((a,b) => (a.stock ?? 0) - (b.stock ?? 0))
                 : [];
         } else {
-            // Cloud Inventory processing
-            lowStockProducts = cloudData.inventory
+            let sourceInventory = cloudData.inventory;
+            if (selectedBranch !== 'ALL') {
+                sourceInventory = sourceInventory.filter((i: any) => i.store_id === selectedBranch);
+            }
+            lowStockProducts = sourceInventory
                 .filter(i => i.stock <= 5)
                 .sort((a,b) => a.stock - b.stock)
-                .slice(0, 10); // Limit to top 10 low stock items globally
+                .slice(0, 10); 
         }
 
         const outstandingReceivables = sourceTransactions
@@ -139,7 +195,7 @@ const DashboardView: React.FC = () => {
             const items = t.items || [];
             items.forEach((item: any) => {
                 if (!item.isReward) {
-                    const id = item.id || item.name; // Fallback to name if ID missing in old data
+                    const id = item.id || item.name;
                     const existing = productSales.get(id) || { name: item.name, quantity: 0 };
                     productSales.set(id, { ...existing, quantity: existing.quantity + (item.quantity || 0) });
                 }
@@ -147,9 +203,9 @@ const DashboardView: React.FC = () => {
         });
         const topProducts = Array.from(productSales.values()).sort((a, b) => b.quantity - a.quantity).slice(0, 5);
 
-        // Multi-Branch Stats (Only for Cloud)
+        // Multi-Branch Stats
         let branchPerformance: any[] = [];
-        if (dataSource === 'cloud') {
+        if (dataSource !== 'local' && selectedBranch === 'ALL') {
             const salesByStore = new Map<string, number>();
             activeTransactions.forEach((t: any) => {
                 const store = t.store_id || 'Unknown';
@@ -170,26 +226,26 @@ const DashboardView: React.FC = () => {
             branchPerformance,
             recentTransactions: sourceTransactions.slice(0, 5)
         };
-    }, [dataSource, localTransactions, cloudData, products, inventorySettings]);
+    }, [dataSource, localTransactions, cloudData, products, inventorySettings, selectedBranch]);
     
-    // AI Logic (Updated to use active dashboardData)
+    // AI Logic
     const getAIInsight = useCallback(async (question: string) => {
         setIsLoadingAI(true);
         setAiResponse('');
         setAiError('');
 
         try {
-            // Prepare context based on current view (Local or Cloud)
             const salesContext = dashboardData.salesTrend;
             const topProducts = dashboardData.topProducts;
-            const branchInfo = dataSource === 'cloud' ? dashboardData.branchPerformance : "Data cabang tidak tersedia (Mode Lokal)";
+            const branchInfo = dataSource !== 'local' ? dashboardData.branchPerformance : "Data cabang tidak tersedia (Mode Lokal)";
             
             const systemInstruction = `You are "Artea AI", a smart business consultant. 
             Analyze the provided sales summary data.
             Answer in Bahasa Indonesia. Concise, practical, markdown format.`;
             
             const userContent = `
-            Context: ${dataSource === 'cloud' ? 'Data Multi-Cabang (Cloud)' : 'Data Lokal (Satu Cabang)'}
+            Context: ${dataSource} mode
+            Selected Branch Filter: ${selectedBranch}
             Tren Penjualan 7 Hari: ${JSON.stringify(salesContext)}
             Produk Terlaris: ${JSON.stringify(topProducts)}
             Performa Cabang: ${JSON.stringify(branchInfo)}
@@ -215,7 +271,7 @@ const DashboardView: React.FC = () => {
         } finally {
             setIsLoadingAI(false);
         }
-    }, [dashboardData, dataSource]);
+    }, [dashboardData, dataSource, selectedBranch]);
 
     const handleAIPrompt = (prompt: string) => {
         setAiQuestion(prompt);
@@ -241,38 +297,64 @@ const DashboardView: React.FC = () => {
         return { __html: html };
     };
 
-    const COLORS = ['#347758', '#6366f1', '#f59e0b', '#ec4899', '#10b981'];
-
     return (
         <div className="space-y-6 max-w-7xl mx-auto">
             {/* Header & Controls */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h1 className="text-3xl font-bold text-white">Dashboard</h1>
                 
-                {/* Data Source Toggle */}
-                <div className="bg-slate-800 p-1 rounded-lg flex items-center border border-slate-700">
-                    <button
-                        onClick={() => setDataSource('local')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                    >
-                        <span className="flex items-center gap-2"><Icon name="database" className="w-4 h-4" /> Lokal (Perangkat Ini)</span>
-                    </button>
-                    <button
-                        onClick={() => setDataSource('cloud')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${dataSource === 'cloud' ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                    >
-                        <span className="flex items-center gap-2"><Icon name="wifi" className="w-4 h-4" /> Cloud (Gabungan)</span>
-                    </button>
+                <div className="flex flex-wrap gap-2 items-center">
+                    {/* Branch Selector */}
+                    {dataSource !== 'local' && availableBranches.length > 0 && (
+                        <div className="bg-slate-800 p-1 rounded-lg border border-slate-700">
+                            <select 
+                                value={selectedBranch} 
+                                onChange={(e) => setSelectedBranch(e.target.value)}
+                                className="bg-transparent text-sm text-white px-3 py-1.5 outline-none cursor-pointer"
+                            >
+                                <option value="ALL" className="bg-slate-800">Semua Cabang</option>
+                                {availableBranches.map(b => (
+                                    <option key={b} value={b} className="bg-slate-800">{b}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {/* Data Source Toggle */}
+                    <div className="bg-slate-800 p-1 rounded-lg flex items-center border border-slate-700">
+                        <button
+                            onClick={() => handleSourceChange('local')}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            <span className="flex items-center gap-2"><Icon name="database" className="w-4 h-4" /> Lokal</span>
+                        </button>
+                        <button
+                            onClick={() => handleSourceChange('dropbox')}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            <span className="flex items-center gap-2"><Icon name="share" className="w-4 h-4" /> Dropbox (Sync)</span>
+                        </button>
+                        <button
+                            onClick={() => handleSourceChange('cloud')}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${dataSource === 'cloud' ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            <span className="flex items-center gap-2"><Icon name="wifi" className="w-4 h-4" /> Supabase</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
             {/* Info Banner for Cloud Mode */}
-            {dataSource === 'cloud' && (
-                <div className="bg-sky-900/30 border border-sky-800 p-3 rounded-lg flex items-center gap-3 text-sky-200 text-sm animate-fade-in">
+            {dataSource !== 'local' && (
+                <div className="bg-blue-900/30 border border-blue-800 p-3 rounded-lg flex items-center gap-3 text-blue-200 text-sm animate-fade-in">
                     <Icon name="info-circle" className="w-5 h-5 flex-shrink-0" />
-                    <div>
-                        <p className="font-bold">Mode Laporan Terpusat</p>
-                        <p className="opacity-80">Menampilkan data dari database Cloud. Data ini mencakup semua cabang yang terhubung ke Project Supabase yang sama. Data tidak disimpan di perangkat ini.</p>
+                    <div className="flex-1">
+                        <p className="font-bold">Mode Laporan Terpusat ({dataSource === 'dropbox' ? 'Dropbox' : 'Supabase'})</p>
+                        <p className="opacity-80">
+                            {selectedBranch === 'ALL' 
+                                ? 'Menampilkan data gabungan dari semua cabang yang terhubung.' 
+                                : `Menampilkan data spesifik untuk cabang: ${selectedBranch}`}
+                        </p>
                     </div>
                     {isCloudLoading && <span className="ml-auto text-white animate-pulse font-bold">Memuat...</span>}
                 </div>
@@ -290,7 +372,7 @@ const DashboardView: React.FC = () => {
                                 <p key={i} className="truncate flex justify-between">
                                     <span>{p.item_name || p.name}</span>
                                     <span className="text-red-300 font-bold">{p.stock}</span>
-                                    {dataSource === 'cloud' && <span className="text-[10px] bg-slate-700 px-1 rounded">{p.store_id}</span>}
+                                    {dataSource !== 'local' && <span className="text-[10px] bg-slate-700 px-1 rounded">{p.store_id || p.storeId}</span>}
                                 </p>
                             ))}
                         </div>
@@ -302,8 +384,8 @@ const DashboardView: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
                 {/* Left Column: Charts */}
                 <div className="lg:col-span-2 space-y-6">
-                    {/* Branch Performance (Only in Cloud Mode) */}
-                    {dataSource === 'cloud' && dashboardData.branchPerformance.length > 0 && (
+                    {/* Branch Performance (Only in Cloud/Dropbox Mode + ALL branches selected) */}
+                    {dataSource !== 'local' && selectedBranch === 'ALL' && dashboardData.branchPerformance.length > 0 && (
                         <div className="bg-slate-800 p-4 sm:p-6 rounded-xl shadow-lg border border-slate-700">
                             <h3 className="flex items-center gap-2 text-lg font-semibold text-white mb-4">
                                 <Icon name="share" className="w-5 h-5 text-sky-400"/>
@@ -392,7 +474,7 @@ const DashboardView: React.FC = () => {
                                         <p className="font-medium text-slate-200">{t.customerName || `Order #${t.id.slice(-4)}`}</p>
                                         <div className="flex items-center gap-2">
                                             <span className="text-[10px] text-slate-400">{new Date(t.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit'})}</span>
-                                            {dataSource === 'cloud' && <span className="text-[9px] bg-slate-700 px-1 rounded text-slate-300 uppercase">{t.store_id}</span>}
+                                            {dataSource !== 'local' && <span className="text-[9px] bg-slate-700 px-1 rounded text-slate-300 uppercase">{t.store_id || t.storeId}</span>}
                                         </div>
                                     </div>
                                     <p className="font-semibold text-[#52a37c]">{CURRENCY_FORMATTER.format(t.total)}</p>

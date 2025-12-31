@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { CartItem as CartItemType } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
@@ -17,7 +18,9 @@ const CartItem: React.FC<CartItemProps> = ({ item, onOpenDiscountModal }) => {
   };
   
   const addonsTotal = item.selectedAddons?.reduce((sum, addon) => sum + addon.price, 0) || 0;
-  const pricePerItem = item.price + addonsTotal;
+  const modifiersTotal = item.selectedModifiers?.reduce((sum, mod) => sum + mod.price, 0) || 0;
+  
+  const pricePerItem = item.price + addonsTotal + modifiersTotal;
   const originalPrice = pricePerItem * item.quantity;
   let finalPrice = originalPrice;
   let discountDisplay = '';
@@ -53,6 +56,8 @@ const CartItem: React.FC<CartItemProps> = ({ item, onOpenDiscountModal }) => {
       <div className="flex-1">
         <p className="font-semibold text-slate-200">{item.name}</p>
         {item.discount?.name && <p className="text-xs text-green-400 font-medium">{item.discount.name}</p>}
+        
+        {/* Legacy Addons */}
         {item.selectedAddons && item.selectedAddons.length > 0 && (
             <div className="text-xs text-slate-400 pl-2">
                 {item.selectedAddons.map(addon => (
@@ -60,6 +65,19 @@ const CartItem: React.FC<CartItemProps> = ({ item, onOpenDiscountModal }) => {
                 ))}
             </div>
         )}
+
+        {/* New Modifiers */}
+        {item.selectedModifiers && item.selectedModifiers.length > 0 && (
+            <div className="text-xs text-slate-400 pl-2 mt-1 space-y-0.5">
+                {item.selectedModifiers.map((mod, idx) => (
+                    <p key={`${mod.optionId}-${idx}`} className="flex justify-between w-3/4">
+                        <span>• {mod.name}</span>
+                        {mod.price > 0 && <span>+{CURRENCY_FORMATTER.format(mod.price).replace('Rp', '')}</span>}
+                    </p>
+                ))}
+            </div>
+        )}
+
         <div className="text-sm text-slate-400 mt-1">
             {item.discount ? (
                 <>

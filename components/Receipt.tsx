@@ -58,7 +58,7 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(({ transaction, s
                 </div>
                 <div className="border-b border-dashed border-black"></div>
                 <div className="my-2">
-                    {transaction.items.map(item => {
+                    {(transaction.items || []).map(item => {
                         const addonsTotal = item.selectedAddons?.reduce((sum, addon) => sum + addon.price, 0) || 0;
                         const pricePerItem = item.price + addonsTotal;
                         const originalTotal = pricePerItem * item.quantity;

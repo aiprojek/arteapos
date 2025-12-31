@@ -1,5 +1,5 @@
 
-import React, { useRef, useLayoutEffect, useState, useCallback } from 'react';
+import React, { useRef, useCallback } from 'react';
 import { useResizeObserver } from '../hooks/useResizeObserver';
 import { FixedSizeList } from 'react-window';
 
@@ -7,7 +7,7 @@ interface Column<T> {
   label: string;
   render: (item: T) => React.ReactNode;
   width: string; // e.g., '1fr', '150px'
-  className?: string; // Allow custom classes for cells (e.g., overflow-visible)
+  className?: string; // Allow custom classes for cells
 }
 
 interface VirtualizedTableProps<T> {
@@ -21,11 +21,20 @@ const VirtualizedTable = <T extends { id: string | number }>({ data, columns, ro
   const containerRef = useRef<HTMLDivElement>(null);
   const { width, height } = useResizeObserver(containerRef);
 
-  // Determine the effective width: either the container width or the minimum width, whichever is larger.
-  // This ensures the table pushes out (scrolls) if the screen is too small.
+  // Ensure table has at least minWidth, otherwise use container width
   const effectiveWidth = Math.max(width, minWidth);
 
-  const gridTemplateColumns = columns.map(c => c.width).join(' ');
+  // Helper to calculate flex-basis and flex-grow based on input
+  const getColStyle = (widthStr: string): React.CSSProperties => {
+      if (widthStr.endsWith('fr')) {
+          const flexGrow = widthStr.replace('fr', '');
+          // flex: grow shrink basis.
+          // Changed minWidth from 0 to 50px to prevent collapse on some engines/layouts
+          return { flex: `${flexGrow} 1 0px`, minWidth: '50px' }; 
+      }
+      // Fixed width
+      return { flex: `0 0 ${widthStr}`, minWidth: widthStr, maxWidth: widthStr };
+  };
 
   const Row = useCallback(({ index, style }: { index: number; style: React.CSSProperties }) => {
     const item = data[index];
@@ -38,8 +47,8 @@ const VirtualizedTable = <T extends { id: string | number }>({ data, columns, ro
         {columns.map((col, colIndex) => (
           <div 
             key={colIndex} 
-            className={`px-3 py-2 text-slate-300 ${col.className ?? 'overflow-hidden truncate'}`}
-            style={{ flex: col.width.endsWith('fr') ? col.width.replace('fr', '') : `0 0 ${col.width}`}}
+            className={`px-3 py-2 text-slate-300 ${col.className || 'overflow-hidden text-ellipsis whitespace-nowrap'}`}
+            style={getColStyle(col.width)}
             role="gridcell"
           >
             {col.render(item)}
@@ -47,50 +56,51 @@ const VirtualizedTable = <T extends { id: string | number }>({ data, columns, ro
         ))}
       </div>
     );
-  }, [data, columns, gridTemplateColumns]);
+  }, [data, columns]);
 
-  // Approximate header height (padding + text). 
-  // We use this to subtract from total height for the FixedSizeList.
   const HEADER_HEIGHT = 45; 
 
   return (
-    <div ref={containerRef} className="w-full h-full flex flex-col overflow-hidden relative">
-      {/* Scrollable Container for Horizontal Scrolling */}
-      <div className="w-full h-full overflow-x-auto overflow-y-hidden">
+    <div ref={containerRef} className="w-full h-full flex flex-col overflow-hidden relative border border-slate-700 rounded-lg">
+      {/* Horizontal Scroll Container */}
+      <div className="w-full h-full overflow-x-auto overflow-y-hidden bg-slate-800">
         
-        {/* Inner Container that enforces the minimum width */}
+        {/* Table Layout Container */}
         <div style={{ minWidth: effectiveWidth, height: '100%', display: 'flex', flexDirection: 'column' }}>
             
-            {/* Sticky Header */}
-            <div className="bg-slate-700 text-slate-200 font-semibold text-left sticky top-0 z-10 border-b border-slate-600">
-                <div className="flex" style={{ gridTemplateColumns }}>
-                    {columns.map((col, colIndex) => (
-                    <div 
-                        key={colIndex} 
-                        className="p-3"
-                        style={{ flex: col.width.endsWith('fr') ? col.width.replace('fr', '') : `0 0 ${col.width}`}}
-                        role="columnheader"
-                    >
-                        {col.label}
-                    </div>
-                    ))}
+            {/* Header */}
+            <div className="bg-slate-700 text-slate-200 font-bold text-left sticky top-0 z-10 border-b border-slate-600 flex items-center h-[45px] flex-shrink-0">
+                {columns.map((col, colIndex) => (
+                <div 
+                    key={colIndex} 
+                    className="px-3 py-2 truncate"
+                    style={getColStyle(col.width)}
+                    role="columnheader"
+                >
+                    {col.label}
                 </div>
+                ))}
             </div>
             
-            {/* List */}
-            <div className="flex-1 w-full">
+            {/* Body */}
+            <div className="flex-1 w-full relative">
                 {height > 0 && (
                     <FixedSizeList
-                        height={height - HEADER_HEIGHT}
+                        height={Math.max(height - HEADER_HEIGHT, 0)} // Prevent negative height
                         width={effectiveWidth}
                         itemCount={data.length}
                         itemSize={rowHeight}
                         itemKey={(index: number) => data[index].id}
                         className="no-scrollbar"
-                        style={{ overflowX: 'hidden' }} // We handle X scroll in parent
+                        style={{ overflowX: 'hidden' }}
                     >
                         {Row}
                     </FixedSizeList>
+                )}
+                {data.length === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center text-slate-500">
+                        Tidak ada data untuk ditampilkan.
+                    </div>
                 )}
             </div>
         </div>

@@ -66,6 +66,8 @@ export const initialData: AppData = {
     },
     authSettings: {
         enabled: false,
+        securityQuestion: 'Apa nama aplikasi ini?', // Default Question
+        securityAnswer: 'artea', // Default Answer (lowercase)
     },
     sessionSettings: {
         enabled: false,

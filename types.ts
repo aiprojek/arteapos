@@ -13,12 +13,38 @@ export interface ProductVariant {
   costPrice?: number;
 }
 
+// --- NEW MODIFIER SYSTEM ---
+export interface ModifierOption {
+    id: string;
+    name: string;
+    price: number; // Price adjustment (can be 0)
+    costPrice?: number;
+}
+
+export interface ModifierGroup {
+    id: string;
+    name: string; // e.g., "Sugar Level", "Toppings"
+    minSelection: number; // 0 = Optional, 1 = Mandatory
+    maxSelection: number; // 1 = Single choice (Radio), >1 = Multi (Checkbox)
+    options: ModifierOption[];
+}
+
+export interface SelectedModifier {
+    groupId: string;
+    groupName: string;
+    optionId: string;
+    name: string;
+    price: number;
+}
+// ---------------------------
+
 export interface RawMaterial {
   id: string;
   name: string;
   stock: number;
   unit: string; // e.g., 'gram', 'ml', 'pcs'
   costPerUnit?: number; // Cost per single unit (e.g., cost per gram)
+  validStoreIds?: string[]; // NEW: Restriction
 }
 
 export interface RecipeItem {
@@ -52,6 +78,13 @@ export interface BranchPrice {
     price: number;
 }
 
+// NEW: Branch Definition
+export interface Branch {
+    id: string;
+    name: string;
+    address?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -65,9 +98,11 @@ export interface Product {
   recipe?: RecipeItem[];
   isFavorite?: boolean;
   barcode?: string;
-  addons?: Addon[];
-  variants?: ProductVariant[]; // New: Multi-tier pricing
+  addons?: Addon[]; // Deprecated but kept for backward compat
+  variants?: ProductVariant[]; // Deprecated but kept for backward compat
+  modifierGroups?: ModifierGroup[]; // NEW: Advanced Modifiers
   branchPrices?: BranchPrice[]; // NEW: Remote pricing configuration
+  validStoreIds?: string[]; // NEW: Branch Restriction (e.g. ['SPARE-01'] only)
 }
 
 export interface CartItem extends Product {
@@ -76,8 +111,9 @@ export interface CartItem extends Product {
   isReward?: boolean; // To identify reward items
   rewardId?: string; // To link to the reward definition
   discount?: Discount;
-  selectedAddons?: Addon[];
-  selectedVariant?: ProductVariant; // New: Selected variant
+  selectedAddons?: Addon[]; // Deprecated
+  selectedVariant?: ProductVariant; // Deprecated
+  selectedModifiers?: SelectedModifier[]; // NEW
 }
 
 // New Type for Held Carts Feature
@@ -93,6 +129,7 @@ export interface User {
   name: string;
   pin: string; // 4-digit PIN
   role: 'admin' | 'manager' | 'staff'; // Added 'manager'
+  assignedBranch?: string; // NEW: 'all' or specific Branch ID
 }
 
 export type PaymentMethod = 'cash' | 'non-cash';
@@ -145,6 +182,7 @@ export interface ReceiptSettings {
     serviceChargeRate?: number; // New: Percentage (e.g., 5 for 5%)
     storeId?: string; // NEW: Identifier for Multi-Branch
     orderTypes?: string[]; // NEW: Customizable order types
+    branches?: Branch[]; // NEW: List of available branches
 }
 
 export interface InventorySettings {
@@ -154,6 +192,8 @@ export interface InventorySettings {
 
 export interface AuthSettings {
     enabled: boolean;
+    securityQuestion?: string; // NEW
+    securityAnswer?: string;   // NEW
 }
 
 export interface SessionSettings {

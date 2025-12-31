@@ -8,7 +8,6 @@ import { useData } from '../context/DataContext';
 import { CURRENCY_FORMATTER } from '../constants';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import type { Transaction as TransactionType, SessionHistory, StockAdjustment } from '../types';
 import ReceiptModal from '../components/ReceiptModal';
 import Modal from '../components/Modal';
@@ -16,14 +15,13 @@ import UpdatePaymentModal from '../components/UpdatePaymentModal';
 import VirtualizedTable from '../components/VirtualizedTable';
 import { dataService } from '../services/dataService';
 import { useUI } from '../context/UIContext';
-import EndSessionModal from '../components/EndSessionModal';
-import SendReportModal from '../components/SendReportModal';
 import { supabaseService } from '../services/supabaseService';
-
+import { dropboxService } from '../services/dropboxService';
+import ReportCharts from '../components/reports/ReportCharts';
 
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
 type ReportScope = 'session' | 'historical' | 'session_history';
-type ReportTab = 'sales' | 'stock_logs';
+type ReportTab = 'sales' | 'stock_logs' | 'hourly' | 'products';
 
 const StatCard: React.FC<{title: string; value: string; className?: string}> = ({title, value, className}) => (
     <div className={`bg-slate-800 p-4 rounded-lg ${className}`}>
@@ -150,7 +148,7 @@ const SessionHistoryTable: React.FC<{ history: SessionHistory[] }> = ({ history 
 const ReportsView: React.FC = () => {
     const { transactions: localTransactions, addPaymentToTransaction, refundTransaction } = useFinance();
     const { inventorySettings, stockAdjustments: localStockAdjustments } = useProduct();
-    const { session, startSession, sessionSettings, endSession } = useSession();
+    const { session, sessionSettings } = useSession();
     const { data: appData } = useData();
     const { receiptSettings } = useSettings();
     const { showAlert } = useUI();
@@ -159,10 +157,6 @@ const ReportsView: React.FC = () => {
     const [activeTab, setActiveTab] = useState<ReportTab>('sales');
     const [selectedTransaction, setSelectedTransaction] = useState<TransactionType | null>(null);
     const [updatingTransaction, setUpdatingTransaction] = useState<TransactionType | null>(null);
-    const [isStartSessionModalOpen, setStartSessionModalOpen] = useState(false);
-    const [isEndSessionModalOpen, setEndSessionModalOpen] = useState(false);
-    const [isSendReportModalOpen, setSendReportModalOpen] = useState(false);
-    const [startingCashInput, setStartingCashInput] = useState('');
     const [customStartDate, setCustomStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [customEndDate, setCustomEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [isFilterDropdownOpen, setFilterDropdownOpen] = useState(false);
@@ -172,16 +166,11 @@ const ReportsView: React.FC = () => {
     const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
 
     // Cloud Mode State
-    const [dataSource, setDataSource] = useState<'local' | 'cloud'>('local');
+    const [dataSource, setDataSource] = useState<'local' | 'cloud' | 'dropbox'>('local');
     const [cloudTransactions, setCloudTransactions] = useState<TransactionType[]>([]);
     const [cloudStockLogs, setCloudStockLogs] = useState<StockAdjustment[]>([]);
     const [isCloudLoading, setIsCloudLoading] = useState(false);
 
-    const handleStartSession = () => {
-        startSession(parseFloat(startingCashInput) || 0);
-        setStartSessionModalOpen(false);
-        setStartingCashInput('');
-    }
     
     const handleRefund = (transaction: TransactionType) => {
         showAlert({
@@ -215,68 +204,109 @@ const ReportsView: React.FC = () => {
         };
     }, []);
 
-    // Load Cloud Data when Filter or Source Changes
+    // Load Cloud/Dropbox Data when Source Changes
     useEffect(() => {
-        if (dataSource === 'cloud') {
-            const loadCloud = async () => {
+        const loadCloud = async () => {
+            // 1. Pre-check credentials
+            if (dataSource === 'cloud') {
                 const sbUrl = localStorage.getItem('ARTEA_SB_URL');
                 const sbKey = localStorage.getItem('ARTEA_SB_KEY');
                 if (!sbUrl || !sbKey) {
+                    showAlert({ type: 'alert', title: 'Supabase Belum Dikonfigurasi', message: 'Silakan atur URL dan API Key Supabase di menu Pengaturan.' });
                     setDataSource('local');
                     return;
                 }
-
-                setIsCloudLoading(true);
-                supabaseService.init(sbUrl, sbKey);
-
-                const now = new Date();
-                let start = new Date();
-                let end = new Date();
-
-                if (filter === 'today') {
-                    start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                } else if (filter === 'week') {
-                    start.setDate(now.getDate() - 7);
-                } else if (filter === 'month') {
-                    start = new Date(now.getFullYear(), now.getMonth(), 1);
-                } else if (filter === 'custom') {
-                    start = new Date(customStartDate);
-                    end = new Date(customEndDate);
-                    end.setHours(23, 59, 59);
-                } else {
-                    start = new Date(0); // All time
+            } else if (dataSource === 'dropbox') {
+                const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
+                if (!dbxToken) {
+                    showAlert({ type: 'alert', title: 'Dropbox Belum Dikonfigurasi', message: 'Silakan hubungkan akun Dropbox di menu Pengaturan.' });
+                    setDataSource('local');
+                    return;
                 }
+            }
 
-                // Fetch Transactions
-                const transData = await supabaseService.fetchReportData(start, end);
-                const mappedData = transData.map((t: any) => ({
-                    ...t,
-                    createdAt: t.created_at,
-                    paymentStatus: t.payment_status,
-                    userName: t.user_name || 'Cloud',
-                    customerName: t.customerName || '-', 
-                    items: t.items || [],
-                    storeId: t.store_id // Map DB to Prop
-                }));
-                setCloudTransactions(mappedData);
+            setIsCloudLoading(true);
+            setCloudTransactions([]);
+            setCloudStockLogs([]);
 
-                // Fetch Stock Logs
-                const stockData = await supabaseService.fetchStockAdjustments(start, end);
-                const mappedStock = stockData.map((s: any) => ({
-                    ...s,
-                    createdAt: s.created_at,
-                    productId: s.product_id,
-                    productName: s.product_name,
-                    newStock: s.new_stock,
-                    storeId: s.store_id
-                }));
-                setCloudStockLogs(mappedStock);
+            try {
+                if (dataSource === 'cloud') {
+                    const sbUrl = localStorage.getItem('ARTEA_SB_URL')!;
+                    const sbKey = localStorage.getItem('ARTEA_SB_KEY')!;
 
+                    supabaseService.init(sbUrl, sbKey);
+                    const now = new Date();
+                    let start = new Date(0); // Default ALL
+                    let end = new Date();
+
+                    if (filter === 'today') {
+                        start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    } else if (filter === 'week') {
+                        start.setDate(now.getDate() - 7);
+                    } else if (filter === 'month') {
+                        start = new Date(now.getFullYear(), now.getMonth(), 1);
+                    } else if (filter === 'custom') {
+                        start = new Date(customStartDate);
+                        end = new Date(customEndDate);
+                        end.setHours(23, 59, 59);
+                    }
+
+                    // Fetch Transactions
+                    const transData = await supabaseService.fetchReportData(start, end);
+                    const mappedData = transData.map((t: any) => ({
+                        ...t,
+                        createdAt: t.created_at,
+                        paymentStatus: t.payment_status,
+                        userName: t.user_name || 'Cloud',
+                        customerName: t.customerName || '-', 
+                        items: t.items || [],
+                        storeId: t.store_id
+                    }));
+                    setCloudTransactions(mappedData);
+
+                    // Fetch Stock Logs
+                    const stockData = await supabaseService.fetchStockAdjustments(start, end);
+                    const mappedStock = stockData.map((s: any) => ({
+                        ...s,
+                        createdAt: s.created_at,
+                        productId: s.product_id,
+                        productName: s.product_name,
+                        newStock: s.new_stock,
+                        storeId: s.store_id
+                    }));
+                    setCloudStockLogs(mappedStock);
+
+                } else if (dataSource === 'dropbox') {
+                    // Fetch aggregated JSONs from Dropbox
+                    const allBranches = await dropboxService.fetchAllBranchData();
+                    let allTxns: any[] = [];
+                    let allLogs: any[] = [];
+
+                    allBranches.forEach(branch => {
+                        if (branch.transactionRecords) {
+                            allTxns = [...allTxns, ...branch.transactionRecords.map((t:any) => ({...t, storeId: branch.storeId}))];
+                        }
+                        if (branch.stockAdjustments) {
+                            allLogs = [...allLogs, ...branch.stockAdjustments.map((s:any) => ({...s, storeId: branch.storeId}))];
+                        }
+                    });
+                    
+                    setCloudTransactions(allTxns);
+                    setCloudStockLogs(allLogs);
+                }
+            } catch (err: any) {
+                console.error("Cloud Load Error:", err);
+                showAlert({ type: 'alert', title: 'Gagal Memuat', message: err.message });
+                setDataSource('local'); // Fallback
+            } finally {
                 setIsCloudLoading(false);
-            };
+            }
+        };
+
+        if (dataSource !== 'local') {
             loadCloud();
         }
-    }, [dataSource, filter, customStartDate, customEndDate]);
+    }, [dataSource, filter, customStartDate, customEndDate, showAlert]);
     
     const isSessionMode = sessionSettings.enabled && session;
 
@@ -299,6 +329,8 @@ const ReportsView: React.FC = () => {
 
     // FILTER LOGIC
     const dateFilterPredicate = (dateStr: string) => {
+        if (dataSource === 'cloud') return true; // Already filtered by query
+
         const tDate = new Date(dateStr);
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -335,30 +367,28 @@ const ReportsView: React.FC = () => {
             result = result.filter(t => t.storeId === selectedBranch);
         }
 
-        // 2. Date Filter (Cloud already filtered by query, so skip if cloud)
-        if (dataSource === 'local') {
-            if (isSessionMode && reportScope === 'session') {
+        // 2. Date Filter
+        if (dataSource !== 'cloud') { // Local & Dropbox need client-side filtering
+            if (isSessionMode && reportScope === 'session' && dataSource === 'local') {
                 result = result.filter(t => new Date(t.createdAt) >= new Date(session.startTime));
             } else {
                 result = result.filter(t => dateFilterPredicate(t.createdAt));
             }
         }
         
-        return result;
+        return result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [transactions, filter, session, isSessionMode, reportScope, customStartDate, customEndDate, dataSource, selectedBranch]);
 
     const filteredStockLogs = useMemo(() => {
         let result = stockLogs;
         
-        // 1. Branch Filter (Assuming Stock Logs also carry storeId now - added in Types)
-        // Note: Currently local stock logs don't explicitly store 'storeId' but we can assume 'LOCAL' or current settings
-        // For Cloud, they do.
-        if (dataSource === 'cloud' && selectedBranch !== 'ALL') {
+        // 1. Branch Filter
+        if (dataSource !== 'local' && selectedBranch !== 'ALL') {
              // @ts-ignore
              result = result.filter(s => s.storeId === selectedBranch);
         }
 
-        if (dataSource === 'local') {
+        if (dataSource !== 'cloud') {
              result = result.filter(s => dateFilterPredicate(s.createdAt)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         }
         return result;
@@ -370,8 +400,17 @@ const ReportsView: React.FC = () => {
         let totalSales = 0;
         let totalProfit = 0;
         let totalCashSales = 0;
-        const salesByHour = Array(24).fill(0);
-        const productSales = new Map<string, {name: string, quantity: number, revenue: number}>();
+        
+        // Hourly data structures
+        const hourlyStats = Array.from({ length: 24 }, (_, i) => ({
+            id: i.toString(),
+            hourLabel: `${String(i).padStart(2, '0')}:00`,
+            rawHour: i,
+            total: 0,
+            count: 0
+        }));
+
+        const productSales = new Map<string, {id: string, name: string, quantity: number, revenue: number}>();
         
         // Use activeTransactions (excluding refunded) for calculations
         activeTransactions.forEach(t => {
@@ -383,34 +422,47 @@ const ReportsView: React.FC = () => {
                 totalCashSales += cashPayment.amount;
             }
 
-            const hour = new Date(t.createdAt).getHours();
-            salesByHour[hour] += t.total;
+            // Hourly Calculation
+            const tDate = new Date(t.createdAt);
+            const hour = tDate.getHours();
+            if (hour >= 0 && hour < 24) {
+                hourlyStats[hour].total += t.total;
+                hourlyStats[hour].count += 1;
+            }
 
             const transactionCost = t.items.reduce((sum: number, item: any) => {
-                // item.costPrice is the single source of truth for cost at the time of transaction.
-                // It includes base product cost (from recipe or manual) + addon costs.
                 return sum + ((item.costPrice || 0) * item.quantity);
             }, 0);
             totalProfit += t.total - transactionCost;
             
             t.items.forEach((item: any) => {
-                const existing = productSales.get(item.id) || { name: item.name, quantity: 0, revenue: 0 };
+                const existing = productSales.get(item.id) || { id: item.id, name: item.name, quantity: 0, revenue: 0 };
                 productSales.set(item.id, {
-                    name: item.name,
+                    ...existing,
                     quantity: existing.quantity + item.quantity,
                     revenue: existing.revenue + (item.price * item.quantity),
                 });
             });
         });
 
-        const bestSellingProducts = Array.from(productSales.values())
-            .sort((a, b) => b.quantity - a.quantity)
-            .slice(0, 10);
+        const allProductSales = Array.from(productSales.values()).sort((a, b) => b.quantity - a.quantity);
+        const bestSellingProducts = allProductSales.slice(0, 10);
         
-        const hourlyChartData = salesByHour.map((total, hour) => ({
-            name: `${hour.toString().padStart(2, '0')}:00`,
-            total,
+        // Prepare chart data (simple total for chart)
+        const hourlyChartData = hourlyStats.map(h => ({
+            name: h.hourLabel,
+            total: h.total,
         }));
+
+        // Prepare table data (filter out hours with 0 sales for table, or keep all if preferred)
+        const hourlyBreakdown = hourlyStats
+            .filter(h => h.total > 0 || h.count > 0)
+            .map(h => ({
+                id: h.id,
+                timeRange: `${h.hourLabel} - ${String(h.rawHour + 1).padStart(2, '0')}:00`,
+                count: h.count,
+                total: h.total
+            }));
 
         // Cash Movements from session (Only locally relevant)
         let cashIn = 0;
@@ -430,7 +482,9 @@ const ReportsView: React.FC = () => {
             avgTransaction: activeTransactions.length > 0 ? totalSales / activeTransactions.length : 0,
             profitMargin: totalSales > 0 ? (totalProfit / totalSales) * 100 : 0,
             bestSellingProducts,
+            allProductSales, // Full list for table
             hourlyChartData,
+            hourlyBreakdown, // Detailed table data
             cashIn,
             cashOut
         };
@@ -465,8 +519,6 @@ const ReportsView: React.FC = () => {
         return Array.from(categoryMap.entries()).map(([name, value]) => ({ name, value }));
     }, [activeTransactions]);
 
-    const PIE_COLORS = ['#347758', '#6366f1', '#ec4899', '#f97316', '#10b981', '#facc15'];
-    
     const exportReport = () => {
         if (activeTab === 'stock_logs') {
             const stockCsv = dataService.generateStockAdjustmentsCSVString(filteredStockLogs);
@@ -517,18 +569,26 @@ const ReportsView: React.FC = () => {
     const txnColumns = useMemo(() => [
         { label: 'Waktu', width: '1.5fr', render: (t: TransactionType) => <span className="text-slate-400 whitespace-nowrap">{new Date(t.createdAt).toLocaleString('id-ID')}</span> },
         { label: 'Cabang', width: '1fr', render: (t: TransactionType) => <span className="text-xs bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{t.storeId || '-'}</span> },
-        { label: 'Pelanggan', width: '1fr', render: (t: TransactionType) => <span className="font-semibold text-white">{t.customerName || '-'}</span> },
+        { label: 'Pelanggan', width: '1.5fr', render: (t: TransactionType) => <span className="font-semibold text-white">{t.customerName || '-'}</span> },
         { label: 'Kasir', width: '1fr', render: (t: TransactionType) => <span>{t.userName}</span> },
         { label: 'Total', width: '1fr', render: (t: TransactionType) => <span className={`font-medium ${t.paymentStatus === 'refunded' ? 'line-through text-slate-500' : ''}`}>{CURRENCY_FORMATTER.format(t.total)}</span> },
         { label: 'Status', width: '1fr', render: (t: TransactionType) => <PaymentStatusBadge status={t.paymentStatus} /> },
-        { label: 'Items', width: '2fr', render: (t: TransactionType) => <span className="truncate">{t.items.map((i: any) => `${i.name} (x${i.quantity})`).join(', ')}</span> },
+        { 
+            label: 'Items', 
+            width: '2.5fr', 
+            render: (t: TransactionType) => {
+                if (!t.items || t.items.length === 0) return <span className="text-slate-500 italic"> - </span>;
+                const itemsStr = t.items.map((i: any) => `${i.name || 'Unknown'} (x${i.quantity})`).join(', ');
+                return <span title={itemsStr} className="block truncate">{itemsStr}</span>;
+            } 
+        },
         { label: 'Aksi', width: '1fr', className: 'overflow-visible', render: (t: TransactionType) => (
             <ActionMenu 
                 transaction={t}
                 onViewReceipt={setSelectedTransaction}
                 onPay={setUpdatingTransaction}
                 onRefund={handleRefund}
-                disabled={dataSource === 'cloud'}
+                disabled={dataSource !== 'local'} // Only allow edits on local data for now
             />
         )}
     ], [setSelectedTransaction, setUpdatingTransaction, handleRefund, dataSource]);
@@ -536,7 +596,7 @@ const ReportsView: React.FC = () => {
     // Columns for Stock Log Table
     const stockColumns = useMemo(() => [
         { label: 'Waktu', width: '1.5fr', render: (s: StockAdjustment) => <span className="text-slate-400 whitespace-nowrap">{new Date(s.createdAt).toLocaleString('id-ID')}</span> },
-        { label: 'Produk', width: '1.5fr', render: (s: StockAdjustment) => <span className="font-semibold text-white">{s.productName}</span> },
+        { label: 'Produk', width: '2fr', render: (s: StockAdjustment) => <span className="font-semibold text-white">{s.productName}</span> },
         { label: 'Tipe', width: '1fr', render: (s: StockAdjustment) => (
             <span className={`px-2 py-1 text-xs font-bold rounded ${s.change > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                 {s.change > 0 ? 'MASUK' : 'KELUAR'}
@@ -557,14 +617,29 @@ const ReportsView: React.FC = () => {
         ) },
     ], [dataSource]);
 
+    // Columns for Hourly Analysis
+    const hourlyColumns = useMemo(() => [
+        { label: 'Jam', width: '1fr', render: (h: any) => h.timeRange },
+        { label: 'Jumlah Transaksi', width: '1fr', render: (h: any) => h.count },
+        { label: 'Total Omzet', width: '1fr', render: (h: any) => CURRENCY_FORMATTER.format(h.total) }
+    ], []);
+
+    // Columns for Product Sales
+    const productSalesColumns = useMemo(() => [
+        { label: 'Nama Produk', width: '2fr', render: (p: any) => <span className="font-medium text-white">{p.name}</span> },
+        { label: 'Terjual (Qty)', width: '1fr', render: (p: any) => p.quantity },
+        { label: 'Total Pendapatan', width: '1fr', render: (p: any) => CURRENCY_FORMATTER.format(p.revenue) }
+    ], []);
+
     return (
         <div className="space-y-6">
             <div className="space-y-4">
+                {/* Header Section */}
                 <div className="flex justify-between items-start flex-wrap gap-4">
                      <div>
                          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
                              {showSessionView && session ? 'Laporan Sesi Saat Ini' : reportScope === 'session_history' ? 'Riwayat Sesi (Shift)' : 'Laporan & Audit'}
-                             {dataSource === 'cloud' && <span className="text-sm font-normal bg-sky-600 px-2 py-0.5 rounded text-white">Cloud Mode</span>}
+                             {dataSource !== 'local' && <span className={`text-sm font-normal px-2 py-0.5 rounded text-white ${dataSource === 'cloud' ? 'bg-sky-600' : 'bg-blue-600'}`}>{dataSource === 'cloud' ? 'Supabase' : 'Dropbox'}</span>}
                          </h1>
                          {showSessionView && session && (
                             <p className="text-sm text-slate-400">Dimulai pada {new Date(session.startTime).toLocaleString('id-ID')} oleh {session.userName}</p>
@@ -572,7 +647,7 @@ const ReportsView: React.FC = () => {
                     </div>
                      <div className="flex gap-2 items-center flex-wrap justify-end">
                         
-                        {/* Branch Selector (Visible for both Local & Cloud if multiple branches exist) */}
+                        {/* Branch Selector */}
                         {availableBranches.length > 1 && (
                             <div className="bg-slate-700 p-1 rounded-lg">
                                 <select 
@@ -588,10 +663,29 @@ const ReportsView: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Cloud Toggle */}
-                        <div className="bg-slate-700 p-1 rounded-lg flex items-center mr-2">
-                            <button onClick={() => setDataSource('local')} className={`p-2 rounded transition-colors ${dataSource === 'local' ? 'bg-slate-500 text-white' : 'text-slate-400 hover:text-white'}`} title="Data Lokal"><Icon name="database" className="w-4 h-4"/></button>
-                            <button onClick={() => setDataSource('cloud')} className={`p-2 rounded transition-colors ${dataSource === 'cloud' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`} title="Data Cloud (Gabungan)"><Icon name="wifi" className="w-4 h-4"/></button>
+                        {/* Data Source Toggle (Standardized) */}
+                        <div className="bg-slate-800 p-1 rounded-lg flex items-center border border-slate-700">
+                            <button
+                                onClick={() => setDataSource('local')}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                                title="Data Lokal"
+                            >
+                                Lokal
+                            </button>
+                            <button
+                                onClick={() => setDataSource('dropbox')}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                                title="Data Gabungan dari Dropbox"
+                            >
+                                Dropbox
+                            </button>
+                            <button
+                                onClick={() => setDataSource('cloud')}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'cloud' ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                                title="Data Real-time Supabase"
+                            >
+                                Cloud
+                            </button>
                         </div>
 
                         {sessionSettings.enabled && dataSource === 'local' && (
@@ -608,7 +702,7 @@ const ReportsView: React.FC = () => {
                             </div>
                         )}
                         
-                        {(!sessionSettings.enabled || reportScope === 'historical' || dataSource === 'cloud') && (
+                        {(!sessionSettings.enabled || reportScope === 'historical' || dataSource !== 'local') && (
                             <div className="relative" ref={filterDropdownRef}>
                                 <Button variant="secondary" size="sm" onClick={() => setFilterDropdownOpen(prev => !prev)}>
                                     Filter: {filterLabels[filter]}
@@ -618,7 +712,7 @@ const ReportsView: React.FC = () => {
                                     <div className="absolute top-full right-0 mt-2 w-48 bg-slate-700 rounded-lg shadow-xl z-10">
                                         {(['today', 'week', 'month', 'all', 'custom'] as TimeFilter[]).map(f => (
                                             <button 
-                                                key={f} 
+                                                key={f}
                                                 onClick={() => handleFilterChange(f)}
                                                 className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter === f ? 'bg-[#347758] text-white' : 'text-slate-200 hover:bg-slate-600'}`}
                                             >
@@ -630,306 +724,139 @@ const ReportsView: React.FC = () => {
                             </div>
                         )}
                         
-                        {reportScope !== 'session_history' && (
-                            <>
-                                <Button onClick={exportReport} variant="secondary" size="sm" disabled={activeTab === 'sales' ? filteredTransactions.length === 0 : filteredStockLogs.length === 0}>
-                                    <Icon name="download" className="w-4 h-4"/> Export CSV
-                                </Button>
-                                
-                                {dataSource === 'local' && activeTab === 'sales' && (
-                                    <Button onClick={() => setSendReportModalOpen(true)} variant="primary" size="sm" disabled={filteredTransactions.length === 0}>
-                                        <Icon name="chat" className="w-4 h-4"/> Kirim ke Admin
-                                    </Button>
-                                )}
-                            </>
-                        )}
-
-                        {sessionSettings.enabled && !session && reportScope !== 'session_history' && dataSource === 'local' && (
-                            <Button onClick={() => setStartSessionModalOpen(true)} variant="primary" size="sm">
-                                <Icon name="plus" className="w-4 h-4"/>
-                                Mulai Sesi
-                            </Button>
-                        )}
-                        {isSessionMode && reportScope === 'session' && dataSource === 'local' && (
-                             <Button onClick={() => setEndSessionModalOpen(true)} variant="danger" size="sm">
-                                Tutup Sesi
-                            </Button>
-                        )}
+                        <Button variant="secondary" size="sm" onClick={exportReport}>
+                            <Icon name="download" className="w-4 h-4" /> Export CSV
+                        </Button>
                     </div>
                 </div>
-                
-                {(!sessionSettings.enabled || reportScope === 'historical' || dataSource === 'cloud') && filter === 'custom' && (
-                    <div className="w-full flex flex-col sm:flex-row gap-4 items-center justify-end bg-slate-800 p-3 rounded-lg">
-                        <div>
-                            <label htmlFor="startDate" className="text-sm text-slate-400 mr-2">Dari Tanggal:</label>
-                            <input
-                                id="startDate"
-                                type="date"
-                                value={customStartDate}
-                                onChange={(e) => setCustomStartDate(e.target.value)}
-                                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-white"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="endDate" className="text-sm text-slate-400 mr-2">Sampai Tanggal:</label>
-                            <input
-                                id="endDate"
-                                type="date"
-                                value={customEndDate}
-                                onChange={(e) => setCustomEndDate(e.target.value)}
-                                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-white"
-                            />
-                        </div>
+
+                {/* Date Picker for Custom Filter */}
+                {filter === 'custom' && (!sessionSettings.enabled || reportScope === 'historical' || dataSource !== 'local') && (
+                    <div className="flex gap-2 items-center justify-end bg-slate-800 p-2 rounded-lg w-fit ml-auto">
+                        <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} className="bg-slate-700 text-white rounded px-2 py-1 text-sm border border-slate-600" />
+                        <span className="text-slate-400">-</span>
+                        <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} className="bg-slate-700 text-white rounded px-2 py-1 text-sm border border-slate-600" />
                     </div>
                 )}
             </div>
 
-            {reportScope === 'session_history' && dataSource === 'local' ? (
-                <SessionHistoryTable history={appData.sessionHistory || []} />
-            ) : (
-            <>
-                <div className="flex bg-slate-700 p-1 rounded-lg w-fit">
-                    <button onClick={() => setActiveTab('sales')} className={`px-4 py-2 text-sm rounded-md transition-colors ${activeTab === 'sales' ? 'bg-[#347758] text-white font-bold' : 'text-slate-300 hover:text-white'}`}>
-                        Laporan Penjualan
-                    </button>
-                    <button onClick={() => setActiveTab('stock_logs')} className={`px-4 py-2 text-sm rounded-md transition-colors ${activeTab === 'stock_logs' ? 'bg-[#347758] text-white font-bold' : 'text-slate-300 hover:text-white'}`}>
-                        Riwayat Stok (Log)
-                    </button>
+            {isCloudLoading && (
+                <div className="w-full text-center py-8 bg-slate-800 rounded-lg border border-slate-700">
+                    <span className="text-white animate-pulse">Memuat data dari {dataSource === 'cloud' ? 'Supabase' : 'Dropbox'}...</span>
                 </div>
+            )}
 
-                {isCloudLoading ? (
-                    <div className="text-center py-12 bg-slate-800 rounded-lg">
-                        <span className="text-white animate-pulse">Mengambil data dari Cloud...</span>
-                    </div>
-                ) : (
-                    <>
-                        {activeTab === 'sales' && (
-                            <>
-                                <div className={`grid grid-cols-2 ${inventorySettings.enabled ? 'lg:grid-cols-4' : 'lg:grid-cols-2'} gap-4`}>
-                                    {showSessionView && session ? (
-                                        <>
-                                            <StatCard title="Modal Awal" value={CURRENCY_FORMATTER.format(session.startingCash)} />
-                                            <StatCard title="Penjualan Bersih" value={CURRENCY_FORMATTER.format(reportData.totalSales)} />
-                                            <StatCard title="Estimasi Kas Di Laci" value={CURRENCY_FORMATTER.format(session.startingCash + reportData.totalCashSales + reportData.cashIn - reportData.cashOut)} className="bg-[#347758]/20" />
-                                            {inventorySettings.enabled && <StatCard title="Laba Sesi" value={CURRENCY_FORMATTER.format(reportData.totalProfit)} />}
-                                        </>
-                                    ) : (
-                                        <>
-                                            <StatCard title="Total Penjualan Bersih" value={CURRENCY_FORMATTER.format(reportData.totalSales)} />
-                                            <StatCard title="Total Transaksi" value={reportData.totalTransactions.toString()} />
-                                            <StatCard title="Rata-rata/Transaksi" value={CURRENCY_FORMATTER.format(reportData.avgTransaction)} />
-                                            {inventorySettings.enabled && <StatCard title="Total Laba (Est)" value={CURRENCY_FORMATTER.format(reportData.totalProfit)} />}
-                                        </>
+            {!isCloudLoading && (
+                <>
+                    {reportScope === 'session_history' && dataSource === 'local' ? (
+                        <SessionHistoryTable history={appData.sessionHistory} />
+                    ) : (
+                        <>
+                            {/* Stats Cards */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <StatCard title="Total Omzet" value={CURRENCY_FORMATTER.format(reportData.totalSales)} className="border-b-4 border-green-500" />
+                                <StatCard title="Total Transaksi" value={reportData.totalTransactions.toString()} className="border-b-4 border-blue-500" />
+                                <StatCard title="Profit (Estimasi)" value={CURRENCY_FORMATTER.format(reportData.totalProfit)} className="border-b-4 border-yellow-500" />
+                                <StatCard title="Margin Rata-rata" value={`${reportData.profitMargin.toFixed(1)}%`} className="border-b-4 border-purple-500" />
+                            </div>
+
+                            {/* Charts */}
+                            <ReportCharts 
+                                hourlyChartData={reportData.hourlyChartData}
+                                salesOverTimeData={salesOverTimeData}
+                                categorySalesData={categorySalesData}
+                                bestSellingProducts={reportData.bestSellingProducts}
+                                filter={reportScope === 'session' ? 'today' : filter}
+                                showSessionView={showSessionView}
+                            />
+
+                            {/* Tabs for Table View */}
+                            <div className="mt-6">
+                                <div className="flex border-b border-slate-700 mb-4 overflow-x-auto">
+                                    <button 
+                                        className={`pb-2 px-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'sales' ? 'border-b-2 border-[#347758] text-[#52a37c]' : 'text-slate-400 hover:text-white'}`}
+                                        onClick={() => setActiveTab('sales')}
+                                    >
+                                        Riwayat Penjualan
+                                    </button>
+                                    <button 
+                                        className={`pb-2 px-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'products' ? 'border-b-2 border-[#347758] text-[#52a37c]' : 'text-slate-400 hover:text-white'}`}
+                                        onClick={() => setActiveTab('products')}
+                                    >
+                                        Rekap Produk
+                                    </button>
+                                    <button 
+                                        className={`pb-2 px-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'hourly' ? 'border-b-2 border-[#347758] text-[#52a37c]' : 'text-slate-400 hover:text-white'}`}
+                                        onClick={() => setActiveTab('hourly')}
+                                    >
+                                        Analisa Per Jam
+                                    </button>
+                                    <button 
+                                        className={`pb-2 px-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'stock_logs' ? 'border-b-2 border-[#347758] text-[#52a37c]' : 'text-slate-400 hover:text-white'}`}
+                                        onClick={() => setActiveTab('stock_logs')}
+                                    >
+                                        Riwayat Stok
+                                    </button>
+                                </div>
+
+                                {/* Table Content */}
+                                <div className="h-[600px]">
+                                    {activeTab === 'sales' && (
+                                        <VirtualizedTable 
+                                            data={filteredTransactions} 
+                                            columns={txnColumns} 
+                                            rowHeight={50} 
+                                        />
+                                    )}
+                                    {activeTab === 'products' && (
+                                        <VirtualizedTable 
+                                            data={reportData.allProductSales} 
+                                            columns={productSalesColumns} 
+                                            rowHeight={50} 
+                                        />
+                                    )}
+                                    {activeTab === 'hourly' && (
+                                        <VirtualizedTable 
+                                            data={reportData.hourlyBreakdown} 
+                                            columns={hourlyColumns} 
+                                            rowHeight={50} 
+                                        />
+                                    )}
+                                    {activeTab === 'stock_logs' && (
+                                        <VirtualizedTable 
+                                            data={filteredStockLogs} 
+                                            columns={stockColumns} 
+                                            rowHeight={50} 
+                                        />
                                     )}
                                 </div>
-
-                                {filteredTransactions.length === 0 && !session ? (
-                                    <div className="text-center py-12 bg-slate-800 rounded-lg">
-                                        <p className="text-slate-400">{showSessionView ? 'Belum ada transaksi di sesi ini.' : 'Tidak ada transaksi untuk periode yang dipilih.'}</p>
-                                    </div>
-                                ) : (
-                                    <>
-                                        {/* Charts & Tables for Sales */}
-                                        {showSessionView && session && (reportData.cashIn > 0 || reportData.cashOut > 0) && (
-                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                                <div className="bg-slate-800 p-4 rounded-lg">
-                                                    <h3 className="font-semibold text-white mb-2">Aktivitas Kas Non-Penjualan</h3>
-                                                    <div className="space-y-2">
-                                                        <div className="flex justify-between text-sm">
-                                                            <span className="text-slate-400">Total Kas Masuk (Tambahan)</span>
-                                                            <span className="text-green-400 font-semibold">+{CURRENCY_FORMATTER.format(reportData.cashIn)}</span>
-                                                        </div>
-                                                        <div className="flex justify-between text-sm">
-                                                            <span className="text-slate-400">Total Kas Keluar</span>
-                                                            <span className="text-red-400 font-semibold">-{CURRENCY_FORMATTER.format(reportData.cashOut)}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="bg-slate-800 p-4 rounded-lg overflow-y-auto max-h-40">
-                                                    <h3 className="font-semibold text-white mb-2 text-sm">Rincian Pergerakan Kas</h3>
-                                                    <table className="w-full text-xs text-left min-w-[300px]">
-                                                        <tbody>
-                                                            {session.cashMovements.map((m) => (
-                                                                <tr key={m.id} className="border-b border-slate-700/50">
-                                                                    <td className="py-1">{new Date(m.timestamp).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}</td>
-                                                                    <td className="py-1">{m.description}</td>
-                                                                    <td className={`py-1 text-right font-medium ${m.type === 'in' ? 'text-green-400' : 'text-red-400'}`}>
-                                                                        {m.type === 'in' ? '+' : '-'}{CURRENCY_FORMATTER.format(m.amount)}
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {inventorySettings.enabled && (
-                                            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                                                <div className="lg:col-span-3 bg-slate-800 p-4 rounded-lg">
-                                                    <h3 className="font-semibold mb-4 text-white">Penjualan per Jam (Jam Sibuk)</h3>
-                                                    <ResponsiveContainer width="100%" height={300}>
-                                                        <BarChart data={reportData.hourlyChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                                                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                            <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
-                                                            <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `Rp${Number(value) / 1000}k`} />
-                                                            <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }} formatter={(value: number) => [CURRENCY_FORMATTER.format(value), 'Total']} />
-                                                            <Bar dataKey="total" fill="#10b981" />
-                                                        </BarChart>
-                                                    </ResponsiveContainer>
-                                                </div>
-                                                <div className="lg:col-span-2 bg-slate-800 p-4 rounded-lg">
-                                                    <h3 className="font-semibold text-white mb-4">Produk Terlaris</h3>
-                                                    <div className="space-y-2 max-h-[280px] overflow-y-auto">
-                                                        {reportData.bestSellingProducts.map((p, index) => (
-                                                            <div key={index} className="flex justify-between items-center text-sm">
-                                                                <span className="text-slate-300 truncate pr-2">{p.name}</span>
-                                                                <span className="font-semibold text-white bg-slate-700 px-2 py-0.5 rounded">{p.quantity} terjual</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            <div className="bg-slate-800 p-4 rounded-lg">
-                                                <h3 className="font-semibold mb-4 text-white">Penjualan per Hari</h3>
-                                                <ResponsiveContainer width="100%" height={300}>
-                                                    <BarChart data={salesOverTimeData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                                        <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
-                                                        <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `Rp${Number(value) / 1000}k`} />
-                                                        <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '0.5rem' }} formatter={(value: number) => [CURRENCY_FORMATTER.format(value), 'Total']} />
-                                                        <Bar dataKey="total" fill="#347758" />
-                                                    </BarChart>
-                                                </ResponsiveContainer>
-                                            </div>
-                                            <div className="bg-slate-800 p-4 rounded-lg">
-                                                <h3 className="font-semibold mb-4 text-white">Penjualan per Kategori</h3>
-                                                <ResponsiveContainer width="100%" height={300}>
-                                                    <PieChart>
-                                                        <Pie data={categorySalesData} cx="50%" cy="50%" labelLine={false} outerRadius={100} fill="#8884d8" dataKey="value" nameKey="name"
-                                                            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-                                                                const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                                                                const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
-                                                                const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
-                                                                return ( <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central">{`${(percent * 100).toFixed(0)}%`}</text> );
-                                                            }}>
-                                                            {categorySalesData.map((entry, index) => ( <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} /> ))}
-                                                        </Pie>
-                                                        <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }} formatter={(value: number, name: string) => [CURRENCY_FORMATTER.format(value), name]} />
-                                                        <Legend />
-                                                    </PieChart>
-                                                </ResponsiveContainer>
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-slate-800 rounded-lg shadow-md flex flex-col min-h-[400px]">
-                                            <h2 className="text-lg font-semibold p-4">Detail Transaksi</h2>
-                                            <div className="flex-1 min-h-0">
-                                            <VirtualizedTable 
-                                                    data={filteredTransactions}
-                                                    columns={txnColumns}
-                                                    rowHeight={60}
-                                                    minWidth={900}
-                                            />
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-                            </>
-                        )}
-
-                        {activeTab === 'stock_logs' && (
-                            <div className="bg-slate-800 rounded-lg shadow-md flex flex-col min-h-[400px]">
-                                <div className="p-4 border-b border-slate-700 flex justify-between items-center">
-                                    <h2 className="text-lg font-semibold">Riwayat Perubahan Stok (Masuk/Keluar)</h2>
-                                    <div className="text-xs text-slate-400">
-                                        Total: {filteredStockLogs.length} catatan
-                                    </div>
-                                </div>
-                                
-                                {filteredStockLogs.length === 0 ? (
-                                    <div className="flex-1 flex items-center justify-center p-8 text-slate-500">
-                                        Tidak ada riwayat perubahan stok pada periode ini.
-                                    </div>
-                                ) : (
-                                    <div className="flex-1 min-h-0">
-                                        <VirtualizedTable
-                                            data={filteredStockLogs}
-                                            columns={stockColumns}
-                                            rowHeight={60}
-                                            minWidth={800}
-                                        />
-                                    </div>
-                                )}
                             </div>
-                        )}
-                    </>
-                )}
-            </>
-            )}
-            
-            <Modal isOpen={isStartSessionModalOpen} onClose={() => setStartSessionModalOpen(false)} title="Mulai Sesi Penjualan">
-                <div className="space-y-4">
-                    <p className="text-slate-300">Masukkan jumlah uang tunai awal (modal) yang tersedia di laci kasir.</p>
-                    <div>
-                        <label htmlFor="startingCash" className="block text-sm font-medium text-slate-300 mb-1">Uang Awalan (IDR)</label>
-                        <input
-                            id="startingCash"
-                            type="number"
-                            min="0"
-                            value={startingCashInput}
-                            onChange={(e) => setStartingCashInput(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg"
-                            placeholder="0"
-                        />
-                    </div>
-                    <Button onClick={handleStartSession} className="w-full py-3">
-                        Mulai Sesi
-                    </Button>
-                </div>
-            </Modal>
-            
-            {selectedTransaction && (
-                <ReceiptModal isOpen={!!selectedTransaction} onClose={() => setSelectedTransaction(null)} transaction={selectedTransaction} />
+                        </>
+                    )}
+                </>
             )}
 
+            {/* Receipt Modal */}
+            {selectedTransaction && (
+                <ReceiptModal 
+                    isOpen={!!selectedTransaction} 
+                    onClose={() => setSelectedTransaction(null)} 
+                    transaction={selectedTransaction} 
+                />
+            )}
+
+            {/* Update Payment Modal */}
             {updatingTransaction && (
                 <UpdatePaymentModal 
-                    isOpen={!!updatingTransaction}
-                    onClose={() => setUpdatingTransaction(null)}
+                    isOpen={!!updatingTransaction} 
+                    onClose={() => setUpdatingTransaction(null)} 
                     transaction={updatingTransaction}
-                    onConfirm={(newPayments) => {
-                        addPaymentToTransaction(updatingTransaction.id, newPayments);
+                    onConfirm={(payments) => {
+                        addPaymentToTransaction(updatingTransaction.id, payments);
                         setUpdatingTransaction(null);
                     }}
                 />
             )}
-
-            {isSessionMode && session && (
-                <EndSessionModal
-                    isOpen={isEndSessionModalOpen}
-                    onClose={() => setEndSessionModalOpen(false)}
-                    sessionSales={reportData.totalCashSales}
-                    startingCash={session.startingCash}
-                    cashIn={reportData.cashIn}
-                    cashOut={reportData.cashOut}
-                />
-            )}
-
-            <SendReportModal
-                isOpen={isSendReportModalOpen}
-                onClose={() => setSendReportModalOpen(false)}
-                data={filteredTransactions}
-                adminWhatsapp={receiptSettings.adminWhatsapp}
-                adminTelegram={receiptSettings.adminTelegram}
-                // Pass cash flow data only if viewing current session
-                startingCash={showSessionView && session ? session.startingCash : 0}
-                cashIn={showSessionView ? reportData.cashIn : 0}
-                cashOut={showSessionView ? reportData.cashOut : 0}
-            />
         </div>
     );
 };

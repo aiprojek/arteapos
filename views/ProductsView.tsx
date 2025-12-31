@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { useUI } from '../context/UIContext';
-import type { Product, RecipeItem, Addon, ProductVariant, BranchPrice } from '../types';
+import type { Product, RecipeItem, Addon, ProductVariant, BranchPrice, ModifierGroup, ModifierOption } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Icon from '../components/Icon';
@@ -12,6 +12,7 @@ import { useCameraAvailability } from '../hooks/useCameraAvailability';
 import ProductPlaceholder from '../components/ProductPlaceholder';
 import VirtualizedTable from '../components/VirtualizedTable';
 import StockOpnameModal from '../components/StockOpnameModal';
+import { useSettings } from '../context/SettingsContext';
 
 // Informasikan TypeScript tentang pustaka global JsBarcode
 declare const JsBarcode: any;
@@ -30,15 +31,6 @@ function base64ToBlob(base64: string): Blob {
         u8arr[n] = bstr.charCodeAt(n);
     }
     return new Blob([u8arr], { type: mime });
-}
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
 }
 
 const InputField: React.FC<{
@@ -165,6 +157,138 @@ const CategoryInput: React.FC<{
     );
 };
 
+// --- ADVANCED MODIFIER BUILDER ---
+const ModifierBuilder: React.FC<{
+    groups: ModifierGroup[];
+    onChange: (groups: ModifierGroup[]) => void;
+}> = ({ groups, onChange }) => {
+    
+    const addGroup = () => {
+        const newGroup: ModifierGroup = {
+            id: Date.now().toString(),
+            name: '',
+            minSelection: 0,
+            maxSelection: 1,
+            options: []
+        };
+        onChange([...groups, newGroup]);
+    };
+
+    const updateGroup = (index: number, field: keyof ModifierGroup, value: any) => {
+        const updated = [...groups];
+        updated[index] = { ...updated[index], [field]: value };
+        onChange(updated);
+    };
+
+    const removeGroup = (index: number) => {
+        onChange(groups.filter((_, i) => i !== index));
+    };
+
+    const addOption = (groupIndex: number) => {
+        const updated = [...groups];
+        updated[groupIndex].options.push({
+            id: Date.now().toString(),
+            name: '',
+            price: 0
+        });
+        onChange(updated);
+    };
+
+    const updateOption = (groupIndex: number, optionIndex: number, field: keyof ModifierOption, value: any) => {
+        const updated = [...groups];
+        const opts = [...updated[groupIndex].options];
+        opts[optionIndex] = { ...opts[optionIndex], [field]: value };
+        updated[groupIndex].options = opts;
+        onChange(updated);
+    };
+
+    const removeOption = (groupIndex: number, optionIndex: number) => {
+        const updated = [...groups];
+        updated[groupIndex].options = updated[groupIndex].options.filter((_, i) => i !== optionIndex);
+        onChange(updated);
+    };
+
+    return (
+        <div className="space-y-4">
+            {groups.map((group, gIdx) => (
+                <div key={group.id} className="bg-slate-900 border border-slate-700 p-4 rounded-lg space-y-3 relative">
+                    <button type="button" onClick={() => removeGroup(gIdx)} className="absolute top-2 right-2 text-red-400 hover:text-red-300">
+                        <Icon name="trash" className="w-4 h-4"/>
+                    </button>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-xs text-slate-400">Nama Grup (cth: Level Gula, Topping)</label>
+                            <input 
+                                type="text" 
+                                value={group.name} 
+                                onChange={e => updateGroup(gIdx, 'name', e.target.value)} 
+                                className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                            />
+                        </div>
+                        <div className="flex gap-2">
+                            <div className="flex-1">
+                                <label className="text-xs text-slate-400">Min Pilih</label>
+                                <input 
+                                    type="number" min="0"
+                                    value={group.minSelection} 
+                                    onChange={e => updateGroup(gIdx, 'minSelection', parseInt(e.target.value) || 0)} 
+                                    className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label className="text-xs text-slate-400">Max Pilih</label>
+                                <input 
+                                    type="number" min="1"
+                                    value={group.maxSelection} 
+                                    onChange={e => updateGroup(gIdx, 'maxSelection', parseInt(e.target.value) || 1)} 
+                                    className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Visual Hint */}
+                    <p className="text-[10px] text-slate-500 italic">
+                        {group.minSelection > 0 ? "Wajib diisi." : "Opsional."} 
+                        {group.maxSelection === 1 ? " (Radio Button - Pilih Satu)" : ` (Checkbox - Maks ${group.maxSelection})`}
+                    </p>
+
+                    <div className="pl-4 border-l-2 border-slate-700 space-y-2">
+                        {group.options.map((opt, oIdx) => (
+                            <div key={opt.id} className="flex gap-2 items-center">
+                                <input 
+                                    type="text" 
+                                    placeholder="Nama Opsi" 
+                                    value={opt.name}
+                                    onChange={e => updateOption(gIdx, oIdx, 'name', e.target.value)}
+                                    className="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-xs"
+                                />
+                                <input 
+                                    type="number" 
+                                    placeholder="Harga (+)" 
+                                    value={opt.price}
+                                    onChange={e => updateOption(gIdx, oIdx, 'price', parseFloat(e.target.value) || 0)}
+                                    className="w-20 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-xs"
+                                />
+                                <button type="button" onClick={() => removeOption(gIdx, oIdx)} className="text-red-400">
+                                    <Icon name="close" className="w-3 h-3"/>
+                                </button>
+                            </div>
+                        ))}
+                        <button type="button" onClick={() => addOption(gIdx)} className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1">
+                            <Icon name="plus" className="w-3 h-3"/> Tambah Opsi
+                        </button>
+                    </div>
+                </div>
+            ))}
+            <Button type="button" variant="secondary" onClick={addGroup} size="sm">
+                <Icon name="plus" className="w-4 h-4"/> Tambah Grup Modifier
+            </Button>
+        </div>
+    );
+};
+
 
 const ProductForm = React.forwardRef<HTMLFormElement, {
     product?: Product | null,
@@ -175,12 +299,15 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
     capturedImage?: string | null
 }>(({ product, onSave, onCancel, onOpenCamera, isCameraAvailable, capturedImage }, ref) => {
     const { inventorySettings, rawMaterials, products } = useProduct();
+    const { receiptSettings } = useSettings();
     const { showAlert } = useUI();
     const [formData, setFormData] = useState({
         name: '', price: '', category: [] as string[], imageUrl: '', costPrice: '',
         stock: '', trackStock: false, recipe: [] as RecipeItem[], isFavorite: false, barcode: '', 
         addons: [] as Addon[], variants: [] as ProductVariant[],
-        branchPrices: [] as BranchPrice[]
+        modifierGroups: [] as ModifierGroup[], // NEW
+        branchPrices: [] as BranchPrice[],
+        validStoreIds: [] as string[]
     });
     const [imageSource, setImageSource] = useState<ImageSource>('none');
     
@@ -190,6 +317,9 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const barcodeRef = useRef<SVGSVGElement>(null);
+
+    // List of branches available for selection
+    const availableBranches = receiptSettings.branches || [];
 
     useEffect(() => {
         if (product) {
@@ -209,7 +339,9 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 barcode: product.barcode || '',
                 addons: product.addons || [],
                 variants: product.variants || [],
-                branchPrices: product.branchPrices || []
+                modifierGroups: product.modifierGroups || [], // NEW
+                branchPrices: product.branchPrices || [],
+                validStoreIds: product.validStoreIds || []
             };
             setFormData(productData);
 
@@ -221,7 +353,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 setImageSource('none');
             }
         } else {
-            setFormData({ name: '', price: '', category: [], imageUrl: '', costPrice: '', stock: '', trackStock: false, recipe: [], isFavorite: false, barcode: '', addons: [], variants: [], branchPrices: [] });
+            setFormData({ name: '', price: '', category: [], imageUrl: '', costPrice: '', stock: '', trackStock: false, recipe: [], isFavorite: false, barcode: '', addons: [], variants: [], modifierGroups: [], branchPrices: [], validStoreIds: [] });
             setImageSource('none');
         }
     }, [product]);
@@ -295,34 +427,6 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
         setFormData(prev => ({ ...prev, recipe: prev.recipe.filter((_, i) => i !== index) }));
     };
 
-    const handleAddonChange = (index: number, field: keyof Addon, value: string | number) => {
-        const updatedAddons = [...formData.addons];
-        updatedAddons[index] = { ...updatedAddons[index], [field]: value };
-        setFormData(prev => ({ ...prev, addons: updatedAddons }));
-    };
-
-    const addAddonItem = () => {
-        setFormData(prev => ({ ...prev, addons: [...prev.addons, { id: Date.now().toString(), name: '', price: 0, costPrice: 0 }] }));
-    };
-
-    const removeAddonItem = (index: number) => {
-        setFormData(prev => ({ ...prev, addons: prev.addons.filter((_, i) => i !== index) }));
-    };
-
-    const handleVariantChange = (index: number, field: keyof ProductVariant, value: string | number) => {
-        const updatedVariants = [...formData.variants];
-        updatedVariants[index] = { ...updatedVariants[index], [field]: value };
-        setFormData(prev => ({ ...prev, variants: updatedVariants }));
-    };
-
-    const addVariantItem = () => {
-        setFormData(prev => ({ ...prev, variants: [...prev.variants, { id: Date.now().toString(), name: '', price: 0, costPrice: 0 }] }));
-    };
-
-    const removeVariantItem = (index: number) => {
-        setFormData(prev => ({ ...prev, variants: prev.variants.filter((_, i) => i !== index) }));
-    };
-
     // --- Branch Price Handlers ---
     const addBranchPrice = () => {
         if (!newBranchId || !newBranchPrice) return;
@@ -347,6 +451,17 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
         }));
     };
 
+    const handleToggleStoreId = (storeId: string) => {
+        setFormData(prev => {
+            const current = prev.validStoreIds || [];
+            if (current.includes(storeId)) {
+                return { ...prev, validStoreIds: current.filter(id => id !== storeId) };
+            } else {
+                return { ...prev, validStoreIds: [...current, storeId] };
+            }
+        });
+    };
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
         setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
@@ -365,9 +480,13 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 rawMaterialId: r.itemType === 'raw_material' ? r.rawMaterialId : undefined,
                 productId: r.itemType === 'product' ? r.productId : undefined,
             })).filter(r => (r.itemType === 'raw_material' && r.rawMaterialId) || (r.itemType === 'product' && r.productId)),
-            addons: formData.addons.filter(a => a.name.trim() !== '').map(a => ({...a, price: Number(a.price) || 0, costPrice: Number(a.costPrice) || 0})),
-            variants: formData.variants.filter(v => v.name.trim() !== '').map(v => ({...v, price: Number(v.price) || 0, costPrice: Number(v.costPrice) || 0})),
-            branchPrices: formData.branchPrices
+            // Filter empty mods
+            modifierGroups: formData.modifierGroups.filter(g => g.name.trim() !== '' && g.options.length > 0),
+            // Legacy fallbacks (optional to keep or clear)
+            addons: formData.addons, 
+            variants: formData.variants,
+            branchPrices: formData.branchPrices,
+            validStoreIds: formData.validStoreIds.length === 0 ? undefined : formData.validStoreIds
         };
         if (product && 'id' in product) {
             onSave({ ...productData, id: product.id });
@@ -430,6 +549,40 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
             
             <CategoryInput value={formData.category} onChange={(newCats) => setFormData(prev => ({ ...prev, category: newCats }))} />
             
+            {/* Branch Restriction Selector */}
+            {availableBranches.length > 0 && (
+                <div className="pt-2">
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Ketersediaan Cabang</label>
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, validStoreIds: [] }))}
+                            className={`px-3 py-1 text-xs rounded-full border transition-colors ${formData.validStoreIds.length === 0 ? 'bg-blue-600 border-blue-600 text-white font-bold' : 'bg-slate-800 border-slate-600 text-slate-400'}`}
+                        >
+                            Semua Cabang
+                        </button>
+                        {availableBranches.map(branch => {
+                            const isSelected = formData.validStoreIds.includes(branch.id);
+                            return (
+                                <button
+                                    key={branch.id}
+                                    type="button"
+                                    onClick={() => handleToggleStoreId(branch.id)}
+                                    className={`px-3 py-1 text-xs rounded-full border transition-colors ${isSelected ? 'bg-[#347758] border-[#347758] text-white' : 'bg-slate-800 border-slate-600 text-slate-400'}`}
+                                >
+                                    {branch.name}
+                                </button>
+                            )
+                        })}
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                        {formData.validStoreIds.length === 0 
+                            ? "Produk ini akan muncul di semua cabang." 
+                            : "Produk ini HANYA akan muncul di cabang yang dipilih."}
+                    </p>
+                </div>
+            )}
+
             <div>
                  <label htmlFor="barcode" className="block text-sm font-medium text-slate-300 mb-1">Barcode (Opsional)</label>
                  <div className="flex gap-2">
@@ -530,94 +683,14 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 </div>
             </div>
 
-            {/* Varian Harga (Multi-Tier Pricing) */}
+            {/* NEW: Modifier & Variant Builder */}
             <div className="space-y-3 pt-4 border-t border-slate-700">
-                <h3 className="text-lg font-semibold text-white">Varian Harga (Opsional)</h3>
-                <p className="text-xs text-slate-400">Gunakan ini untuk ukuran berbeda (Regular/Jumbo) atau tipe (Panas/Dingin).</p>
-                {formData.variants.map((variant, index) => (
-                    <div key={index} className="flex flex-wrap items-center gap-2 bg-slate-900 p-2 rounded-md">
-                        <input
-                            type="text"
-                            value={variant.name}
-                            placeholder="Nama Varian (cth: Jumbo)"
-                            onChange={(e) => handleVariantChange(index, 'name', e.target.value)}
-                            className="flex-1 min-w-[150px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
-                        />
-                        <input
-                            type="number"
-                            min="0"
-                            value={variant.price}
-                            placeholder="Harga Jual"
-                            onChange={(e) => handleVariantChange(index, 'price', parseFloat(e.target.value) || 0)}
-                            className="flex-1 min-w-[120px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
-                        />
-                        {inventorySettings.enabled && (
-                            <input
-                                type="number"
-                                min="0"
-                                value={variant.costPrice || ''}
-                                placeholder="Harga Modal (Opsional)"
-                                onChange={(e) => handleVariantChange(index, 'costPrice', parseFloat(e.target.value) || 0)}
-                                className="flex-1 min-w-[120px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
-                            />
-                        )}
-                        <Button
-                            type="button"
-                            variant="danger"
-                            size="sm"
-                            onClick={() => removeVariantItem(index)}
-                        >
-                            <Icon name="trash" className="w-4 h-4" />
-                        </Button>
-                    </div>
-                ))}
-                <Button type="button" variant="secondary" onClick={addVariantItem}>
-                    <Icon name="plus" className="w-4 h-4" /> Tambah Varian
-                </Button>
-            </div>
-
-             <div className="space-y-3 pt-4 border-t border-slate-700">
-                <h3 className="text-lg font-semibold text-white">Add-ons / Topping (Opsional)</h3>
-                {formData.addons.map((addon, index) => (
-                    <div key={index} className="flex flex-wrap items-center gap-2 bg-slate-900 p-2 rounded-md">
-                        <input
-                            type="text"
-                            value={addon.name}
-                            placeholder="Nama Add-on"
-                            onChange={(e) => handleAddonChange(index, 'name', e.target.value)}
-                            className="flex-1 min-w-[150px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
-                        />
-                        <input
-                            type="number"
-                            min="0"
-                            value={addon.price}
-                            placeholder="Harga Jual"
-                            onChange={(e) => handleAddonChange(index, 'price', parseFloat(e.target.value) || 0)}
-                            className="flex-1 min-w-[120px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
-                        />
-                        {inventorySettings.enabled && (
-                            <input
-                                type="number"
-                                min="0"
-                                value={addon.costPrice || ''}
-                                placeholder="Harga Modal"
-                                onChange={(e) => handleAddonChange(index, 'costPrice', parseFloat(e.target.value) || 0)}
-                                className="flex-1 min-w-[120px] bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-white"
-                            />
-                        )}
-                        <Button
-                            type="button"
-                            variant="danger"
-                            size="sm"
-                            onClick={() => removeAddonItem(index)}
-                        >
-                            <Icon name="trash" className="w-4 h-4" />
-                        </Button>
-                    </div>
-                ))}
-                <Button type="button" variant="secondary" onClick={addAddonItem}>
-                    <Icon name="plus" className="w-4 h-4" /> Tambah Add-on
-                </Button>
+                <h3 className="text-lg font-semibold text-white">Varian & Modifier (Advanced)</h3>
+                <p className="text-xs text-slate-400">Atur varian rasa, level gula, topping, atau ukuran.</p>
+                <ModifierBuilder 
+                    groups={formData.modifierGroups} 
+                    onChange={(groups) => setFormData(prev => ({...prev, modifierGroups: groups}))} 
+                />
             </div>
 
             {inventorySettings.enabled && (
@@ -830,7 +903,9 @@ const ProductsView: React.FC = () => {
         { label: 'Harga', width: '1fr', render: (p: Product) => (
             <div>
                 <p className="text-white">{CURRENCY_FORMATTER.format(p.price)}</p>
-                {p.variants && p.variants.length > 0 && <span className="text-[10px] text-blue-300">Ada Varian</span>}
+                {(p.modifierGroups && p.modifierGroups.length > 0) 
+                    ? <span className="text-[10px] text-purple-300">Modifier</span>
+                    : (p.variants && p.variants.length > 0 && <span className="text-[10px] text-blue-300">Varian Lama</span>)}
             </div>
         )},
         { label: 'Stok', width: '1fr', render: (p: Product) => (

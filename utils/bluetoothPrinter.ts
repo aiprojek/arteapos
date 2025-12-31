@@ -61,6 +61,8 @@ const COMMANDS = {
     SIZE_NORMAL: GS + '!' + '\x00',
     SIZE_LARGE: GS + '!' + '\x11', // Double width & height
     CUT: GS + 'V' + '\x41' + '\x00', // Cut paper
+    FONT_B: ESC + 'M' + '\x01', // Small Font
+    FONT_A: ESC + 'M' + '\x00', // Normal Font
 };
 
 let bluetoothDevice: BluetoothDevice | null = null;
@@ -182,10 +184,27 @@ export const bluetoothPrinterService = {
         // --- Footer ---
         data += COMMANDS.ALIGN_CENTER;
         data += LF + settings.footerMessage + LF;
+        
+        // --- Branding (Watermark replacement) ---
+        data += COMMANDS.FONT_B; // Small font
+        data += '--------------------------------' + LF;
+        data += 'Powered by ARTEA POS' + LF;
+        data += 'aiprojek01.my.id' + LF;
+        data += COMMANDS.FONT_A; // Reset font
+        
         data += LF + LF + LF; // Feed
 
         try {
-            await printerCharacteristic?.writeValue(encoder.encode(data));
+            // FIX: Send data in chunks to prevent buffer overflow (truncation issues)
+            const encodedData = encoder.encode(data);
+            const CHUNK_SIZE = 100; // 100 bytes per packet is generally safe for thermal printers
+            
+            for (let i = 0; i < encodedData.length; i += CHUNK_SIZE) {
+                const chunk = encodedData.slice(i, i + CHUNK_SIZE);
+                await printerCharacteristic?.writeValue(chunk);
+                // Optional: Tiny delay can help very slow printers processing buffer
+                // await new Promise(r => setTimeout(r, 10)); 
+            }
         } catch (e) {
             console.error('Failed to print', e);
             alert('Gagal mengirim data ke printer. Coba sambungkan ulang.');

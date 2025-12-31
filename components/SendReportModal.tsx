@@ -130,7 +130,7 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
                  const username = adminTelegram.replace('@', '');
                  url = `https://t.me/${username}?text=${encodedMsg}`;
              } else {
-                 // Fallback to share URL
+                 // Fallback for share URL
                  url = `https://t.me/share/url?url=&text=${encodedMsg}`;
              }
         }
@@ -250,10 +250,10 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
         if (dbxToken) {
             try {
                 // A. Upload Full Backup (JSON) - Untuk Restore
-                await dropboxService.uploadBackup(dbxToken);
+                await dropboxService.uploadBackup();
                 
                 // B. Upload Laporan CSV Harian (Transaksi & Stok) - Untuk Admin Baca
-                await dropboxService.uploadCSVReports(dbxToken);
+                await dropboxService.uploadCSVReports();
 
                 messages.push("✅ Dropbox: Berhasil (Backup + Laporan CSV)");
             } catch (e: any) {

@@ -10,6 +10,7 @@ import { dataService } from '../services/dataService';
 import { CURRENCY_FORMATTER } from '../constants';
 import VirtualizedTable from '../components/VirtualizedTable';
 import StockOpnameModal from '../components/StockOpnameModal';
+import { useSettings } from '../context/SettingsContext';
 
 const InputField: React.FC<{
     name: string;
@@ -41,7 +42,10 @@ const RawMaterialForm: React.FC<{
     onSave: (material: Omit<RawMaterial, 'id'> | RawMaterial) => void, 
     onCancel: () => void 
 }> = ({ material, onSave, onCancel }) => {
-    const [formData, setFormData] = useState({ name: '', stock: '', unit: '', costPerUnit: '' });
+    const { receiptSettings } = useSettings();
+    const [formData, setFormData] = useState({ name: '', stock: '', unit: '', costPerUnit: '', validStoreIds: [] as string[] });
+    
+    const availableBranches = receiptSettings.branches || [];
 
     useEffect(() => {
         if (material) {
@@ -49,10 +53,11 @@ const RawMaterialForm: React.FC<{
                 name: material.name,
                 stock: material.stock.toString(),
                 unit: material.unit,
-                costPerUnit: material.costPerUnit?.toString() || ''
+                costPerUnit: material.costPerUnit?.toString() || '',
+                validStoreIds: material.validStoreIds || []
             });
         } else {
-            setFormData({ name: '', stock: '', unit: '', costPerUnit: '' });
+            setFormData({ name: '', stock: '', unit: '', costPerUnit: '', validStoreIds: [] });
         }
     }, [material]);
 
@@ -61,12 +66,24 @@ const RawMaterialForm: React.FC<{
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    const handleToggleStoreId = (storeId: string) => {
+        setFormData(prev => {
+            const current = prev.validStoreIds || [];
+            if (current.includes(storeId)) {
+                return { ...prev, validStoreIds: current.filter(id => id !== storeId) };
+            } else {
+                return { ...prev, validStoreIds: [...current, storeId] };
+            }
+        });
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const materialData = {
             ...formData,
             stock: parseFloat(formData.stock) || 0,
             costPerUnit: parseFloat(formData.costPerUnit) || 0,
+            validStoreIds: formData.validStoreIds.length === 0 ? undefined : formData.validStoreIds
         };
         if (material && 'id' in material) {
             onSave({ ...materialData, id: material.id });
@@ -81,6 +98,38 @@ const RawMaterialForm: React.FC<{
             <InputField name="stock" label="Jumlah Stok" type="number" required value={formData.stock} onChange={handleChange} min="0"/>
             <InputField name="unit" label="Satuan (cth: gram, ml, pcs)" required value={formData.unit} onChange={handleChange} />
             <InputField name="costPerUnit" label="Biaya per Satuan (IDR, Opsional)" type="number" value={formData.costPerUnit} onChange={handleChange} min="0"/>
+
+            {/* Branch Restriction Selector */}
+            {availableBranches.length > 0 && (
+                <div className="pt-2 border-t border-slate-700">
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Ketersediaan Cabang</label>
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, validStoreIds: [] }))}
+                            className={`px-3 py-1 text-xs rounded-full border transition-colors ${formData.validStoreIds.length === 0 ? 'bg-blue-600 border-blue-600 text-white font-bold' : 'bg-slate-800 border-slate-600 text-slate-400'}`}
+                        >
+                            Semua Cabang
+                        </button>
+                        {availableBranches.map(branch => {
+                            const isSelected = formData.validStoreIds.includes(branch.id);
+                            return (
+                                <button
+                                    key={branch.id}
+                                    type="button"
+                                    onClick={() => handleToggleStoreId(branch.id)}
+                                    className={`px-3 py-1 text-xs rounded-full border transition-colors ${isSelected ? 'bg-[#347758] border-[#347758] text-white' : 'bg-slate-800 border-slate-600 text-slate-400'}`}
+                                >
+                                    {branch.name}
+                                </button>
+                            )
+                        })}
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                        Jika dipilih, bahan baku ini hanya akan muncul di cabang tersebut.
+                    </p>
+                </div>
+            )}
 
             <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="secondary" onClick={onCancel}>Batal</Button>

@@ -13,7 +13,8 @@ interface DataContextType {
   logAudit: (user: User | null, action: AuditAction, details: string, targetId?: string) => Promise<void>;
   triggerAutoSync: () => Promise<void>;
   syncStatus: 'idle' | 'syncing' | 'success' | 'error';
-  syncErrorMessage: string | null; // NEW: To store specific error reason
+  setSyncStatus: (status: 'idle' | 'syncing' | 'success' | 'error') => void; // Exposed for AuthContext
+  syncErrorMessage: string | null;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -40,6 +41,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   const prevDataRef = useRef<AppData | null>(null);
+  
+  // Ref for debounce timer to avoid too many cloud pushes
+  const masterPushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -106,10 +110,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadData();
   }, []);
 
+  // --- AUTOMATED MASTER DATA PUSH (ADMIN SIDE) ---
+  const triggerMasterDataPush = useCallback(async () => {
+      // Check if credentials exist
+      const sbUrl = localStorage.getItem('ARTEA_SB_URL');
+      const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
+      
+      if (!sbUrl && !dbxToken) return;
+
+      setSyncStatus('syncing');
+      try {
+          if (sbUrl) {
+              const sbKey = localStorage.getItem('ARTEA_SB_KEY') || '';
+              supabaseService.init(sbUrl, sbKey);
+              await supabaseService.pushMasterData();
+          } else if (dbxToken) {
+              // Fallback to dropbox if only dropbox is connected
+              await dropboxService.uploadMasterData();
+          }
+          setSyncStatus('success');
+          setTimeout(() => setSyncStatus('idle'), 2000);
+      } catch (e) {
+          console.error("Master Push Failed", e);
+          setSyncStatus('error');
+      }
+  }, []);
+
   useEffect(() => {
     const prevData = prevDataRef.current;
     if (isDataLoading || !prevData || prevData === data) return;
     
+    // 1. Persist to IndexedDB (Instant)
     const persist = async () => {
       try {
         await db.transaction('rw', db.tables.map(t => t.name), async () => {
@@ -135,7 +166,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 case 'discountDefinitions':
                 case 'heldCarts':
                 case 'sessionHistory':
-                case 'auditLogs': // Persist logs
+                case 'auditLogs':
                   promises.push(db.table(key).clear().then(() => db.table(key).bulkAdd(value as any[])));
                   break;
                 case 'categories':
@@ -159,8 +190,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     
     persist();
+
+    // 2. Trigger Auto Push for Master Data (Debounced)
+    // We check if Master Data keys have changed
+    const masterKeys: (keyof AppData)[] = ['products', 'categories', 'discountDefinitions', 'membershipSettings', 'customers', 'suppliers'];
+    const hasMasterChanges = masterKeys.some(key => data[key] !== prevData[key]);
+
+    if (hasMasterChanges) {
+        if (masterPushTimeoutRef.current) clearTimeout(masterPushTimeoutRef.current);
+        
+        masterPushTimeoutRef.current = setTimeout(() => {
+            triggerMasterDataPush();
+        }, 3000); // Wait 3 seconds of inactivity before pushing
+    }
+
     prevDataRef.current = data;
-  }, [data, isDataLoading]);
+  }, [data, isDataLoading, triggerMasterDataPush]);
   
   const setData = useCallback((value: AppData | ((val: AppData) => AppData)) => {
     _setData(value);
@@ -192,7 +237,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await db.discountDefinitions.bulkAdd(backupData.discountDefinitions || []);
       await db.heldCarts.bulkAdd(backupData.heldCarts || []);
       await db.sessionHistory.bulkAdd(backupData.sessionHistory || []);
-      await db.auditLogs.bulkAdd(backupData.auditLogs || []); // Restore logs
+      await db.auditLogs.bulkAdd(backupData.auditLogs || []); 
       
       await db.appState.put({ key: 'categories', value: backupData.categories || [] });
 
@@ -208,7 +253,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.location.reload();
   }, []);
 
-  // --- NEW: Audit Logging Utility ---
+  // --- Audit Logging Utility ---
   const logAudit = useCallback(async (user: User | null, action: AuditAction, details: string, targetId?: string) => {
       const newLog: AuditLog = {
           id: Date.now().toString(),
@@ -226,11 +271,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }));
   }, []);
 
-  // --- NEW: Automatic Cloud Sync ---
+  // --- Automatic Cloud Sync (Operational Data - Tx, Expenses, Stock) ---
   const triggerAutoSync = useCallback(async () => {
       const sbUrl = localStorage.getItem('ARTEA_SB_URL');
       const sbKey = localStorage.getItem('ARTEA_SB_KEY');
-      const dbxToken = localStorage.getItem('ARTEA_DBX_TOKEN');
+      const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
 
       // If no cloud configured, do nothing silently
       if (!sbUrl && !dbxToken) return;
@@ -249,7 +294,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Priority 2: Dropbox (CSV Only for speed)
           // We avoid uploading the full JSON backup on every transaction to prevent lag/bandwidth usage
           if (dbxToken) {
-              await dropboxService.uploadCSVReports(dbxToken);
+              await dropboxService.uploadCSVReports();
           }
 
           setSyncStatus('success');
@@ -269,7 +314,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <DataContext.Provider value={{ data, setData, restoreData, isDataLoading, logAudit, triggerAutoSync, syncStatus, syncErrorMessage }}>
+    <DataContext.Provider value={{ data, setData, restoreData, isDataLoading, logAudit, triggerAutoSync, syncStatus, setSyncStatus, syncErrorMessage }}>
       {children}
     </DataContext.Provider>
   );

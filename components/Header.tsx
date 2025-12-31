@@ -1,14 +1,16 @@
 
 import React, { useState, useRef } from 'react';
-import type { View } from '../types';
+import type { View, Branch } from '../types';
 import Icon from './Icon';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
+import { useSettings } from '../context/SettingsContext';
 import Button from './Button';
 import { dataService } from '../services/dataService';
 import { useUI } from '../context/UIContext';
 import { supabaseService } from '../services/supabaseService';
 import { dropboxService } from '../services/dropboxService';
+import { db } from '../services/db'; // Direct DB access to check branches after sync
 import Modal from './Modal';
 
 interface HeaderProps {
@@ -30,10 +32,18 @@ const viewTitles: Record<View, string> = {
 
 const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick }) => {
     const { currentUser, logout, authSettings } = useAuth();
-    const { restoreData, syncStatus, syncErrorMessage } = useData(); // Get sync status & error
+    const { restoreData, syncStatus, syncErrorMessage } = useData(); 
+    const { updateReceiptSettings, receiptSettings } = useSettings();
     const { showAlert } = useUI();
+    
     const [isDataModalOpen, setDataModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    
+    // Branch Selection State
+    const [isBranchModalOpen, setBranchModalOpen] = useState(false);
+    const [availableBranches, setAvailableBranches] = useState<Branch[]>([]);
+    const [selectedBranchId, setSelectedBranchId] = useState('');
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const isAdmin = currentUser?.role === 'admin';
@@ -75,7 +85,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
     const handleCloudPull = async () => {
         const sbUrl = localStorage.getItem('ARTEA_SB_URL');
         const sbKey = localStorage.getItem('ARTEA_SB_KEY');
-        const dbxToken = localStorage.getItem('ARTEA_DBX_TOKEN');
+        const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
 
         if (!sbUrl && !dbxToken) {
             showAlert({ type: 'alert', title: 'Belum Dikonfigurasi', message: 'Admin belum mengatur koneksi Cloud (Supabase/Dropbox) di menu Pengaturan.' });
@@ -84,29 +94,50 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
 
         setIsProcessing(true);
         try {
-            let message = "";
             if (sbUrl && sbKey) {
                 // Priority 1: Supabase
                 supabaseService.init(sbUrl, sbKey);
                 const res = await supabaseService.pullMasterData();
                 if (!res.success) throw new Error(res.message);
-                message = "Berhasil menarik data terbaru dari Database Pusat (Supabase).";
             } else if (dbxToken) {
                 // Priority 2: Dropbox
-                await dropboxService.downloadAndMergeMasterData(dbxToken);
-                message = "Berhasil menarik data terbaru dari Dropbox Pusat.";
+                await dropboxService.downloadAndMergeMasterData();
             }
             
-            showAlert({ type: 'alert', title: 'Update Sukses', message: message });
-            setDataModalOpen(false);
-            // Optional: Reload to ensure all contexts refresh perfectly
-            setTimeout(() => window.location.reload(), 1500); 
+            // --- AUTO PROMPT BRANCH SELECTION ---
+            // After sync, check DB if branches exist
+            const settings = await db.settings.get('receiptSettings');
+            const branches = settings?.value?.branches || [];
+            
+            if (branches.length > 0) {
+                setAvailableBranches(branches);
+                // Pre-select current if exists
+                setSelectedBranchId(settings?.value?.storeId || '');
+                setDataModalOpen(false); // Close main modal
+                setBranchModalOpen(true); // Open branch select modal
+            } else {
+                showAlert({ type: 'alert', title: 'Update Sukses', message: "Data berhasil diperbarui. Tidak ada data cabang ditemukan." });
+                setDataModalOpen(false);
+                setTimeout(() => window.location.reload(), 1500); 
+            }
+
         } catch (e: any) {
             console.error(e);
             showAlert({ type: 'alert', title: 'Gagal Update', message: `Terjadi kesalahan: ${e.message}` });
         } finally {
             setIsProcessing(false);
         }
+    };
+
+    const handleSaveBranchSelection = () => {
+        if (!selectedBranchId) return;
+        
+        // Save to context/DB
+        updateReceiptSettings({ ...receiptSettings, storeId: selectedBranchId });
+        
+        setBranchModalOpen(false);
+        showAlert({ type: 'alert', title: 'Setup Selesai', message: 'Identitas cabang berhasil disimpan. Aplikasi akan dimuat ulang.' });
+        setTimeout(() => window.location.reload(), 1500);
     };
 
     const handleSyncErrorClick = () => {
@@ -216,7 +247,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                             <h4 className="font-bold text-white text-sm">Update dari Pusat</h4>
                         </div>
                         <p className="text-xs text-slate-400 mb-3">
-                            Tarik harga, produk, dan promo terbaru dari server Cloud. Tidak akan menghapus laporan penjualan Anda.
+                            Tarik harga, produk, dan data cabang terbaru dari server Cloud.
                         </p>
                         <Button onClick={handleCloudPull} disabled={isProcessing} className="w-full bg-sky-700 hover:bg-sky-600 text-white border-none">
                             {isProcessing ? 'Sedang Memproses...' : 'Update Data Sekarang'}
@@ -267,6 +298,45 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                     <div className="pt-2 text-center">
                         <button onClick={() => setDataModalOpen(false)} className="text-slate-400 text-sm hover:text-white">Tutup</button>
                     </div>
+                </div>
+            </Modal>
+
+            {/* NEW: Branch Selection Modal (Auto-appears after Sync) */}
+            <Modal isOpen={isBranchModalOpen} onClose={() => {}} title="Pilih Identitas Cabang">
+                <div className="space-y-4">
+                    <div className="bg-green-900/20 p-3 rounded-lg border border-green-800">
+                        <p className="text-sm text-green-200 flex items-center gap-2">
+                            <Icon name="check-circle-fill" className="w-4 h-4"/>
+                            Data berhasil diperbarui dari Pusat.
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <p className="text-slate-300 text-sm mb-2">Pilih lokasi operasional perangkat ini:</p>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {availableBranches.map(branch => (
+                                <button
+                                    key={branch.id}
+                                    onClick={() => setSelectedBranchId(branch.id)}
+                                    className={`w-full text-left p-3 rounded-lg border transition-colors flex justify-between items-center
+                                        ${selectedBranchId === branch.id 
+                                            ? 'bg-[#347758] border-[#347758] text-white' 
+                                            : 'bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700'
+                                        }`}
+                                >
+                                    <div>
+                                        <div className="font-bold">{branch.name}</div>
+                                        <div className="text-xs opacity-75">{branch.id}</div>
+                                    </div>
+                                    {selectedBranchId === branch.id && <Icon name="check-circle-fill" className="w-5 h-5"/>}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <Button onClick={handleSaveBranchSelection} disabled={!selectedBranchId} className="w-full">
+                        Simpan & Mulai
+                    </Button>
                 </div>
             </Modal>
         </header>

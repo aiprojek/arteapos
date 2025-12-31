@@ -56,7 +56,7 @@ function base64ToBlob(base64: string): Blob {
 
 export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const { data, setData, logAudit, triggerAutoSync } = useData(); // Added triggerAutoSync
-  const { products, categories, rawMaterials, inventorySettings, stockAdjustments } = data;
+  const { products, categories, rawMaterials, inventorySettings, stockAdjustments, receiptSettings } = data;
   const { showAlert } = useUI();
   const { currentUser } = useAuth();
 
@@ -112,8 +112,19 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
   }, [setData]);
 
   const findProductByBarcode = useCallback((barcode: string) => {
-    return products.find(p => p.barcode === barcode);
-  }, [products]);
+    // UPDATED: Check store restriction
+    const currentStoreId = receiptSettings.storeId;
+    return products.find(p => {
+        // Check barcode match
+        if (p.barcode !== barcode) return false;
+        
+        // Check store restriction
+        if (p.validStoreIds && p.validStoreIds.length > 0 && currentStoreId) {
+            return p.validStoreIds.includes(currentStoreId);
+        }
+        return true;
+    });
+  }, [products, receiptSettings.storeId]);
 
   const addRawMaterial = useCallback((material: Omit<RawMaterial, 'id'>) => {
     const newMaterial = { ...material, id: Date.now().toString() };

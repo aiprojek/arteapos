@@ -110,7 +110,7 @@ interface CartSidebarProps {
     selectedCustomer: Customer | null;
     setSelectedCustomer: (c: Customer | null) => void;
     onOpenCustomerForm: () => void;
-    onSplitBill?: () => void; // New Prop
+    onSplitBill?: () => void;
 }
 
 const CartSidebar: React.FC<CartSidebarProps> = ({ 
@@ -177,10 +177,10 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     };
 
     return (
-        <div className={`w-full md:w-96 lg:w-[420px] bg-slate-800 rounded-xl shadow-2xl flex flex-col p-4 flex-shrink-0 h-[45%] md:h-full border-l border-slate-700 ${isSessionLocked ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className={`w-full md:w-96 lg:w-[420px] bg-slate-800 md:rounded-xl shadow-none md:shadow-2xl flex flex-col p-4 flex-shrink-0 h-full border-l-0 md:border-l border-slate-700 ${isSessionLocked ? 'opacity-50 pointer-events-none' : ''}`}>
             {sessionSettings.enabled && sessionSettings.enableCartHolding && <HeldCartsTabs onSwitch={handleSwitchCart} />}
             
-            <h2 className="text-xl font-bold mb-2 text-white">Keranjang</h2>
+            <h2 className="text-xl font-bold mb-2 text-white hidden md:block">Keranjang</h2>
             
             {cart.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center text-slate-500">
@@ -190,7 +190,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 </div>
             ) : (
                 <>
-                    <div className="flex-1 overflow-y-auto pr-2 -mr-2 divide-y divide-slate-700">
+                    <div className="flex-1 overflow-y-auto pr-1 -mr-1 space-y-2 pb-2">
                        {cart.map(item => <CartItemComponent key={item.cartItemId} item={item} onOpenDiscountModal={onOpenDiscountModal}/>)}
                     </div>
                     
@@ -262,7 +262,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                                 title="Bayar dengan uang pas"
                                 className="bg-slate-700"
                             >
-                                Uang Pas
+                                Pas
                             </Button>
                             {quickPayAmounts.map(amount => (
                                 <Button
@@ -273,7 +273,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                                     disabled={cart.length === 0 || finalTotal > amount}
                                     className="bg-slate-700"
                                 >
-                                    {amount / 1000}rb
+                                    {amount / 1000}k
                                 </Button>
                             ))}
                         </div>

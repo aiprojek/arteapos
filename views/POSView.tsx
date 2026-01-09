@@ -875,10 +875,15 @@ const POSView: React.FC = () => {
     const [isStaffRestockOpen, setStaffRestockOpen] = useState(false); 
     const [isOpnameOpen, setIsOpnameOpen] = useState(false); 
     
-    // NEW STATES for Modifiers & Split
+    // NEW STATES for Modifiers & Split & Mobile Tabs
     const [isModifierModalOpen, setModifierModalOpen] = useState(false);
     const [productForModifier, setProductForModifier] = useState<Product | null>(null);
     const [isSplitBillModalOpen, setSplitBillModalOpen] = useState(false);
+    const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products');
+
+    // Calculate cart total quantity for badge
+    const totalCartItems = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
+    const { finalTotal } = getCartTotals();
 
     // Effects
     useEffect(() => {
@@ -887,8 +892,6 @@ const POSView: React.FC = () => {
         }
     }, [selectedCustomer, appliedReward, removeRewardFromCart]);
     
-    // Keyboard Shortcuts (F2) handled in Payment Modal or specific logic, removed global listener to simplify
-
     // --- Action Handlers ---
 
     const handleProductClick = (product: Product) => {
@@ -945,15 +948,6 @@ const POSView: React.FC = () => {
     // New Handler for Modifiers
     const handleModifierConfirm = (selectedModifiers: SelectedModifier[]) => {
         if (productForModifier) {
-            // We use addConfiguredItemToCart but inject our modifiers into the logic (via CartContext update)
-            // Since addConfiguredItemToCart accepts addons/variant, we might need to extend it 
-            // OR update addToCart to handle pre-filled item
-            // For now, let's update CartContext to accept modifiers
-            // Check CartContext.tsx for addConfiguredItemToCart update
-            
-            // Temporary hack: Pass empty addons, but add configured item manually if context not fully updated yet.
-            // Better: Update CartContext `addConfiguredItemToCart` to accept modifiers.
-            // Assuming we updated CartContext already:
             // @ts-ignore
             addConfiguredItemToCart(productForModifier, [], undefined, selectedModifiers); 
         }
@@ -1077,78 +1071,104 @@ const POSView: React.FC = () => {
     const isSessionLocked = sessionSettings.enabled && !session;
 
     return (
-        <div className="flex flex-col md:flex-row h-full gap-6">
-            {/* Products & Main Actions Area */}
-            <div className="flex flex-col min-w-0 md:flex-1 h-[55%] md:h-full">
-                {isSessionLocked ? (
-                    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-800/50 rounded-xl border-2 border-dashed border-slate-700">
-                        <div className="bg-slate-800 p-4 rounded-full mb-4 shadow-lg">
-                            <Icon name="lock" className="w-12 h-12 text-slate-500" />
-                        </div>
-                        <h3 className="text-xl font-bold text-white mb-2">Sesi Penjualan Belum Dimulai</h3>
-                        <p className="text-slate-400 mb-6 max-w-xs text-sm">
-                            Untuk keamanan dan pencatatan yang akurat, silakan mulai sesi baru dan masukkan modal awal kasir.
-                        </p>
-                        <Button onClick={() => setStartSessionModalOpen(true)} variant="primary" size="lg">
-                            Mulai Sesi Sekarang
-                        </Button>
-                    </div>
-                ) : (
-                    <>
-                        {/* Session Actions Bar (Only visible if Session Enabled and Active) */}
-                        {sessionSettings.enabled && session && (
-                            <div className="flex items-center gap-2 mb-4 bg-slate-800 p-2 rounded-lg border border-slate-700 overflow-x-auto">
-                                <Button variant="secondary" size="sm" onClick={() => setHistoryModalOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
-                                    <Icon name="book" className="w-4 h-4" /> Riwayat
-                                </Button>
-                                <Button variant="secondary" size="sm" onClick={() => setCashMgmtOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
-                                    <Icon name="finance" className="w-4 h-4" /> Kas
-                                </Button>
-                                <Button variant="secondary" size="sm" onClick={() => setSendReportModalOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
-                                    <Icon name="chat" className="w-4 h-4" /> Laporan
-                                </Button>
-                                <Button variant="danger" size="sm" onClick={() => setEndSessionModalOpen(true)} className="border-none bg-red-900/30 hover:bg-red-900/50 text-red-300 ml-auto">
-                                    <Icon name="logout" className="w-4 h-4" /> Tutup
-                                </Button>
-                            </div>
-                        )}
-
-                        <ProductBrowser 
-                            onProductClick={handleProductClick}
-                            isSessionLocked={isSessionLocked}
-                            onOpenScanner={() => setBarcodeScannerOpen(true)}
-                            onOpenRestock={() => setStaffRestockOpen(true)}
-                            onOpenOpname={() => setIsOpnameOpen(true)}
-                        />
-                    </>
-                )}
+        <div className="flex flex-col h-full">
+            {/* Mobile Tab Navigation */}
+            <div className="md:hidden flex p-1 bg-slate-800 mb-4 rounded-lg gap-1 shrink-0">
+                <button
+                    onClick={() => setMobileTab('products')}
+                    className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 ${mobileTab === 'products' ? 'bg-[#347758] text-white' : 'text-slate-400 hover:text-white'}`}
+                >
+                    <Icon name="products" className="w-4 h-4"/> Menu
+                </button>
+                <button
+                    onClick={() => setMobileTab('cart')}
+                    className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 ${mobileTab === 'cart' ? 'bg-[#347758] text-white' : 'text-slate-400 hover:text-white'}`}
+                >
+                    <Icon name="cash" className="w-4 h-4"/> Keranjang
+                    {totalCartItems > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">
+                            {totalCartItems}
+                        </span>
+                    )}
+                </button>
             </div>
-            
-            {/* Cart Sidebar */}
-            <CartSidebar 
-                isSessionLocked={isSessionLocked}
-                onOpenDiscountModal={handleOpenDiscountModal}
-                onOpenCartDiscountModal={() => setCartDiscountModalOpen(true)}
-                onOpenRewardModal={() => selectedCustomer ? setRewardsModalOpen(true) : showAlert({type: 'alert', title: 'Pilih Pelanggan', message: 'Silakan pilih pelanggan.'})}
-                onOpenPaymentModal={() => setPaymentModalOpen(true)}
-                onOpenNameModal={(cart) => { setCartToRename(cart); setNameModalOpen(true); }}
-                onQuickPay={handleQuickPay}
-                selectedCustomer={selectedCustomer}
-                setSelectedCustomer={setSelectedCustomer}
-                onOpenCustomerForm={() => setCustomerModalOpen(true)}
-                // New Prop
-                onSplitBill={() => {
-                    if(cart.length > 0) setSplitBillModalOpen(true);
-                    else showAlert({type: 'alert', title: 'Keranjang Kosong', message: 'Tidak ada item untuk dipisah.'});
-                }}
-            />
+
+            <div className="flex flex-col md:flex-row h-full gap-6 overflow-hidden">
+                {/* Products & Main Actions Area */}
+                {/* Hidden on mobile if cart tab is active */}
+                <div className={`flex-col min-w-0 md:flex-1 h-full ${mobileTab === 'cart' ? 'hidden md:flex' : 'flex'}`}>
+                    {isSessionLocked ? (
+                        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-800/50 rounded-xl border-2 border-dashed border-slate-700">
+                            <div className="bg-slate-800 p-4 rounded-full mb-4 shadow-lg">
+                                <Icon name="lock" className="w-12 h-12 text-slate-500" />
+                            </div>
+                            <h3 className="text-xl font-bold text-white mb-2">Sesi Penjualan Belum Dimulai</h3>
+                            <p className="text-slate-400 mb-6 max-w-xs text-sm">
+                                Untuk keamanan dan pencatatan yang akurat, silakan mulai sesi baru dan masukkan modal awal kasir.
+                            </p>
+                            <Button onClick={() => setStartSessionModalOpen(true)} variant="primary" size="lg">
+                                Mulai Sesi Sekarang
+                            </Button>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Session Actions Bar (Only visible if Session Enabled and Active) */}
+                            {sessionSettings.enabled && session && (
+                                <div className="flex items-center gap-2 mb-4 bg-slate-800 p-2 rounded-lg border border-slate-700 overflow-x-auto">
+                                    <Button variant="secondary" size="sm" onClick={() => setHistoryModalOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
+                                        <Icon name="book" className="w-4 h-4" /> Riwayat
+                                    </Button>
+                                    <Button variant="secondary" size="sm" onClick={() => setCashMgmtOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
+                                        <Icon name="finance" className="w-4 h-4" /> Kas
+                                    </Button>
+                                    <Button variant="secondary" size="sm" onClick={() => setSendReportModalOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
+                                        <Icon name="chat" className="w-4 h-4" /> Laporan
+                                    </Button>
+                                    <Button variant="danger" size="sm" onClick={() => setEndSessionModalOpen(true)} className="border-none bg-red-900/30 hover:bg-red-900/50 text-red-300 ml-auto">
+                                        <Icon name="logout" className="w-4 h-4" /> Tutup
+                                    </Button>
+                                </div>
+                            )}
+
+                            <ProductBrowser 
+                                onProductClick={handleProductClick}
+                                isSessionLocked={isSessionLocked}
+                                onOpenScanner={() => setBarcodeScannerOpen(true)}
+                                onOpenRestock={() => setStaffRestockOpen(true)}
+                                onOpenOpname={() => setIsOpnameOpen(true)}
+                            />
+                        </>
+                    )}
+                </div>
+                
+                {/* Cart Sidebar */}
+                {/* Hidden on mobile if products tab is active */}
+                <div className={`h-full ${mobileTab === 'products' ? 'hidden md:block' : 'block'}`}>
+                    <CartSidebar 
+                        isSessionLocked={isSessionLocked}
+                        onOpenDiscountModal={handleOpenDiscountModal}
+                        onOpenCartDiscountModal={() => setCartDiscountModalOpen(true)}
+                        onOpenRewardModal={() => selectedCustomer ? setRewardsModalOpen(true) : showAlert({type: 'alert', title: 'Pilih Pelanggan', message: 'Silakan pilih pelanggan.'})}
+                        onOpenPaymentModal={() => setPaymentModalOpen(true)}
+                        onOpenNameModal={(cart) => { setCartToRename(cart); setNameModalOpen(true); }}
+                        onQuickPay={handleQuickPay}
+                        selectedCustomer={selectedCustomer}
+                        setSelectedCustomer={setSelectedCustomer}
+                        onOpenCustomerForm={() => setCustomerModalOpen(true)}
+                        onSplitBill={() => {
+                            if(cart.length > 0) setSplitBillModalOpen(true);
+                            else showAlert({type: 'alert', title: 'Keranjang Kosong', message: 'Tidak ada item untuk dipisah.'});
+                        }}
+                    />
+                </div>
+            </div>
             
             {/* --- Modals & Overlays --- */}
             <PaymentModal 
                 isOpen={isPaymentModalOpen} 
                 onClose={() => setPaymentModalOpen(false)} 
                 onConfirm={handleSaveTransaction}
-                total={getCartTotals().finalTotal}
+                total={finalTotal}
                 selectedCustomer={selectedCustomer}
             />
             <CashManagementModal isOpen={isCashMgmtOpen} onClose={() => setCashMgmtOpen(false)} />

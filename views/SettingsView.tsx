@@ -17,6 +17,7 @@ import InventoryTab from '../components/settings/InventoryTab';
 import FeaturesTab from '../components/settings/FeaturesTab';
 import AuthTab from '../components/settings/AuthTab';
 import AuditTab from '../components/settings/AuditTab';
+import HardwareTab from '../components/settings/HardwareTab'; // NEW IMPORT
 
 const SettingsView: React.FC = () => {
     const { receiptSettings: originalReceiptSettings, updateReceiptSettings } = useSettings();
@@ -36,7 +37,7 @@ const SettingsView: React.FC = () => {
     const [membershipForm, setMembershipForm] = useState<MembershipSettings>(originalMembershipSettings);
     const [isDirty, setIsDirty] = useState(false);
 
-    const [activeTab, setActiveTab] = useState<'general' | 'features' | 'inventory' | 'auth' | 'data' | 'audit'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'features' | 'inventory' | 'auth' | 'data' | 'audit' | 'hardware'>('general');
 
     // Sync state
     useEffect(() => setReceiptForm(originalReceiptSettings), [originalReceiptSettings]);
@@ -82,6 +83,7 @@ const SettingsView: React.FC = () => {
             <div className="flex flex-nowrap overflow-x-auto gap-2 border-b border-slate-700 pb-2">
                 {[
                     { id: 'general', label: 'Toko & Struk', icon: 'settings', restricted: false },
+                    { id: 'hardware', label: 'Perangkat Keras', icon: 'bluetooth', restricted: false }, // NEW TAB
                     { id: 'features', label: 'Fitur Kasir', icon: 'star', restricted: false },
                     { id: 'inventory', label: 'Inventaris', icon: 'boxes', restricted: false },
                     { id: 'auth', label: 'Keamanan', icon: 'lock', restricted: true }, 
@@ -102,6 +104,8 @@ const SettingsView: React.FC = () => {
             {/* Content Area */}
             {activeTab === 'general' && <GeneralTab form={receiptForm} onChange={setReceiptForm} />}
             
+            {activeTab === 'hardware' && <HardwareTab />} {/* NEW RENDER */}
+
             {activeTab === 'features' && (
                 <FeaturesTab 
                     sessionForm={sessionForm} 

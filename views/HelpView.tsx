@@ -379,6 +379,15 @@ const HelpView: React.FC = () => {
                     <div>
                         <SectionHeader title="Menu: Pengaturan" icon="settings" desc="Konfigurasi sistem, user, dan data." />
                         <div className="space-y-2">
+                            <AccordionItem title="Perangkat Keras (Printer & Scanner)" isOpen={openAccordion === 'set_hw'} onToggle={() => toggleAccordion('set_hw')} icon="bluetooth" colorClass="text-purple-400" badge="Baru">
+                                <p className="mb-2">Masuk ke tab <strong>"Perangkat Keras"</strong> untuk mengatur alat:</p>
+                                <ul className="list-disc pl-5 space-y-1 text-sm">
+                                    <li><strong>Printer Bluetooth:</strong> (Hanya Android/Chrome). Klik "Cari Printer", pilih perangkat, lalu tes print.</li>
+                                    <li><strong>Printer USB/Kabel:</strong> Gunakan opsi "System Printer" (Dialog Browser). Pastikan matikan "Headers & Footers" di pengaturan print browser agar bersih.</li>
+                                    <li><strong>Barcode Scanner:</strong> Sebagian besar scanner fisik bekerja sebagai keyboard. Colok/Pair, lalu arahkan kursor ke kolom tes untuk mencoba.</li>
+                                    <li><strong>Kamera:</strong> Pastikan izin browser diberikan. Jika kamera belakang tidak terdeteksi, sistem akan mencoba kamera depan otomatis.</li>
+                                </ul>
+                            </AccordionItem>
                             <AccordionItem title="Cloud Sync & Multi-Cabang (Dropbox)" isOpen={openAccordion === 'set_1'} onToggle={() => toggleAccordion('set_1')} icon="wifi" colorClass="text-sky-400">
                                 <p>Fitur Cloud kini terpusat menggunakan <strong>Dropbox</strong> untuk kemudahan dan stabilitas.</p>
                                 <div className="bg-slate-800 p-3 rounded border border-slate-600 mt-2">
@@ -415,6 +424,25 @@ const HelpView: React.FC = () => {
                         <h3 className="font-bold text-white mb-2 text-lg">Tanya Jawab & Masalah Umum</h3>
                         <div className="space-y-4">
                             
+                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Kamera scan barcode error / tidak muncul?</h4>
+                                <p className="text-slate-300 text-sm">
+                                    A: Cek hal berikut:
+                                    <ol className="list-decimal pl-5 mt-1">
+                                        <li>Lihat ikon "Gembok" di sebelah alamat website (URL bar). Pastikan izin <strong>Kamera</strong> diatur ke "Allow" atau "Izinkan".</li>
+                                        <li>Pastikan kamera tidak sedang dipakai aplikasi lain (Zoom/Meet/Kamera HP).</li>
+                                        <li>Jika di Laptop tanpa kamera belakang, sistem akan otomatis beralih ke Webcam depan.</li>
+                                    </ol>
+                                </p>
+                            </div>
+
+                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Hasil print struk ada tulisan URL/Tanggal di atasnya?</h4>
+                                <p className="text-slate-300 text-sm">
+                                    A: Ini adalah pengaturan bawaan browser. Saat jendela print muncul, cari menu "More Settings" (Setelan Lainnya), lalu <strong>hilangkan centang</strong> pada opsi <strong>"Headers and footers"</strong>.
+                                </p>
+                            </div>
+
                             <div className="bg-slate-900/50 p-4 rounded-lg">
                                 <h4 className="font-bold text-[#52a37c] mb-1">Q: Mengapa data cabang tidak muncul otomatis di Admin?</h4>
                                 <p className="text-slate-300 text-sm">

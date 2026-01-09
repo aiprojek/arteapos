@@ -191,7 +191,7 @@ const HelpView: React.FC = () => {
                                 "Input Produk langsung di menu 'Produk'.",
                                 "Jualan di menu 'Kasir'. Data tersimpan di browser.",
                                 "Lihat laporan harian di menu 'Laporan'.",
-                                "Wajib: Lakukan 'Backup Lokal' (Settings > Data) seminggu sekali untuk keamanan."
+                                "Wajib: Lakukan 'Backup Lokal' (Settings &rarr; Data) seminggu sekali untuk keamanan."
                             ]}
                         />
                         <ScenarioCard 
@@ -201,9 +201,9 @@ const HelpView: React.FC = () => {
                             desc="Owner memantau dari jauh tanpa Cloud. Staff kirim laporan via WA."
                             steps={[
                                 "Staff berjualan & Tutup Shift seperti biasa.",
-                                "Di menu Laporan, Staff klik 'Kirim Laporan' -> Pilih 'Laporan Aman' (Kode) atau 'File CSV'.",
+                                "Di menu Laporan, Staff klik 'Kirim Laporan' &rarr; Pilih 'Laporan Aman' (Kode) atau 'File CSV'.",
                                 "Kirim ke WA Owner.",
-                                "Owner buka Artea POS di HP sendiri -> 'Import Transaksi' -> Paste Kode/Upload CSV untuk melihat data."
+                                "Owner buka Artea POS di HP sendiri &rarr; 'Import Transaksi' &rarr; Paste Kode/Upload CSV untuk melihat data."
                             ]}
                         />
                         <ScenarioCard 
@@ -212,7 +212,7 @@ const HelpView: React.FC = () => {
                             color="sky-400"
                             desc="Sinkronisasi otomatis antar cabang menggunakan Dropbox."
                             steps={[
-                                "Admin (Pusat): Hubungkan akun Dropbox di menu Pengaturan > Data.",
+                                "Admin (Pusat): Hubungkan akun Dropbox di menu Pengaturan &rarr; Data.",
                                 "Admin: Upload 'Master Data' (Produk/Harga/Diskon) ke Dropbox.",
                                 "Cabang: Hubungkan akun Dropbox yang SAMA persis.",
                                 "Cabang: Data penjualan terkirim otomatis. Admin <strong>WAJIB</strong> tekan tombol <strong>'Refresh Data'</strong> di Dashboard/Laporan untuk menarik data terbaru."
@@ -368,7 +368,7 @@ const HelpView: React.FC = () => {
                             <AccordionItem title="Utang & Piutang (Kasbon)" isOpen={openAccordion === 'fin_3'} onToggle={() => toggleAccordion('fin_3')} icon="book" colorClass="text-red-400">
                                 <ul className="list-disc pl-5 space-y-1">
                                     <li><strong>Piutang (Kasbon Pelanggan):</strong> Terjadi jika saat transaksi kasir metode bayarnya "Non-Tunai" atau nominal bayar 0.</li>
-                                    <li><strong>Cara Melunasi:</strong> Masuk tab Utang & Piutang -> Klik "Bayar" pada transaksi tersebut.</li>
+                                    <li><strong>Cara Melunasi:</strong> Masuk tab Utang &amp; Piutang &rarr; Klik "Bayar" pada transaksi tersebut.</li>
                                     <li>Pelunasan akan masuk ke Arus Kas hari itu.</li>
                                 </ul>
                             </AccordionItem>
@@ -427,7 +427,7 @@ const HelpView: React.FC = () => {
                                 <p className="text-slate-300 text-sm">
                                     A: Pastikan Anda menggunakan browser <strong>Google Chrome</strong> di Android atau Desktop. 
                                     Hidupkan Bluetooth dan pasangkan (pair) printer di pengaturan HP dulu. 
-                                    Di aplikasi, klik "Cetak BT" -> Pilih printer Anda.
+                                    Di aplikasi, klik "Cetak BT" &rarr; Pilih printer Anda.
                                 </p>
                             </div>
 
@@ -451,7 +451,7 @@ const HelpView: React.FC = () => {
                                 <h4 className="font-bold text-[#52a37c] mb-1">Q: Sinkronisasi Cloud gagal / Penuh?</h4>
                                 <p className="text-slate-300 text-sm">
                                     A: Penyimpanan gratis Dropbox mungkin penuh. 
-                                    Masuk ke Pengaturan -> Data -> Klik tombol merah <strong>"Kosongkan Folder Laporan"</strong>. 
+                                    Masuk ke Pengaturan &rarr; Data &rarr; Klik tombol merah <strong>"Kosongkan Folder Laporan"</strong>. 
                                     Ini akan menghapus log transaksi lama di cloud (tapi data di HP aman) agar sync bisa berjalan lagi.
                                 </p>
                             </div>

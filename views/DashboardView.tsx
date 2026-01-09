@@ -10,7 +10,6 @@ import type { Transaction } from '../types';
 import { dropboxService } from '../services/dropboxService';
 import { mockDataService } from '../services/mockData';
 import { useUI } from '../context/UIContext';
-import { useNavigate } from 'react-router-dom';
 
 const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'products' | 'reports' | 'finance'; iconClass: string; children?: React.ReactNode }> = ({ title, value, icon, iconClass, children }) => (
     <div className="bg-slate-800 p-6 rounded-xl shadow-lg flex flex-col h-full border border-slate-700">

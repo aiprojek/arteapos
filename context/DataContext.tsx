@@ -2,7 +2,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import type { AppData, AuditAction, AuditLog, User } from '../types';
 import { db, initialData } from '../services/db';
-import { supabaseService } from '../services/supabaseService';
 import { dropboxService } from '../services/dropboxService';
 
 interface DataContextType {
@@ -113,21 +112,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // --- AUTOMATED MASTER DATA PUSH (ADMIN SIDE) ---
   const triggerMasterDataPush = useCallback(async () => {
       // Check if credentials exist
-      const sbUrl = localStorage.getItem('ARTEA_SB_URL');
       const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
       
-      if (!sbUrl && !dbxToken) return;
+      if (!dbxToken) return;
 
       setSyncStatus('syncing');
       try {
-          if (sbUrl) {
-              const sbKey = localStorage.getItem('ARTEA_SB_KEY') || '';
-              supabaseService.init(sbUrl, sbKey);
-              await supabaseService.pushMasterData();
-          } else if (dbxToken) {
-              // Fallback to dropbox if only dropbox is connected
-              await dropboxService.uploadMasterData();
-          }
+          await dropboxService.uploadMasterData();
           setSyncStatus('success');
           setTimeout(() => setSyncStatus('idle'), 2000);
       } catch (e) {
@@ -273,29 +264,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // --- Automatic Cloud Sync (Operational Data - Tx, Expenses, Stock) ---
   const triggerAutoSync = useCallback(async () => {
-      const sbUrl = localStorage.getItem('ARTEA_SB_URL');
-      const sbKey = localStorage.getItem('ARTEA_SB_KEY');
       const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
 
       // If no cloud configured, do nothing silently
-      if (!sbUrl && !dbxToken) return;
+      if (!dbxToken) return;
 
       setSyncStatus('syncing');
       setSyncErrorMessage(null);
       
       try {
-          // Priority 1: Supabase (Fast & Realtime)
-          if (sbUrl && sbKey) {
-              supabaseService.init(sbUrl, sbKey);
-              const result = await supabaseService.syncOperationalDataUp();
-              if (!result.success) throw new Error(`Supabase: ${result.message}`);
-          }
-
-          // Priority 2: Dropbox (CSV Only for speed)
-          // We avoid uploading the full JSON backup on every transaction to prevent lag/bandwidth usage
-          if (dbxToken) {
-              await dropboxService.uploadCSVReports();
-          }
+          // Dropbox (JSON Branch Data)
+          await dropboxService.uploadBranchData();
 
           setSyncStatus('success');
           // Reset status after 3 seconds

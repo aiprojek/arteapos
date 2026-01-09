@@ -17,7 +17,7 @@ interface SessionContextType {
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { data, setData, isDataLoading } = useData();
+    const { data, setData, isDataLoading, triggerAutoSync } = useData(); // Added triggerAutoSync
     const { currentUser } = useAuth();
     const { sessionSettings } = data;
     const [session, setSession] = useState<SessionState | null>(null);
@@ -77,10 +77,14 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             await db.session.delete('activeSession');
             setSession(null);
+            
+            // CRITICAL: Trigger Sync immediately so Admin sees the closed session data
+            setTimeout(() => triggerAutoSync(), 1000);
+
         } catch (error) {
             console.error("Failed to delete session from DB", error);
         }
-    }, [session, setData]);
+    }, [session, setData, triggerAutoSync]);
 
     const addCashMovement = useCallback(async (type: 'in' | 'out', amount: number, description: string) => {
         if (!session) return;

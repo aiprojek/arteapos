@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useFinance } from '../context/FinanceContext';
 import { useProduct } from '../context/ProductContext';
 import { useSession } from '../context/SessionContext';
@@ -15,8 +15,8 @@ import UpdatePaymentModal from '../components/UpdatePaymentModal';
 import VirtualizedTable from '../components/VirtualizedTable';
 import { dataService } from '../services/dataService';
 import { useUI } from '../context/UIContext';
-import { supabaseService } from '../services/supabaseService';
 import { dropboxService } from '../services/dropboxService';
+import { mockDataService } from '../services/mockData';
 import ReportCharts from '../components/reports/ReportCharts';
 import { generateSalesReportPDF } from '../utils/pdfGenerator'; // Import PDF Generator
 
@@ -129,8 +129,8 @@ const SessionHistoryTable: React.FC<{ history: SessionHistory[] }> = ({ history 
                         <tr><td colSpan={7} className="p-4 text-center text-slate-500">Belum ada riwayat sesi.</td></tr>
                     ) : history.map(s => (
                         <tr key={s.id} className="border-b border-slate-700 last:border-b-0">
-                            <td className="p-3 text-slate-300">{new Date(s.startTime).toLocaleString('id-ID')}</td>
-                            <td className="p-3 text-slate-300">{s.endTime ? new Date(s.endTime).toLocaleString('id-ID') : '-'}</td>
+                            <td className="p-3 text-slate-400">{new Date(s.startTime).toLocaleString('id-ID')}</td>
+                            <td className="p-3 text-slate-400">{s.endTime ? new Date(s.endTime).toLocaleString('id-ID') : '-'}</td>
                             <td className="p-3">{s.userName}</td>
                             <td className="p-3 text-right text-slate-400">{CURRENCY_FORMATTER.format(s.startingCash)}</td>
                             <td className="p-3 text-right text-green-400 font-medium">{CURRENCY_FORMATTER.format(s.totalSales)}</td>
@@ -167,10 +167,12 @@ const ReportsView: React.FC = () => {
     const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
 
     // Cloud Mode State
-    const [dataSource, setDataSource] = useState<'local' | 'cloud' | 'dropbox'>('local');
+    const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
     const [cloudTransactions, setCloudTransactions] = useState<TransactionType[]>([]);
     const [cloudStockLogs, setCloudStockLogs] = useState<StockAdjustment[]>([]);
     const [isCloudLoading, setIsCloudLoading] = useState(false);
+    const [isDemoMode, setIsDemoMode] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
     
     const handleRefund = (transaction: TransactionType) => {
@@ -205,109 +207,58 @@ const ReportsView: React.FC = () => {
         };
     }, []);
 
+    // Refactored Cloud Load logic to be callable via Refresh Button
+    const loadCloudData = useCallback(async () => {
+        setIsCloudLoading(true);
+        setCloudTransactions([]);
+        setCloudStockLogs([]);
+        setIsDemoMode(false);
+
+        // 1. Pre-check credentials
+        const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
+        if (!dbxToken) {
+            const mock = mockDataService.getMockDashboardData();
+            setCloudTransactions(mock.transactions);
+            setCloudStockLogs(mock.stockAdjustments);
+            setIsDemoMode(true);
+            setLastUpdated(new Date());
+            setIsCloudLoading(false);
+            return;
+        }
+
+        try {
+            // Fetch aggregated JSONs from Dropbox
+            const allBranches = await dropboxService.fetchAllBranchData();
+            let allTxns: any[] = [];
+            let allLogs: any[] = [];
+
+            allBranches.forEach(branch => {
+                if (branch.transactionRecords) {
+                    allTxns = [...allTxns, ...branch.transactionRecords.map((t:any) => ({...t, storeId: branch.storeId}))];
+                }
+                if (branch.stockAdjustments) {
+                    allLogs = [...allLogs, ...branch.stockAdjustments.map((s:any) => ({...s, storeId: branch.storeId}))];
+                }
+            });
+            
+            setCloudTransactions(allTxns);
+            setCloudStockLogs(allLogs);
+            setLastUpdated(new Date());
+        } catch (err: any) {
+            console.error("Cloud Load Error:", err);
+            showAlert({ type: 'alert', title: 'Gagal Memuat', message: err.message });
+            setDataSource('local'); // Fallback
+        } finally {
+            setIsCloudLoading(false);
+        }
+    }, [showAlert]);
+
     // Load Cloud/Dropbox Data when Source Changes
     useEffect(() => {
-        const loadCloud = async () => {
-            // 1. Pre-check credentials
-            if (dataSource === 'cloud') {
-                const sbUrl = localStorage.getItem('ARTEA_SB_URL');
-                const sbKey = localStorage.getItem('ARTEA_SB_KEY');
-                if (!sbUrl || !sbKey) {
-                    showAlert({ type: 'alert', title: 'Supabase Belum Dikonfigurasi', message: 'Silakan atur URL dan API Key Supabase di menu Pengaturan.' });
-                    setDataSource('local');
-                    return;
-                }
-            } else if (dataSource === 'dropbox') {
-                const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-                if (!dbxToken) {
-                    showAlert({ type: 'alert', title: 'Dropbox Belum Dikonfigurasi', message: 'Silakan hubungkan akun Dropbox di menu Pengaturan.' });
-                    setDataSource('local');
-                    return;
-                }
-            }
-
-            setIsCloudLoading(true);
-            setCloudTransactions([]);
-            setCloudStockLogs([]);
-
-            try {
-                if (dataSource === 'cloud') {
-                    const sbUrl = localStorage.getItem('ARTEA_SB_URL')!;
-                    const sbKey = localStorage.getItem('ARTEA_SB_KEY')!;
-
-                    supabaseService.init(sbUrl, sbKey);
-                    const now = new Date();
-                    let start = new Date(0); // Default ALL
-                    let end = new Date();
-
-                    if (filter === 'today') {
-                        start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    } else if (filter === 'week') {
-                        start.setDate(now.getDate() - 7);
-                    } else if (filter === 'month') {
-                        start = new Date(now.getFullYear(), now.getMonth(), 1);
-                    } else if (filter === 'custom') {
-                        start = new Date(customStartDate);
-                        end = new Date(customEndDate);
-                        end.setHours(23, 59, 59);
-                    }
-
-                    // Fetch Transactions
-                    const transData = await supabaseService.fetchReportData(start, end);
-                    const mappedData = transData.map((t: any) => ({
-                        ...t,
-                        createdAt: t.created_at,
-                        paymentStatus: t.payment_status,
-                        userName: t.user_name || 'Cloud',
-                        customerName: t.customerName || '-', 
-                        items: t.items || [],
-                        storeId: t.store_id
-                    }));
-                    setCloudTransactions(mappedData);
-
-                    // Fetch Stock Logs
-                    const stockData = await supabaseService.fetchStockAdjustments(start, end);
-                    const mappedStock = stockData.map((s: any) => ({
-                        ...s,
-                        createdAt: s.created_at,
-                        productId: s.product_id,
-                        productName: s.product_name,
-                        newStock: s.new_stock,
-                        storeId: s.store_id
-                    }));
-                    setCloudStockLogs(mappedStock);
-
-                } else if (dataSource === 'dropbox') {
-                    // Fetch aggregated JSONs from Dropbox
-                    const allBranches = await dropboxService.fetchAllBranchData();
-                    let allTxns: any[] = [];
-                    let allLogs: any[] = [];
-
-                    allBranches.forEach(branch => {
-                        if (branch.transactionRecords) {
-                            allTxns = [...allTxns, ...branch.transactionRecords.map((t:any) => ({...t, storeId: branch.storeId}))];
-                        }
-                        if (branch.stockAdjustments) {
-                            allLogs = [...allLogs, ...branch.stockAdjustments.map((s:any) => ({...s, storeId: branch.storeId}))];
-                        }
-                    });
-                    
-                    setCloudTransactions(allTxns);
-                    setCloudStockLogs(allLogs);
-                }
-            } catch (err: any) {
-                console.error("Cloud Load Error:", err);
-                showAlert({ type: 'alert', title: 'Gagal Memuat', message: err.message });
-                setDataSource('local'); // Fallback
-            } finally {
-                setIsCloudLoading(false);
-            }
-        };
-
         if (dataSource !== 'local') {
-            loadCloud();
+            loadCloudData();
         }
-    }, [dataSource, filter, customStartDate, customEndDate, showAlert]);
+    }, [dataSource, loadCloudData]);
     
     const isSessionMode = sessionSettings.enabled && session;
 
@@ -330,8 +281,6 @@ const ReportsView: React.FC = () => {
 
     // FILTER LOGIC
     const dateFilterPredicate = (dateStr: string) => {
-        if (dataSource === 'cloud') return true; // Already filtered by query
-
         const tDate = new Date(dateStr);
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -369,12 +318,10 @@ const ReportsView: React.FC = () => {
         }
 
         // 2. Date Filter
-        if (dataSource !== 'cloud') { // Local & Dropbox need client-side filtering
-            if (isSessionMode && reportScope === 'session' && dataSource === 'local') {
-                result = result.filter(t => new Date(t.createdAt) >= new Date(session.startTime));
-            } else {
-                result = result.filter(t => dateFilterPredicate(t.createdAt));
-            }
+        if (isSessionMode && reportScope === 'session' && dataSource === 'local') {
+            result = result.filter(t => new Date(t.createdAt) >= new Date(session.startTime));
+        } else {
+            result = result.filter(t => dateFilterPredicate(t.createdAt));
         }
         
         return result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -389,9 +336,8 @@ const ReportsView: React.FC = () => {
              result = result.filter(s => s.storeId === selectedBranch);
         }
 
-        if (dataSource !== 'cloud') {
-             result = result.filter(s => dateFilterPredicate(s.createdAt)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        }
+        result = result.filter(s => dateFilterPredicate(s.createdAt)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        
         return result;
     }, [stockLogs, filter, customStartDate, customEndDate, dataSource, selectedBranch]);
 
@@ -657,7 +603,7 @@ const ReportsView: React.FC = () => {
                      <div>
                          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
                              {showSessionView && session ? 'Laporan Sesi Saat Ini' : reportScope === 'session_history' ? 'Riwayat Sesi (Shift)' : 'Laporan & Audit'}
-                             {dataSource !== 'local' && <span className={`text-sm font-normal px-2 py-0.5 rounded text-white ${dataSource === 'cloud' ? 'bg-sky-600' : 'bg-blue-600'}`}>{dataSource === 'cloud' ? 'Supabase' : 'Dropbox'}</span>}
+                             {dataSource !== 'local' && <span className="text-sm font-normal px-2 py-0.5 rounded text-white bg-blue-600">Mode Dropbox</span>}
                          </h1>
                          {showSessionView && session && (
                             <p className="text-sm text-slate-400">Dimulai pada {new Date(session.startTime).toLocaleString('id-ID')} oleh {session.userName}</p>
@@ -665,6 +611,27 @@ const ReportsView: React.FC = () => {
                     </div>
                      <div className="flex gap-2 items-center flex-wrap justify-end">
                         
+                        {/* Cloud Refresh Button (Only visible in Cloud Mode) */}
+                        {dataSource === 'dropbox' && (
+                            <div className="flex items-center gap-2 mr-2">
+                                {lastUpdated && (
+                                    <span className="text-[10px] text-slate-400 hidden sm:block">
+                                        {lastUpdated.toLocaleTimeString()}
+                                    </span>
+                                )}
+                                <Button 
+                                    size="sm" 
+                                    onClick={loadCloudData} 
+                                    disabled={isCloudLoading} 
+                                    className="bg-blue-600 hover:bg-blue-500 text-white border-none"
+                                    title="Tarik data terbaru"
+                                >
+                                    <Icon name="reset" className={`w-4 h-4 ${isCloudLoading ? 'animate-spin' : ''}`} />
+                                    {isCloudLoading ? '' : 'Refresh'}
+                                </Button>
+                            </div>
+                        )}
+
                         {/* Branch Selector */}
                         {availableBranches.length > 1 && (
                             <div className="bg-slate-700 p-1 rounded-lg">
@@ -696,13 +663,6 @@ const ReportsView: React.FC = () => {
                                 title="Data Gabungan dari Dropbox"
                             >
                                 Dropbox
-                            </button>
-                            <button
-                                onClick={() => setDataSource('cloud')}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'cloud' ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                                title="Data Real-time Supabase"
-                            >
-                                Cloud
                             </button>
                         </div>
 
@@ -763,9 +723,22 @@ const ReportsView: React.FC = () => {
                 )}
             </div>
 
+            {/* Info Banner for Demo Mode */}
+            {isDemoMode && dataSource === 'dropbox' && (
+                <div className="mb-4 bg-yellow-900/30 border border-yellow-700 p-3 rounded-lg flex items-center gap-3 text-yellow-200 text-sm animate-fade-in">
+                    <Icon name="warning" className="w-5 h-5 flex-shrink-0" />
+                    <div className="flex-1">
+                        <p className="font-bold">Mode Demo (Simulasi)</p>
+                        <p className="opacity-80">
+                            Dropbox belum diatur. Data di bawah ini adalah data palsu untuk menunjukkan tampilan laporan terpusat dari beberapa cabang.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {isCloudLoading && (
                 <div className="w-full text-center py-8 bg-slate-800 rounded-lg border border-slate-700">
-                    <span className="text-white animate-pulse">Memuat data dari {dataSource === 'cloud' ? 'Supabase' : 'Dropbox'}...</span>
+                    <span className="text-white animate-pulse">Memuat data dari Dropbox...</span>
                 </div>
             )}
 

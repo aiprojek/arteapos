@@ -7,9 +7,10 @@ import Icon from '../components/Icon';
 import Button from '../components/Button';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import type { Transaction } from '../types';
-import { supabaseService } from '../services/supabaseService';
 import { dropboxService } from '../services/dropboxService';
+import { mockDataService } from '../services/mockData';
 import { useUI } from '../context/UIContext';
+import { useNavigate } from 'react-router-dom';
 
 const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'products' | 'reports' | 'finance'; iconClass: string; children?: React.ReactNode }> = ({ title, value, icon, iconClass, children }) => (
     <div className="bg-slate-800 p-6 rounded-xl shadow-lg flex flex-col h-full border border-slate-700">
@@ -31,54 +32,35 @@ const DashboardView: React.FC = () => {
     const { products, inventorySettings } = useProduct();
     const { showAlert } = useUI();
 
-    const [dataSource, setDataSource] = useState<'local' | 'cloud' | 'dropbox'>('local');
+    const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
     const [cloudData, setCloudData] = useState<{ transactions: any[], inventory: any[] }>({ transactions: [], inventory: [] });
     const [isCloudLoading, setIsCloudLoading] = useState(false);
     const [selectedBranch, setSelectedBranch] = useState('ALL');
+    const [isDemoMode, setIsDemoMode] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
     const [isLoadingAI, setIsLoadingAI] = useState(false);
     const [aiResponse, setAiResponse] = useState('');
     const [aiError, setAiError] = useState('');
     const [aiQuestion, setAiQuestion] = useState('');
 
-    // Load Cloud Data Logic (Supabase)
-    const loadSupabaseData = async () => {
-        const sbUrl = localStorage.getItem('ARTEA_SB_URL');
-        const sbKey = localStorage.getItem('ARTEA_SB_KEY');
-
-        if (!sbUrl || !sbKey) {
-            showAlert({ type: 'alert', title: 'Konfigurasi Belum Ada', message: 'Harap atur URL dan API Key Supabase di menu Pengaturan.' });
-            setDataSource('local');
-            return;
-        }
-
-        setIsCloudLoading(true);
-        try {
-            supabaseService.init(sbUrl, sbKey);
-            const endDate = new Date();
-            const startDate = new Date();
-            startDate.setDate(startDate.getDate() - 30);
-            const data = await supabaseService.fetchDashboardData(startDate, endDate);
-            setCloudData(data);
-        } catch (error: any) {
-            console.error(error);
-            showAlert({ type: 'alert', title: 'Gagal Memuat Data', message: 'Gagal mengambil data dari Supabase.' });
-            setDataSource('local');
-        } finally {
-            setIsCloudLoading(false);
-        }
-    };
-
     // Load Dropbox Data Logic (Aggregation)
     const loadDropboxData = async () => {
+        setIsCloudLoading(true);
+        setIsDemoMode(false);
+
         const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
+        
+        // --- DEMO MODE TRIGGER ---
         if (!dbxToken) {
-             showAlert({ type: 'alert', title: 'Dropbox Belum Terhubung', message: 'Hubungkan Dropbox di menu Pengaturan terlebih dahulu.' });
-             setDataSource('local');
+             const mock = mockDataService.getMockDashboardData();
+             setCloudData({ transactions: mock.transactions, inventory: mock.inventory });
+             setIsDemoMode(true);
+             setLastUpdated(new Date());
+             setIsCloudLoading(false);
              return;
         }
 
-        setIsCloudLoading(true);
         try {
             const allBranchesData = await dropboxService.fetchAllBranchData();
             
@@ -88,17 +70,18 @@ const DashboardView: React.FC = () => {
 
             allBranchesData.forEach(branch => {
                 if (branch.transactionRecords) {
-                    const txns = branch.transactionRecords.map((t: any) => ({ ...t, store_id: branch.storeId })); // Add source
+                    // STANDARDIZED: Ensure we use 'storeId' (camelCase) for internal consistency
+                    const txns = branch.transactionRecords.map((t: any) => ({ ...t, storeId: branch.storeId })); 
                     allTxns = [...allTxns, ...txns];
                 }
                 if (branch.currentStock) {
-                    const inv = branch.currentStock.map((i: any) => ({ ...i, store_id: branch.storeId }));
+                    const inv = branch.currentStock.map((i: any) => ({ ...i, storeId: branch.storeId }));
                     allInv = [...allInv, ...inv];
                 }
             });
 
             setCloudData({ transactions: allTxns, inventory: allInv });
-            showAlert({ type: 'alert', title: 'Sync Selesai', message: `Berhasil menarik data dari ${allBranchesData.length} cabang via Dropbox.` });
+            setLastUpdated(new Date());
 
         } catch (error: any) {
             console.error(error);
@@ -109,10 +92,10 @@ const DashboardView: React.FC = () => {
         }
     };
 
-    const handleSourceChange = (source: 'local' | 'cloud' | 'dropbox') => {
+    const handleSourceChange = (source: 'local' | 'dropbox') => {
         setDataSource(source);
-        if (source === 'cloud') loadSupabaseData();
         if (source === 'dropbox') loadDropboxData();
+        else setIsDemoMode(false);
     };
 
     // Available Branches for Filter
@@ -120,7 +103,7 @@ const DashboardView: React.FC = () => {
         if (dataSource === 'local') return [];
         const branches = new Set<string>();
         cloudData.transactions.forEach(t => {
-            if (t.store_id || t.storeId) branches.add(t.store_id || t.storeId);
+            if (t.storeId) branches.add(t.storeId);
         });
         return Array.from(branches).sort();
     }, [cloudData, dataSource]);
@@ -129,13 +112,13 @@ const DashboardView: React.FC = () => {
     const dashboardData = useMemo(() => {
         let sourceTransactions = dataSource === 'local' ? localTransactions : cloudData.transactions.map(t => ({
             ...t,
-            createdAt: t.created_at || t.createdAt, // Handle both Supabase & Local/Dropbox field names
-            store_id: t.store_id || t.storeId
+            createdAt: t.created_at || t.createdAt, 
+            storeId: t.storeId // Use consistent key
         }));
 
         // Apply Branch Filter
         if (dataSource !== 'local' && selectedBranch !== 'ALL') {
-            sourceTransactions = sourceTransactions.filter((t: any) => t.store_id === selectedBranch);
+            sourceTransactions = sourceTransactions.filter((t: any) => t.storeId === selectedBranch);
         }
 
         const now = new Date();
@@ -160,7 +143,7 @@ const DashboardView: React.FC = () => {
         } else {
             let sourceInventory = cloudData.inventory;
             if (selectedBranch !== 'ALL') {
-                sourceInventory = sourceInventory.filter((i: any) => i.store_id === selectedBranch);
+                sourceInventory = sourceInventory.filter((i: any) => i.storeId === selectedBranch);
             }
             lowStockProducts = sourceInventory
                 .filter(i => i.stock <= 5)
@@ -208,7 +191,7 @@ const DashboardView: React.FC = () => {
         if (dataSource !== 'local' && selectedBranch === 'ALL') {
             const salesByStore = new Map<string, number>();
             activeTransactions.forEach((t: any) => {
-                const store = t.store_id || 'Unknown';
+                const store = t.storeId || 'Unknown';
                 salesByStore.set(store, (salesByStore.get(store) || 0) + (t.total || 0));
             });
             branchPerformance = Array.from(salesByStore.entries())
@@ -304,6 +287,27 @@ const DashboardView: React.FC = () => {
                 <h1 className="text-3xl font-bold text-white">Dashboard</h1>
                 
                 <div className="flex flex-wrap gap-2 items-center">
+                    {/* Cloud Actions (Only in Cloud Mode) */}
+                    {dataSource === 'dropbox' && (
+                        <div className="flex items-center gap-2">
+                            {lastUpdated && (
+                                <span className="text-[10px] text-slate-400 hidden md:block">
+                                    Update: {lastUpdated.toLocaleTimeString()}
+                                </span>
+                            )}
+                            <Button 
+                                size="sm" 
+                                onClick={loadDropboxData} 
+                                disabled={isCloudLoading} 
+                                className="bg-blue-600 hover:bg-blue-500 text-white border-none"
+                                title="Tarik data terbaru dari cabang"
+                            >
+                                <Icon name="reset" className={`w-4 h-4 ${isCloudLoading ? 'animate-spin' : ''}`} />
+                                {isCloudLoading ? 'Syncing...' : 'Refresh Data'}
+                            </Button>
+                        </div>
+                    )}
+
                     {/* Branch Selector */}
                     {dataSource !== 'local' && availableBranches.length > 0 && (
                         <div className="bg-slate-800 p-1 rounded-lg border border-slate-700">
@@ -332,13 +336,7 @@ const DashboardView: React.FC = () => {
                             onClick={() => handleSourceChange('dropbox')}
                             className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
                         >
-                            <span className="flex items-center gap-2"><Icon name="share" className="w-4 h-4" /> Dropbox (Sync)</span>
-                        </button>
-                        <button
-                            onClick={() => handleSourceChange('cloud')}
-                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${dataSource === 'cloud' ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                        >
-                            <span className="flex items-center gap-2"><Icon name="wifi" className="w-4 h-4" /> Supabase</span>
+                            <span className="flex items-center gap-2"><Icon name="share" className="w-4 h-4" /> Cloud (Dropbox)</span>
                         </button>
                     </div>
                 </div>
@@ -346,17 +344,18 @@ const DashboardView: React.FC = () => {
 
             {/* Info Banner for Cloud Mode */}
             {dataSource !== 'local' && (
-                <div className="bg-blue-900/30 border border-blue-800 p-3 rounded-lg flex items-center gap-3 text-blue-200 text-sm animate-fade-in">
-                    <Icon name="info-circle" className="w-5 h-5 flex-shrink-0" />
+                <div className={`p-3 rounded-lg flex items-center gap-3 text-sm animate-fade-in ${isDemoMode ? 'bg-yellow-900/30 border border-yellow-700 text-yellow-200' : 'bg-blue-900/30 border border-blue-800 text-blue-200'}`}>
+                    <Icon name={isDemoMode ? "warning" : "info-circle"} className="w-5 h-5 flex-shrink-0" />
                     <div className="flex-1">
-                        <p className="font-bold">Mode Laporan Terpusat ({dataSource === 'dropbox' ? 'Dropbox' : 'Supabase'})</p>
+                        <p className="font-bold">{isDemoMode ? "Mode Demo (Data Dummy)" : "Mode Laporan Terpusat (Dropbox)"}</p>
                         <p className="opacity-80">
-                            {selectedBranch === 'ALL' 
-                                ? 'Menampilkan data gabungan dari semua cabang yang terhubung.' 
-                                : `Menampilkan data spesifik untuk cabang: ${selectedBranch}`}
+                            {isDemoMode 
+                                ? "Dropbox belum dikonfigurasi. Menampilkan data simulasi agar Anda bisa melihat potensi fitur Multi-Cabang." 
+                                : (selectedBranch === 'ALL' 
+                                    ? 'Menampilkan data gabungan dari semua cabang. Tekan "Refresh Data" untuk mengambil update terbaru.' 
+                                    : `Menampilkan data spesifik untuk cabang: ${selectedBranch}`)}
                         </p>
                     </div>
-                    {isCloudLoading && <span className="ml-auto text-white animate-pulse font-bold">Memuat...</span>}
                 </div>
             )}
 
@@ -372,7 +371,7 @@ const DashboardView: React.FC = () => {
                                 <p key={i} className="truncate flex justify-between">
                                     <span>{p.item_name || p.name}</span>
                                     <span className="text-red-300 font-bold">{p.stock}</span>
-                                    {dataSource !== 'local' && <span className="text-[10px] bg-slate-700 px-1 rounded">{p.store_id || p.storeId}</span>}
+                                    {dataSource !== 'local' && <span className="text-[10px] bg-slate-700 px-1 rounded">{p.storeId}</span>}
                                 </p>
                             ))}
                         </div>
@@ -474,7 +473,7 @@ const DashboardView: React.FC = () => {
                                         <p className="font-medium text-slate-200">{t.customerName || `Order #${t.id.slice(-4)}`}</p>
                                         <div className="flex items-center gap-2">
                                             <span className="text-[10px] text-slate-400">{new Date(t.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit'})}</span>
-                                            {dataSource !== 'local' && <span className="text-[9px] bg-slate-700 px-1 rounded text-slate-300 uppercase">{t.store_id || t.storeId}</span>}
+                                            {dataSource !== 'local' && <span className="text-[9px] bg-slate-700 px-1 rounded text-slate-300 uppercase">{t.storeId}</span>}
                                         </div>
                                     </div>
                                     <p className="font-semibold text-[#52a37c]">{CURRENCY_FORMATTER.format(t.total)}</p>

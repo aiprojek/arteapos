@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import Icon from './Icon';
@@ -8,7 +8,6 @@ import { dataService } from '../services/dataService';
 import { encryptReport } from '../utils/crypto';
 import { CURRENCY_FORMATTER } from '../constants';
 import type { Transaction as TransactionType } from '../types';
-import { supabaseService } from '../services/supabaseService';
 import { dropboxService } from '../services/dropboxService';
 import { useProduct } from '../context/ProductContext'; // Import context product
 import { useSettings } from '../context/SettingsContext';
@@ -32,6 +31,14 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
     const { stockAdjustments } = useProduct(); // Access stock adjustment history
     const { receiptSettings } = useSettings();
     const [isSyncing, setIsSyncing] = useState(false);
+    const [isCloudConnected, setIsCloudConnected] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            const token = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
+            setIsCloudConnected(!!token);
+        }
+    }, [isOpen]);
 
     const summary = useMemo(() => {
         const totalSales = data.reduce((sum, t) => sum + t.total, 0);
@@ -246,7 +253,7 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
         let messages = [];
         
         // 1. Coba Dropbox
-        const dbxToken = localStorage.getItem('ARTEA_DBX_TOKEN');
+        const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
         if (dbxToken) {
             try {
                 // A. Upload Full Backup (JSON) - Untuk Restore
@@ -261,31 +268,13 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
             }
         }
 
-        // 2. Coba Supabase
-        const sbUrl = localStorage.getItem('ARTEA_SB_URL');
-        const sbKey = localStorage.getItem('ARTEA_SB_KEY');
-        if (sbUrl && sbKey) {
-            try {
-                supabaseService.init(sbUrl, sbKey);
-                const opRes = await supabaseService.syncOperationalDataUp();
-                
-                if (opRes.success) {
-                    messages.push("✅ Supabase: Berhasil (Data & Stok)");
-                } else {
-                    messages.push(`❌ Supabase: Gagal (${opRes.message})`);
-                }
-            } catch (e: any) {
-                messages.push(`❌ Supabase: Error (${e.message})`);
-            }
-        }
-
         setIsSyncing(false);
 
         if (messages.length === 0) {
             showAlert({ 
                 type: 'alert', 
                 title: 'Belum Dikonfigurasi', 
-                message: 'Admin belum mengatur koneksi Dropbox atau Supabase di menu Pengaturan.' 
+                message: 'Admin belum mengatur koneksi Dropbox di menu Pengaturan.' 
             });
         } else {
             showAlert({
@@ -304,27 +293,42 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
         <Modal isOpen={isOpen} onClose={onClose} title="Kirim Laporan ke Admin">
             <div className="space-y-6">
                 
-                {/* Opsi 0: Sync Cloud (New for Staff) */}
-                <div className="bg-slate-700/50 p-3 rounded-lg border border-slate-600">
-                    <h4 className="text-white font-semibold text-sm mb-2 flex items-center gap-2">
-                        <Icon name="upload" className="w-4 h-4 text-purple-400"/> Sinkronisasi Cloud
-                    </h4>
-                    <p className="text-xs text-slate-400 mb-3">
-                        Kirim data transaksi dan stok terbaru ke server (Dropbox/Supabase) agar Admin bisa memantau dari jauh.
-                    </p>
-                    <Button onClick={handleCloudSync} disabled={isSyncing} className="w-full bg-purple-700 hover:bg-purple-600 text-white border-none">
-                        {isSyncing ? 'Sedang Mengirim...' : <><Icon name="wifi" className="w-4 h-4" /> Sync Sekarang</>}
-                    </Button>
+                {/* Opsi 0: Cloud Status Banner */}
+                {isCloudConnected ? (
+                    <div className="bg-green-900/20 border border-green-800 p-3 rounded-lg flex items-center gap-3">
+                        <div className="bg-green-500/20 p-2 rounded-full">
+                            <Icon name="check-circle-fill" className="w-5 h-5 text-green-400" />
+                        </div>
+                        <div>
+                            <h4 className="text-green-300 font-bold text-sm">Cloud Sync Aktif</h4>
+                            <p className="text-xs text-slate-400">Data penjualan sudah otomatis tersimpan di Dropbox Admin.</p>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="bg-slate-700/50 p-3 rounded-lg border border-slate-600">
+                        <h4 className="text-white font-semibold text-sm mb-2 flex items-center gap-2">
+                            <Icon name="upload" className="w-4 h-4 text-purple-400"/> Sinkronisasi Dropbox
+                        </h4>
+                        <p className="text-xs text-slate-400 mb-3">
+                            Kirim data terbaru manual ke server (Backup).
+                        </p>
+                        <Button onClick={handleCloudSync} disabled={isSyncing} className="w-full bg-purple-700 hover:bg-purple-600 text-white border-none">
+                            {isSyncing ? 'Sedang Mengirim...' : <><Icon name="wifi" className="w-4 h-4" /> Sync Sekarang</>}
+                        </Button>
+                    </div>
+                )}
+
+                <div className="relative flex py-1 items-center">
+                    <div className="flex-grow border-t border-slate-700"></div>
+                    <span className="flex-shrink-0 mx-4 text-slate-500 text-xs uppercase font-bold">Laporan Manual (Backup)</span>
+                    <div className="flex-grow border-t border-slate-700"></div>
                 </div>
 
                 {/* Option 1: Ringkasan */}
                 <div className="bg-slate-700/50 p-3 rounded-lg border border-slate-600">
                     <h4 className="text-white font-semibold text-sm mb-2 flex items-center gap-2">
-                        <Icon name="chat" className="w-4 h-4 text-[#52a37c]"/> Opsi 1: Ringkasan Cepat
+                        <Icon name="chat" className="w-4 h-4 text-[#52a37c]"/> Ringkasan Cepat
                     </h4>
-                    <p className="text-xs text-slate-400 mb-3">
-                        Mengirim ringkasan omzet dan total setoran via pesan teks.
-                    </p>
                     <div className="grid grid-cols-2 gap-3">
                         <Button size="sm" onClick={() => handleSendSummary('whatsapp')} className="bg-[#25D366] hover:bg-[#1da851] text-white border-none">
                             <Icon name="whatsapp" className="w-4 h-4" /> WhatsApp
@@ -338,11 +342,8 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
                 {/* Option 2: Laporan Aman */}
                 <div className="bg-slate-700/50 p-3 rounded-lg border border-slate-600">
                     <h4 className="text-white font-semibold text-sm mb-2 flex items-center gap-2">
-                        <Icon name="lock" className="w-4 h-4 text-yellow-400"/> Opsi 2: Laporan Aman (Anti-Edit)
+                        <Icon name="lock" className="w-4 h-4 text-yellow-400"/> Laporan Aman (Anti-Edit)
                     </h4>
-                    <p className="text-xs text-slate-400 mb-3">
-                        Mengirim kode terenkripsi. Angka penjualan dijamin asli. Admin perlu mengimpor kode ini.
-                    </p>
                     <div className="grid grid-cols-2 gap-3">
                         <Button size="sm" onClick={() => handleSendEncrypted('whatsapp')} variant="secondary" className="border-slate-500">
                             <Icon name="whatsapp" className="w-4 h-4" /> WhatsApp
@@ -356,11 +357,8 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
                 {/* Option 3: Detail File */}
                 <div className="bg-slate-700/50 p-3 rounded-lg border border-slate-600">
                     <h4 className="text-white font-semibold text-sm mb-2 flex items-center gap-2">
-                        <Icon name="database" className="w-4 h-4 text-blue-400"/> Opsi 3: File CSV Detail
+                        <Icon name="database" className="w-4 h-4 text-blue-400"/> File CSV Detail
                     </h4>
-                    <p className="text-xs text-slate-400 mb-3">
-                        Mengirim file CSV berisi rincian item.
-                    </p>
                     <Button onClick={handleShareFile} className="w-full" variant="secondary">
                         <Icon name="share" className="w-4 h-4" /> Bagikan File
                     </Button>

@@ -4,7 +4,6 @@ import type { AuditLog } from '../../types';
 import Icon from '../Icon';
 import VirtualizedTable from '../VirtualizedTable';
 import { useData } from '../../context/DataContext';
-import { supabaseService } from '../../services/supabaseService';
 import { dropboxService } from '../../services/dropboxService';
 import { useUI } from '../../context/UIContext';
 
@@ -23,7 +22,7 @@ const SettingsCard: React.FC<{ title: string; description?: string; children: Re
 const AuditTab: React.FC = () => {
     const { data } = useData();
     const { showAlert } = useUI();
-    const [dataSource, setDataSource] = useState<'local' | 'cloud' | 'dropbox'>('local');
+    const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
     const [cloudLogs, setCloudLogs] = useState<AuditLog[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -32,16 +31,7 @@ const AuditTab: React.FC = () => {
             if (dataSource === 'local') return;
 
             // Pre-check credentials
-            if (dataSource === 'cloud') {
-                const sbUrl = localStorage.getItem('ARTEA_SB_URL');
-                const sbKey = localStorage.getItem('ARTEA_SB_KEY');
-                if (!sbUrl || !sbKey) {
-                    showAlert({ type: 'alert', title: 'Supabase Belum Dikonfigurasi', message: 'Silakan atur URL dan API Key Supabase di menu Data & Cloud.' });
-                    setDataSource('local');
-                    return;
-                }
-                supabaseService.init(sbUrl, sbKey);
-            } else if (dataSource === 'dropbox') {
+            if (dataSource === 'dropbox') {
                 const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
                 if (!dbxToken) {
                     showAlert({ type: 'alert', title: 'Dropbox Belum Dikonfigurasi', message: 'Silakan hubungkan akun Dropbox di menu Data & Cloud.' });
@@ -54,10 +44,7 @@ const AuditTab: React.FC = () => {
             setCloudLogs([]);
 
             try {
-                if (dataSource === 'cloud') {
-                    const logs = await supabaseService.fetchAuditLogs(200); // Limit to last 200
-                    setCloudLogs(logs);
-                } else if (dataSource === 'dropbox') {
+                if (dataSource === 'dropbox') {
                     const allBranches = await dropboxService.fetchAllBranchData();
                     let aggregatedLogs: any[] = [];
                     allBranches.forEach(branch => {
@@ -115,12 +102,6 @@ const AuditTab: React.FC = () => {
                             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
                         >
                             Dropbox
-                        </button>
-                        <button
-                            onClick={() => setDataSource('cloud')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'cloud' ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                        >
-                            Cloud
                         </button>
                     </div>
                     {isLoading && <span className="text-xs text-slate-400 animate-pulse">Sedang memuat data dari {dataSource}...</span>}

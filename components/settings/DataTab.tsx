@@ -4,7 +4,6 @@ import Button from '../Button';
 import Icon from '../Icon';
 import Modal from '../Modal';
 import { dataService } from '../../services/dataService';
-import { supabaseService, SETUP_SQL_SCRIPT } from '../../services/supabaseService';
 import { dropboxService } from '../../services/dropboxService';
 import { decryptReport } from '../../utils/crypto';
 import { useData } from '../../context/DataContext';
@@ -35,10 +34,6 @@ const DataTab: React.FC = () => {
     const [dbxSecret, setDbxSecret] = useState(localStorage.getItem('ARTEA_DBX_SECRET') || '');
     const [dbxRefreshToken, setDbxRefreshToken] = useState(localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN') || '');
     
-    const [supabaseUrl, setSupabaseUrl] = useState(localStorage.getItem('ARTEA_SB_URL') || '');
-    const [supabaseKey, setSupabaseKey] = useState(localStorage.getItem('ARTEA_SB_KEY') || '');
-    
-    const [showSqlModal, setShowSqlModal] = useState(false);
     const [showDbxHelpModal, setShowDbxHelpModal] = useState(false);
     const [dbxAuthCode, setDbxAuthCode] = useState('');
     const [isDbxConnecting, setIsDbxConnecting] = useState(false);
@@ -107,15 +102,7 @@ const DataTab: React.FC = () => {
         localStorage.setItem('ARTEA_DBX_SECRET', dbxSecret);
         localStorage.setItem('ARTEA_DBX_REFRESH_TOKEN', dbxRefreshToken);
         
-        localStorage.setItem('ARTEA_SB_URL', supabaseUrl);
-        localStorage.setItem('ARTEA_SB_KEY', supabaseKey);
-        
-        showAlert({ type: 'alert', title: 'Tersimpan', message: 'Konfigurasi Cloud berhasil disimpan.' });
-    };
-
-    const copySqlToClipboard = () => {
-        navigator.clipboard.writeText(SETUP_SQL_SCRIPT);
-        showAlert({ type: 'alert', title: 'Disalin', message: 'Script SQL berhasil disalin ke clipboard.' });
+        showAlert({ type: 'alert', title: 'Tersimpan', message: 'Konfigurasi Dropbox berhasil disimpan.' });
     };
 
     // --- System Health Check ---
@@ -289,12 +276,12 @@ const DataTab: React.FC = () => {
     const handleCloudPurge = () => {
         showAlert({
             type: 'confirm',
-            title: 'Kosongkan Riwayat Cloud?',
+            title: 'Kosongkan Folder Laporan?',
             message: (
                 <div className="text-left text-sm space-y-2">
-                    <p>Tindakan ini akan <strong>MENGHAPUS SEMUA</strong> riwayat transaksi, log stok, dan audit di Supabase & Dropbox untuk mengatasi penyimpanan penuh.</p>
+                    <p>Tindakan ini akan menghapus folder "Laporan" di Dropbox Anda untuk mengosongkan ruang.</p>
                     <p className="bg-slate-700 p-2 rounded border border-slate-600">
-                        ⚠️ Data Master (Produk, Pelanggan, Diskon) di Cloud <strong>TIDAK</strong> akan dihapus.
+                        ⚠️ File Master Data (Produk, Pelanggan, Diskon) di Dropbox <strong>TIDAK</strong> akan dihapus.
                     </p>
                     <p>Sebelum menghapus, sistem akan otomatis mengunduh <strong>Backup Lokal (JSON)</strong> ke perangkat ini sebagai arsip.</p>
                 </div>
@@ -307,11 +294,6 @@ const DataTab: React.FC = () => {
                     await dataService.exportData(); 
 
                     let messages = [];
-                    if (supabaseUrl && supabaseKey) {
-                        supabaseService.init(supabaseUrl, supabaseKey);
-                        const res = await supabaseService.clearOperationalData();
-                        messages.push(res.success ? "✅ Supabase: Berhasil dibersihkan" : `❌ Supabase: ${res.message}`);
-                    }
                     if (dbxRefreshToken && dbxKey && dbxSecret) {
                         // Manually re-init for maintenance task if needed, currently service pulls from localstorage
                         const res = await dropboxService.clearOldBackups();
@@ -337,6 +319,10 @@ const DataTab: React.FC = () => {
             }
         });
     };
+
+    // Helper to get last update time (persisted or just current logic)
+    // Note: Ideally this should be saved in DB/LocalStorage
+    const lastPullTime = localStorage.getItem('ARTEA_LAST_MASTER_PULL');
 
     return (
         <div className="animate-fade-in">
@@ -380,7 +366,7 @@ const DataTab: React.FC = () => {
                 </div>
             </SettingsCard>
 
-            <SettingsCard title="Manajemen Penyimpanan Cloud" description="Pantau kuota penyimpanan dan lakukan pembersihan jika penuh.">
+            <SettingsCard title="Manajemen Penyimpanan Dropbox" description="Pantau kuota penyimpanan dan lakukan pembersihan jika penuh.">
                 {/* Storage Stats Dashboard */}
                 <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 mb-4">
                     <div className="space-y-4">
@@ -440,14 +426,14 @@ const DataTab: React.FC = () => {
                             </p>
                             <ol className="list-decimal pl-4 text-xs text-slate-400 mt-2 space-y-1">
                                 <li>Memaksa unduh <strong>Backup Lokal (.json)</strong> untuk arsip Anda.</li>
-                                <li>Menghapus riwayat transaksi & log lama di Cloud (Supabase & Dropbox) untuk mengosongkan ruang.</li>
+                                <li>Menghapus riwayat transaksi & log lama di Dropbox untuk mengosongkan ruang.</li>
                                 <li>Data Master (Produk & Pelanggan) <strong>TIDAK</strong> akan dihapus.</li>
                             </ol>
                         </div>
                     </div>
                 </div>
                 <Button onClick={handleCloudPurge} disabled={isCleaning} variant="danger" className="w-full sm:w-auto">
-                    {isCleaning ? 'Sedang Memproses...' : <><Icon name="trash" className="w-4 h-4"/> Kosongkan Riwayat Cloud (Reset)</>}
+                    {isCleaning ? 'Sedang Memproses...' : <><Icon name="trash" className="w-4 h-4"/> Kosongkan Folder Laporan</>}
                 </Button>
             </SettingsCard>
 
@@ -493,54 +479,28 @@ const DataTab: React.FC = () => {
                 </div>
             </SettingsCard>
 
-            <SettingsCard title="Koneksi Cloud Hybrid (Disarankan)" description="Anda dapat mengisi kedua layanan ini sekaligus untuk redundansi maksimal.">
+            <SettingsCard title="Koneksi Cloud (Dropbox)" description="Hubungkan akun Dropbox untuk backup otomatis dan sinkronisasi antar cabang.">
                 <div className="bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded-r mb-4">
                     <div className="flex items-start gap-3">
                         <Icon name="info-circle" className="w-5 h-5 text-blue-400 mt-0.5" />
                         <div>
-                            <h4 className="font-bold text-blue-300 text-sm">Mode Hybrid (Supabase + Dropbox)</h4>
+                            <h4 className="font-bold text-blue-300 text-sm">Mode Sinkronisasi</h4>
                             <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                                Sistem akan otomatis mengirim data ke <strong>keduanya</strong> saat sinkronisasi:
+                                Sistem akan menyimpan file backup JSON & laporan harian CSV ke Dropbox App Folder Anda.
                             </p>
-                            <ul className="list-disc pl-4 text-xs text-slate-400 mt-2 space-y-1">
-                                <li><strong>Supabase:</strong> Untuk Database Real-time (Pantau omzet & stok live di Dashboard).</li>
-                                <li><strong>Dropbox:</strong> Untuk Arsip File (Menyimpan file backup JSON & laporan harian CSV).</li>
-                            </ul>
+                            {lastPullTime && (
+                                <p className="text-xs text-green-300 mt-2 font-mono">
+                                    ✔ Terakhir Update Master Data: {new Date(parseInt(lastPullTime)).toLocaleString()}
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 <div className="space-y-4">
-                    {/* Supabase Section */}
                     <div>
                         <div className="flex justify-between items-center mb-1">
-                            <label className="block text-sm font-medium text-slate-300">Supabase URL (Real-time DB)</label>
-                            <button onClick={() => setShowSqlModal(true)} className="text-xs text-sky-400 hover:underline flex items-center gap-1">
-                                <Icon name="question" className="w-3 h-3"/> Panduan & SQL Script
-                            </button>
-                        </div>
-                        <input 
-                            type="text" 
-                            value={supabaseUrl} 
-                            onChange={(e) => setSupabaseUrl(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
-                            placeholder="https://xyz.supabase.co"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Supabase Anon Key</label>
-                        <input 
-                            type="password" 
-                            value={supabaseKey} 
-                            onChange={(e) => setSupabaseKey(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
-                        />
-                    </div>
-
-                    {/* Dropbox Section */}
-                    <div className="border-t border-slate-700 my-4 pt-4">
-                        <div className="flex justify-between items-center mb-1">
-                            <label className="block text-sm font-medium text-slate-300">Dropbox App (Backup File)</label>
+                            <label className="block text-sm font-medium text-slate-300">Dropbox App</label>
                             <button onClick={() => setShowDbxHelpModal(true)} className="text-xs text-sky-400 hover:underline flex items-center gap-1">
                                 <Icon name="question" className="w-3 h-3"/> Bantuan & Koneksi
                             </button>
@@ -575,34 +535,10 @@ const DataTab: React.FC = () => {
                     </div>
 
                     <div className="flex justify-end gap-2">
-                        <Button onClick={saveCloudSettings}>Simpan Konfigurasi Cloud</Button>
+                        <Button onClick={saveCloudSettings}>Simpan Konfigurasi</Button>
                     </div>
                 </div>
             </SettingsCard>
-
-            {/* Supabase Help Modal */}
-            <Modal isOpen={showSqlModal} onClose={() => setShowSqlModal(false)} title="Panduan Setup Supabase">
-                <div className="space-y-4">
-                    <p className="text-sm text-slate-300">
-                        Untuk menggunakan fitur database real-time, Anda perlu membuat tabel di Project Supabase Anda.
-                    </p>
-                    <ol className="list-decimal pl-5 text-sm text-slate-300 space-y-1">
-                        <li>Buka <a href="https://supabase.com/dashboard" target="_blank" className="text-sky-400 underline">Supabase Dashboard</a>.</li>
-                        <li>Masuk ke project Anda, lalu pilih menu <strong>SQL Editor</strong>.</li>
-                        <li>Buat Query baru, lalu salin dan tempel script di bawah ini.</li>
-                        <li>Klik <strong>Run</strong>. Tabel akan dibuat otomatis.</li>
-                    </ol>
-                    
-                    <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg max-h-60 overflow-y-auto">
-                        <pre className="text-[10px] text-green-400 font-mono whitespace-pre-wrap">{SETUP_SQL_SCRIPT}</pre>
-                    </div>
-
-                    <div className="flex justify-end gap-2">
-                        <Button variant="secondary" onClick={() => setShowSqlModal(false)}>Tutup</Button>
-                        <Button onClick={copySqlToClipboard}>Salin Script SQL</Button>
-                    </div>
-                </div>
-            </Modal>
 
             {/* Dropbox Help & Connect Modal */}
             <Modal isOpen={showDbxHelpModal} onClose={() => setShowDbxHelpModal(false)} title="Hubungkan Dropbox">

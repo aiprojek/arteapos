@@ -8,7 +8,6 @@ import { useSettings } from '../context/SettingsContext';
 import Button from './Button';
 import { dataService } from '../services/dataService';
 import { useUI } from '../context/UIContext';
-import { supabaseService } from '../services/supabaseService';
 import { dropboxService } from '../services/dropboxService';
 import { db } from '../services/db'; // Direct DB access to check branches after sync
 import Modal from './Modal';
@@ -83,26 +82,16 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
     };
 
     const handleCloudPull = async () => {
-        const sbUrl = localStorage.getItem('ARTEA_SB_URL');
-        const sbKey = localStorage.getItem('ARTEA_SB_KEY');
         const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
 
-        if (!sbUrl && !dbxToken) {
-            showAlert({ type: 'alert', title: 'Belum Dikonfigurasi', message: 'Admin belum mengatur koneksi Cloud (Supabase/Dropbox) di menu Pengaturan.' });
+        if (!dbxToken) {
+            showAlert({ type: 'alert', title: 'Belum Dikonfigurasi', message: 'Admin belum mengatur koneksi Dropbox di menu Pengaturan.' });
             return;
         }
 
         setIsProcessing(true);
         try {
-            if (sbUrl && sbKey) {
-                // Priority 1: Supabase
-                supabaseService.init(sbUrl, sbKey);
-                const res = await supabaseService.pullMasterData();
-                if (!res.success) throw new Error(res.message);
-            } else if (dbxToken) {
-                // Priority 2: Dropbox
-                await dropboxService.downloadAndMergeMasterData();
-            }
+            await dropboxService.downloadAndMergeMasterData();
             
             // --- AUTO PROMPT BRANCH SELECTION ---
             // After sync, check DB if branches exist
@@ -147,12 +136,12 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                 title: 'Penyimpanan Cloud Penuh!',
                 message: (
                     <div className="text-left">
-                        <p className="mb-2 text-sm text-slate-300">Sinkronisasi gagal karena batas penyimpanan akun gratis (Dropbox/Supabase) telah tercapai.</p>
+                        <p className="mb-2 text-sm text-slate-300">Sinkronisasi gagal karena batas penyimpanan akun gratis Dropbox telah tercapai.</p>
                         <p className="font-bold text-yellow-400 text-sm mb-2">Solusi:</p>
                         <ol className="list-decimal pl-5 text-xs text-slate-400 space-y-1">
                             <li>Buka menu <strong>Pengaturan</strong> {'>'} <strong>Data & Cloud</strong>.</li>
                             <li>Gunakan fitur <strong>"Kosongkan Riwayat Cloud"</strong>.</li>
-                            <li>Fitur ini akan mengarsipkan data ke lokal lalu membersihkan Cloud agar sinkronisasi bisa berjalan kembali.</li>
+                            <li>Fitur ini akan mengarsipkan data ke lokal lalu membersihkan Dropbox agar sinkronisasi bisa berjalan kembali.</li>
                         </ol>
                     </div>
                 )
@@ -244,7 +233,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                     <div className="bg-sky-900/20 border border-sky-800 p-3 rounded-lg">
                         <div className="flex items-center gap-2 mb-2">
                             <Icon name="wifi" className="w-5 h-5 text-sky-400"/>
-                            <h4 className="font-bold text-white text-sm">Update dari Pusat</h4>
+                            <h4 className="font-bold text-white text-sm">Update dari Pusat (Dropbox)</h4>
                         </div>
                         <p className="text-xs text-slate-400 mb-3">
                             Tarik harga, produk, dan data cabang terbaru dari server Cloud.

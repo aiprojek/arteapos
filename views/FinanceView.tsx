@@ -1,12 +1,12 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useFinance } from '../context/FinanceContext';
 import { useSettings } from '../context/SettingsContext';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
-import { supabaseService } from '../services/supabaseService';
 import { dropboxService } from '../services/dropboxService';
+import { mockDataService } from '../services/mockData';
 import { useUI } from '../context/UIContext';
 import { generateTablePDF } from '../utils/pdfGenerator';
 import { CURRENCY_FORMATTER } from '../constants';
@@ -32,8 +32,8 @@ const FinanceView: React.FC = () => {
     const [mainView, setMainView] = useState<'finance' | 'customers'>('finance');
     const [activeTab, setActiveTab] = useState<string>(isManagement ? 'cashflow' : 'expenses');
 
-    // Cloud Aggregation State (Lifted from CashFlowTab to be available globally in Finance)
-    const [dataSource, setDataSource] = useState<'local' | 'cloud' | 'dropbox'>('local');
+    // Cloud Aggregation State
+    const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
     const [cloudData, setCloudData] = useState<{ 
         transactions: TransactionType[], 
         expenses: Expense[], 
@@ -41,90 +41,64 @@ const FinanceView: React.FC = () => {
         purchases: Purchase[]
     }>({ transactions: [], expenses: [], otherIncomes: [], purchases: [] });
     const [isCloudLoading, setIsCloudLoading] = useState(false);
+    const [isDemoMode, setIsDemoMode] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-    // Load Data Effect
-    useEffect(() => {
-        const loadData = async () => {
-            // 1. Pre-check credentials to avoid unnecessary errors
-            if (dataSource === 'cloud') {
-                const sbUrl = localStorage.getItem('ARTEA_SB_URL');
-                const sbKey = localStorage.getItem('ARTEA_SB_KEY');
-                if (!sbUrl || !sbKey) {
-                    showAlert({ 
-                        type: 'alert', 
-                        title: 'Supabase Belum Dikonfigurasi', 
-                        message: 'Silakan atur URL dan API Key Supabase di menu Pengaturan > Data & Cloud terlebih dahulu.' 
-                    });
-                    setDataSource('local');
-                    return;
-                }
-            } else if (dataSource === 'dropbox') {
-                const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-                if (!dbxToken) {
-                    showAlert({ 
-                        type: 'alert', 
-                        title: 'Dropbox Belum Dikonfigurasi', 
-                        message: 'Silakan hubungkan akun Dropbox di menu Pengaturan > Data & Cloud terlebih dahulu.' 
-                    });
-                    setDataSource('local');
-                    return;
-                }
-            }
+    // Refactored Load Data to be callable via Refresh Button
+    const loadCloudData = useCallback(async () => {
+        setIsCloudLoading(true);
+        setIsDemoMode(false);
 
-            setIsCloudLoading(true);
-            try {
-                if (dataSource === 'cloud') {
-                    // Supabase Logic
-                    const sbUrl = localStorage.getItem('ARTEA_SB_URL')!;
-                    const sbKey = localStorage.getItem('ARTEA_SB_KEY')!;
-                    
-                    supabaseService.init(sbUrl, sbKey);
-                    // Fetch last 30 days by default or logic in sub-components will filter
-                    const endDate = new Date();
-                    const startDate = new Date();
-                    startDate.setMonth(startDate.getMonth() - 12); // Fetch 1 year for overview
-
-                    const result = await supabaseService.fetchFinanceData(startDate, endDate);
-                    
-                    setCloudData({
-                        transactions: result.transactions.map((t: any) => ({...t, createdAt: t.created_at, paymentStatus: t.payment_status, storeId: t.store_id})),
-                        expenses: result.expenses.map((e: any) => ({...e, storeId: e.store_id})),
-                        otherIncomes: result.otherIncomes.map((i: any) => ({...i, storeId: i.store_id})),
-                        purchases: result.purchases.map((p: any) => ({...p, storeId: p.store_id}))
-                    });
-
-                } else if (dataSource === 'dropbox') {
-                    // Dropbox Logic
-                    const allBranches = await dropboxService.fetchAllBranchData();
-                    let txns: any[] = [], exps: any[] = [], incs: any[] = [], prchs: any[] = []; 
-
-                    allBranches.forEach(branch => {
-                        if (branch.transactionRecords) txns.push(...branch.transactionRecords.map((t:any) => ({...t, storeId: branch.storeId})));
-                        if (branch.expenses) exps.push(...branch.expenses.map((e:any) => ({...e, storeId: branch.storeId})));
-                        if (branch.otherIncomes) incs.push(...branch.otherIncomes.map((i:any) => ({...i, storeId: branch.storeId})));
-                        // Note: Purchase data sync to dropbox might need update in dropboxService if missing
-                    });
-
-                    setCloudData({
-                        transactions: txns,
-                        expenses: exps,
-                        otherIncomes: incs,
-                        purchases: [] // Placeholder until dropbox service syncs purchases
-                    });
-                }
-            } catch (error: any) {
-                console.error("Finance Load Error:", error);
-                showAlert({ type: 'alert', title: 'Gagal Memuat Data', message: error.message });
-                setDataSource('local');
-            } finally {
-                setIsCloudLoading(false);
-            }
-        };
-
-        if (dataSource !== 'local') {
-            loadData();
+        // 1. Pre-check credentials
+        const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
+        if (!dbxToken) {
+            const mock = mockDataService.getMockDashboardData();
+            setCloudData({
+                transactions: mock.transactions,
+                expenses: mock.expenses,
+                otherIncomes: mock.otherIncomes,
+                purchases: []
+            });
+            setIsDemoMode(true);
+            setLastUpdated(new Date());
+            setIsCloudLoading(false);
+            return;
         }
-    }, [dataSource, showAlert]);
+
+        try {
+            // Dropbox Logic
+            const allBranches = await dropboxService.fetchAllBranchData();
+            let txns: any[] = [], exps: any[] = [], incs: any[] = []; 
+
+            allBranches.forEach(branch => {
+                // STANDARDIZED: Ensure we use 'storeId' (camelCase)
+                if (branch.transactionRecords) txns.push(...branch.transactionRecords.map((t:any) => ({...t, storeId: branch.storeId})));
+                if (branch.expenses) exps.push(...branch.expenses.map((e:any) => ({...e, storeId: branch.storeId})));
+                if (branch.otherIncomes) incs.push(...branch.otherIncomes.map((i:any) => ({...i, storeId: branch.storeId})));
+            });
+
+            setCloudData({
+                transactions: txns,
+                expenses: exps,
+                otherIncomes: incs,
+                purchases: [] // Placeholder until dropbox service syncs purchases
+            });
+            setLastUpdated(new Date());
+        } catch (error: any) {
+            console.error("Finance Load Error:", error);
+            showAlert({ type: 'alert', title: 'Gagal Memuat Data', message: error.message });
+            setDataSource('local');
+        } finally {
+            setIsCloudLoading(false);
+        }
+    }, [showAlert]);
+
+    // Effect to trigger load when switching to dropbox
+    useEffect(() => {
+        if (dataSource === 'dropbox') {
+            loadCloudData();
+        }
+    }, [dataSource, loadCloudData]);
 
     const renderSubTabButton = (tab: string, label: string) => (
         <button onClick={() => setActiveTab(tab)} className={`whitespace-nowrap px-4 py-2 text-sm font-medium rounded-t-lg transition-colors border-b-2 ${activeTab === tab ? 'text-[#52a37c] border-[#52a37c]' : 'text-slate-400 border-transparent hover:text-white'}`}>
@@ -280,13 +254,34 @@ const FinanceView: React.FC = () => {
                 <h1 className="text-2xl font-bold text-white flex items-center gap-2">
                     Keuangan & Pelanggan
                     {dataSource !== 'local' && (
-                        <span className={`text-xs px-2 py-1 rounded font-normal text-white ${dataSource === 'cloud' ? 'bg-sky-600' : 'bg-blue-600'}`}>
-                            Mode {dataSource === 'cloud' ? 'Cloud' : 'Dropbox'}
+                        <span className="text-xs px-2 py-1 rounded font-normal text-white bg-blue-600">
+                            Mode Dropbox
                         </span>
                     )}
                 </h1>
                 
                 <div className="flex gap-2 items-center flex-wrap">
+                    {/* Cloud Refresh Button (Only visible in Cloud Mode) */}
+                    {dataSource === 'dropbox' && (
+                        <div className="flex items-center gap-2 mr-2">
+                            {lastUpdated && (
+                                <span className="text-[10px] text-slate-400 hidden sm:block">
+                                    {lastUpdated.toLocaleTimeString()}
+                                </span>
+                            )}
+                            <Button 
+                                size="sm" 
+                                onClick={loadCloudData} 
+                                disabled={isCloudLoading} 
+                                className="bg-blue-600 hover:bg-blue-500 text-white border-none"
+                                title="Tarik data terbaru"
+                            >
+                                <Icon name="reset" className={`w-4 h-4 ${isCloudLoading ? 'animate-spin' : ''}`} />
+                                {isCloudLoading ? '' : 'Refresh'}
+                            </Button>
+                        </div>
+                    )}
+
                     {/* Export Buttons */}
                     {mainView === 'finance' && (
                         <div className="flex gap-2 mr-2">
@@ -315,13 +310,6 @@ const FinanceView: React.FC = () => {
                         >
                             Dropbox
                         </button>
-                        <button
-                            onClick={() => setDataSource('cloud')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'cloud' ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                            title="Data Real-time Supabase"
-                        >
-                            Cloud
-                        </button>
                     </div>
 
                     <div className="bg-slate-700 p-1 rounded-lg flex">
@@ -330,6 +318,19 @@ const FinanceView: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Info Banner for Demo Mode */}
+            {isDemoMode && dataSource === 'dropbox' && (
+                <div className="mb-4 bg-yellow-900/30 border border-yellow-700 p-3 rounded-lg flex items-center gap-3 text-yellow-200 text-sm animate-fade-in">
+                    <Icon name="warning" className="w-5 h-5 flex-shrink-0" />
+                    <div className="flex-1">
+                        <p className="font-bold">Mode Demo (Simulasi)</p>
+                        <p className="opacity-80">
+                            Dropbox belum diatur. Data di bawah ini adalah data palsu untuk menunjukkan tampilan laporan terpusat dari beberapa cabang.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             <div className="flex-1 overflow-y-auto">
                 {isCloudLoading ? (

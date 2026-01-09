@@ -2,7 +2,6 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { useData } from './DataContext';
 import { useUI } from './UIContext';
-import { supabaseService } from '../services/supabaseService';
 import { dropboxService } from '../services/dropboxService';
 import type { User, AuthSettings } from '../types';
 
@@ -63,24 +62,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // AUTO SYNC LOGIC
   const performAutoSync = async () => {
-      const sbUrl = localStorage.getItem('ARTEA_SB_URL');
-      const sbKey = localStorage.getItem('ARTEA_SB_KEY');
       const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
 
       // Only sync if cloud is configured
-      if (!sbUrl && !dbxToken) return;
+      if (!dbxToken) return;
 
       setSyncStatus('syncing');
       try {
-          // Priority 1: Supabase
-          if (sbUrl && sbKey) {
-              supabaseService.init(sbUrl, sbKey);
-              await supabaseService.pullMasterData();
-          } 
-          // Priority 2: Dropbox (fallback or alternative)
-          else if (dbxToken) {
-              await dropboxService.downloadAndMergeMasterData();
-          }
+          await dropboxService.downloadAndMergeMasterData();
           
           setSyncStatus('success');
           // Optional: Show non-intrusive notification via console or toast if UI supports it

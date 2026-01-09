@@ -81,7 +81,7 @@ const ScenarioCard: React.FC<{
                         <span className={`flex-shrink-0 w-5 h-5 rounded-full bg-slate-900 ${textColor} flex items-center justify-center text-xs font-bold mt-0.5 border border-slate-700`}>
                             {idx + 1}
                         </span>
-                        <span>{step}</span>
+                        <span dangerouslySetInnerHTML={{__html: step}} />
                     </div>
                 ))}
             </div>
@@ -210,12 +210,12 @@ const HelpView: React.FC = () => {
                             title="3. Cloud Sync (Multi-Cabang)" 
                             icon="wifi" 
                             color="sky-400"
-                            desc="Sinkronisasi otomatis antar cabang menggunakan Dropbox/Supabase."
+                            desc="Sinkronisasi otomatis antar cabang menggunakan Dropbox."
                             steps={[
-                                "Admin: Atur koneksi Cloud di Pengaturan > Data.",
-                                "Admin: Upload 'Master Data' (Produk/Harga).",
-                                "Cabang: Hubungkan akun Cloud yang sama -> Klik 'Update dari Pusat'.",
-                                "Data penjualan cabang akan terkirim otomatis ke Cloud untuk dipantau Admin."
+                                "Admin (Pusat): Hubungkan akun Dropbox di menu Pengaturan > Data.",
+                                "Admin: Upload 'Master Data' (Produk/Harga/Diskon) ke Dropbox.",
+                                "Cabang: Hubungkan akun Dropbox yang SAMA persis.",
+                                "Cabang: Data penjualan terkirim otomatis. Admin <strong>WAJIB</strong> tekan tombol <strong>'Refresh Data'</strong> di Dashboard/Laporan untuk menarik data terbaru."
                             ]}
                         />
                         <ScenarioCard 
@@ -247,7 +247,15 @@ const HelpView: React.FC = () => {
                                     <li><strong>Kartu Atas:</strong> Ringkasan Penjualan Hari Ini, Jumlah Transaksi, Total Piutang Belum Dibayar, dan Peringatan Stok Menipis.</li>
                                     <li><strong>Grafik Tren:</strong> Menampilkan pergerakan omzet selama 7 hari terakhir.</li>
                                     <li><strong>Produk Terlaris:</strong> Top 5 produk dengan penjualan tertinggi minggu ini.</li>
-                                    <li><strong>Mode Cloud:</strong> Jika Cloud aktif, dashboard bisa difilter per Cabang untuk melihat performa outlet lain.</li>
+                                    <li><strong>Mode Cloud:</strong> Aktifkan "Mode Dropbox" untuk melihat laporan gabungan dari semua cabang.</li>
+                                </ul>
+                            </AccordionItem>
+                            <AccordionItem title="Tombol Refresh (Khusus Admin)" isOpen={openAccordion === 'dash_3'} onToggle={() => toggleAccordion('dash_3')} icon="reset" colorClass="text-blue-400" badge="Penting">
+                                <p>Jika Anda menggunakan fitur Cloud/Dropbox:</p>
+                                <ul className="list-disc pl-5 space-y-1 mt-2">
+                                    <li>Data cabang <strong>tidak muncul otomatis</strong> (real-time) di layar Admin.</li>
+                                    <li>Anda harus menekan tombol <strong>"Refresh Data"</strong> (ikon panah melingkar) yang tersedia di Dashboard, Laporan, atau Keuangan.</li>
+                                    <li>Tombol ini akan memerintahkan aplikasi untuk mengunduh file data terbaru yang dikirim oleh cabang ke Dropbox.</li>
                                 </ul>
                             </AccordionItem>
                             <AccordionItem title="Artea AI (Analisis Cerdas)" isOpen={openAccordion === 'dash_2'} onToggle={() => toggleAccordion('dash_2')} icon="chat" colorClass="text-purple-400" badge="AI">
@@ -371,13 +379,17 @@ const HelpView: React.FC = () => {
                     <div>
                         <SectionHeader title="Menu: Pengaturan" icon="settings" desc="Konfigurasi sistem, user, dan data." />
                         <div className="space-y-2">
-                            <AccordionItem title="Data & Cloud (Sync)" isOpen={openAccordion === 'set_1'} onToggle={() => toggleAccordion('set_1')} icon="wifi" colorClass="text-sky-400">
-                                <p>Menghubungkan aplikasi dengan penyimpanan luar.</p>
-                                <ul className="list-disc pl-5 mt-2 space-y-1">
-                                    <li><strong>Dropbox:</strong> Disarankan untuk Backup File (JSON/CSV). Murah & Mudah.</li>
-                                    <li><strong>Supabase:</strong> Disarankan untuk Database Real-time (Dashboard Live). Lebih canggih.</li>
-                                    <li><strong>Backup Lokal:</strong> Tombol wajib ditekan rutin jika Anda tidak memakai Cloud. Menyimpan data ke file di HP/Laptop.</li>
-                                </ul>
+                            <AccordionItem title="Cloud Sync & Multi-Cabang (Dropbox)" isOpen={openAccordion === 'set_1'} onToggle={() => toggleAccordion('set_1')} icon="wifi" colorClass="text-sky-400">
+                                <p>Fitur Cloud kini terpusat menggunakan <strong>Dropbox</strong> untuk kemudahan dan stabilitas.</p>
+                                <div className="bg-slate-800 p-3 rounded border border-slate-600 mt-2">
+                                    <strong className="text-blue-400 block mb-1">Fungsi Dropbox:</strong>
+                                    <ul className="list-disc pl-4 text-xs text-slate-400 space-y-1">
+                                        <li><strong>Backup Otomatis:</strong> Data penting disimpan ke folder aplikasi di Dropbox Anda.</li>
+                                        <li><strong>Laporan Pusat:</strong> Jika Anda punya banyak cabang, setiap cabang akan mengirim data penjualan ke Dropbox.</li>
+                                        <li><strong>Update Produk (Master Data):</strong> Admin pusat bisa mengupdate harga/produk lalu mengirimnya ke cabang via Dropbox.</li>
+                                    </ul>
+                                </div>
+                                <p className="mt-2 text-xs text-slate-400">*Pastikan akun Dropbox yang digunakan di Pusat dan Cabang adalah <strong>akun yang sama</strong> agar data bisa saling terbaca.</p>
                             </AccordionItem>
                             <AccordionItem title="Keamanan & User" isOpen={openAccordion === 'set_2'} onToggle={() => toggleAccordion('set_2')} icon="lock" colorClass="text-red-400">
                                 <ul className="list-disc pl-5 space-y-1">
@@ -404,6 +416,13 @@ const HelpView: React.FC = () => {
                         <div className="space-y-4">
                             
                             <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Mengapa data cabang tidak muncul otomatis di Admin?</h4>
+                                <p className="text-slate-300 text-sm">
+                                    A: Sistem Dropbox berbasis file, bukan database real-time. Data cabang sudah terkirim secara otomatis, namun Admin perlu menekan tombol <strong>"Refresh Data"</strong> (ikon panah melingkar) di Dashboard, Laporan, atau Keuangan untuk menarik/mengunduh update terbaru tersebut ke layar Anda.
+                                </p>
+                            </div>
+
+                            <div className="bg-slate-900/50 p-4 rounded-lg">
                                 <h4 className="font-bold text-[#52a37c] mb-1">Q: Bagaimana cara print struk via Bluetooth?</h4>
                                 <p className="text-slate-300 text-sm">
                                     A: Pastikan Anda menggunakan browser <strong>Google Chrome</strong> di Android atau Desktop. 
@@ -423,24 +442,16 @@ const HelpView: React.FC = () => {
                             <div className="bg-slate-900/50 p-4 rounded-lg">
                                 <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah data saya hilang jika HP rusak?</h4>
                                 <p className="text-slate-300 text-sm">
-                                    A: <strong>YA</strong>, jika Anda tidak pernah backup. Aplikasi ini Offline-first (data di HP). 
-                                    Solusi: Rutin lakukan "Backup Lokal" (download file JSON) dan simpan di Google Drive/WA, atau aktifkan fitur Cloud Sync (Dropbox).
+                                    A: <strong>YA</strong>, jika Anda tidak menghubungkan Dropbox. Aplikasi ini Offline-first (data di HP). 
+                                    Solusi: Segera hubungkan Dropbox di menu Pengaturan. Data akan otomatis ter-backup ke cloud.
                                 </p>
                             </div>
 
                             <div className="bg-slate-900/50 p-4 rounded-lg">
-                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Kenapa stok tidak berkurang saat transaksi?</h4>
+                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Sinkronisasi Cloud gagal / Penuh?</h4>
                                 <p className="text-slate-300 text-sm">
-                                    A: Cek menu Produk -> Edit Produk tersebut. Pastikan centang <strong>"Lacak Stok"</strong> sudah aktif. 
-                                    Jika menggunakan resep, pastikan bahan baku penyusunnya juga memiliki stok yang cukup.
-                                </p>
-                            </div>
-
-                            <div className="bg-slate-900/50 p-4 rounded-lg">
-                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Sinkronisasi Cloud gagal / Error Quota?</h4>
-                                <p className="text-slate-300 text-sm">
-                                    A: Penyimpanan gratis Dropbox/Supabase mungkin penuh. 
-                                    Masuk ke Pengaturan -> Data -> Klik tombol merah <strong>"Kosongkan Riwayat Cloud"</strong>. 
+                                    A: Penyimpanan gratis Dropbox mungkin penuh. 
+                                    Masuk ke Pengaturan -> Data -> Klik tombol merah <strong>"Kosongkan Folder Laporan"</strong>. 
                                     Ini akan menghapus log transaksi lama di cloud (tapi data di HP aman) agar sync bisa berjalan lagi.
                                 </p>
                             </div>

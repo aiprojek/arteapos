@@ -32,9 +32,8 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
             }
         } else if (currentUser.role === 'staff') {
             // Cek konfigurasi cloud owner untuk menentukan pesan briefing
-            const sbUrl = localStorage.getItem('ARTEA_SB_URL');
-            const dbxToken = localStorage.getItem('ARTEA_DBX_TOKEN');
-            if (sbUrl || dbxToken) {
+            const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
+            if (dbxToken) {
                 setCloudMode('cloud');
             } else {
                 setCloudMode('local');
@@ -162,7 +161,7 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
                             <Icon name="warning" className="w-5 h-5"/> PERHATIAN STAF
                         </h4>
                         <p className="text-sm text-yellow-100 mt-1">
-                            Aplikasi ini menggunakan mode <strong>{cloudMode === 'cloud' ? 'ONLINE (Cloud)' : 'OFFLINE (Lokal)'}</strong>. Ikuti prosedur berikut:
+                            Aplikasi ini menggunakan mode <strong>{cloudMode === 'cloud' ? 'ONLINE (Dropbox Sync)' : 'OFFLINE (Lokal)'}</strong>. Ikuti prosedur berikut:
                         </p>
                     </div>
 
@@ -210,7 +209,7 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
                                         Saat tutup toko, kirim data penjualan ke server pusat agar Owner bisa memantau.
                                     </p>
                                     <div className="mt-2 bg-slate-800 p-2 rounded border border-slate-700 text-xs text-slate-300">
-                                        <span>👉 Menu Laporan (tombol di atas daftar produk) {'>'} Kirim Laporan {'>'} Klik <strong>"Sync Cloud"</strong>.</span>
+                                        <span>👉 Menu Laporan (tombol di atas daftar produk) {'>'} Kirim Laporan {'>'} Klik <strong>"Sync Sekarang"</strong>.</span>
                                     </div>
                                 </div>
                             </div>

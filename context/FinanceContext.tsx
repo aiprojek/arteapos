@@ -1,7 +1,9 @@
 
 import React, { createContext, useContext, ReactNode, useCallback } from 'react';
 import { useData } from './DataContext';
-import { useAuth } from './AuthContext'; // Import Auth
+import { useAuth } from './AuthContext';
+import { useCloudSync } from './CloudSyncContext'; // NEW
+import { useAudit } from './AuditContext'; // NEW
 import type { Expense, Supplier, Purchase, ExpenseStatus, PurchaseStatus, StockAdjustment, Transaction as TransactionType, Payment, OtherIncome, Product, RawMaterial } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 
@@ -26,16 +28,16 @@ interface FinanceContextType {
     addPaymentToTransaction: (transactionId: string, payments: Array<Omit<Payment, 'id' | 'createdAt'>>) => void;
     refundTransaction: (transactionId: string) => void;
     importTransactions: (newTransactions: TransactionType[]) => void;
-    importFinanceData: (expenses: Expense[], incomes: OtherIncome[], purchases: Purchase[]) => void; // NEW
+    importFinanceData: (expenses: Expense[], incomes: OtherIncome[], purchases: Purchase[]) => void;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
-// FIX: Change to React.FC to fix children prop type error
 export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ children }) => {
-    const { data, setData, logAudit, triggerAutoSync } = useData(); // Added triggerAutoSync
+    const { data, setData } = useData();
+    const { triggerAutoSync } = useCloudSync(); // Use new hook
+    const { logAudit } = useAudit(); // Use new hook
     const { currentUser } = useAuth();
-    // FIX: Use 'transactionRecords' from data and alias it to 'transactions' for context consumers.
     const { expenses, otherIncomes = [], suppliers, purchases, transactionRecords: transactions } = data;
 
     const addExpense = useCallback((expenseData: Omit<Expense, 'id' | 'status'>) => {
@@ -181,7 +183,6 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
 
     const addPaymentToTransaction = useCallback((transactionId: string, payments: Array<Omit<Payment, 'id' | 'createdAt'>>) => {
         setData(prev => {
-            // FIX: Use 'transactionRecords' for data manipulation.
             const targetTransaction = prev.transactionRecords.find(t => t.id === transactionId);
             if (!targetTransaction) {
                 console.error("Transaction not found for payment update");
@@ -214,12 +215,10 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                 paymentStatus: newPaymentStatus,
             };
 
-            // FIX: Use 'transactionRecords' for data manipulation.
             const updatedTransactions = prev.transactionRecords.map(t => 
                 t.id === transactionId ? updatedTransaction : t
             );
 
-            // FIX: Update 'transactionRecords' in the data state.
             return { ...prev, transactionRecords: updatedTransactions };
         });
         setTimeout(() => triggerAutoSync(), 500);
@@ -233,7 +232,6 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
             // Audit Log
             logAudit(currentUser, 'REFUND_TRANSACTION', `Refund transaksi #${transactionId.slice(-4)}. Total: ${CURRENCY_FORMATTER.format(targetTransaction.total)}`, transactionId);
 
-            // 1. Mark Transaction as Refunded
             const updatedTransaction: TransactionType = { ...targetTransaction, paymentStatus: 'refunded' };
             const updatedTransactions = prev.transactionRecords.map(t => t.id === transactionId ? updatedTransaction : t);
 
@@ -242,16 +240,12 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
             let updatedCustomers = [...prev.customers];
             let updatedStockAdjustments = [...(prev.stockAdjustments || [])];
             
-            // 2. Restore Inventory (Logic reversed from saveTransaction)
             if (prev.inventorySettings.enabled) {
-                // Safely access items array
                 const itemsList = targetTransaction.items || [];
                 const cartItems = itemsList.filter(item => !(item.isReward && item.price === 0));
 
                 cartItems.forEach(item => {
                     const product = prev.products.find(p => p.id === item.id);
-                    // Use recipe from ITEM SNAPSHOT if available to ensure historical accuracy, 
-                    // otherwise fallback to current product definition
                     const recipeToRestore = item.recipe || product?.recipe;
 
                     if (prev.inventorySettings.trackIngredients && recipeToRestore && recipeToRestore.length > 0) {
@@ -259,14 +253,12 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                             const totalToRestore = recipeItem.quantity * item.quantity;
                             
                             if (recipeItem.itemType === 'product' && recipeItem.productId) {
-                                // Restore component product stock
                                 const pIdx = updatedProducts.findIndex(p => p.id === recipeItem.productId);
                                 if (pIdx > -1) {
                                     const currentStock = updatedProducts[pIdx].stock || 0;
                                     const newStock = currentStock + totalToRestore;
                                     updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: newStock };
                                     
-                                    // Log Adjustment
                                     if(updatedProducts[pIdx].trackStock) {
                                         updatedStockAdjustments.unshift({
                                             id: `${Date.now()}-ref-${recipeItem.productId}`,
@@ -280,7 +272,6 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                                     }
                                 }
                             } else {
-                                // Restore raw material stock
                                 const materialId = recipeItem.rawMaterialId || '';
                                 const mIdx = updatedRawMaterials.findIndex(m => m.id === materialId);
                                 if (mIdx > -1) {
@@ -289,14 +280,12 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                             }
                         });
                     } else if (product && product.trackStock) {
-                        // Direct stock restore
                         const pIdx = updatedProducts.findIndex(p => p.id === product.id);
                         if (pIdx > -1) {
                             const currentStock = updatedProducts[pIdx].stock || 0;
                             const newStock = currentStock + item.quantity;
                             updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: newStock };
 
-                            // Log Adjustment
                             updatedStockAdjustments.unshift({
                                 id: `${Date.now()}-ref-${product.id}`,
                                 productId: product.id,
@@ -311,17 +300,13 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                 });
             }
 
-            // 3. Revert Customer Points (if earned)
             if (targetTransaction.customerId && targetTransaction.pointsEarned && prev.membershipSettings.enabled) {
                 const customerIndex = updatedCustomers.findIndex(c => c.id === targetTransaction.customerId);
                 if (customerIndex > -1) {
-                    // Deduct earned points, but add back spent points if a reward was redeemed
                     let pointsCorrection = -targetTransaction.pointsEarned;
                     if (targetTransaction.rewardRedeemed) {
                         pointsCorrection += targetTransaction.rewardRedeemed.pointsSpent;
                     }
-                    
-                    // Prevent negative points just in case
                     const newPoints = Math.max(0, updatedCustomers[customerIndex].points + pointsCorrection);
                     updatedCustomers[customerIndex] = { ...updatedCustomers[customerIndex], points: newPoints };
                 }
@@ -341,7 +326,6 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
 
     const importTransactions = useCallback((newTransactions: TransactionType[]) => {
         setData(prev => {
-            // Merge transactions, filtering out duplicates by ID
             const existingIds = new Set(prev.transactionRecords.map(t => t.id));
             const uniqueNewTransactions = newTransactions.filter(t => !existingIds.has(t.id));
             

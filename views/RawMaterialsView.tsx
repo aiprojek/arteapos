@@ -20,7 +20,8 @@ const InputField: React.FC<{
     type?: string;
     required?: boolean;
     min?: string;
-}> = ({ name, label, value, onChange, type = 'text', required = false, min }) => (
+    placeholder?: string;
+}> = ({ name, label, value, onChange, type = 'text', required = false, min, placeholder }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
         <input
@@ -31,6 +32,7 @@ const InputField: React.FC<{
             onChange={onChange}
             required={required}
             min={min}
+            placeholder={placeholder}
             className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
         />
     </div>
@@ -43,7 +45,15 @@ const RawMaterialForm: React.FC<{
     onCancel: () => void 
 }> = ({ material, onSave, onCancel }) => {
     const { receiptSettings } = useSettings();
-    const [formData, setFormData] = useState({ name: '', stock: '', unit: '', costPerUnit: '', validStoreIds: [] as string[] });
+    const [formData, setFormData] = useState({ 
+        name: '', 
+        stock: '', 
+        unit: '', 
+        costPerUnit: '', 
+        validStoreIds: [] as string[],
+        purchaseUnit: '',
+        conversionRate: ''
+    });
     
     const availableBranches = receiptSettings.branches || [];
 
@@ -54,10 +64,12 @@ const RawMaterialForm: React.FC<{
                 stock: material.stock.toString(),
                 unit: material.unit,
                 costPerUnit: material.costPerUnit?.toString() || '',
-                validStoreIds: material.validStoreIds || []
+                validStoreIds: material.validStoreIds || [],
+                purchaseUnit: material.purchaseUnit || '',
+                conversionRate: material.conversionRate ? material.conversionRate.toString() : ''
             });
         } else {
-            setFormData({ name: '', stock: '', unit: '', costPerUnit: '', validStoreIds: [] });
+            setFormData({ name: '', stock: '', unit: '', costPerUnit: '', validStoreIds: [], purchaseUnit: '', conversionRate: '' });
         }
     }, [material]);
 
@@ -83,6 +95,8 @@ const RawMaterialForm: React.FC<{
             ...formData,
             stock: parseFloat(formData.stock) || 0,
             costPerUnit: parseFloat(formData.costPerUnit) || 0,
+            conversionRate: formData.conversionRate ? parseFloat(formData.conversionRate) : undefined,
+            purchaseUnit: formData.purchaseUnit || undefined,
             validStoreIds: formData.validStoreIds.length === 0 ? undefined : formData.validStoreIds
         };
         if (material && 'id' in material) {
@@ -95,9 +109,26 @@ const RawMaterialForm: React.FC<{
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <InputField name="name" label="Nama Bahan Baku" required value={formData.name} onChange={handleChange} />
-            <InputField name="stock" label="Jumlah Stok" type="number" required value={formData.stock} onChange={handleChange} min="0"/>
-            <InputField name="unit" label="Satuan (cth: gram, ml, pcs)" required value={formData.unit} onChange={handleChange} />
-            <InputField name="costPerUnit" label="Biaya per Satuan (IDR, Opsional)" type="number" value={formData.costPerUnit} onChange={handleChange} min="0"/>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <InputField name="stock" label="Jumlah Stok (Satuan Pakai)" type="number" required value={formData.stock} onChange={handleChange} min="0"/>
+                <InputField name="unit" label="Satuan Pakai (cth: ml, gr)" required value={formData.unit} onChange={handleChange} />
+            </div>
+            
+            <InputField name="costPerUnit" label="Estimasi Harga per Satuan Pakai (IDR)" type="number" value={formData.costPerUnit} onChange={handleChange} min="0"/>
+
+            {/* Conversion Section */}
+            <div className="bg-slate-900 p-3 rounded-lg border border-slate-700 space-y-3">
+                <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Icon name="share" className="w-4 h-4"/> Konversi Satuan Beli (Opsional)
+                </h4>
+                <p className="text-xs text-slate-400">Isi jika Anda membeli dalam satuan besar (cth: Karton) tapi memakai dalam satuan kecil (cth: Pcs).</p>
+                
+                <div className="grid grid-cols-2 gap-4">
+                    <InputField name="purchaseUnit" label="Satuan Beli (cth: Karton)" value={formData.purchaseUnit} onChange={handleChange} placeholder="cth: Box"/>
+                    <InputField name="conversionRate" label={`Isi per ${formData.purchaseUnit || 'Unit Beli'}`} type="number" value={formData.conversionRate} onChange={handleChange} min="1" placeholder="cth: 12"/>
+                </div>
+            </div>
 
             {/* Branch Restriction Selector */}
             {availableBranches.length > 0 && (
@@ -209,7 +240,16 @@ const RawMaterialsView: React.FC = () => {
     };
     
     const columns = useMemo(() => [
-        { label: 'Nama Bahan', width: '2fr', render: (m: RawMaterial) => <span className="font-medium">{m.name}</span> },
+        { label: 'Nama Bahan', width: '2fr', render: (m: RawMaterial) => (
+            <div>
+                <span className="font-medium">{m.name}</span>
+                {m.purchaseUnit && m.conversionRate && (
+                    <div className="text-[10px] text-slate-400">
+                        1 {m.purchaseUnit} = {m.conversionRate} {m.unit}
+                    </div>
+                )}
+            </div>
+        ) },
         { label: 'Biaya per Satuan', width: '1.5fr', render: (m: RawMaterial) => m.costPerUnit ? CURRENCY_FORMATTER.format(m.costPerUnit) : '-' },
         { label: 'Stok', width: '1fr', render: (m: RawMaterial) => m.stock },
         { label: 'Satuan', width: '1fr', render: (m: RawMaterial) => m.unit },

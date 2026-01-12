@@ -42,9 +42,12 @@ export interface RawMaterial {
   id: string;
   name: string;
   stock: number;
-  unit: string; // e.g., 'gram', 'ml', 'pcs'
-  costPerUnit?: number; // Cost per single unit (e.g., cost per gram)
-  validStoreIds?: string[]; // NEW: Restriction
+  unit: string; // Base usage unit e.g., 'ml', 'pcs'
+  costPerUnit?: number; // Cost per base unit
+  validStoreIds?: string[]; 
+  // Multi-Unit Support
+  purchaseUnit?: string; // e.g. 'Karton', 'Pack'
+  conversionRate?: number; // How many base units in 1 purchase unit (e.g. 12 pcs per Pack)
 }
 
 export interface RecipeItem {
@@ -103,6 +106,7 @@ export interface Product {
   modifierGroups?: ModifierGroup[]; // NEW: Advanced Modifiers
   branchPrices?: BranchPrice[]; // NEW: Remote pricing configuration
   validStoreIds?: string[]; // NEW: Branch Restriction (e.g. ['SPARE-01'] only)
+  taxRate?: number; // NEW: Override global tax rate (e.g., 0 for non-taxable, 11 for specific items)
 }
 
 export interface CartItem extends Product {
@@ -266,7 +270,8 @@ export interface PurchaseItem {
     rawMaterialId?: string;
     productId?: string;
     quantity: number;
-    price: number; // price per unit
+    price: number; // price per unit (either purchase unit or base unit depending on entry)
+    conversionApplied?: boolean; // Track if we used conversion
 }
 
 export type PurchaseStatus = 'lunas' | 'belum-lunas';

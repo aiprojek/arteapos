@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import type { AuditLog } from '../../types';
 import Icon from '../Icon';
 import VirtualizedTable from '../VirtualizedTable';
-import { useData } from '../../context/DataContext';
+import { useAudit } from '../../context/AuditContext'; // Use new context
 import { dropboxService } from '../../services/dropboxService';
 import { useUI } from '../../context/UIContext';
 
@@ -20,17 +20,16 @@ const SettingsCard: React.FC<{ title: string; description?: string; children: Re
 );
 
 const AuditTab: React.FC = () => {
-    const { data } = useData();
+    const { auditLogs: localLogs, isLoadingLogs } = useAudit(); // Use hook
     const { showAlert } = useUI();
     const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
     const [cloudLogs, setCloudLogs] = useState<AuditLog[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isCloudLoading, setIsCloudLoading] = useState(false);
 
     useEffect(() => {
         const loadCloudData = async () => {
             if (dataSource === 'local') return;
 
-            // Pre-check credentials
             if (dataSource === 'dropbox') {
                 const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
                 if (!dbxToken) {
@@ -40,7 +39,7 @@ const AuditTab: React.FC = () => {
                 }
             }
 
-            setIsLoading(true);
+            setIsCloudLoading(true);
             setCloudLogs([]);
 
             try {
@@ -49,12 +48,10 @@ const AuditTab: React.FC = () => {
                     let aggregatedLogs: any[] = [];
                     allBranches.forEach(branch => {
                         if (branch.auditLogs) {
-                            // Add storeId info if not present
                             const logsWithStore = branch.auditLogs.map((l: any) => ({...l, storeId: branch.storeId}));
                             aggregatedLogs = [...aggregatedLogs, ...logsWithStore];
                         }
                     });
-                    // Sort descending by time
                     aggregatedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
                     setCloudLogs(aggregatedLogs);
                 }
@@ -63,19 +60,19 @@ const AuditTab: React.FC = () => {
                 showAlert({ type: 'alert', title: 'Gagal Memuat Log', message: e.message });
                 setDataSource('local');
             } finally {
-                setIsLoading(false);
+                setIsCloudLoading(false);
             }
         };
 
         loadCloudData();
     }, [dataSource, showAlert]);
 
-    const activeLogs = dataSource === 'local' ? (data.auditLogs || []) : cloudLogs;
+    const activeLogs = dataSource === 'local' ? localLogs : cloudLogs;
+    const isLoading = dataSource === 'local' ? isLoadingLogs : isCloudLoading;
 
     const columns = [
         { label: 'Waktu', width: '1.5fr', render: (l: AuditLog) => <span className="text-slate-400 text-xs">{new Date(l.timestamp).toLocaleString()}</span> },
         { label: 'User', width: '1fr', render: (l: AuditLog) => <span className="text-white text-xs">{l.userName}</span> },
-        // Conditional Store Column
         ...(dataSource !== 'local' ? [{ 
             label: 'Cabang', 
             width: '0.8fr', 
@@ -104,10 +101,9 @@ const AuditTab: React.FC = () => {
                             Dropbox
                         </button>
                     </div>
-                    {isLoading && <span className="text-xs text-slate-400 animate-pulse">Sedang memuat data dari {dataSource}...</span>}
+                    {isLoading && <span className="text-xs text-slate-400 animate-pulse">Sedang memuat data...</span>}
                 </div>
 
-                {/* Security Warning Banner */}
                 <div className="bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r mb-4">
                     <h4 className="font-bold text-red-300 text-sm mb-1 flex items-center gap-2">
                         <Icon name="warning" className="w-4 h-4"/> Sistem Pencatatan Aktif

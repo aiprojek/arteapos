@@ -2,6 +2,7 @@
 import React, { createContext, useContext, ReactNode, useCallback, useState, useEffect } from 'react';
 import { useData } from './DataContext';
 import { useAuth } from './AuthContext';
+import { useCloudSync } from './CloudSyncContext'; // NEW
 import { db } from '../services/db';
 import type { SessionState, SessionSettings, CashMovement, SessionHistory } from '../types';
 
@@ -17,7 +18,8 @@ interface SessionContextType {
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { data, setData, isDataLoading, triggerAutoSync } = useData(); // Added triggerAutoSync
+    const { data, setData, isDataLoading } = useData();
+    const { triggerAutoSync } = useCloudSync(); // Use new hook
     const { currentUser } = useAuth();
     const { sessionSettings } = data;
     const [session, setSession] = useState<SessionState | null>(null);
@@ -56,7 +58,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const endSession = useCallback(async (finalData?: { actualCash: number, expectedCash: number, sales: number, cashIn: number, cashOut: number }) => {
         try {
             if (session && finalData) {
-                // Archive session
                 const history: SessionHistory = {
                     ...session,
                     endTime: new Date().toISOString(),
@@ -68,7 +69,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     variance: finalData.actualCash - finalData.expectedCash
                 };
                 
-                // Add to Context State and DB via DataContext
                 setData(prev => ({
                     ...prev,
                     sessionHistory: [history, ...(prev.sessionHistory || [])]
@@ -78,7 +78,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
             await db.session.delete('activeSession');
             setSession(null);
             
-            // CRITICAL: Trigger Sync immediately so Admin sees the closed session data
             setTimeout(() => triggerAutoSync(), 1000);
 
         } catch (error) {
@@ -112,7 +111,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return (
         <SessionContext.Provider value={{
             session,
-            sessionSettings: sessionSettings || { enabled: false, enableCartHolding: false }, // Fallback for safety
+            sessionSettings: sessionSettings || { enabled: false, enableCartHolding: false },
             startSession,
             endSession,
             updateSessionSettings,

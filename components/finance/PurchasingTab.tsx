@@ -50,15 +50,43 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
         setSupplierForm({ name: '', contact: '' });
     };
 
+    const getSelectedItemDetails = () => {
+        if (!tempItem.id) return null;
+        if (tempItem.type === 'product') return products.find(p => p.id === tempItem.id);
+        return rawMaterials.find(m => m.id === tempItem.id);
+    };
+
+    const selectedItemDetails = getSelectedItemDetails();
+
     const handleAddItemToPurchase = () => {
         if (!tempItem.id || !tempItem.qty || !tempItem.price) return;
         
+        let quantity = parseFloat(tempItem.qty);
+        const inputPrice = parseFloat(tempItem.price);
+        let finalPrice = inputPrice;
+        let conversionApplied = false;
+
+        // CHECK FOR CONVERSION (Raw Material Only)
+        if (tempItem.type === 'raw_material' && selectedItemDetails && 'conversionRate' in selectedItemDetails) {
+            const mat = selectedItemDetails as any; // Cast for TS check
+            if (mat.conversionRate && mat.conversionRate > 1 && mat.purchaseUnit) {
+                // User input qty in Purchase Units (e.g. 2 Karton)
+                // We must store qty in Base Units (e.g. 24 Pcs)
+                // And calculate price per Base Unit
+                const totalCost = quantity * inputPrice;
+                quantity = quantity * mat.conversionRate;
+                finalPrice = totalCost / quantity; // Cost per base unit
+                conversionApplied = true;
+            }
+        }
+
         const newItem: PurchaseItem = {
             itemType: tempItem.type,
             productId: tempItem.type === 'product' ? tempItem.id : undefined,
             rawMaterialId: tempItem.type === 'raw_material' ? tempItem.id : undefined,
-            quantity: parseFloat(tempItem.qty),
-            price: parseFloat(tempItem.price)
+            quantity: quantity,
+            price: finalPrice,
+            conversionApplied: conversionApplied
         };
 
         setPurchaseForm(prev => ({
@@ -220,22 +248,44 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                             </select>
                         </div>
 
+                        {/* INFO UNIT */}
+                        {selectedItemDetails && (
+                            <div className="text-xs text-slate-400 bg-slate-900/50 p-2 rounded">
+                                Satuan Pakai: <strong>{(selectedItemDetails as any).unit || 'Unit'}</strong>.
+                                {(selectedItemDetails as any).purchaseUnit && (selectedItemDetails as any).conversionRate > 1 && (
+                                    <span className="text-green-400 ml-1">
+                                        (Otomatis konversi: 1 {(selectedItemDetails as any).purchaseUnit} = {(selectedItemDetails as any).conversionRate} {(selectedItemDetails as any).unit})
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
                         <div className="flex gap-2">
-                            <input 
-                                type="number" placeholder="Qty" min="0" step="0.01"
-                                value={tempItem.qty} 
-                                onChange={e => setTempItem({...tempItem, qty: e.target.value})}
-                                className="w-1/3 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
-                            />
-                            <input 
-                                type="number" placeholder="Harga Satuan (Rp)" min="0"
-                                value={tempItem.price} 
-                                onChange={e => setTempItem({...tempItem, price: e.target.value})}
-                                className="w-1/3 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
-                            />
-                            <Button size="sm" onClick={handleAddItemToPurchase} disabled={!tempItem.id || !tempItem.qty || !tempItem.price}>
-                                <Icon name="plus" className="w-4 h-4" />
-                            </Button>
+                            <div className="flex-1">
+                                <label className="text-[10px] text-slate-500 mb-1">
+                                    Qty ({(selectedItemDetails as any)?.purchaseUnit || 'Unit'})
+                                </label>
+                                <input 
+                                    type="number" placeholder="Qty" min="0" step="0.01"
+                                    value={tempItem.qty} 
+                                    onChange={e => setTempItem({...tempItem, qty: e.target.value})}
+                                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label className="text-[10px] text-slate-500 mb-1">Harga Satuan</label>
+                                <input 
+                                    type="number" placeholder="Harga (Rp)" min="0"
+                                    value={tempItem.price} 
+                                    onChange={e => setTempItem({...tempItem, price: e.target.value})}
+                                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                                />
+                            </div>
+                            <div className="flex items-end">
+                                <Button size="sm" onClick={handleAddItemToPurchase} disabled={!tempItem.id || !tempItem.qty || !tempItem.price}>
+                                    <Icon name="plus" className="w-4 h-4" />
+                                </Button>
+                            </div>
                         </div>
                     </div>
 
@@ -248,7 +298,10 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                                 <div key={idx} className="flex justify-between items-center text-xs text-slate-300 py-1 border-b border-slate-800 last:border-0">
                                     <div className="flex-1 truncate pr-2">
                                         <span className="text-white block">{getItemName(item)}</span>
-                                        <span>{item.quantity} x {CURRENCY_FORMATTER.format(item.price)}</span>
+                                        <span>
+                                            {item.quantity} x {CURRENCY_FORMATTER.format(item.price)}
+                                            {item.conversionApplied && <span className="text-[9px] text-green-400 ml-1">(Terkonversi)</span>}
+                                        </span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="font-bold text-white">{CURRENCY_FORMATTER.format(item.quantity * item.price)}</span>

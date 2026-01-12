@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'artea-pos-cache-v3';
+const CACHE_NAME = 'artea-pos-cache-v4';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -19,7 +19,8 @@ const urlsToCache = [
   'https://aistudiocdn.com/dexie@^4.0.7',
   'https://esm.sh/crypto-js@4.1.1',
   'https://esm.sh/jspdf@2.5.1',
-  'https://esm.sh/jspdf-autotable@3.8.2'
+  'https://esm.sh/jspdf-autotable@3.8.2',
+  'https://esm.sh/xlsx@0.18.5'
 ];
 
 self.addEventListener('install', event => {

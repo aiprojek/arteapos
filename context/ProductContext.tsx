@@ -2,7 +2,9 @@
 import React, { createContext, useContext, ReactNode, useCallback } from 'react';
 import { useData } from './DataContext';
 import { useUI } from './UIContext';
-import { useAuth } from './AuthContext'; // Import Auth
+import { useAuth } from './AuthContext';
+import { useAudit } from './AuditContext'; // NEW
+import { useCloudSync } from './CloudSyncContext'; // NEW
 import type { Product, RawMaterial, InventorySettings, StockAdjustment } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 
@@ -35,7 +37,7 @@ interface ProductContextType {
   bulkAddProducts: (newProducts: Product[]) => void;
   bulkAddRawMaterials: (newRawMaterials: RawMaterial[]) => void;
   isProductAvailable: (product: Product) => { available: boolean, reason: string };
-  importStockAdjustments: (adjustments: StockAdjustment[]) => void; // NEW
+  importStockAdjustments: (adjustments: StockAdjustment[]) => void;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -56,7 +58,9 @@ function base64ToBlob(base64: string): Blob {
 }
 
 export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
-  const { data, setData, logAudit, triggerAutoSync } = useData(); // Added triggerAutoSync
+  const { data, setData } = useData();
+  const { logAudit } = useAudit(); // Use new hook
+  const { triggerAutoSync } = useCloudSync(); // Use new hook
   const { products, categories, rawMaterials, inventorySettings, stockAdjustments, receiptSettings } = data;
   const { showAlert } = useUI();
   const { currentUser } = useAuth();
@@ -67,7 +71,6 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
   }, [setData]);
 
   const updateProduct = useCallback((updatedProduct: Product) => {
-    // Audit Price Change
     const oldProduct = products.find(p => p.id === updatedProduct.id);
     if (oldProduct && oldProduct.price !== updatedProduct.price) {
         const oldFmt = CURRENCY_FORMATTER.format(oldProduct.price);
@@ -113,13 +116,9 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
   }, [setData]);
 
   const findProductByBarcode = useCallback((barcode: string) => {
-    // UPDATED: Check store restriction
     const currentStoreId = receiptSettings.storeId;
     return products.find(p => {
-        // Check barcode match
         if (p.barcode !== barcode) return false;
-        
-        // Check store restriction
         if (p.validStoreIds && p.validStoreIds.length > 0 && currentStoreId) {
             return p.validStoreIds.includes(currentStoreId);
         }
@@ -160,7 +159,6 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
     setData(prev => {
         const productIndex = prev.products.findIndex(p => p.id === productId);
         if (productIndex === -1) {
-            // Try find raw material
             const materialIndex = prev.rawMaterials.findIndex(m => m.id === productId);
             if (materialIndex === -1) return prev;
 
@@ -173,7 +171,7 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
             const newAdjustment: StockAdjustment = {
                 id: Date.now().toString(),
                 productId: material.id,
-                productName: material.name, // Reusing field
+                productName: material.name,
                 change: quantity,
                 newStock,
                 notes,
@@ -216,7 +214,6 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
   }, [setData, triggerAutoSync]);
 
   const performStockOpname = useCallback((items: OpnameItem[], notes: string = '') => {
-      // Audit Log
       const count = items.filter(i => i.systemStock !== i.actualStock).length;
       if (count > 0) {
           logAudit(currentUser, 'STOCK_OPNAME', `Melakukan stock opname massal. ${count} item disesuaikan. ${notes}`, 'BATCH-OPNAME');
@@ -230,7 +227,7 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
 
           items.forEach((item, index) => {
               const diff = item.actualStock - item.systemStock;
-              if (diff === 0) return; // No change
+              if (diff === 0) return;
 
               if (item.type === 'product') {
                   const pIdx = updatedProducts.findIndex(p => p.id === item.id);
@@ -296,7 +293,6 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
     if (inventorySettings.trackIngredients && product.recipe && product.recipe.length > 0) {
       for (const recipeItem of product.recipe) {
         if (recipeItem.itemType === 'product' && recipeItem.productId) {
-            // Check bundled product availability
             const bundledProduct = products.find(p => p.id === recipeItem.productId);
             if (!bundledProduct) return { available: false, reason: 'Produk Komponen Hilang' };
             
@@ -310,7 +306,6 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
             }
 
         } else {
-            // Check raw material
             const materialId = recipeItem.rawMaterialId;
             const material = rawMaterials.find(m => m.id === materialId);
             if (!material || material.stock < recipeItem.quantity) {
@@ -330,7 +325,6 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
     return { available: true, reason: '' };
   }, [inventorySettings, rawMaterials, products]);
 
-  // NEW: Bulk Import Adjustments from Cloud
   const importStockAdjustments = useCallback((newAdjustments: StockAdjustment[]) => {
       setData(prev => {
           const existingIds = new Set(prev.stockAdjustments?.map(a => a.id) || []);

@@ -2,18 +2,17 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { useData } from './DataContext';
 import { useUI } from './UIContext';
+import { useCloudSync } from './CloudSyncContext'; // NEW
 import { dropboxService } from '../services/dropboxService';
 import type { User, AuthSettings } from '../types';
 
 const SYSTEM_USER: User = { id: 'system', name: 'Admin Sistem', pin: '', role: 'admin' };
 
-// Helper function to hash PINs using SHA-256
 async function hashPin(pin: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(pin);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  // convert bytes to hex string
   const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   return hashHex;
 }
@@ -29,14 +28,15 @@ interface AuthContextType {
   deleteUser: (userId: string) => void;
   resetUserPin: (userId: string) => Promise<string | null>;
   resetDefaultAdminPin: () => Promise<string | null>;
-  overrideAdminPin: (newPin: string) => Promise<boolean>; // NEW FUNCTION
+  overrideAdminPin: (newPin: string) => Promise<boolean>;
   updateAuthSettings: (settings: AuthSettings) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { data, setData, isDataLoading, setSyncStatus } = useData();
+  const { data, setData, isDataLoading } = useData();
+  const { triggerMasterDataPush } = useCloudSync(); // Just to access trigger, logic for auto sync is inside login
   const { authSettings, users } = data;
   const { showAlert } = useUI();
   const [currentUser, setCurrentUser] = useState<User | null>(() => authSettings.enabled ? null : SYSTEM_USER);
@@ -60,34 +60,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setupDefaultAdmin();
   }, [isDataLoading, users, setData]);
 
-  // AUTO SYNC LOGIC
-  const performAutoSync = async () => {
-      const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-
-      // Only sync if cloud is configured
-      if (!dbxToken) return;
-
-      setSyncStatus('syncing');
-      try {
-          await dropboxService.downloadAndMergeMasterData();
-          
-          setSyncStatus('success');
-          // Optional: Show non-intrusive notification via console or toast if UI supports it
-          console.log("Auto-sync from cloud successful");
-          
-          setTimeout(() => setSyncStatus('idle'), 3000);
-      } catch (error) {
-          console.error("Auto-sync failed:", error);
-          setSyncStatus('error');
-      }
-  };
-
+  // LOGIN LOGIC with Auto Sync
   const login = useCallback(async (user: User, pin: string): Promise<boolean> => {
     if (!authSettings.enabled) return false;
 
-    // Check if stored pin is already hashed (SHA-256 hash is 64 hex characters)
     const isHashed = user.pin.length === 64; 
-
     let success = false;
 
     if (isHashed) {
@@ -96,10 +73,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setCurrentUser(user);
             success = true;
         }
-    } else { // Plaintext pin, migrate on successful login
+    } else {
         if (user.pin === pin) {
             setCurrentUser(user);
-            // Migrate to hashed pin in the background
             const newHashedPin = await hashPin(pin);
             setData(prev => ({
                 ...prev,
@@ -110,14 +86,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     if (success) {
-        // TRIGGER AUTO SYNC ON LOGIN
-        // We don't await this so login is instant. Sync happens in background.
-        performAutoSync(); 
+        // Attempt Silent Sync on Login
+        const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
+        if (dbxToken) {
+             dropboxService.downloadAndMergeMasterData().catch(err => console.warn("Login Sync Failed", err));
+        }
         return true;
     }
     
     return false;
-  }, [authSettings.enabled, setData, setSyncStatus]);
+  }, [authSettings.enabled, setData]);
 
   const logout = useCallback(() => {
     if (authSettings.enabled) {
@@ -133,13 +111,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUser = useCallback(async (updatedUser: User) => {
     const originalUser = users.find(u => u.id === updatedUser.id);
-    
     let pinToSave = updatedUser.pin;
-    // If pin has changed and it's not already a hash, then hash it.
     if (originalUser && originalUser.pin !== updatedUser.pin && updatedUser.pin.length !== 64) {
         pinToSave = await hashPin(updatedUser.pin);
     }
-    
     const finalUser = { ...updatedUser, pin: pinToSave };
     setData(prev => ({ ...prev, users: prev.users.map(u => u.id === finalUser.id ? finalUser : u) }));
   }, [setData, users]);
@@ -180,13 +155,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return adminName;
   }, [setData]);
 
-  // NEW: Override Admin PIN directly (used after Security Challenge)
   const overrideAdminPin = useCallback(async (newPin: string): Promise<boolean> => {
       const hashedPin = await hashPin(newPin);
       let success = false;
-      
       setData(prev => {
-          // Find first admin
           const adminIndex = prev.users.findIndex(u => u.role === 'admin');
           if (adminIndex > -1) {
               const updatedUsers = [...prev.users];
@@ -202,7 +174,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateAuthSettings = useCallback((settings: AuthSettings) => {
     setData(prev => ({ ...prev, authSettings: settings }));
   }, [setData]);
-
 
   return (
     <AuthContext.Provider value={{

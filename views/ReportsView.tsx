@@ -18,7 +18,7 @@ import { useUI } from '../context/UIContext';
 import { dropboxService } from '../services/dropboxService';
 import { mockDataService } from '../services/mockData';
 import ReportCharts from '../components/reports/ReportCharts';
-import { generateSalesReportPDF } from '../utils/pdfGenerator'; // Import PDF Generator
+import { generateSalesReportPDF } from '../utils/pdfGenerator';
 
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
 type ReportScope = 'session' | 'historical' | 'session_history';
@@ -163,6 +163,10 @@ const ReportsView: React.FC = () => {
     const [isFilterDropdownOpen, setFilterDropdownOpen] = useState(false);
     const filterDropdownRef = useRef<HTMLDivElement>(null);
 
+    // Export Dropdown
+    const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+    const exportDropdownRef = useRef<HTMLDivElement>(null);
+
     // Branch Filtering State
     const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
 
@@ -174,7 +178,6 @@ const ReportsView: React.FC = () => {
     const [isDemoMode, setIsDemoMode] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-    
     const handleRefund = (transaction: TransactionType) => {
         showAlert({
             type: 'confirm',
@@ -200,6 +203,9 @@ const ReportsView: React.FC = () => {
             if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
                 setFilterDropdownOpen(false);
             }
+            if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
+                setIsExportDropdownOpen(false);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => {
@@ -207,14 +213,12 @@ const ReportsView: React.FC = () => {
         };
     }, []);
 
-    // Refactored Cloud Load logic to be callable via Refresh Button
     const loadCloudData = useCallback(async () => {
         setIsCloudLoading(true);
         setCloudTransactions([]);
         setCloudStockLogs([]);
         setIsDemoMode(false);
 
-        // 1. Pre-check credentials
         const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
         if (!dbxToken) {
             const mock = mockDataService.getMockDashboardData();
@@ -227,7 +231,6 @@ const ReportsView: React.FC = () => {
         }
 
         try {
-            // Fetch aggregated JSONs from Dropbox
             const allBranches = await dropboxService.fetchAllBranchData();
             let allTxns: any[] = [];
             let allLogs: any[] = [];
@@ -247,20 +250,18 @@ const ReportsView: React.FC = () => {
         } catch (err: any) {
             console.error("Cloud Load Error:", err);
             showAlert({ type: 'alert', title: 'Gagal Memuat', message: err.message });
-            setDataSource('local'); // Fallback
+            setDataSource('local');
         } finally {
             setIsCloudLoading(false);
         }
     }, [showAlert]);
 
-    // Load Cloud/Dropbox Data when Source Changes
     useEffect(() => {
         if (dataSource !== 'local') {
             loadCloudData();
         }
     }, [dataSource, loadCloudData]);
 
-    // NEW: Merge Cloud to Local Logic
     const handleMergeToLocal = () => {
         if (cloudTransactions.length === 0 && cloudStockLogs.length === 0) {
             showAlert({ type: 'alert', title: 'Data Kosong', message: 'Tidak ada data cloud untuk disimpan.' });
@@ -287,31 +288,24 @@ const ReportsView: React.FC = () => {
                 importTransactions(cloudTransactions);
                 importStockAdjustments(cloudStockLogs);
                 showAlert({ type: 'alert', title: 'Berhasil', message: 'Data cloud berhasil digabungkan ke database lokal.' });
-                setDataSource('local'); // Switch back to see result
+                setDataSource('local');
             }
         });
     };
     
     const isSessionMode = sessionSettings.enabled && session;
-
-    // Use current transaction source
     const transactions = dataSource === 'local' ? localTransactions : cloudTransactions;
     const stockLogs = dataSource === 'local' ? localStockAdjustments : cloudStockLogs;
 
-    // Available Branches for Filter
     const availableBranches = useMemo(() => {
         const branches = new Set<string>();
-        // Add local branch
         branches.add(receiptSettings.storeId || 'LOCAL');
-        
-        // Add imported/cloud branches
         transactions.forEach(t => {
             if (t.storeId) branches.add(t.storeId);
         });
         return Array.from(branches).sort();
     }, [transactions, receiptSettings.storeId]);
 
-    // FILTER LOGIC
     const dateFilterPredicate = (dateStr: string) => {
         const tDate = new Date(dateStr);
         const now = new Date();
@@ -343,33 +337,24 @@ const ReportsView: React.FC = () => {
 
     const filteredTransactions = useMemo(() => {
         let result = transactions;
-
-        // 1. Branch Filter
         if (selectedBranch !== 'ALL') {
             result = result.filter(t => t.storeId === selectedBranch);
         }
-
-        // 2. Date Filter
         if (isSessionMode && reportScope === 'session' && dataSource === 'local') {
             result = result.filter(t => new Date(t.createdAt) >= new Date(session.startTime));
         } else {
             result = result.filter(t => dateFilterPredicate(t.createdAt));
         }
-        
         return result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [transactions, filter, session, isSessionMode, reportScope, customStartDate, customEndDate, dataSource, selectedBranch]);
 
     const filteredStockLogs = useMemo(() => {
         let result = stockLogs;
-        
-        // 1. Branch Filter
         if (dataSource !== 'local' && selectedBranch !== 'ALL') {
              // @ts-ignore
              result = result.filter(s => s.storeId === selectedBranch);
         }
-
         result = result.filter(s => dateFilterPredicate(s.createdAt)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        
         return result;
     }, [stockLogs, filter, customStartDate, customEndDate, dataSource, selectedBranch]);
 
@@ -380,7 +365,6 @@ const ReportsView: React.FC = () => {
         let totalProfit = 0;
         let totalCashSales = 0;
         
-        // Hourly data structures
         const hourlyStats = Array.from({ length: 24 }, (_, i) => ({
             id: i.toString(),
             hourLabel: `${String(i).padStart(2, '0')}:00`,
@@ -391,17 +375,13 @@ const ReportsView: React.FC = () => {
 
         const productSales = new Map<string, {id: string, name: string, quantity: number, revenue: number}>();
         
-        // Use activeTransactions (excluding refunded) for calculations
         activeTransactions.forEach(t => {
             totalSales += t.total;
-            
-            // Calculate cash sales specifically for session reconciliation
             const cashPayment = t.payments?.find((p: any) => p.method === 'cash');
             if (cashPayment) {
                 totalCashSales += cashPayment.amount;
             }
 
-            // Hourly Calculation
             const tDate = new Date(t.createdAt);
             const hour = tDate.getHours();
             if (hour >= 0 && hour < 24) {
@@ -428,13 +408,11 @@ const ReportsView: React.FC = () => {
         const allProductSales = Array.from(productSales.values()).sort((a, b) => b.quantity - a.quantity);
         const bestSellingProducts = allProductSales.slice(0, 10);
         
-        // Prepare chart data (simple total for chart)
         const hourlyChartData = hourlyStats.map(h => ({
             name: h.hourLabel,
             total: h.total,
         }));
 
-        // Prepare table data (filter out hours with 0 sales for table, or keep all if preferred)
         const hourlyBreakdown = hourlyStats
             .filter(h => h.total > 0 || h.count > 0)
             .map(h => ({
@@ -444,7 +422,6 @@ const ReportsView: React.FC = () => {
                 total: h.total
             }));
 
-        // Cash Movements from session (Only locally relevant)
         let cashIn = 0;
         let cashOut = 0;
         if (session && reportScope === 'session' && dataSource === 'local') {
@@ -462,9 +439,9 @@ const ReportsView: React.FC = () => {
             avgTransaction: activeTransactions.length > 0 ? totalSales / activeTransactions.length : 0,
             profitMargin: totalSales > 0 ? (totalProfit / totalSales) * 100 : 0,
             bestSellingProducts,
-            allProductSales, // Full list for table
+            allProductSales,
             hourlyChartData,
-            hourlyBreakdown, // Detailed table data
+            hourlyBreakdown,
             cashIn,
             cashOut
         };
@@ -499,52 +476,54 @@ const ReportsView: React.FC = () => {
         return Array.from(categoryMap.entries()).map(([name, value]) => ({ name, value }));
     }, [activeTransactions]);
 
-    // Updated Export Logic with PDF
-    const handleExportPDF = () => {
-        // Construct a readable period label
-        let label = 'Semua Transaksi';
-        if (filter === 'today') label = `Hari Ini (${new Date().toLocaleDateString('id-ID')})`;
-        if (filter === 'week') label = 'Minggu Ini';
-        if (filter === 'month') label = 'Bulan Ini';
-        if (filter === 'custom') label = `${customStartDate} s/d ${customEndDate}`;
-        if (isSessionMode && reportScope === 'session') label = 'Sesi Aktif';
+    const getPeriodLabel = () => {
+        if (filter === 'today') return `Hari Ini (${new Date().toLocaleDateString('id-ID')})`;
+        if (filter === 'week') return 'Minggu Ini';
+        if (filter === 'month') return 'Bulan Ini';
+        if (filter === 'custom') return `${customStartDate} s/d ${customEndDate}`;
+        if (isSessionMode && reportScope === 'session') return 'Sesi Aktif';
+        return 'Semua Data';
+    };
 
+    const handleExportPDF = () => {
+        const label = getPeriodLabel();
         generateSalesReportPDF(filteredTransactions, receiptSettings, label, {
             totalSales: reportData.totalSales,
             totalProfit: reportData.totalProfit,
             totalTransactions: reportData.totalTransactions
         });
+        setIsExportDropdownOpen(false);
     }
 
-    const exportReport = () => {
+    const handleExportSpreadsheet = (format: 'xlsx' | 'ods' | 'csv') => {
+        const timestamp = new Date().toISOString().slice(0,10);
+        
         if (activeTab === 'stock_logs') {
-            const stockCsv = dataService.generateStockAdjustmentsCSVString(filteredStockLogs);
-            const blob = new Blob([stockCsv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.setAttribute('href', url);
-            link.setAttribute('download', `stock_log_${filter}_${new Date().toISOString().slice(0,10)}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            return;
+            const headers = ['Waktu', 'Produk', 'Perubahan', 'Stok Akhir', 'Catatan', 'Cabang'];
+            const rows = filteredStockLogs.map(s => [
+                new Date(s.createdAt).toLocaleString('id-ID'),
+                s.productName,
+                s.change,
+                s.newStock,
+                s.notes || '-',
+                (s as any).storeId || '-'
+            ]);
+            dataService.exportToSpreadsheet(headers, rows, `stock_log_${timestamp}`, format);
+        } else {
+            // Transaction Export
+            const headers = ['ID', 'Waktu', 'Total', 'Item', 'Kasir', 'Status', 'Cabang'];
+            const rows = filteredTransactions.map(t => [
+                t.id,
+                new Date(t.createdAt).toLocaleString('id-ID'),
+                t.total,
+                (t.items || []).map((i: any) => `${i.name} (x${i.quantity})`).join('; '),
+                t.userName,
+                t.paymentStatus,
+                t.storeId || ''
+            ]);
+            dataService.exportToSpreadsheet(headers, rows, `sales_report_${timestamp}`, format);
         }
-
-        const headers = 'Transaction ID,Date,Time,Total,Items,Cashier,Status,Branch';
-        const rows = filteredTransactions.map(t => {
-            const date = new Date(t.createdAt);
-            const items = (t.items || []).map((i: any) => `${i.name} (x${i.quantity})`).join('; ');
-            return `${t.id},${date.toLocaleDateString()},${date.toLocaleTimeString()},${t.total},"${items}","${t.userName}","${t.paymentStatus}","${t.storeId || ''}"`;
-        });
-        const csvContent = [headers, ...rows].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `sales_report_${isSessionMode ? reportScope : filter}_${new Date().toISOString().slice(0,10)}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        setIsExportDropdownOpen(false);
     };
 
     const showSessionView = sessionSettings.enabled && reportScope === 'session' && dataSource === 'local';
@@ -585,12 +564,11 @@ const ReportsView: React.FC = () => {
                 onViewReceipt={setSelectedTransaction}
                 onPay={setUpdatingTransaction}
                 onRefund={handleRefund}
-                disabled={dataSource !== 'local'} // Only allow edits on local data for now
+                disabled={dataSource !== 'local'}
             />
         )}
     ], [setSelectedTransaction, setUpdatingTransaction, handleRefund, dataSource]);
 
-    // Columns for Stock Log Table
     const stockColumns = useMemo(() => [
         { label: 'Waktu', width: '1.5fr', render: (s: StockAdjustment) => <span className="text-slate-400 whitespace-nowrap">{new Date(s.createdAt).toLocaleString('id-ID')}</span> },
         { label: 'Produk', width: '2fr', render: (s: StockAdjustment) => <span className="font-semibold text-white">{s.productName}</span> },
@@ -614,14 +592,12 @@ const ReportsView: React.FC = () => {
         ) },
     ], [dataSource]);
 
-    // Columns for Hourly Analysis
     const hourlyColumns = useMemo(() => [
         { label: 'Jam', width: '1fr', render: (h: any) => h.timeRange },
         { label: 'Jumlah Transaksi', width: '1fr', render: (h: any) => h.count },
         { label: 'Total Omzet', width: '1fr', render: (h: any) => CURRENCY_FORMATTER.format(h.total) }
     ], []);
 
-    // Columns for Product Sales
     const productSalesColumns = useMemo(() => [
         { label: 'Nama Produk', width: '2fr', render: (p: any) => <span className="font-medium text-white">{p.name}</span> },
         { label: 'Terjual (Qty)', width: '1fr', render: (p: any) => p.quantity },
@@ -644,7 +620,6 @@ const ReportsView: React.FC = () => {
                     </div>
                      <div className="flex gap-2 items-center flex-wrap justify-end">
                         
-                        {/* Cloud Refresh Button (Only visible in Cloud Mode) */}
                         {dataSource === 'dropbox' && (
                             <div className="flex items-center gap-2 mr-2">
                                 {lastUpdated && (
@@ -662,7 +637,6 @@ const ReportsView: React.FC = () => {
                                     <Icon name="reset" className={`w-4 h-4 ${isCloudLoading ? 'animate-spin' : ''}`} />
                                     {isCloudLoading ? '' : 'Refresh'}
                                 </Button>
-                                {/* NEW: Merge to Local Button */}
                                 <Button
                                     size="sm"
                                     onClick={handleMergeToLocal}
@@ -690,7 +664,6 @@ const ReportsView: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Data Source Toggle (Standardized) */}
                         <div className="bg-slate-800 p-1 rounded-lg flex items-center border border-slate-700">
                             <button
                                 onClick={() => setDataSource('local')}
@@ -744,14 +717,32 @@ const ReportsView: React.FC = () => {
                             </div>
                         )}
                         
-                        {activeTab === 'sales' && (
-                            <Button variant="secondary" size="sm" onClick={handleExportPDF} title="Cetak Laporan PDF">
-                                <Icon name="printer" className="w-4 h-4" /> Export PDF
+                        {/* Export Dropdown */}
+                        <div className="relative" ref={exportDropdownRef}>
+                            <Button variant="secondary" size="sm" onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)} title="Export Report">
+                                <Icon name="download" className="w-4 h-4"/>
+                                <span className="hidden sm:inline ml-1">Export</span>
+                                <Icon name="chevron-down" className="w-3 h-3 ml-1"/>
                             </Button>
-                        )}
-                        <Button variant="secondary" size="sm" onClick={exportReport} title="Export data mentah (CSV)">
-                            <Icon name="download" className="w-4 h-4" /> Export CSV
-                        </Button>
+                            {isExportDropdownOpen && (
+                                <div className="absolute top-full right-0 mt-2 w-48 bg-slate-700 rounded-lg shadow-xl z-20 overflow-hidden border border-slate-600">
+                                    {activeTab === 'sales' && (
+                                        <button onClick={handleExportPDF} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2">
+                                            <Icon name="printer" className="w-4 h-4"/> PDF (Cetak)
+                                        </button>
+                                    )}
+                                    <button onClick={() => handleExportSpreadsheet('xlsx')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2 border-t border-slate-600">
+                                        <Icon name="boxes" className="w-4 h-4"/> Excel (.xlsx)
+                                    </button>
+                                    <button onClick={() => handleExportSpreadsheet('ods')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2">
+                                        <Icon name="file-lock" className="w-4 h-4"/> OpenDoc (.ods)
+                                    </button>
+                                    <button onClick={() => handleExportSpreadsheet('csv')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2 border-t border-slate-600">
+                                        <Icon name="database" className="w-4 h-4"/> CSV (Raw)
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -874,7 +865,6 @@ const ReportsView: React.FC = () => {
                 </>
             )}
 
-            {/* Receipt Modal */}
             {selectedTransaction && (
                 <ReceiptModal 
                     isOpen={!!selectedTransaction} 
@@ -883,7 +873,6 @@ const ReportsView: React.FC = () => {
                 />
             )}
 
-            {/* Update Payment Modal */}
             {updatingTransaction && (
                 <UpdatePaymentModal 
                     isOpen={!!updatingTransaction} 

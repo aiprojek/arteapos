@@ -1,19 +1,13 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import type { AppData, AuditAction, AuditLog, User } from '../types';
+import type { AppData } from '../types';
 import { db, initialData } from '../services/db';
-import { dropboxService } from '../services/dropboxService';
 
 interface DataContextType {
   data: AppData;
   setData: (value: AppData | ((val: AppData) => AppData)) => void;
   restoreData: (backupData: AppData) => Promise<void>;
   isDataLoading: boolean;
-  logAudit: (user: User | null, action: AuditAction, details: string, targetId?: string) => Promise<void>;
-  triggerAutoSync: () => Promise<void>;
-  syncStatus: 'idle' | 'syncing' | 'success' | 'error';
-  setSyncStatus: (status: 'idle' | 'syncing' | 'success' | 'error') => void; // Exposed for AuthContext
-  syncErrorMessage: string | null;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -33,17 +27,11 @@ function base64ToBlob(base64: string): Blob {
     return new Blob([u8arr], { type: mime });
 }
 
-
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isDataLoading, setIsLoading] = useState(true);
   const [data, _setData] = useState<AppData>(initialData);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
-  const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   const prevDataRef = useRef<AppData | null>(null);
   
-  // Ref for debounce timer to avoid too many cloud pushes
-  const masterPushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -87,7 +75,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           discountDefinitions,
           heldCarts,
           sessionHistory: sessionHistory || [],
-          auditLogs: auditLogs || [], // Load logs
+          auditLogs: auditLogs || [],
           receiptSettings: settings.find(s => s.key === 'receiptSettings')?.value || initialData.receiptSettings,
           inventorySettings: settings.find(s => s.key === 'inventorySettings')?.value || initialData.inventorySettings,
           authSettings: settings.find(s => s.key === 'authSettings')?.value || initialData.authSettings,
@@ -109,29 +97,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadData();
   }, []);
 
-  // --- AUTOMATED MASTER DATA PUSH (ADMIN SIDE) ---
-  const triggerMasterDataPush = useCallback(async () => {
-      // Check if credentials exist
-      const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-      
-      if (!dbxToken) return;
-
-      setSyncStatus('syncing');
-      try {
-          await dropboxService.uploadMasterData();
-          setSyncStatus('success');
-          setTimeout(() => setSyncStatus('idle'), 2000);
-      } catch (e) {
-          console.error("Master Push Failed", e);
-          setSyncStatus('error');
-      }
-  }, []);
-
+  // --- PERSISTENCE LOGIC ONLY ---
   useEffect(() => {
     const prevData = prevDataRef.current;
     if (isDataLoading || !prevData || prevData === data) return;
     
-    // 1. Persist to IndexedDB (Instant)
     const persist = async () => {
       try {
         await db.transaction('rw', db.tables.map(t => t.name), async () => {
@@ -158,6 +128,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 case 'heldCarts':
                 case 'sessionHistory':
                 case 'auditLogs':
+                  // Note: Full table replace on change is inefficient for large datasets, 
+                  // but retained here for consistency with original architecture until further refactor.
                   promises.push(db.table(key).clear().then(() => db.table(key).bulkAdd(value as any[])));
                   break;
                 case 'categories':
@@ -181,22 +153,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     
     persist();
-
-    // 2. Trigger Auto Push for Master Data (Debounced)
-    // We check if Master Data keys have changed
-    const masterKeys: (keyof AppData)[] = ['products', 'categories', 'discountDefinitions', 'membershipSettings', 'customers', 'suppliers'];
-    const hasMasterChanges = masterKeys.some(key => data[key] !== prevData[key]);
-
-    if (hasMasterChanges) {
-        if (masterPushTimeoutRef.current) clearTimeout(masterPushTimeoutRef.current);
-        
-        masterPushTimeoutRef.current = setTimeout(() => {
-            triggerMasterDataPush();
-        }, 3000); // Wait 3 seconds of inactivity before pushing
-    }
-
     prevDataRef.current = data;
-  }, [data, isDataLoading, triggerMasterDataPush]);
+  }, [data, isDataLoading]);
   
   const setData = useCallback((value: AppData | ((val: AppData) => AppData)) => {
     _setData(value);
@@ -244,56 +202,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.location.reload();
   }, []);
 
-  // --- Audit Logging Utility ---
-  const logAudit = useCallback(async (user: User | null, action: AuditAction, details: string, targetId?: string) => {
-      const newLog: AuditLog = {
-          id: Date.now().toString(),
-          timestamp: new Date().toISOString(),
-          userId: user?.id || 'system',
-          userName: user?.name || 'System/Guest',
-          action,
-          details,
-          targetId
-      };
-      
-      _setData(prev => ({
-          ...prev,
-          auditLogs: [newLog, ...(prev.auditLogs || [])]
-      }));
-  }, []);
-
-  // --- Automatic Cloud Sync (Operational Data - Tx, Expenses, Stock) ---
-  const triggerAutoSync = useCallback(async () => {
-      const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-
-      // If no cloud configured, do nothing silently
-      if (!dbxToken) return;
-
-      setSyncStatus('syncing');
-      setSyncErrorMessage(null);
-      
-      try {
-          // Dropbox (JSON Branch Data)
-          await dropboxService.uploadBranchData();
-
-          setSyncStatus('success');
-          // Reset status after 3 seconds
-          setTimeout(() => setSyncStatus('idle'), 3000);
-
-      } catch (error: any) {
-          console.error("Auto Sync Failed:", error);
-          setSyncStatus('error');
-          // Capture specific quota error messages
-          const msg = error.message || "Unknown error";
-          setSyncErrorMessage(msg);
-          
-          // Reset status after 5 seconds
-          setTimeout(() => setSyncStatus('idle'), 5000);
-      }
-  }, []);
-
   return (
-    <DataContext.Provider value={{ data, setData, restoreData, isDataLoading, logAudit, triggerAutoSync, syncStatus, setSyncStatus, syncErrorMessage }}>
+    <DataContext.Provider value={{ data, setData, restoreData, isDataLoading }}>
       {children}
     </DataContext.Provider>
   );

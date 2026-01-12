@@ -13,6 +13,7 @@ import ProductPlaceholder from '../components/ProductPlaceholder';
 import VirtualizedTable from '../components/VirtualizedTable';
 import StockOpnameModal from '../components/StockOpnameModal';
 import { useSettings } from '../context/SettingsContext';
+import { compressImage } from '../utils/imageCompression'; // NEW Import
 
 // Informasikan TypeScript tentang pustaka global JsBarcode
 declare const JsBarcode: any;
@@ -43,7 +44,8 @@ const InputField: React.FC<{
     step?: string;
     className?: string;
     min?: string;
-}> = ({ name, label, value, onChange, type = 'text', required = false, step, className='', min }) => (
+    placeholder?: string;
+}> = ({ name, label, value, onChange, type = 'text', required = false, step, className='', min, placeholder }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
         <input
@@ -55,6 +57,7 @@ const InputField: React.FC<{
             required={required}
             step={step}
             min={min}
+            placeholder={placeholder}
             className={`w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white ${className}`}
         />
     </div>
@@ -305,11 +308,13 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
         name: '', price: '', category: [] as string[], imageUrl: '', costPrice: '',
         stock: '', trackStock: false, recipe: [] as RecipeItem[], isFavorite: false, barcode: '', 
         addons: [] as Addon[], variants: [] as ProductVariant[],
-        modifierGroups: [] as ModifierGroup[], // NEW
+        modifierGroups: [] as ModifierGroup[], 
         branchPrices: [] as BranchPrice[],
-        validStoreIds: [] as string[]
+        validStoreIds: [] as string[],
+        taxRate: '' // New Field
     });
     const [imageSource, setImageSource] = useState<ImageSource>('none');
+    const [isCompressing, setIsCompressing] = useState(false);
     
     // New States for Branch Pricing
     const [newBranchId, setNewBranchId] = useState('');
@@ -339,9 +344,10 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 barcode: product.barcode || '',
                 addons: product.addons || [],
                 variants: product.variants || [],
-                modifierGroups: product.modifierGroups || [], // NEW
+                modifierGroups: product.modifierGroups || [], 
                 branchPrices: product.branchPrices || [],
-                validStoreIds: product.validStoreIds || []
+                validStoreIds: product.validStoreIds || [],
+                taxRate: product.taxRate !== undefined ? product.taxRate.toString() : ''
             };
             setFormData(productData);
 
@@ -353,7 +359,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 setImageSource('none');
             }
         } else {
-            setFormData({ name: '', price: '', category: [], imageUrl: '', costPrice: '', stock: '', trackStock: false, recipe: [], isFavorite: false, barcode: '', addons: [], variants: [], modifierGroups: [], branchPrices: [], validStoreIds: [] });
+            setFormData({ name: '', price: '', category: [], imageUrl: '', costPrice: '', stock: '', trackStock: false, recipe: [], isFavorite: false, barcode: '', addons: [], variants: [], modifierGroups: [], branchPrices: [], validStoreIds: [], taxRate: '' });
             setImageSource('none');
         }
     }, [product]);
@@ -399,12 +405,20 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
         if (source === 'camera') onOpenCamera();
     };
     
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => setFormData(prev => ({ ...prev, imageUrl: reader.result as string }));
-            reader.readAsDataURL(file);
+            setIsCompressing(true);
+            try {
+                // COMPRESS IMAGE AUTOMATICALLY BEFORE SAVING
+                const compressedBase64 = await compressImage(file);
+                setFormData(prev => ({ ...prev, imageUrl: compressedBase64 }));
+            } catch (err) {
+                console.error("Image compression failed:", err);
+                showAlert({type:'alert', title:'Gagal Upload', message:'Gagal memproses gambar. Coba gambar lain.'});
+            } finally {
+                setIsCompressing(false);
+            }
         }
     };
 
@@ -486,7 +500,8 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
             addons: formData.addons, 
             variants: formData.variants,
             branchPrices: formData.branchPrices,
-            validStoreIds: formData.validStoreIds.length === 0 ? undefined : formData.validStoreIds
+            validStoreIds: formData.validStoreIds.length === 0 ? undefined : formData.validStoreIds,
+            taxRate: formData.taxRate !== '' ? parseFloat(formData.taxRate) : undefined
         };
         if (product && 'id' in product) {
             onSave({ ...productData, id: product.id });
@@ -540,10 +555,17 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                      </label>
                 </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <InputField name="price" label="Harga Jual Default (IDR)" type="number" required value={formData.price} onChange={handleChange} min="0"/>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-1">
+                    <InputField name="price" label="Harga Jual (IDR)" type="number" required value={formData.price} onChange={handleChange} min="0"/>
+                </div>
+                <div className="md:col-span-1">
+                    <InputField name="taxRate" label="Pajak Khusus (%)" type="number" value={formData.taxRate} onChange={handleChange} min="0" placeholder={`Global: ${receiptSettings.taxRate || 0}%`}/>
+                </div>
                 {inventorySettings.enabled && (
-                    <InputField name="costPrice" label="Harga Modal Default (IDR)" type="number" value={formData.costPrice} onChange={handleChange} min="0"/>
+                    <div className="md:col-span-1">
+                        <InputField name="costPrice" label="Harga Modal (IDR)" type="number" value={formData.costPrice} onChange={handleChange} min="0"/>
+                    </div>
                 )}
             </div>
             
@@ -631,6 +653,8 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                      <input type="text" name="imageUrl" value={formData.imageUrl.startsWith('http') ? formData.imageUrl : ''} onChange={handleChange} placeholder="https://..." className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" />
                 )}
                 <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+
+                {isCompressing && <p className="text-xs text-yellow-400 animate-pulse">Mengompres gambar...</p>}
 
                 {formData.imageUrl && (
                     <div className="mt-3 relative w-40 h-40">
@@ -785,7 +809,9 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
 
             <div className="flex justify-end gap-3 pt-6 border-t border-slate-700">
                 <Button type="button" variant="secondary" onClick={onCancel}>Batal</Button>
-                <Button type="submit" variant="primary">Simpan</Button>
+                <Button type="submit" variant="primary" disabled={isCompressing}>
+                    {isCompressing ? 'Memproses...' : 'Simpan'}
+                </Button>
             </div>
         </form>
     );

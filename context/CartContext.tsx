@@ -5,6 +5,8 @@ import { useUI } from './UIContext';
 import { useAuth } from './AuthContext';
 import { useProduct } from './ProductContext';
 import { useSettings } from './SettingsContext';
+import { useCloudSync } from './CloudSyncContext'; // NEW
+import { calculateCartTotals } from '../utils/cartCalculations'; // NEW
 import type { CartItem, Discount, Product, HeldCart, Transaction as TransactionType, Payment, PaymentMethod, PaymentStatus, Addon, Reward, Customer, OrderType, ProductVariant, SelectedModifier } from '../types';
 
 interface CartContextType {
@@ -44,14 +46,14 @@ interface CartContextType {
     }) => TransactionType;
     applyRewardToCart: (reward: Reward, customer: Customer) => void;
     removeRewardFromCart: () => void;
-    splitCart: (itemsToKeep: string[]) => void; // New Logic
+    splitCart: (itemsToKeep: string[]) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-// FIX: Change to React.FC to fix children prop type error
 export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children }) => {
-    const { data, setData, triggerAutoSync } = useData(); // Added triggerAutoSync
+    const { data, setData } = useData();
+    const { triggerAutoSync } = useCloudSync(); // Use new hook
     const { showAlert } = useUI();
     const { currentUser } = useAuth();
     const { receiptSettings } = useSettings();
@@ -96,7 +98,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         }
 
         if (rewardCartItem) {
-            removeRewardFromCart(); // Hapus reward lama jika ada
+            removeRewardFromCart();
             setCart(prev => [...prev, rewardCartItem!]);
             setAppliedReward({ reward, cartItem: rewardCartItem });
         }
@@ -109,7 +111,6 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                 showAlert({ type: 'alert', title: 'Gagal Menambahkan Produk', message: `Tidak dapat menambahkan ${product.name}. ${reason}.` });
                 return prevCart;
             }
-            // Check for existing item with SAME product ID, NO addons, NO variant, NO modifiers (implicit default)
             const existingItem = prevCart.find(item => 
                 item.id === product.id && 
                 !item.isReward && 
@@ -139,13 +140,9 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
              cartItemId: Date.now().toString(), 
              selectedAddons: addons, 
              selectedVariant: variant,
-             selectedModifiers: modifiers, // NEW
-             // If variant exists, override price. 
-             // IMPORTANT: We do NOT add addon/modifier price here to base price, 
-             // getCartTotals calculates that dynamically. We store base price.
+             selectedModifiers: modifiers,
              price: variant ? variant.price : product.price,
              name: variant ? `${product.name} (${variant.name})` : product.name,
-             // If variant has specific cost, use it, else use base product cost
              costPrice: variant?.costPrice !== undefined ? variant.costPrice : product.costPrice
          };
          
@@ -170,65 +167,13 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         setCart([]);
         setAppliedReward(null);
         setCartDiscount(null);
-        setOrderType(defaultOrderType); // Reset order type
+        setOrderType(defaultOrderType);
     }, [setAppliedReward, defaultOrderType]);
 
+    // REFACTORED: Use utility function
     const getCartTotals = useCallback(() => {
-        let subtotal = 0;
-        let itemDiscountAmount = 0;
-
-        cart.forEach(item => {
-            if(item.isReward) {
-                // Reward items might have negative price (for discounts)
-                subtotal += item.price * item.quantity;
-                return;
-            }
-            // Add legacy Addons
-            const addonsTotal = item.selectedAddons?.reduce((sum, addon) => sum + addon.price, 0) || 0;
-            // Add NEW Modifiers
-            const modifiersTotal = item.selectedModifiers?.reduce((sum, mod) => sum + mod.price, 0) || 0;
-
-            const itemOriginalTotal = (item.price + addonsTotal + modifiersTotal) * item.quantity;
-            
-            let currentItemDiscount = 0;
-            if (item.discount) {
-                if (item.discount.type === 'amount') {
-                    currentItemDiscount = item.discount.value * item.quantity;
-                } else {
-                    currentItemDiscount = itemOriginalTotal * (item.discount.value / 100);
-                }
-            }
-            currentItemDiscount = Math.min(currentItemDiscount, itemOriginalTotal);
-            subtotal += itemOriginalTotal;
-            itemDiscountAmount += currentItemDiscount;
-        });
-
-        const subtotalAfterItemDiscounts = subtotal - itemDiscountAmount;
-        let cartDiscountAmount = 0;
-        if (cartDiscount) {
-            if (cartDiscount.type === 'amount') {
-                cartDiscountAmount = cartDiscount.value;
-            } else {
-                cartDiscountAmount = subtotalAfterItemDiscounts * (cartDiscount.value / 100);
-            }
-        }
-        cartDiscountAmount = Math.min(cartDiscountAmount, subtotalAfterItemDiscounts);
-        
-        const taxableAmount = subtotalAfterItemDiscounts - cartDiscountAmount;
-        
-        // Calculate Service Charge (on taxable amount, before tax)
-        const serviceChargeRate = receiptSettings.serviceChargeRate || 0;
-        const serviceChargeAmount = Math.round(taxableAmount * (serviceChargeRate / 100));
-        
-        // Calculate Tax (on taxable amount + service charge)
-        const taxRate = receiptSettings.taxRate || 0;
-        const taxBase = taxableAmount + serviceChargeAmount;
-        const taxAmount = Math.round(taxBase * (taxRate / 100));
-
-        const finalTotal = taxableAmount + serviceChargeAmount + taxAmount;
-        
-        return { subtotal, itemDiscountAmount, cartDiscountAmount, taxAmount, serviceChargeAmount, finalTotal };
-    }, [cart, cartDiscount, receiptSettings.taxRate, receiptSettings.serviceChargeRate]);
+        return calculateCartTotals(cart, cartDiscount, receiptSettings);
+    }, [cart, cartDiscount, receiptSettings]);
 
     const applyItemDiscount = useCallback((cartItemId: string, discount: Discount) => {
         setCart(prev => prev.map(item => item.cartItemId === cartItemId ? { ...item, discount } : item));
@@ -256,7 +201,6 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         if (activeHeldCartId) {
             setData(prev => {
                 const currentCartInState = prev.heldCarts?.find(c => c.id === activeHeldCartId);
-                // Check if items OR orderType changed
                 if (currentCartInState && (JSON.stringify(currentCartInState.items) !== JSON.stringify(cart) || currentCartInState.orderType !== orderType)) {
                     return {
                         ...prev,
@@ -275,7 +219,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         
         if (newCartId === null) {
             setCart([]);
-            setOrderType(defaultOrderType); // Reset default
+            setOrderType(defaultOrderType);
             setActiveHeldCartId(null);
         } else {
             const targetCart = data.heldCarts.find(c => c.id === newCartId);
@@ -323,9 +267,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         }));
     }, [setData]);
 
-    // NEW: Split Cart Function
     const splitCart = useCallback((itemsToKeep: string[]) => {
-        // Items NOT in itemsToKeep will be moved to a new Held Cart
         const itemsToMove = cart.filter(item => !itemsToKeep.includes(item.cartItemId));
         const keptItems = cart.filter(item => itemsToKeep.includes(item.cartItemId));
 
@@ -335,7 +277,6 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         const timeStr = timestamp.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
         const newCartName = `Sisa Split ${timeStr}`;
 
-        // Create new held cart for unselected items
         const newHeldCart: HeldCart = {
             id: `split-${Date.now()}`,
             name: newCartName,
@@ -343,10 +284,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
             orderType: orderType
         };
 
-        // Update active cart
         setCart(keptItems);
-
-        // Save new held cart
         setData(prev => ({ ...prev, heldCarts: [...(prev.heldCarts || []), newHeldCart] }));
         
         showAlert({ type: 'alert', title: 'Split Berhasil', message: `${itemsToMove.length} item dipindahkan ke "${newCartName}".` });
@@ -359,7 +297,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         if (cart.length === 0) throw new Error("Cart is empty");
         if (!currentUser) throw new Error("No user is logged in");
 
-        const { subtotal, finalTotal, taxAmount, serviceChargeAmount } = getCartTotals();
+        const { finalTotal, taxAmount, serviceChargeAmount } = getCartTotals();
         const amountPaid = payments.reduce((sum, p) => sum + p.amount, 0);
         let paymentStatus: PaymentStatus = amountPaid >= finalTotal - 0.01 ? 'paid' : (amountPaid > 0 ? 'partial' : 'unpaid');
         
@@ -372,12 +310,10 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
 
             if (inventorySettings.enabled && inventorySettings.trackIngredients && product?.recipe) {
                 const recipeCost = product.recipe.reduce((sum, recipeItem) => {
-                    // Check itemType
                     if (recipeItem.itemType === 'product' && recipeItem.productId) {
                         const subProduct = products.find(p => p.id === recipeItem.productId);
                         return sum + ((subProduct?.costPrice || 0) * recipeItem.quantity);
                     } else {
-                        // Raw Material
                         const materialId = recipeItem.rawMaterialId || '';
                         const material = rawMaterials.find(rm => rm.id === materialId);
                         return sum + ((material?.costPerUnit || 0) * recipeItem.quantity);
@@ -385,17 +321,18 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                 }, 0);
                 return { ...item, costPrice: recipeCost + addonsCost };
             }
-            // Use existing costPrice (which might be from variant) or fallback to product cost
             return { ...item, costPrice: (item.costPrice || product?.costPrice || 0) + addonsCost };
         });
 
         const newTransaction: TransactionType = {
-            id: now.getTime().toString(), items: cartWithCost, subtotal, cartDiscount, 
+            id: now.getTime().toString(), items: cartWithCost, 
+            subtotal: getCartTotals().subtotal, // re-calc safe
+            cartDiscount, 
             total: finalTotal, amountPaid,
-            tax: taxAmount, serviceCharge: serviceChargeAmount, orderType, // Added new fields
+            tax: taxAmount, serviceCharge: serviceChargeAmount, orderType,
             paymentStatus, payments: fullPayments, createdAt: now.toISOString(), userId: currentUser.id,
             userName: currentUser.name, customerName, customerContact, customerId,
-            storeId: receiptSettings.storeId || 'LOCAL' // NEW: Simpan Store ID
+            storeId: receiptSettings.storeId || 'LOCAL'
         };
 
         setData(prev => {
@@ -419,7 +356,6 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                     }, 0);
                     
                     prev.membershipSettings.pointRules.forEach(rule => {
-                        // FILTER RULES BY STORE ID
                         if (rule.validStoreIds && rule.validStoreIds.length > 0) {
                             if (!rule.validStoreIds.includes(currentStoreId)) return;
                         }
@@ -453,7 +389,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
             
             if (prev.inventorySettings.enabled) {
                 const rawMaterialUpdates = new Map<string, number>();
-                const productUpdates = new Map<string, number>(); // Map for decrementing bundled product stocks
+                const productUpdates = new Map<string, number>();
 
                 const cartWithoutFreeRewards = cart.filter(item => !(item.isReward && item.price === 0));
 
@@ -463,18 +399,15 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                     if (prev.inventorySettings.trackIngredients && product.recipe && product.recipe.length > 0) {
                         product.recipe.forEach(recipeItem => {
                             if (recipeItem.itemType === 'product' && recipeItem.productId) {
-                                // It's a bundled product, decrement that product's stock
                                 const totalToDecrement = recipeItem.quantity * item.quantity;
                                 productUpdates.set(recipeItem.productId, (productUpdates.get(recipeItem.productId) || 0) + totalToDecrement);
                             } else {
-                                // It's a raw material
                                 const materialId = recipeItem.rawMaterialId || '';
                                 const totalToDecrement = recipeItem.quantity * item.quantity;
                                 rawMaterialUpdates.set(materialId, (rawMaterialUpdates.get(materialId) || 0) + totalToDecrement);
                             }
                         });
                     } else if (product.trackStock) {
-                        // Direct stock decrement
                         productUpdates.set(product.id, (productUpdates.get(product.id) || 0) + item.quantity);
                     }
                 });
@@ -492,13 +425,11 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                     });
                 }
             }
-            // FIX: Update 'transactionRecords' instead of 'transactions'.
             return { ...prev, transactionRecords: [newTransaction, ...prev.transactionRecords], products: updatedProducts, rawMaterials: updatedRawMaterials, customers: updatedCustomers, heldCarts: updatedHeldCarts };
         });
         
         switchActiveCart(null);
         
-        // Trigger Auto Sync after save
         setTimeout(() => triggerAutoSync(), 500);
 
         return newTransaction;

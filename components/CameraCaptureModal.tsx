@@ -112,15 +112,29 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
     const context = canvas.getContext('2d');
     
     if (context) {
-      const targetWidth = 600; // Better quality for product photos
-      const scale = targetWidth / video.videoWidth;
-      const targetHeight = video.videoHeight * scale;
+      // OPTIMIZED: Max dimension 500px for Database Performance
+      const MAX_SIZE = 500;
+      let targetWidth = video.videoWidth;
+      let targetHeight = video.videoHeight;
+
+      if (targetWidth > targetHeight) {
+          if (targetWidth > MAX_SIZE) {
+              targetHeight = targetHeight * (MAX_SIZE / targetWidth);
+              targetWidth = MAX_SIZE;
+          }
+      } else {
+          if (targetHeight > MAX_SIZE) {
+              targetWidth = targetWidth * (MAX_SIZE / targetHeight);
+              targetHeight = MAX_SIZE;
+          }
+      }
 
       canvas.width = targetWidth;
       canvas.height = targetHeight;
       context.drawImage(video, 0, 0, targetWidth, targetHeight);
       
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85); 
+      // OPTIMIZED: Quality 0.7 JPEG
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.7); 
       onCapture(dataUrl);
       onClose();
     }

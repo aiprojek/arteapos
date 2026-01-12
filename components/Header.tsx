@@ -5,11 +5,12 @@ import Icon from './Icon';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useSettings } from '../context/SettingsContext';
+import { useCloudSync } from '../context/CloudSyncContext'; // NEW
 import Button from './Button';
 import { dataService } from '../services/dataService';
 import { useUI } from '../context/UIContext';
 import { dropboxService } from '../services/dropboxService';
-import { db } from '../services/db'; // Direct DB access to check branches after sync
+import { db } from '../services/db'; 
 import Modal from './Modal';
 
 interface HeaderProps {
@@ -31,14 +32,14 @@ const viewTitles: Record<View, string> = {
 
 const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick }) => {
     const { currentUser, logout, authSettings } = useAuth();
-    const { restoreData, syncStatus, syncErrorMessage } = useData(); 
+    const { restoreData } = useData(); 
+    const { syncStatus, syncErrorMessage, triggerMasterDataPush } = useCloudSync(); // Use new context
     const { updateReceiptSettings, receiptSettings } = useSettings();
     const { showAlert } = useUI();
     
     const [isDataModalOpen, setDataModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     
-    // Branch Selection State
     const [isBranchModalOpen, setBranchModalOpen] = useState(false);
     const [availableBranches, setAvailableBranches] = useState<Branch[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState('');
@@ -46,8 +47,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const isAdmin = currentUser?.role === 'admin';
-
-    // --- Handlers ---
 
     const handleLocalBackup = async () => {
         try {
@@ -77,7 +76,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
             showAlert({ type: 'alert', title: 'Gagal Restore', message: e.message });
         } finally {
             setIsProcessing(false);
-            if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input
+            if (fileInputRef.current) fileInputRef.current.value = ''; 
         }
     };
 
@@ -93,17 +92,14 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
         try {
             await dropboxService.downloadAndMergeMasterData();
             
-            // --- AUTO PROMPT BRANCH SELECTION ---
-            // After sync, check DB if branches exist
             const settings = await db.settings.get('receiptSettings');
             const branches = settings?.value?.branches || [];
             
             if (branches.length > 0) {
                 setAvailableBranches(branches);
-                // Pre-select current if exists
                 setSelectedBranchId(settings?.value?.storeId || '');
-                setDataModalOpen(false); // Close main modal
-                setBranchModalOpen(true); // Open branch select modal
+                setDataModalOpen(false); 
+                setBranchModalOpen(true); 
             } else {
                 showAlert({ type: 'alert', title: 'Update Sukses', message: "Data berhasil diperbarui. Tidak ada data cabang ditemukan." });
                 setDataModalOpen(false);
@@ -120,10 +116,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
 
     const handleSaveBranchSelection = () => {
         if (!selectedBranchId) return;
-        
-        // Save to context/DB
         updateReceiptSettings({ ...receiptSettings, storeId: selectedBranchId });
-        
         setBranchModalOpen(false);
         showAlert({ type: 'alert', title: 'Setup Selesai', message: 'Identitas cabang berhasil disimpan. Aplikasi akan dimuat ulang.' });
         setTimeout(() => window.location.reload(), 1500);
@@ -160,7 +153,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                 <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
                     <h1 className="text-lg font-semibold text-white">{viewTitles[activeView]}</h1>
                     
-                    {/* Sync Status Indicator */}
                     {syncStatus === 'syncing' && (
                         <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-900/30 border border-blue-800 animate-pulse">
                             <div className="w-2 h-2 rounded-full bg-blue-400"></div>
@@ -184,8 +176,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                 </div>
             </div>
             <div className="flex items-center gap-3">
-                 
-                 {/* Unified Data Action Button */}
                  <Button
                     onClick={() => setDataModalOpen(true)}
                     variant="secondary"
@@ -222,14 +212,12 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                 )}
             </div>
 
-            {/* Data Actions Modal */}
             <Modal isOpen={isDataModalOpen} onClose={() => setDataModalOpen(false)} title="Menu Data & Sinkronisasi">
                 <div className="space-y-4">
                     <p className="text-sm text-slate-400 mb-4">
                         Kelola penyimpanan data lokal atau sinkronkan dengan pusat.
                     </p>
 
-                    {/* Option 1: Cloud Update (Priority for Staff) */}
                     <div className="bg-sky-900/20 border border-sky-800 p-3 rounded-lg">
                         <div className="flex items-center gap-2 mb-2">
                             <Icon name="wifi" className="w-5 h-5 text-sky-400"/>
@@ -243,10 +231,8 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                         </Button>
                     </div>
 
-                    {/* Divider */}
                     <div className="border-t border-slate-700 my-2"></div>
 
-                    {/* Option 2: Local Backup */}
                     <div className="bg-slate-700/30 p-3 rounded-lg">
                         <div className="flex items-center gap-2 mb-2">
                             <Icon name="download" className="w-5 h-5 text-green-400"/>
@@ -260,7 +246,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                         </Button>
                     </div>
 
-                    {/* Option 3: Local Restore (Admin Only) */}
                     {isAdmin && (
                         <div className="bg-red-900/10 border border-red-900/30 p-3 rounded-lg">
                             <div className="flex items-center gap-2 mb-2">
@@ -273,7 +258,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                             <Button onClick={handleLocalRestoreClick} variant="danger" className="w-full">
                                 Upload File & Restore
                             </Button>
-                            {/* Hidden File Input */}
                             <input 
                                 type="file" 
                                 ref={fileInputRef} 
@@ -290,7 +274,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                 </div>
             </Modal>
 
-            {/* NEW: Branch Selection Modal (Auto-appears after Sync) */}
             <Modal isOpen={isBranchModalOpen} onClose={() => {}} title="Pilih Identitas Cabang">
                 <div className="space-y-4">
                     <div className="bg-green-900/20 p-3 rounded-lg border border-green-800">

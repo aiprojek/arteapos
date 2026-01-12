@@ -1,6 +1,7 @@
 
 import type { AppData, Product, RawMaterial, Transaction as TransactionType, Expense, Purchase, Customer, StockAdjustment, Addon, CartItem, ProductVariant, ReceiptSettings } from '../types';
 import { db } from './db';
+import * as XLSX from 'xlsx';
 
 const downloadCSV = (csvContent: string, filename: string) => {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -380,6 +381,25 @@ export const dataService = {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  },
+
+  // NEW: Universal Spreadsheet Export using XLSX
+  exportToSpreadsheet: (headers: string[], rows: (string | number)[][], fileName: string, format: 'xlsx' | 'ods' | 'csv') => {
+      // 1. Prepare Data: [Headers, ...Rows]
+      const worksheetData = [headers, ...rows];
+      
+      // 2. Create Worksheet
+      const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+      
+      // 3. Create Workbook
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Data");
+
+      // 4. Generate File
+      XLSX.writeFile(wb, `${fileName}.${format}`, { 
+          bookType: format,
+          type: 'binary'
+      });
   },
 
   importData: (file: File): Promise<AppData> => {

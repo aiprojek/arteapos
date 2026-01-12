@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, Brush } from 'recharts';
 import { CURRENCY_FORMATTER } from '../../constants';
 import Icon from '../Icon';
 
@@ -39,6 +39,7 @@ const ReportCharts: React.FC<ReportChartsProps> = ({
                             <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `Rp${Number(value) / 1000}k`} />
                             <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }} formatter={(value: number) => [CURRENCY_FORMATTER.format(value), 'Omzet']} />
                             <Bar dataKey="total" fill="#347758" radius={[4, 4, 0, 0]} />
+                            <Brush dataKey="name" height={20} stroke="#52a37c" fill="#1e293b" />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -57,6 +58,7 @@ const ReportCharts: React.FC<ReportChartsProps> = ({
                                     <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `Rp${Number(value) / 1000}k`} />
                                     <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }} formatter={(value: number) => [CURRENCY_FORMATTER.format(value), 'Total']} />
                                     <Bar dataKey="total" fill="#10b981" />
+                                    <Brush dataKey="name" height={20} stroke="#52a37c" fill="#1e293b" />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -83,6 +85,7 @@ const ReportCharts: React.FC<ReportChartsProps> = ({
                                     <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `Rp${Number(value) / 1000}k`} />
                                     <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '0.5rem' }} formatter={(value: number) => [CURRENCY_FORMATTER.format(value), 'Total']} />
                                     <Bar dataKey="total" fill="#347758" />
+                                    <Brush dataKey="name" height={20} stroke="#52a37c" fill="#1e293b" />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>

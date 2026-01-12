@@ -147,8 +147,8 @@ const SessionHistoryTable: React.FC<{ history: SessionHistory[] }> = ({ history 
 };
 
 const ReportsView: React.FC = () => {
-    const { transactions: localTransactions, addPaymentToTransaction, refundTransaction } = useFinance();
-    const { inventorySettings, stockAdjustments: localStockAdjustments } = useProduct();
+    const { transactions: localTransactions, addPaymentToTransaction, refundTransaction, importTransactions } = useFinance();
+    const { inventorySettings, stockAdjustments: localStockAdjustments, importStockAdjustments } = useProduct();
     const { session, sessionSettings } = useSession();
     const { data: appData } = useData();
     const { receiptSettings } = useSettings();
@@ -259,6 +259,38 @@ const ReportsView: React.FC = () => {
             loadCloudData();
         }
     }, [dataSource, loadCloudData]);
+
+    // NEW: Merge Cloud to Local Logic
+    const handleMergeToLocal = () => {
+        if (cloudTransactions.length === 0 && cloudStockLogs.length === 0) {
+            showAlert({ type: 'alert', title: 'Data Kosong', message: 'Tidak ada data cloud untuk disimpan.' });
+            return;
+        }
+
+        showAlert({
+            type: 'confirm',
+            title: 'Simpan Permanen?',
+            message: (
+                <div className="text-left text-sm">
+                    <p>Anda akan menyimpan data berikut ke database lokal perangkat ini:</p>
+                    <ul className="list-disc pl-5 mt-2 text-slate-300">
+                        <li>{cloudTransactions.length} Transaksi</li>
+                        <li>{cloudStockLogs.length} Riwayat Stok</li>
+                    </ul>
+                    <p className="mt-2 text-yellow-300 bg-yellow-900/30 p-2 rounded border border-yellow-700">
+                        Pastikan data ini valid. Data dengan ID yang sama tidak akan diduplikasi.
+                    </p>
+                </div>
+            ),
+            confirmText: 'Ya, Simpan',
+            onConfirm: () => {
+                importTransactions(cloudTransactions);
+                importStockAdjustments(cloudStockLogs);
+                showAlert({ type: 'alert', title: 'Berhasil', message: 'Data cloud berhasil digabungkan ke database lokal.' });
+                setDataSource('local'); // Switch back to see result
+            }
+        });
+    };
     
     const isSessionMode = sessionSettings.enabled && session;
 
@@ -377,12 +409,13 @@ const ReportsView: React.FC = () => {
                 hourlyStats[hour].count += 1;
             }
 
-            const transactionCost = t.items.reduce((sum: number, item: any) => {
+            const safeItems = t.items || [];
+            const transactionCost = safeItems.reduce((sum: number, item: any) => {
                 return sum + ((item.costPrice || 0) * item.quantity);
             }, 0);
             totalProfit += t.total - transactionCost;
             
-            t.items.forEach((item: any) => {
+            safeItems.forEach((item: any) => {
                 const existing = productSales.get(item.id) || { id: item.id, name: item.name, quantity: 0, revenue: 0 };
                 productSales.set(item.id, {
                     ...existing,
@@ -456,7 +489,7 @@ const ReportsView: React.FC = () => {
     const categorySalesData = useMemo(() => {
         const categoryMap = new Map<string, number>();
         activeTransactions.forEach(t => {
-            t.items.forEach((item: any) => {
+            (t.items || []).forEach((item: any) => {
                 const categories = (item.category && Array.isArray(item.category) && item.category.length > 0) ? item.category : ['Uncategorized'];
                 categories.forEach((cat: string) => {
                     categoryMap.set(cat, (categoryMap.get(cat) || 0) + (item.price * item.quantity));
@@ -500,7 +533,7 @@ const ReportsView: React.FC = () => {
         const headers = 'Transaction ID,Date,Time,Total,Items,Cashier,Status,Branch';
         const rows = filteredTransactions.map(t => {
             const date = new Date(t.createdAt);
-            const items = t.items.map((i: any) => `${i.name} (x${i.quantity})`).join('; ');
+            const items = (t.items || []).map((i: any) => `${i.name} (x${i.quantity})`).join('; ');
             return `${t.id},${date.toLocaleDateString()},${date.toLocaleTimeString()},${t.total},"${items}","${t.userName}","${t.paymentStatus}","${t.storeId || ''}"`;
         });
         const csvContent = [headers, ...rows].join('\n');
@@ -628,6 +661,15 @@ const ReportsView: React.FC = () => {
                                 >
                                     <Icon name="reset" className={`w-4 h-4 ${isCloudLoading ? 'animate-spin' : ''}`} />
                                     {isCloudLoading ? '' : 'Refresh'}
+                                </Button>
+                                {/* NEW: Merge to Local Button */}
+                                <Button
+                                    size="sm"
+                                    onClick={handleMergeToLocal}
+                                    className="bg-green-600 hover:bg-green-500 text-white border-none"
+                                    title="Simpan data cloud ke lokal"
+                                >
+                                    <Icon name="download" className="w-4 h-4" /> Simpan ke Lokal
                                 </Button>
                             </div>
                         )}

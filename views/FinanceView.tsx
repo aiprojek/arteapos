@@ -24,7 +24,7 @@ import type { Expense, OtherIncome, Transaction as TransactionType, Purchase } f
 const FinanceView: React.FC = () => {
     const { currentUser } = useAuth();
     const { receiptSettings } = useSettings();
-    const { transactions: localTransactions, expenses: localExpenses, purchases: localPurchases, otherIncomes: localIncomes, suppliers } = useFinance();
+    const { transactions: localTransactions, expenses: localExpenses, purchases: localPurchases, otherIncomes: localIncomes, suppliers, importFinanceData } = useFinance(); // Add importFinanceData
     const { showAlert } = useUI();
     const isManagement = currentUser?.role === 'admin' || currentUser?.role === 'manager';
     
@@ -99,6 +99,37 @@ const FinanceView: React.FC = () => {
             loadCloudData();
         }
     }, [dataSource, loadCloudData]);
+
+    // NEW: Merge Cloud to Local Logic for Finance
+    const handleMergeToLocal = () => {
+        if (cloudData.expenses.length === 0 && cloudData.otherIncomes.length === 0) {
+            showAlert({ type: 'alert', title: 'Data Kosong', message: 'Tidak ada data keuangan cloud untuk disimpan.' });
+            return;
+        }
+
+        showAlert({
+            type: 'confirm',
+            title: 'Simpan Permanen?',
+            message: (
+                <div className="text-left text-sm">
+                    <p>Gabungkan data keuangan berikut ke database lokal perangkat ini?</p>
+                    <ul className="list-disc pl-5 mt-2 text-slate-300">
+                        <li>{cloudData.expenses.length} Pengeluaran</li>
+                        <li>{cloudData.otherIncomes.length} Pemasukan Lain</li>
+                    </ul>
+                    <p className="mt-2 text-yellow-300 bg-yellow-900/30 p-2 rounded border border-yellow-700">
+                        Pastikan data valid. Duplikasi akan dicegah berdasarkan ID.
+                    </p>
+                </div>
+            ),
+            confirmText: 'Ya, Simpan',
+            onConfirm: () => {
+                importFinanceData(cloudData.expenses, cloudData.otherIncomes, cloudData.purchases);
+                showAlert({ type: 'alert', title: 'Berhasil', message: 'Data keuangan berhasil digabungkan.' });
+                setDataSource('local'); // Switch back
+            }
+        });
+    };
 
     const renderSubTabButton = (tab: string, label: string) => (
         <button onClick={() => setActiveTab(tab)} className={`whitespace-nowrap px-4 py-2 text-sm font-medium rounded-t-lg transition-colors border-b-2 ${activeTab === tab ? 'text-[#52a37c] border-[#52a37c]' : 'text-slate-400 border-transparent hover:text-white'}`}>
@@ -278,6 +309,15 @@ const FinanceView: React.FC = () => {
                             >
                                 <Icon name="reset" className={`w-4 h-4 ${isCloudLoading ? 'animate-spin' : ''}`} />
                                 {isCloudLoading ? '' : 'Refresh'}
+                            </Button>
+                            {/* NEW: Merge to Local Button */}
+                            <Button
+                                size="sm"
+                                onClick={handleMergeToLocal}
+                                className="bg-green-600 hover:bg-green-500 text-white border-none"
+                                title="Simpan data cloud ke lokal"
+                            >
+                                <Icon name="download" className="w-4 h-4" /> Simpan ke Lokal
                             </Button>
                         </div>
                     )}

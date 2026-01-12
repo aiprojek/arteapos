@@ -63,6 +63,7 @@ const ScenarioCard: React.FC<{
         'pink-400': 'text-pink-400',
         'yellow-400': 'text-yellow-400',
         'sky-400': 'text-sky-400',
+        'purple-400': 'text-purple-400',
     };
     const textColor = colorMap[color] || 'text-slate-400';
 
@@ -212,10 +213,10 @@ const HelpView: React.FC = () => {
                             color="sky-400"
                             desc="Sinkronisasi otomatis antar cabang menggunakan Dropbox."
                             steps={[
-                                "Admin (Pusat): Hubungkan akun Dropbox di menu Pengaturan &rarr; Data.",
-                                "Admin: Upload 'Master Data' (Produk/Harga/Diskon) ke Dropbox.",
-                                "Cabang: Hubungkan akun Dropbox yang SAMA persis.",
-                                "Cabang: Data penjualan terkirim otomatis. Admin <strong>WAJIB</strong> tekan tombol <strong>'Refresh Data'</strong> di Dashboard/Laporan untuk menarik data terbaru."
+                                "Admin (Pusat): Hubungkan akun Dropbox (Login Email/Pass) di menu Pengaturan &rarr; Data.",
+                                "Admin: Klik tombol <strong>'Bagikan Akses (Pairing)'</strong> untuk menampilkan QR atau Kode Teks.",
+                                "Cabang (Staff): Buka Pengaturan &rarr; Data. Pilih <strong>'Scan Akses Pusat'</strong> atau <strong>'Input Kode'</strong>.",
+                                "Cabang: Scan/Paste kode dari Admin. Selesai! Cabang terhubung tanpa login email."
                             ]}
                         />
                         <ScenarioCard 
@@ -228,6 +229,18 @@ const HelpView: React.FC = () => {
                                 "Staff harus input modal awal saat login.",
                                 "Semua aktivitas sensitif (Hapus produk, Refund, Edit Stok) tercatat di 'Audit Log'.",
                                 "Saat tutup, sistem menghitung selisih (Variance) uang di laci vs sistem."
+                            ]}
+                        />
+                        <ScenarioCard 
+                            title="5. Bergantian Device (Shared)" 
+                            icon="users" 
+                            color="purple-400"
+                            desc="Satu perangkat (Tablet/PC) digunakan bersama oleh Owner dan Staff secara bergantian."
+                            steps={[
+                                "Masuk ke Pengaturan &rarr; Keamanan.",
+                                "Buat user baru (misal: 'Budi' sebagai Staff, 'Andi' sebagai Admin).",
+                                "Aktifkan tombol <strong>'Multi-Pengguna & Login PIN'</strong>.",
+                                "Saat pergantian shift, klik tombol 'Logout' atau ikon User. User berikutnya login dengan PIN mereka."
                             ]}
                         />
                     </div>
@@ -390,7 +403,7 @@ const HelpView: React.FC = () => {
                             </AccordionItem>
                             <AccordionItem title="Cloud Sync & Multi-Cabang (Dropbox)" isOpen={openAccordion === 'set_1'} onToggle={() => toggleAccordion('set_1')} icon="wifi" colorClass="text-sky-400">
                                 <p>Fitur Cloud kini terpusat menggunakan <strong>Dropbox</strong> untuk kemudahan dan stabilitas.</p>
-                                <div className="bg-slate-800 p-3 rounded border border-slate-600 mt-2">
+                                <div className="bg-slate-800 p-3 rounded border border-slate-600 mt-2 mb-3">
                                     <strong className="text-blue-400 block mb-1">Fungsi Dropbox:</strong>
                                     <ul className="list-disc pl-4 text-xs text-slate-400 space-y-1">
                                         <li><strong>Backup Otomatis:</strong> Data penting disimpan ke folder aplikasi di Dropbox Anda.</li>
@@ -398,7 +411,19 @@ const HelpView: React.FC = () => {
                                         <li><strong>Update Produk (Master Data):</strong> Admin pusat bisa mengupdate harga/produk lalu mengirimnya ke cabang via Dropbox.</li>
                                     </ul>
                                 </div>
-                                <p className="mt-2 text-xs text-slate-400">*Pastikan akun Dropbox yang digunakan di Pusat dan Cabang adalah <strong>akun yang sama</strong> agar data bisa saling terbaca.</p>
+                                
+                                <div className="space-y-2 border-t border-slate-700 pt-2">
+                                    <strong className="text-yellow-400 text-sm block">Cara Pairing Cabang (Tanpa Login Email):</strong>
+                                    <p className="text-xs text-slate-300">
+                                        Fitur "Scan Akses Pusat" atau "Input Kode" digunakan khusus untuk perangkat cabang agar bisa terhubung ke akun Dropbox Admin Pusat tanpa mengetahui email/password Admin.
+                                    </p>
+                                    <ol className="list-decimal pl-5 text-sm text-slate-300 space-y-1">
+                                        <li><strong>Di HP Admin (Pusat):</strong> Pastikan Dropbox sudah terhubung (Login Email/Pass). Di menu Data & Cloud, klik tombol biru <strong>"Bagikan Akses (Pairing)"</strong>.</li>
+                                        <li><strong>Di HP Cabang:</strong> Buka Pengaturan &rarr; Data & Cloud. Klik tombol <strong>"Scan Akses Pusat"</strong> (jika ada kamera) atau <strong>"Input Kode"</strong>.</li>
+                                        <li>Scan QR yang ada di HP Admin, atau Copy-Paste kode teks panjang dari Admin.</li>
+                                        <li>Selesai! HP Cabang akan langsung terhubung ke Dropbox Admin dan otomatis mengunduh data produk terbaru.</li>
+                                    </ol>
+                                </div>
                             </AccordionItem>
                             <AccordionItem title="Keamanan & User" isOpen={openAccordion === 'set_2'} onToggle={() => toggleAccordion('set_2')} icon="lock" colorClass="text-red-400">
                                 <ul className="list-disc pl-5 space-y-1">
@@ -424,6 +449,24 @@ const HelpView: React.FC = () => {
                         <h3 className="font-bold text-white mb-2 text-lg">Tanya Jawab & Masalah Umum</h3>
                         <div className="space-y-4">
                             
+                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Apa itu "Scan Akses Pusat (Pairing)" dan siapa yang menggunakannya?</h4>
+                                <p className="text-slate-300 text-sm">
+                                    A: Fitur ini <strong>khusus untuk perangkat cabang</strong>. Fungsinya untuk menghubungkan HP Cabang ke akun Dropbox Admin Pusat tanpa perlu login email. 
+                                    <br/>Admin Pusat cukup membuat kode lewat tombol "Bagikan Akses", lalu staf cabang memindai (scan) atau memasukkan kode tersebut.
+                                </p>
+                            </div>
+
+                            <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Bagaimana cara menghubungkan HP Cabang tanpa kasih password Dropbox?</h4>
+                                <p className="text-slate-300 text-sm">
+                                    A: Gunakan fitur **Pairing** seperti dijelaskan di atas.
+                                    <br/>1. Di HP Admin (yang sudah login), masuk menu <strong>Data & Cloud</strong> &rarr; Klik tombol biru <strong>"Bagikan Akses"</strong>.
+                                    <br/>2. Di HP Cabang, klik <strong>"Scan Akses Pusat"</strong> atau <strong>"Input Kode"</strong>.
+                                    <br/>3. HP Cabang akan otomatis terhubung ke akun Dropbox Admin tanpa perlu login manual.
+                                </p>
+                            </div>
+
                             <div className="bg-slate-900/50 p-4 rounded-lg">
                                 <h4 className="font-bold text-[#52a37c] mb-1">Q: Kamera scan barcode error / tidak muncul?</h4>
                                 <p className="text-slate-300 text-sm">

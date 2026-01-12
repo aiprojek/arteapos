@@ -26,6 +26,7 @@ interface FinanceContextType {
     addPaymentToTransaction: (transactionId: string, payments: Array<Omit<Payment, 'id' | 'createdAt'>>) => void;
     refundTransaction: (transactionId: string) => void;
     importTransactions: (newTransactions: TransactionType[]) => void;
+    importFinanceData: (expenses: Expense[], incomes: OtherIncome[], purchases: Purchase[]) => void; // NEW
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -243,7 +244,9 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
             
             // 2. Restore Inventory (Logic reversed from saveTransaction)
             if (prev.inventorySettings.enabled) {
-                const cartItems = targetTransaction.items.filter(item => !(item.isReward && item.price === 0));
+                // Safely access items array
+                const itemsList = targetTransaction.items || [];
+                const cartItems = itemsList.filter(item => !(item.isReward && item.price === 0));
 
                 cartItems.forEach(item => {
                     const product = prev.products.find(p => p.id === item.id);
@@ -351,6 +354,28 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
         });
     }, [setData]);
 
+    const importFinanceData = useCallback((newExpenses: Expense[], newIncomes: OtherIncome[], newPurchases: Purchase[]) => {
+        setData(prev => {
+            const existingExpIds = new Set(prev.expenses.map(e => e.id));
+            const uniqueExpenses = newExpenses.filter(e => !existingExpIds.has(e.id));
+
+            const existingIncIds = new Set(prev.otherIncomes?.map(i => i.id) || []);
+            const uniqueIncomes = newIncomes.filter(i => !existingIncIds.has(i.id));
+
+            const existingPurchIds = new Set(prev.purchases?.map(p => p.id) || []);
+            const uniquePurchases = newPurchases.filter(p => !existingPurchIds.has(p.id));
+
+            if (uniqueExpenses.length === 0 && uniqueIncomes.length === 0 && uniquePurchases.length === 0) return prev;
+
+            return {
+                ...prev,
+                expenses: [...uniqueExpenses, ...prev.expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                otherIncomes: [...uniqueIncomes, ...(prev.otherIncomes || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+                purchases: [...uniquePurchases, ...(prev.purchases || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+            };
+        });
+    }, [setData]);
+
     return (
         <FinanceContext.Provider value={{
             expenses,
@@ -372,7 +397,8 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
             addPaymentToPurchase,
             addPaymentToTransaction,
             refundTransaction,
-            importTransactions
+            importTransactions,
+            importFinanceData
         }}>
             {children}
         </FinanceContext.Provider>

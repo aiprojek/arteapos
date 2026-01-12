@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Transaction as TransactionType, ReceiptSettings } from '../types';
 
@@ -21,7 +22,7 @@ const KitchenNote = React.forwardRef<HTMLDivElement, KitchenNoteProps>(({ transa
             </div>
             <div className="border-b border-dashed border-black"></div>
             <div className="my-3 space-y-3">
-                {transaction.items.filter(item => !item.isReward).map(item => (
+                {(transaction.items || []).filter(item => !item.isReward).map(item => (
                     <div key={item.cartItemId} className="flex">
                         <div className="w-8 font-bold text-lg">{item.quantity}x</div>
                         <div className="flex-1">

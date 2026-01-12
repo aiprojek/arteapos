@@ -28,7 +28,7 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 export const generateTransactionsCSVString = (transactions: TransactionType[]) => {
     const headers = 'id,createdAt,customerName,userName,total,amountPaid,paymentStatus,storeId,items';
     const rows = transactions.map(t => {
-        const items = t.items.map(i => {
+        const items = (t.items || []).map(i => {
             const variantStr = i.selectedVariant ? ` [${i.selectedVariant.name}]` : '';
             return `${i.name}${variantStr} (qty: ${i.quantity}, price: ${i.price})`
         }).join('; ');

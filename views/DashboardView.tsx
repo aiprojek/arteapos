@@ -5,7 +5,7 @@ import { useProduct } from '../context/ProductContext';
 import { CURRENCY_FORMATTER } from '../constants';
 import Icon from '../components/Icon';
 import Button from '../components/Button';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, Brush } from 'recharts';
 import type { Transaction } from '../types';
 import { dropboxService } from '../services/dropboxService';
 import { mockDataService } from '../services/mockData';
@@ -27,12 +27,13 @@ const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'product
 );
 
 const DashboardView: React.FC = () => {
-    const { transactions: localTransactions } = useFinance();
-    const { products, inventorySettings } = useProduct();
+    const { transactions: localTransactions, importTransactions } = useFinance(); // Add importTransactions
+    const { products, inventorySettings, importStockAdjustments } = useProduct(); // Add importStockAdjustments
     const { showAlert } = useUI();
 
     const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
-    const [cloudData, setCloudData] = useState<{ transactions: any[], inventory: any[] }>({ transactions: [], inventory: [] });
+    // Updated state to hold stockLogs as well
+    const [cloudData, setCloudData] = useState<{ transactions: any[], inventory: any[], stockLogs: any[] }>({ transactions: [], inventory: [], stockLogs: [] });
     const [isCloudLoading, setIsCloudLoading] = useState(false);
     const [selectedBranch, setSelectedBranch] = useState('ALL');
     const [isDemoMode, setIsDemoMode] = useState(false);
@@ -53,7 +54,11 @@ const DashboardView: React.FC = () => {
         // --- DEMO MODE TRIGGER ---
         if (!dbxToken) {
              const mock = mockDataService.getMockDashboardData();
-             setCloudData({ transactions: mock.transactions, inventory: mock.inventory });
+             setCloudData({ 
+                 transactions: mock.transactions, 
+                 inventory: mock.inventory,
+                 stockLogs: mock.stockAdjustments 
+             });
              setIsDemoMode(true);
              setLastUpdated(new Date());
              setIsCloudLoading(false);
@@ -66,10 +71,10 @@ const DashboardView: React.FC = () => {
             // Consolidate Data
             let allTxns: any[] = [];
             let allInv: any[] = [];
+            let allLogs: any[] = [];
 
             allBranchesData.forEach(branch => {
                 if (branch.transactionRecords) {
-                    // STANDARDIZED: Ensure we use 'storeId' (camelCase) for internal consistency
                     const txns = branch.transactionRecords.map((t: any) => ({ ...t, storeId: branch.storeId })); 
                     allTxns = [...allTxns, ...txns];
                 }
@@ -77,9 +82,13 @@ const DashboardView: React.FC = () => {
                     const inv = branch.currentStock.map((i: any) => ({ ...i, storeId: branch.storeId }));
                     allInv = [...allInv, ...inv];
                 }
+                if (branch.stockAdjustments) {
+                    const logs = branch.stockAdjustments.map((s: any) => ({ ...s, storeId: branch.storeId }));
+                    allLogs = [...allLogs, ...logs];
+                }
             });
 
-            setCloudData({ transactions: allTxns, inventory: allInv });
+            setCloudData({ transactions: allTxns, inventory: allInv, stockLogs: allLogs });
             setLastUpdated(new Date());
 
         } catch (error: any) {
@@ -89,6 +98,38 @@ const DashboardView: React.FC = () => {
         } finally {
             setIsCloudLoading(false);
         }
+    };
+
+    // NEW: Merge Logic for Dashboard
+    const handleMergeToLocal = () => {
+        if (cloudData.transactions.length === 0 && cloudData.stockLogs.length === 0) {
+            showAlert({ type: 'alert', title: 'Data Kosong', message: 'Tidak ada data cloud untuk disimpan.' });
+            return;
+        }
+
+        showAlert({
+            type: 'confirm',
+            title: 'Simpan Permanen?',
+            message: (
+                <div className="text-left text-sm">
+                    <p>Simpan data dari Dashboard Cloud ke database lokal perangkat ini?</p>
+                    <ul className="list-disc pl-5 mt-2 text-slate-300">
+                        <li>{cloudData.transactions.length} Transaksi</li>
+                        <li>{cloudData.stockLogs.length} Riwayat Stok</li>
+                    </ul>
+                    <p className="mt-2 text-yellow-300 bg-yellow-900/30 p-2 rounded border border-yellow-700">
+                        Data akan digabungkan (Merge). Transaksi dengan ID yang sama tidak akan diduplikasi.
+                    </p>
+                </div>
+            ),
+            confirmText: 'Ya, Simpan',
+            onConfirm: () => {
+                importTransactions(cloudData.transactions);
+                importStockAdjustments(cloudData.stockLogs);
+                showAlert({ type: 'alert', title: 'Berhasil', message: 'Data cloud berhasil digabungkan ke database lokal.' });
+                setDataSource('local'); // Switch back
+            }
+        });
     };
 
     const handleSourceChange = (source: 'local' | 'dropbox') => {
@@ -304,6 +345,15 @@ const DashboardView: React.FC = () => {
                                 <Icon name="reset" className={`w-4 h-4 ${isCloudLoading ? 'animate-spin' : ''}`} />
                                 {isCloudLoading ? 'Syncing...' : 'Refresh Data'}
                             </Button>
+                            {/* Merge Button Added Here */}
+                            <Button
+                                size="sm"
+                                onClick={handleMergeToLocal}
+                                className="bg-green-600 hover:bg-green-500 text-white border-none"
+                                title="Simpan data cloud ke lokal"
+                            >
+                                <Icon name="download" className="w-4 h-4" /> Simpan ke Lokal
+                            </Button>
                         </div>
                     )}
 
@@ -351,7 +401,7 @@ const DashboardView: React.FC = () => {
                             {isDemoMode 
                                 ? "Dropbox belum dikonfigurasi. Menampilkan data simulasi agar Anda bisa melihat potensi fitur Multi-Cabang." 
                                 : (selectedBranch === 'ALL' 
-                                    ? 'Menampilkan data gabungan dari semua cabang. Tekan "Refresh Data" untuk mengambil update terbaru.' 
+                                    ? 'Menampilkan data gabungan dari semua cabang. Tekan "Simpan ke Lokal" untuk mengarsipkan data ini secara permanen.' 
                                     : `Menampilkan data spesifik untuk cabang: ${selectedBranch}`)}
                         </p>
                     </div>
@@ -413,6 +463,7 @@ const DashboardView: React.FC = () => {
                                 <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `Rp${Number(value) / 1000}k`} />
                                 <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '0.5rem' }} formatter={(value: number) => [CURRENCY_FORMATTER.format(value), 'Penjualan']} />
                                 <Bar dataKey="Penjualan" fill="#347758" radius={[4, 4, 0, 0]} />
+                                <Brush dataKey="name" height={20} stroke="#52a37c" fill="#1e293b" />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>

@@ -35,6 +35,7 @@ interface ProductContextType {
   bulkAddProducts: (newProducts: Product[]) => void;
   bulkAddRawMaterials: (newRawMaterials: RawMaterial[]) => void;
   isProductAvailable: (product: Product) => { available: boolean, reason: string };
+  importStockAdjustments: (adjustments: StockAdjustment[]) => void; // NEW
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -299,15 +300,10 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
             const bundledProduct = products.find(p => p.id === recipeItem.productId);
             if (!bundledProduct) return { available: false, reason: 'Produk Komponen Hilang' };
             
-            // Recursive check? For now, simpler: check direct stock or its own availability if it's bundled too
-            // Note: Preventing infinite recursion is key. For now we assume stock check.
             if (bundledProduct.trackStock && (bundledProduct.stock ?? 0) < recipeItem.quantity) {
                  return { available: false, reason: `Stok ${bundledProduct.name} Kurang` };
             }
             
-            // If bundled product is ALSO a recipe, we should theoretically recurse, 
-            // but for performance in a list, we might limit depth or rely on direct stock for simplicity in V1.
-            // Let's do 1 level recursion check if it's not tracked by simple stock
             if (!bundledProduct.trackStock && bundledProduct.recipe?.length) {
                  const result = isProductAvailable(bundledProduct);
                  if(!result.available) return { available: false, reason: `Komponen ${bundledProduct.name} Habis` };
@@ -334,6 +330,20 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
     return { available: true, reason: '' };
   }, [inventorySettings, rawMaterials, products]);
 
+  // NEW: Bulk Import Adjustments from Cloud
+  const importStockAdjustments = useCallback((newAdjustments: StockAdjustment[]) => {
+      setData(prev => {
+          const existingIds = new Set(prev.stockAdjustments?.map(a => a.id) || []);
+          const uniqueNew = newAdjustments.filter(a => !existingIds.has(a.id));
+          if (uniqueNew.length === 0) return prev;
+
+          return {
+              ...prev,
+              stockAdjustments: [...uniqueNew, ...(prev.stockAdjustments || [])].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          };
+      });
+  }, [setData]);
+
   return (
     <ProductContext.Provider value={{
       products,
@@ -355,7 +365,8 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       performStockOpname,
       bulkAddProducts,
       bulkAddRawMaterials,
-      isProductAvailable
+      isProductAvailable,
+      importStockAdjustments
     }}>
       {children}
     </ProductContext.Provider>

@@ -5,12 +5,13 @@ import Icon from '../Icon';
 import Modal from '../Modal';
 import { dataService } from '../../services/dataService';
 import { dropboxService } from '../../services/dropboxService';
-import { decryptReport } from '../../utils/crypto';
+import { decryptReport, encryptCredentials, decryptCredentials } from '../../utils/crypto';
 import { useData } from '../../context/DataContext';
 import { useFinance } from '../../context/FinanceContext';
 import { useUI } from '../../context/UIContext';
 import { db } from '../../services/db'; // Import DB directly for health check
 import type { CartItem, Transaction as TransactionType } from '../../types';
+import BarcodeScannerModal from '../BarcodeScannerModal'; // Re-use existing scanner
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
     <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
@@ -38,6 +39,13 @@ const DataTab: React.FC = () => {
     const [dbxAuthCode, setDbxAuthCode] = useState('');
     const [isDbxConnecting, setIsDbxConnecting] = useState(false);
     
+    // Pairing State
+    const [showPairingModal, setShowPairingModal] = useState(false); // Unified Modal
+    const [isScanningPairing, setIsScanningPairing] = useState(false);
+    const [pairingTextCode, setPairingTextCode] = useState(''); // Admin generated code
+    const [inputPairingCode, setInputPairingCode] = useState(''); // Staff input code
+    const [pairingMode, setPairingMode] = useState<'generate' | 'input'>('generate');
+
     // Import State
     const [encryptedInput, setEncryptedInput] = useState('');
     const jsonInputRef = useRef<HTMLInputElement>(null);
@@ -103,6 +111,84 @@ const DataTab: React.FC = () => {
         localStorage.setItem('ARTEA_DBX_REFRESH_TOKEN', dbxRefreshToken);
         
         showAlert({ type: 'alert', title: 'Tersimpan', message: 'Konfigurasi Dropbox berhasil disimpan.' });
+    };
+
+    // --- Pairing Logic (QR & Text) ---
+    
+    // Admin: Generate Codes
+    const handleOpenPairingGenerator = () => {
+        if (!dbxKey || !dbxSecret || !dbxRefreshToken) {
+            showAlert({ type: 'alert', title: 'Belum Terhubung', message: 'Anda harus menghubungkan Dropbox terlebih dahulu sebelum membagikan akses.' });
+            return;
+        }
+        
+        // Generate Text Code (Encrypted)
+        const textCode = encryptCredentials({
+            k: dbxKey,
+            s: dbxSecret,
+            t: dbxRefreshToken
+        });
+        setPairingTextCode(textCode);
+        
+        setPairingMode('generate');
+        setShowPairingModal(true);
+    };
+
+    // Staff: Process Input Code (QR or Text)
+    const processPairingCode = async (code: string) => {
+        try {
+            const payload = decryptCredentials(code.trim());
+
+            if (payload && payload.k && payload.s && payload.t) {
+                // 1. Save Credentials
+                localStorage.setItem('ARTEA_DBX_KEY', payload.k);
+                localStorage.setItem('ARTEA_DBX_SECRET', payload.s);
+                localStorage.setItem('ARTEA_DBX_REFRESH_TOKEN', payload.t);
+                
+                setDbxKey(payload.k);
+                setDbxSecret(payload.s);
+                setDbxRefreshToken(payload.t);
+
+                // 2. Auto-Sync Master Data (The Smart Part)
+                showAlert({ 
+                    type: 'alert', 
+                    title: 'Kredensial Diterima', 
+                    message: 'Sedang mengunduh Master Data (Produk & User) dari Cloud...' 
+                });
+                
+                try {
+                    await dropboxService.downloadAndMergeMasterData();
+                    
+                    showAlert({ 
+                        type: 'alert', 
+                        title: 'Pairing & Sync Sukses!', 
+                        message: 'Perangkat berhasil terhubung dan data Master telah diperbarui. Aplikasi akan dimuat ulang.',
+                        onConfirm: () => window.location.reload()
+                    });
+                } catch (syncErr: any) {
+                    console.error(syncErr);
+                    showAlert({ 
+                        type: 'alert', 
+                        title: 'Pairing Sukses, Sync Gagal', 
+                        message: 'Terhubung ke Dropbox, tapi gagal download Master Data. Coba "Update dari Pusat" nanti. Error: ' + syncErr.message 
+                    });
+                }
+
+                setShowPairingModal(false);
+                setIsScanningPairing(false);
+            } else {
+                throw new Error("Format kode tidak valid atau password salah.");
+            }
+        } catch (e: any) {
+            showAlert({ type: 'alert', title: 'Gagal Pairing', message: e.message || 'Kode rusak.' });
+        }
+    };
+
+    // QR Generate
+    const getQRPairingString = () => {
+        // Base64 is smaller for QR codes than the encrypted hex string
+        const payload = { k: dbxKey, s: dbxSecret, t: dbxRefreshToken };
+        return `ARTEA_PAIR::${btoa(JSON.stringify(payload))}`;
     };
 
     // --- System Health Check ---
@@ -513,6 +599,7 @@ const DataTab: React.FC = () => {
                                 onChange={(e) => setDbxKey(e.target.value)}
                                 className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
                             />
+                            {/* Mask the secret if already saved and connected */}
                             <input 
                                 type="password" 
                                 placeholder="App Secret"
@@ -521,14 +608,29 @@ const DataTab: React.FC = () => {
                                 className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
                             />
                             {dbxRefreshToken ? (
-                                <div className="flex items-center gap-2 text-green-400 bg-green-900/20 p-2 rounded border border-green-800">
-                                    <Icon name="check-circle-fill" className="w-4 h-4"/>
-                                    <span className="text-xs font-bold">Terhubung (Refresh Token Tersimpan)</span>
-                                    <button onClick={() => {setDbxRefreshToken(''); localStorage.removeItem('ARTEA_DBX_REFRESH_TOKEN');}} className="ml-auto text-xs text-red-400 underline">Putuskan</button>
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2 text-green-400 bg-green-900/20 p-2 rounded border border-green-800">
+                                        <Icon name="check-circle-fill" className="w-4 h-4"/>
+                                        <span className="text-xs font-bold">Terhubung (Refresh Token Tersimpan)</span>
+                                        <button onClick={() => {setDbxRefreshToken(''); localStorage.removeItem('ARTEA_DBX_REFRESH_TOKEN');}} className="ml-auto text-xs text-red-400 underline">Putuskan</button>
+                                    </div>
+                                    <Button onClick={handleOpenPairingGenerator} className="w-full bg-blue-700 hover:bg-blue-600 text-white">
+                                        <Icon name="share" className="w-4 h-4" /> Bagikan Akses (Pairing)
+                                    </Button>
                                 </div>
                             ) : (
-                                <div className="text-xs text-yellow-500 bg-yellow-900/10 p-2 rounded border border-yellow-800">
-                                    Belum Terhubung. Klik tombol "Bantuan & Koneksi" di atas.
+                                <div className="space-y-2">
+                                    <div className="text-xs text-yellow-500 bg-yellow-900/10 p-2 rounded border border-yellow-800">
+                                        Belum Terhubung. Klik "Bantuan & Koneksi" atau "Input Kode".
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button onClick={() => setIsScanningPairing(true)} variant="secondary" className="flex-1 border-dashed border-2 border-slate-500">
+                                            <Icon name="camera" className="w-4 h-4" /> Scan QR
+                                        </Button>
+                                        <Button onClick={() => { setPairingMode('input'); setShowPairingModal(true); }} variant="secondary" className="flex-1 border-dashed border-2 border-slate-500">
+                                            <Icon name="keyboard" className="w-4 h-4" /> Input Kode
+                                        </Button>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -539,6 +641,84 @@ const DataTab: React.FC = () => {
                     </div>
                 </div>
             </SettingsCard>
+
+            {/* Unified Pairing Modal (Generate/Input) */}
+            <Modal isOpen={showPairingModal} onClose={() => setShowPairingModal(false)} title={pairingMode === 'generate' ? "Bagikan Akses Dropbox" : "Hubungkan ke Pusat"}>
+                {pairingMode === 'generate' ? (
+                    <div className="flex flex-col items-center justify-center space-y-4 p-2 text-center">
+                        <p className="text-sm text-slate-300">
+                            Pilih metode untuk membagikan akses ke perangkat cabang:
+                        </p>
+                        
+                        {/* Option 1: QR */}
+                        <div className="bg-white p-3 rounded-lg">
+                            <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getQRPairingString())}`} 
+                                alt="Pairing QR" 
+                                className="w-40 h-40"
+                            />
+                        </div>
+                        <p className="text-xs text-slate-400">Scan QR di atas dengan aplikasi Artea POS di cabang.</p>
+
+                        <div className="w-full border-t border-slate-700 my-2"></div>
+
+                        {/* Option 2: Text Code */}
+                        <div className="w-full">
+                            <p className="text-sm text-white font-bold mb-2">Alternatif: Kode Teks (Tanpa Kamera)</p>
+                            <textarea 
+                                readOnly
+                                value={pairingTextCode}
+                                className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-slate-300 font-mono h-24 break-all"
+                                onClick={(e) => e.currentTarget.select()}
+                            />
+                            <Button 
+                                onClick={() => { navigator.clipboard.writeText(pairingTextCode); showAlert({type:'alert', title:'Disalin', message:'Kode disalin ke clipboard.'}); }}
+                                variant="secondary"
+                                className="w-full mt-2"
+                                size="sm"
+                            >
+                                <Icon name="clipboard" className="w-4 h-4"/> Salin & Kirim ke Staff
+                            </Button>
+                        </div>
+
+                        <p className="text-xs text-red-400 mt-2 bg-red-900/20 p-2 rounded border border-red-800 text-left w-full">
+                            ⚠️ <strong>PENTING:</strong> Kode ini memberikan akses penuh ke folder Dropbox App Anda. Hanya berikan kepada orang terpercaya.
+                        </p>
+                        <Button onClick={() => setShowPairingModal(false)} className="w-full">Tutup</Button>
+                    </div>
+                ) : (
+                    // INPUT MODE
+                    <div className="space-y-4">
+                        <p className="text-sm text-slate-300">
+                            Tempel (Paste) kode teks panjang yang diberikan oleh Admin Pusat di bawah ini.
+                        </p>
+                        <textarea 
+                            value={inputPairingCode}
+                            onChange={(e) => setInputPairingCode(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-white font-mono h-32 break-all"
+                            placeholder="ARTEA_PAIR_SECURE::..."
+                        />
+                        <div className="bg-blue-900/20 p-2 rounded border border-blue-800 text-xs text-blue-200">
+                            <p><strong>Apa yang akan terjadi?</strong></p>
+                            <ul className="list-disc pl-4 mt-1 space-y-1">
+                                <li>Aplikasi akan terhubung ke Dropbox Admin.</li>
+                                <li>Master Data (Produk, Harga, User) akan <strong>otomatis diunduh</strong>.</li>
+                                <li>Halaman akan dimuat ulang untuk menerapkan perubahan.</li>
+                            </ul>
+                        </div>
+                        <Button onClick={() => processPairingCode(inputPairingCode)} disabled={!inputPairingCode} className="w-full">
+                            <Icon name="wifi" className="w-4 h-4"/> Proses Pairing & Sync
+                        </Button>
+                    </div>
+                )}
+            </Modal>
+
+            {/* Scan Pairing Modal (Camera) */}
+            <BarcodeScannerModal 
+                isOpen={isScanningPairing} 
+                onClose={() => setIsScanningPairing(false)} 
+                onScan={(code) => processPairingCode(code)}
+            />
 
             {/* Dropbox Help & Connect Modal */}
             <Modal isOpen={showDbxHelpModal} onClose={() => setShowDbxHelpModal(false)} title="Hubungkan Dropbox">

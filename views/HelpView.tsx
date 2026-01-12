@@ -204,7 +204,7 @@ const HelpView: React.FC = () => {
                                 "Staff berjualan & Tutup Shift seperti biasa.",
                                 "Di menu Laporan, Staff klik 'Kirim Laporan' &rarr; Pilih 'Laporan Aman' (Kode) atau 'File CSV'.",
                                 "Kirim ke WA Owner.",
-                                "Owner buka Artea POS di HP sendiri &rarr; 'Import Transaksi' &rarr; Paste Kode/Upload CSV untuk melihat data."
+                                "Owner buka Artea POS di perangkat sendiri &rarr; 'Import Transaksi' &rarr; Paste Kode/Upload CSV untuk melihat data."
                             ]}
                         />
                         <ScenarioCard 
@@ -330,7 +330,7 @@ const HelpView: React.FC = () => {
                             <AccordionItem title="Menambah & Mengedit Produk" isOpen={openAccordion === 'prod_1'} onToggle={() => toggleAccordion('prod_1')} icon="edit" colorClass="text-yellow-400">
                                 <ul className="list-disc pl-5 space-y-1">
                                     <li><strong>Info Dasar:</strong> Nama, Harga Jual, Kategori.</li>
-                                    <li><strong>Gambar:</strong> Bisa upload file atau ambil foto langsung pakai kamera HP.</li>
+                                    <li><strong>Gambar:</strong> Bisa upload file atau ambil foto langsung pakai kamera perangkat.</li>
                                     <li><strong>Barcode:</strong> Bisa diketik manual atau generate otomatis untuk diprint.</li>
                                     <li><strong>Harga Cabang:</strong> Anda bisa mengatur harga yang berbeda untuk Store ID tertentu (berguna saat sinkronisasi cloud).</li>
                                 </ul>
@@ -418,10 +418,10 @@ const HelpView: React.FC = () => {
                                         Fitur "Scan Akses Pusat" atau "Input Kode" digunakan khusus untuk perangkat cabang agar bisa terhubung ke akun Dropbox Admin Pusat tanpa mengetahui email/password Admin.
                                     </p>
                                     <ol className="list-decimal pl-5 text-sm text-slate-300 space-y-1">
-                                        <li><strong>Di HP Admin (Pusat):</strong> Pastikan Dropbox sudah terhubung (Login Email/Pass). Di menu Data & Cloud, klik tombol biru <strong>"Bagikan Akses (Pairing)"</strong>.</li>
-                                        <li><strong>Di HP Cabang:</strong> Buka Pengaturan &rarr; Data & Cloud. Klik tombol <strong>"Scan Akses Pusat"</strong> (jika ada kamera) atau <strong>"Input Kode"</strong>.</li>
-                                        <li>Scan QR yang ada di HP Admin, atau Copy-Paste kode teks panjang dari Admin.</li>
-                                        <li>Selesai! HP Cabang akan langsung terhubung ke Dropbox Admin dan otomatis mengunduh data produk terbaru.</li>
+                                        <li><strong>Di Perangkat Admin (Pusat):</strong> Pastikan Dropbox sudah terhubung (Login Email/Pass). Di menu Data & Cloud, klik tombol biru <strong>"Bagikan Akses (Pairing)"</strong>.</li>
+                                        <li><strong>Di Perangkat Cabang:</strong> Buka Pengaturan &rarr; Data & Cloud. Klik tombol <strong>"Scan Akses Pusat"</strong> (jika ada kamera) atau <strong>"Input Kode"</strong>.</li>
+                                        <li>Scan QR yang ada di Perangkat Admin, atau Copy-Paste kode teks panjang dari Admin.</li>
+                                        <li>Selesai! Perangkat Cabang akan langsung terhubung ke Dropbox Admin dan otomatis mengunduh data produk terbaru.</li>
                                     </ol>
                                 </div>
                             </AccordionItem>
@@ -452,18 +452,18 @@ const HelpView: React.FC = () => {
                             <div className="bg-slate-900/50 p-4 rounded-lg">
                                 <h4 className="font-bold text-[#52a37c] mb-1">Q: Apa itu "Scan Akses Pusat (Pairing)" dan siapa yang menggunakannya?</h4>
                                 <p className="text-slate-300 text-sm">
-                                    A: Fitur ini <strong>khusus untuk perangkat cabang</strong>. Fungsinya untuk menghubungkan HP Cabang ke akun Dropbox Admin Pusat tanpa perlu login email. 
+                                    A: Fitur ini <strong>khusus untuk perangkat cabang</strong>. Fungsinya untuk menghubungkan Perangkat Cabang ke akun Dropbox Admin Pusat tanpa perlu login email. 
                                     <br/>Admin Pusat cukup membuat kode lewat tombol "Bagikan Akses", lalu staf cabang memindai (scan) atau memasukkan kode tersebut.
                                 </p>
                             </div>
 
                             <div className="bg-slate-900/50 p-4 rounded-lg">
-                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Bagaimana cara menghubungkan HP Cabang tanpa kasih password Dropbox?</h4>
+                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Bagaimana cara menghubungkan Perangkat Cabang tanpa kasih password Dropbox?</h4>
                                 <p className="text-slate-300 text-sm">
                                     A: Gunakan fitur **Pairing** seperti dijelaskan di atas.
-                                    <br/>1. Di HP Admin (yang sudah login), masuk menu <strong>Data & Cloud</strong> &rarr; Klik tombol biru <strong>"Bagikan Akses"</strong>.
-                                    <br/>2. Di HP Cabang, klik <strong>"Scan Akses Pusat"</strong> atau <strong>"Input Kode"</strong>.
-                                    <br/>3. HP Cabang akan otomatis terhubung ke akun Dropbox Admin tanpa perlu login manual.
+                                    <br/>1. Di Perangkat Admin (yang sudah login), masuk menu <strong>Data & Cloud</strong> &rarr; Klik tombol biru <strong>"Bagikan Akses"</strong>.
+                                    <br/>2. Di Perangkat Cabang, klik <strong>"Scan Akses Pusat"</strong> atau <strong>"Input Kode"</strong>.
+                                    <br/>3. Perangkat Cabang akan otomatis terhubung ke akun Dropbox Admin tanpa perlu login manual.
                                 </p>
                             </div>
 
@@ -473,7 +473,7 @@ const HelpView: React.FC = () => {
                                     A: Cek hal berikut:
                                     <ol className="list-decimal pl-5 mt-1">
                                         <li>Lihat ikon "Gembok" di sebelah alamat website (URL bar). Pastikan izin <strong>Kamera</strong> diatur ke "Allow" atau "Izinkan".</li>
-                                        <li>Pastikan kamera tidak sedang dipakai aplikasi lain (Zoom/Meet/Kamera HP).</li>
+                                        <li>Pastikan kamera tidak sedang dipakai aplikasi lain (Zoom/Meet/Aplikasi Lain).</li>
                                         <li>Jika di Laptop tanpa kamera belakang, sistem akan otomatis beralih ke Webcam depan.</li>
                                     </ol>
                                 </p>
@@ -497,7 +497,7 @@ const HelpView: React.FC = () => {
                                 <h4 className="font-bold text-[#52a37c] mb-1">Q: Bagaimana cara print struk via Bluetooth?</h4>
                                 <p className="text-slate-300 text-sm">
                                     A: Pastikan Anda menggunakan browser <strong>Google Chrome</strong> di Android atau Desktop. 
-                                    Hidupkan Bluetooth dan pasangkan (pair) printer di pengaturan HP dulu. 
+                                    Hidupkan Bluetooth dan pasangkan (pair) printer di pengaturan Perangkat dulu. 
                                     Di aplikasi, klik "Cetak BT" &rarr; Pilih printer Anda.
                                 </p>
                             </div>
@@ -511,9 +511,9 @@ const HelpView: React.FC = () => {
                             </div>
 
                             <div className="bg-slate-900/50 p-4 rounded-lg">
-                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah data saya hilang jika HP rusak?</h4>
+                                <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah data saya hilang jika Perangkat rusak?</h4>
                                 <p className="text-slate-300 text-sm">
-                                    A: <strong>YA</strong>, jika Anda tidak menghubungkan Dropbox. Aplikasi ini Offline-first (data di HP). 
+                                    A: <strong>YA</strong>, jika Anda tidak menghubungkan Dropbox. Aplikasi ini Offline-first (data di Perangkat). 
                                     Solusi: Segera hubungkan Dropbox di menu Pengaturan. Data akan otomatis ter-backup ke cloud.
                                 </p>
                             </div>
@@ -523,7 +523,7 @@ const HelpView: React.FC = () => {
                                 <p className="text-slate-300 text-sm">
                                     A: Penyimpanan gratis Dropbox mungkin penuh. 
                                     Masuk ke Pengaturan &rarr; Data &rarr; Klik tombol merah <strong>"Kosongkan Folder Laporan"</strong>. 
-                                    Ini akan menghapus log transaksi lama di cloud (tapi data di HP aman) agar sync bisa berjalan lagi.
+                                    Ini akan menghapus log transaksi lama di cloud (tapi data di Perangkat aman) agar sync bisa berjalan lagi.
                                 </p>
                             </div>
 

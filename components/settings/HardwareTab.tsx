@@ -122,7 +122,7 @@ const HardwareTab: React.FC = () => {
                 {isBleSupported ? (
                     <>
                         <div className="bg-blue-900/20 border-l-4 border-blue-500 p-3 rounded-r text-xs text-slate-300">
-                            <strong>Cara Pakai:</strong> Nyalakan Bluetooth HP/Laptop & Printer. Pasangkan (Pair) di pengaturan Bluetooth perangkat, lalu klik tombol di bawah.
+                            <strong>Cara Pakai:</strong> Nyalakan Bluetooth Perangkat & Printer. Pasangkan (Pair) di pengaturan Bluetooth perangkat, lalu klik tombol di bawah.
                         </div>
                         <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-slate-900 p-4 rounded-lg border border-slate-600">
                             <div className="flex items-center gap-3">
@@ -230,7 +230,7 @@ const HardwareTab: React.FC = () => {
             {/* 4. CAMERA SECTION */}
             <SettingsCard 
                 title="Kamera Perangkat" 
-                description="Menggunakan kamera HP/Tablet/Webcam sebagai scanner."
+                description="Menggunakan kamera Perangkat/Webcam sebagai scanner."
                 icon={<Icon name="camera" className="w-6 h-6"/>}
             >
                 <div className="flex justify-between items-center gap-4">

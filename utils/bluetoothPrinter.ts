@@ -1,6 +1,5 @@
 
 import type { Transaction, ReceiptSettings, CartItem } from '../types';
-import { CURRENCY_FORMATTER } from '../constants';
 
 // --- Web Bluetooth API Types Polyfill ---
 interface BluetoothRemoteGATTCharacteristic {
@@ -67,6 +66,21 @@ const COMMANDS = {
 
 let bluetoothDevice: BluetoothDevice | null = null;
 let printerCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
+
+// Helper: Format currency manually to ASCII to avoid UTF-8 artifacts (Chinese chars) on thermal printers
+const formatCurrencySafe = (amount: number): string => {
+    // 1. Convert to integer string (remove decimals if any for IDR usually)
+    const numStr = Math.round(amount).toString();
+    // 2. Add thousand separators manually
+    const formatted = numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return `Rp ${formatted}`;
+};
+
+// Helper: Format number without Rp
+const formatNumberSafe = (amount: number): string => {
+    const numStr = Math.round(amount).toString();
+    return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+};
 
 export const bluetoothPrinterService = {
     connect: async (): Promise<boolean> => {
@@ -138,7 +152,24 @@ export const bluetoothPrinterService = {
         data += COMMANDS.ALIGN_LEFT;
         data += `ID: ${transaction.id.slice(-6)}` + LF;
         data += `Tgl: ${new Date(transaction.createdAt).toLocaleString('id-ID')}` + LF;
-        if (transaction.customerName) data += `Plg: ${transaction.customerName}` + LF;
+        
+        // FIXED: Added Staff Name
+        if (transaction.userName) {
+            data += `Kasir: ${transaction.userName}` + LF;
+        }
+        
+        // FIXED: Added Customer Name (Always check if exists)
+        if (transaction.customerName) {
+            data += `Plg: ${transaction.customerName}` + LF;
+        }
+
+        // FIXED: Added Order Type
+        if (transaction.orderType) {
+            // Capitalize first letter
+            const type = transaction.orderType.charAt(0).toUpperCase() + transaction.orderType.slice(1);
+            data += `Tipe: ${type}` + LF;
+        }
+
         data += '--------------------------------' + LF;
 
         // --- Items ---
@@ -148,7 +179,8 @@ export const bluetoothPrinterService = {
             // Addons
             if(item.selectedAddons) {
                 item.selectedAddons.forEach(a => {
-                    data += ` + ${a.name} (${CURRENCY_FORMATTER.format(a.price).replace('Rp', '')})` + LF;
+                    // Use formatNumberSafe to avoid encoding issues
+                    data += ` + ${a.name} (${formatNumberSafe(a.price)})` + LF;
                 })
             }
 
@@ -156,54 +188,72 @@ export const bluetoothPrinterService = {
             const price = item.price + addonsTotal;
             const sub = price * item.quantity;
             
-            // Indent qty and price
-            data += `  ${item.quantity} x ${CURRENCY_FORMATTER.format(price).replace('Rp', '')} = ${CURRENCY_FORMATTER.format(sub).replace('Rp', '')}` + LF;
+            // Indent qty and price (Use formatNumberSafe)
+            data += `  ${item.quantity} x ${formatNumberSafe(price)} = ${formatNumberSafe(sub)}` + LF;
         });
         
         data += '--------------------------------' + LF;
 
         // --- Totals ---
         data += COMMANDS.ALIGN_RIGHT;
-        data += `Subtotal: ${CURRENCY_FORMATTER.format(transaction.subtotal)}` + LF;
+        // Use formatCurrencySafe for totals
+        data += `Subtotal: ${formatCurrencySafe(transaction.subtotal)}` + LF;
+        
         if (transaction.cartDiscount) {
             const val = transaction.cartDiscount.value;
-            const discText = transaction.cartDiscount.type === 'percentage' ? `${val}%` : CURRENCY_FORMATTER.format(val);
+            // Handle percentage logic or amount logic for display
+            const discText = transaction.cartDiscount.type === 'percentage' 
+                ? `${val}%` 
+                : formatCurrencySafe(val);
             data += `Diskon: -${discText}` + LF;
         }
         
+        if (transaction.serviceCharge > 0) {
+            data += `Service: ${formatCurrencySafe(transaction.serviceCharge)}` + LF;
+        }
+
+        if (transaction.tax > 0) {
+            data += `Pajak: ${formatCurrencySafe(transaction.tax)}` + LF;
+        }
+        
         data += COMMANDS.BOLD_ON;
-        data += `TOTAL: ${CURRENCY_FORMATTER.format(transaction.total)}` + LF;
+        data += `TOTAL: ${formatCurrencySafe(transaction.total)}` + LF;
         data += COMMANDS.BOLD_OFF;
-        data += `Bayar: ${CURRENCY_FORMATTER.format(transaction.amountPaid)}` + LF;
+        data += `Bayar: ${formatCurrencySafe(transaction.amountPaid)}` + LF;
         
         const kembalian = transaction.amountPaid - transaction.total;
         if(kembalian > 0) {
-             data += `Kembali: ${CURRENCY_FORMATTER.format(kembalian)}` + LF;
+             data += `Kembali: ${formatCurrencySafe(kembalian)}` + LF;
+        } else if (kembalian < 0) {
+             data += `Kurang: ${formatCurrencySafe(Math.abs(kembalian))}` + LF;
         }
 
         // --- Footer ---
         data += COMMANDS.ALIGN_CENTER;
         data += LF + settings.footerMessage + LF;
         
-        // --- Branding (Watermark replacement) ---
+        // --- Branding ---
         data += COMMANDS.FONT_B; // Small font
         data += '--------------------------------' + LF;
         data += 'Powered by ARTEA POS' + LF;
-        data += 'aiprojek01.my.id' + LF;
         data += COMMANDS.FONT_A; // Reset font
         
         data += LF + LF + LF; // Feed
 
+        // CRITICAL FIX FOR CHINESE CHARACTERS:
+        // Filter the final string to allow ONLY ASCII characters.
+        // This removes invisible unicode characters (like NBSP from formatters) that thermal printers misinterpret.
+        const cleanData = data.replace(/[^\x00-\x7F]/g, "");
+
         try {
-            // FIX: Send data in chunks to prevent buffer overflow (truncation issues)
-            const encodedData = encoder.encode(data);
-            const CHUNK_SIZE = 100; // 100 bytes per packet is generally safe for thermal printers
+            const encodedData = encoder.encode(cleanData);
+            const CHUNK_SIZE = 100; // 100 bytes per packet
             
             for (let i = 0; i < encodedData.length; i += CHUNK_SIZE) {
                 const chunk = encodedData.slice(i, i + CHUNK_SIZE);
                 await printerCharacteristic?.writeValue(chunk);
-                // Optional: Tiny delay can help very slow printers processing buffer
-                // await new Promise(r => setTimeout(r, 10)); 
+                // Tiny delay to ensure buffer processing
+                await new Promise(r => setTimeout(r, 20)); 
             }
         } catch (e) {
             console.error('Failed to print', e);

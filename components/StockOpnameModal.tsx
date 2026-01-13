@@ -20,6 +20,8 @@ interface OpnameEntry {
     actualStock: string; // string for input handling
     unit?: string;
     type: 'product' | 'raw_material';
+    purchaseUnit?: string;
+    conversionRate?: number;
 }
 
 const StockOpnameModal: React.FC<StockOpnameModalProps> = ({ isOpen, onClose, initialTab = 'product' }) => {
@@ -52,7 +54,9 @@ const StockOpnameModal: React.FC<StockOpnameModalProps> = ({ isOpen, onClose, in
                 systemStock: m.stock || 0,
                 actualStock: (m.stock || 0).toString(),
                 unit: m.unit,
-                type: 'raw_material'
+                type: 'raw_material',
+                purchaseUnit: m.purchaseUnit,
+                conversionRate: m.conversionRate
             }));
 
             setEntries([...productEntries, ...materialEntries]);
@@ -159,9 +163,17 @@ const StockOpnameModal: React.FC<StockOpnameModalProps> = ({ isOpen, onClose, in
 
                         return (
                             <div key={entry.id} className={`grid grid-cols-12 gap-2 items-center p-2 rounded border ${isModified ? 'border-yellow-600 bg-yellow-900/10' : 'border-slate-800 bg-slate-800'}`}>
-                                <div className="col-span-5 text-sm text-white truncate">
-                                    {entry.name}
-                                    {entry.unit && <span className="text-xs text-slate-500 ml-1">({entry.unit})</span>}
+                                <div className="col-span-5">
+                                    <div className="text-sm text-white truncate">
+                                        {entry.name}
+                                        {entry.unit && <span className="text-xs text-slate-500 ml-1">({entry.unit})</span>}
+                                    </div>
+                                    {/* Conversion Hint */}
+                                    {entry.purchaseUnit && entry.conversionRate && entry.conversionRate > 1 && (
+                                        <div className="text-[10px] text-green-400 mt-0.5">
+                                            💡 Info: 1 {entry.purchaseUnit} = {entry.conversionRate} {entry.unit}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="col-span-2 text-center text-sm text-slate-400">
                                     {entry.systemStock}

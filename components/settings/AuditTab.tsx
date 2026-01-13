@@ -31,8 +31,8 @@ const AuditTab: React.FC = () => {
             if (dataSource === 'local') return;
 
             if (dataSource === 'dropbox') {
-                const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-                if (!dbxToken) {
+                // SECURE CHECK
+                if (!dropboxService.isConfigured()) {
                     showAlert({ type: 'alert', title: 'Dropbox Belum Dikonfigurasi', message: 'Silakan hubungkan akun Dropbox di menu Data & Cloud.' });
                     setDataSource('local');
                     return;

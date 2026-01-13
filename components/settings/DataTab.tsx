@@ -9,9 +9,10 @@ import { decryptReport, encryptCredentials, decryptCredentials } from '../../uti
 import { useData } from '../../context/DataContext';
 import { useFinance } from '../../context/FinanceContext';
 import { useUI } from '../../context/UIContext';
-import { db } from '../../services/db'; // Import DB directly for health check
+import { db } from '../../services/db'; 
 import type { CartItem, Transaction as TransactionType } from '../../types';
-import BarcodeScannerModal from '../BarcodeScannerModal'; // Re-use existing scanner
+import BarcodeScannerModal from '../BarcodeScannerModal'; 
+import DataArchivingModal from '../DataArchivingModal'; 
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
     <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
@@ -31,19 +32,19 @@ const DataTab: React.FC = () => {
     const { showAlert } = useUI();
     
     // Cloud Settings State
-    const [dbxKey, setDbxKey] = useState(localStorage.getItem('ARTEA_DBX_KEY') || '');
-    const [dbxSecret, setDbxSecret] = useState(localStorage.getItem('ARTEA_DBX_SECRET') || '');
-    const [dbxRefreshToken, setDbxRefreshToken] = useState(localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN') || '');
+    const [dbxKey, setDbxKey] = useState('');
+    const [dbxSecret, setDbxSecret] = useState('');
+    const [isConfigured, setIsConfigured] = useState(false);
     
     const [showDbxHelpModal, setShowDbxHelpModal] = useState(false);
     const [dbxAuthCode, setDbxAuthCode] = useState('');
     const [isDbxConnecting, setIsDbxConnecting] = useState(false);
     
     // Pairing State
-    const [showPairingModal, setShowPairingModal] = useState(false); // Unified Modal
+    const [showPairingModal, setShowPairingModal] = useState(false); 
     const [isScanningPairing, setIsScanningPairing] = useState(false);
-    const [pairingTextCode, setPairingTextCode] = useState(''); // Admin generated code
-    const [inputPairingCode, setInputPairingCode] = useState(''); // Staff input code
+    const [pairingTextCode, setPairingTextCode] = useState(''); 
+    const [inputPairingCode, setInputPairingCode] = useState(''); 
     const [pairingMode, setPairingMode] = useState<'generate' | 'input'>('generate');
 
     // Import State
@@ -56,6 +57,9 @@ const DataTab: React.FC = () => {
     const [healthStatus, setHealthStatus] = useState<any>(null);
     const [isChecking, setIsChecking] = useState(false);
 
+    // Archiving Modal State
+    const [isArchivingModalOpen, setIsArchivingModalOpen] = useState(false);
+
     // Storage Stats State
     const [storageStats, setStorageStats] = useState({
         localDataSize: 0,
@@ -65,6 +69,17 @@ const DataTab: React.FC = () => {
     });
 
     useEffect(() => {
+        // Load credentials safely
+        const creds = dropboxService.getCredentials();
+        if (creds) {
+            setDbxKey(creds.clientId);
+            setDbxSecret(creds.clientSecret);
+            setIsConfigured(true);
+            checkDropboxQuota();
+        } else {
+            setIsConfigured(false);
+        }
+
         // Calculate estimated local JSON size
         try {
             const json = JSON.stringify(data);
@@ -73,14 +88,10 @@ const DataTab: React.FC = () => {
         } catch (e) {
             console.error("Failed to calc size", e);
         }
-
-        // Check Dropbox Quota if connected
-        if (dbxRefreshToken && dbxKey && dbxSecret) {
-            checkDropboxQuota();
-        }
-    }, [data, dbxRefreshToken]);
+    }, [data]);
 
     const checkDropboxQuota = async () => {
+        if (!dropboxService.isConfigured()) return;
         setStorageStats(prev => ({...prev, dropboxChecking: true}));
         try {
             const usage = await dropboxService.getSpaceUsage();
@@ -106,27 +117,38 @@ const DataTab: React.FC = () => {
     };
 
     const saveCloudSettings = () => {
-        localStorage.setItem('ARTEA_DBX_KEY', dbxKey);
-        localStorage.setItem('ARTEA_DBX_SECRET', dbxSecret);
-        localStorage.setItem('ARTEA_DBX_REFRESH_TOKEN', dbxRefreshToken);
-        
-        showAlert({ type: 'alert', title: 'Tersimpan', message: 'Konfigurasi Dropbox berhasil disimpan.' });
+        // Note: Manually saving just key/secret without token isn't enough for connection, 
+        // but useful if user wants to update app credentials before auth
+        // To properly save, we usually do it after Exchange Code.
+        // However, if we just want to save partially:
+        const currentCreds = dropboxService.getCredentials();
+        dropboxService.saveCredentials(dbxKey, dbxSecret, currentCreds?.refreshToken || '');
+        showAlert({ type: 'alert', title: 'Tersimpan', message: 'Kredensial App Key/Secret diperbarui (Enkripsi Aktif).' });
+    };
+
+    const handleDisconnect = () => {
+        dropboxService.clearCredentials();
+        setDbxKey('');
+        setDbxSecret('');
+        setIsConfigured(false);
+        showAlert({ type: 'alert', title: 'Terputus', message: 'Koneksi Dropbox diputuskan.' });
     };
 
     // --- Pairing Logic (QR & Text) ---
     
     // Admin: Generate Codes
     const handleOpenPairingGenerator = () => {
-        if (!dbxKey || !dbxSecret || !dbxRefreshToken) {
+        const creds = dropboxService.getCredentials();
+        if (!creds) {
             showAlert({ type: 'alert', title: 'Belum Terhubung', message: 'Anda harus menghubungkan Dropbox terlebih dahulu sebelum membagikan akses.' });
             return;
         }
         
         // Generate Text Code (Encrypted)
         const textCode = encryptCredentials({
-            k: dbxKey,
-            s: dbxSecret,
-            t: dbxRefreshToken
+            k: creds.clientId,
+            s: creds.clientSecret,
+            t: creds.refreshToken
         });
         setPairingTextCode(textCode);
         
@@ -140,16 +162,14 @@ const DataTab: React.FC = () => {
             const payload = decryptCredentials(code.trim());
 
             if (payload && payload.k && payload.s && payload.t) {
-                // 1. Save Credentials
-                localStorage.setItem('ARTEA_DBX_KEY', payload.k);
-                localStorage.setItem('ARTEA_DBX_SECRET', payload.s);
-                localStorage.setItem('ARTEA_DBX_REFRESH_TOKEN', payload.t);
+                // 1. Save Credentials Securely
+                dropboxService.saveCredentials(payload.k, payload.s, payload.t);
                 
                 setDbxKey(payload.k);
                 setDbxSecret(payload.s);
-                setDbxRefreshToken(payload.t);
+                setIsConfigured(true);
 
-                // 2. Auto-Sync Master Data (The Smart Part)
+                // 2. Auto-Sync Master Data
                 showAlert({ 
                     type: 'alert', 
                     title: 'Kredensial Diterima', 
@@ -186,8 +206,10 @@ const DataTab: React.FC = () => {
 
     // QR Generate
     const getQRPairingString = () => {
+        const creds = dropboxService.getCredentials();
+        if (!creds) return '';
         // Base64 is smaller for QR codes than the encrypted hex string
-        const payload = { k: dbxKey, s: dbxSecret, t: dbxRefreshToken };
+        const payload = { k: creds.clientId, s: creds.clientSecret, t: creds.refreshToken };
         return `ARTEA_PAIR::${btoa(JSON.stringify(payload))}`;
     };
 
@@ -196,12 +218,7 @@ const DataTab: React.FC = () => {
         setIsChecking(true);
         setHealthStatus(null);
         try {
-            // Check Local DB Integrity
-            const tables = [
-                'products', 'transactionRecords', 'users', 'expenses', 'customers', 
-                'stockAdjustments', 'auditLogs'
-            ];
-            
+            const tables = ['products', 'transactionRecords', 'users', 'expenses', 'customers', 'stockAdjustments', 'auditLogs'];
             const results: any = {};
             for (const table of tables) {
                 // @ts-ignore
@@ -209,7 +226,6 @@ const DataTab: React.FC = () => {
                 results[table] = count;
             }
 
-            // Check Storage Quota
             let storageInfo = "Tidak tersedia";
             if (navigator.storage && navigator.storage.estimate) {
                 const estimate = await navigator.storage.estimate();
@@ -254,15 +270,13 @@ const DataTab: React.FC = () => {
         setIsDbxConnecting(true);
         try {
             const refreshToken = await dropboxService.exchangeCodeForToken(dbxKey, dbxSecret, dbxAuthCode);
-            setDbxRefreshToken(refreshToken);
-            localStorage.setItem('ARTEA_DBX_REFRESH_TOKEN', refreshToken);
-            // Also save key/secret immediately
-            localStorage.setItem('ARTEA_DBX_KEY', dbxKey);
-            localStorage.setItem('ARTEA_DBX_SECRET', dbxSecret);
+            // SAVE ENCRYPTED
+            dropboxService.saveCredentials(dbxKey, dbxSecret, refreshToken);
+            setIsConfigured(true);
             
             setDbxAuthCode('');
             setShowDbxHelpModal(false);
-            showAlert({ type: 'alert', title: 'Terhubung!', message: 'Dropbox berhasil dihubungkan. Token telah disimpan.' });
+            showAlert({ type: 'alert', title: 'Terhubung!', message: 'Dropbox berhasil dihubungkan. Token telah diamankan.' });
         } catch (e: any) {
             showAlert({ type: 'alert', title: 'Gagal', message: e.message });
         } finally {
@@ -379,24 +393,19 @@ const DataTab: React.FC = () => {
                 try {
                     await dataService.exportData(); 
 
-                    let messages = [];
-                    if (dbxRefreshToken && dbxKey && dbxSecret) {
-                        // Manually re-init for maintenance task if needed, currently service pulls from localstorage
+                    if (isConfigured) {
                         const res = await dropboxService.clearOldBackups();
-                        messages.push(res.success ? "✅ Dropbox: Berhasil dibersihkan" : `❌ Dropbox: ${res.message}`);
+                        showAlert({
+                            type: 'alert',
+                            title: 'Proses Selesai',
+                            message: (
+                                <ul className="list-disc pl-5 text-left text-sm">
+                                    <li>File Backup telah diunduh. Simpan baik-baik.</li>
+                                    <li>{res.success ? "✅ Dropbox: Berhasil dibersihkan" : `❌ Dropbox: ${res.message}`}</li>
+                                </ul>
+                            )
+                        });
                     }
-
-                    showAlert({
-                        type: 'alert',
-                        title: 'Proses Selesai',
-                        message: (
-                            <ul className="list-disc pl-5 text-left text-sm">
-                                <li>File Backup telah diunduh. Simpan baik-baik.</li>
-                                {messages.map((m, i) => <li key={i}>{m}</li>)}
-                            </ul>
-                        )
-                    });
-
                 } catch (e: any) {
                     showAlert({ type: 'alert', title: 'Gagal', message: e.message });
                 } finally {
@@ -406,8 +415,6 @@ const DataTab: React.FC = () => {
         });
     };
 
-    // Helper to get last update time (persisted or just current logic)
-    // Note: Ideally this should be saved in DB/LocalStorage
     const lastPullTime = localStorage.getItem('ARTEA_LAST_MASTER_PULL');
 
     return (
@@ -452,18 +459,32 @@ const DataTab: React.FC = () => {
                 </div>
             </SettingsCard>
 
+            <SettingsCard title="Manajemen Memori (Pengarsipan)" description="Hapus data lama untuk menjaga performa aplikasi tetap cepat.">
+                <div className="bg-orange-900/20 border-l-4 border-orange-500 p-4 rounded-r mb-4">
+                    <div className="flex items-start gap-3">
+                        <Icon name="boxes" className="w-5 h-5 text-orange-400 mt-0.5" />
+                        <div>
+                            <h4 className="font-bold text-orange-300 text-sm">Arsipkan & Hapus Data Lama</h4>
+                            <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                                Jika database terlalu besar, aplikasi akan menjadi lambat. Gunakan fitur ini untuk memindahkan data lama ke Excel/PDF lalu menghapusnya dari aplikasi ini.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <Button onClick={() => setIsArchivingModalOpen(true)} className="w-full sm:w-auto" variant="secondary">
+                    <Icon name="database" className="w-4 h-4"/> Buka Menu Pengarsipan
+                </Button>
+            </SettingsCard>
+
             <SettingsCard title="Manajemen Penyimpanan Dropbox" description="Pantau kuota penyimpanan dan lakukan pembersihan jika penuh.">
-                {/* Storage Stats Dashboard */}
                 <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 mb-4">
                     <div className="space-y-4">
-                        {/* Row 1: Local Data Estimation */}
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-slate-300">Est. Ukuran Data Aplikasi (JSON)</span>
                             <span className="text-white font-bold">{formatBytes(storageStats.localDataSize)}</span>
                         </div>
 
-                        {/* Row 2: Dropbox Quota (If connected) */}
-                        {dbxRefreshToken ? (
+                        {isConfigured ? (
                             <div className="space-y-1">
                                 <div className="flex justify-between items-center text-sm">
                                     <span className="text-slate-300 flex items-center gap-2">
@@ -502,22 +523,6 @@ const DataTab: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="bg-orange-900/20 border-l-4 border-orange-500 p-4 rounded-r mb-4">
-                    <div className="flex items-start gap-3">
-                        <Icon name="warning" className="w-5 h-5 text-orange-400 mt-0.5" />
-                        <div>
-                            <h4 className="font-bold text-orange-300 text-sm">Pembersihan Berkala</h4>
-                            <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                                Jika indikator di atas berwarna merah atau penuh, gunakan tombol ini. Aksi ini akan:
-                            </p>
-                            <ol className="list-decimal pl-4 text-xs text-slate-400 mt-2 space-y-1">
-                                <li>Memaksa unduh <strong>Backup Lokal (.json)</strong> untuk arsip Anda.</li>
-                                <li>Menghapus riwayat transaksi & log lama di Dropbox untuk mengosongkan ruang.</li>
-                                <li>Data Master (Produk & Pelanggan) <strong>TIDAK</strong> akan dihapus.</li>
-                            </ol>
-                        </div>
-                    </div>
-                </div>
                 <Button onClick={handleCloudPurge} disabled={isCleaning} variant="danger" className="w-full sm:w-auto">
                     {isCleaning ? 'Sedang Memproses...' : <><Icon name="trash" className="w-4 h-4"/> Kosongkan Folder Laporan</>}
                 </Button>
@@ -607,12 +612,12 @@ const DataTab: React.FC = () => {
                                 onChange={(e) => setDbxSecret(e.target.value)}
                                 className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
                             />
-                            {dbxRefreshToken ? (
+                            {isConfigured ? (
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-2 text-green-400 bg-green-900/20 p-2 rounded border border-green-800">
                                         <Icon name="check-circle-fill" className="w-4 h-4"/>
-                                        <span className="text-xs font-bold">Terhubung (Refresh Token Tersimpan)</span>
-                                        <button onClick={() => {setDbxRefreshToken(''); localStorage.removeItem('ARTEA_DBX_REFRESH_TOKEN');}} className="ml-auto text-xs text-red-400 underline">Putuskan</button>
+                                        <span className="text-xs font-bold">Terhubung (Token Terenkripsi)</span>
+                                        <button onClick={handleDisconnect} className="ml-auto text-xs text-red-400 underline">Putuskan</button>
                                     </div>
                                     <Button onClick={handleOpenPairingGenerator} className="w-full bg-blue-700 hover:bg-blue-600 text-white">
                                         <Icon name="share" className="w-4 h-4" /> Bagikan Akses (Pairing)
@@ -771,6 +776,11 @@ const DataTab: React.FC = () => {
                     </div>
                 </div>
             </Modal>
+
+            <DataArchivingModal 
+                isOpen={isArchivingModalOpen} 
+                onClose={() => setIsArchivingModalOpen(false)} 
+            />
         </div>
     );
 };

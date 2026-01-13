@@ -104,13 +104,41 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         }
     }, [products, showAlert, removeRewardFromCart, setAppliedReward]);
     
+    // --- Helper to check stock against current cart quantity ---
+    const checkStockAvailability = useCallback((productId: string, currentCartQuantity: number, addedQuantity: number) => {
+        if (!inventorySettings.enabled || !inventorySettings.preventNegativeStock) return true;
+
+        const product = products.find(p => p.id === productId);
+        if (!product) return true;
+
+        const totalRequested = currentCartQuantity + addedQuantity;
+
+        // 1. Simple Stock Check
+        if (product.trackStock && (product.stock || 0) < totalRequested) {
+            showAlert({ type: 'alert', title: 'Stok Tidak Cukup', message: `Hanya tersedia ${product.stock} ${product.name}.` });
+            return false;
+        }
+
+        // 2. Recipe Ingredient Check (Simplification: Only checks first level ingredients)
+        if (inventorySettings.trackIngredients && product.recipe && product.recipe.length > 0) {
+            for (const item of product.recipe) {
+                const requiredQty = item.quantity * totalRequested;
+                
+                if (item.itemType === 'raw_material' && item.rawMaterialId) {
+                    const material = rawMaterials.find(m => m.id === item.rawMaterialId);
+                    if (material && (material.stock || 0) < requiredQty) {
+                        showAlert({ type: 'alert', title: 'Bahan Baku Habis', message: `Bahan ${material.name} tidak cukup untuk pesanan ini.` });
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }, [inventorySettings, products, rawMaterials, showAlert]);
+
     const addToCart = useCallback((product: Product) => {
         setCart(prevCart => {
-            const { available, reason } = isProductAvailable(product);
-            if (!available) {
-                showAlert({ type: 'alert', title: 'Gagal Menambahkan Produk', message: `Tidak dapat menambahkan ${product.name}. ${reason}.` });
-                return prevCart;
-            }
             const existingItem = prevCart.find(item => 
                 item.id === product.id && 
                 !item.isReward && 
@@ -119,19 +147,27 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                 (!item.selectedModifiers || item.selectedModifiers.length === 0)
             );
             
+            const currentQty = existingItem ? existingItem.quantity : 0;
+            
+            // Validate Stock before adding
+            if (!checkStockAvailability(product.id, currentQty, 1)) {
+                return prevCart;
+            }
+            
             if (existingItem) {
                 return prevCart.map(item => item.cartItemId === existingItem.cartItemId ? { ...item, quantity: item.quantity + 1 } : item);
             }
             return [...prevCart, { ...product, quantity: 1, cartItemId: Date.now().toString() }];
         });
-    }, [isProductAvailable, showAlert]);
+    }, [checkStockAvailability]);
     
     const addConfiguredItemToCart = useCallback((product: Product, addons: Addon[], variant?: ProductVariant, modifiers?: SelectedModifier[]) => {
       setCart(prevCart => {
-         const { available, reason } = isProductAvailable(product);
-         if (!available) {
-            showAlert({ type: 'alert', title: 'Gagal Menambahkan Produk', message: `Tidak dapat menambahkan ${product.name}. ${reason}.`});
-            return prevCart;
+         // Check total quantity of this product ID across all cart items (variants/addons matter for uniqueness but share same stock ID)
+         const currentTotalQty = prevCart.filter(i => i.id === product.id).reduce((sum, i) => sum + i.quantity, 0);
+         
+         if (!checkStockAvailability(product.id, currentTotalQty, 1)) {
+             return prevCart;
          }
          
          const newItem: CartItem = { 
@@ -139,7 +175,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
              quantity: 1, 
              cartItemId: Date.now().toString(), 
              selectedAddons: addons, 
-             selectedVariant: variant,
+             selectedVariant: variant, 
              selectedModifiers: modifiers,
              price: variant ? variant.price : product.price,
              name: variant ? `${product.name} (${variant.name})` : product.name,
@@ -148,16 +184,34 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
          
          return [...prevCart, newItem];
       });
-    }, [isProductAvailable, showAlert]);
+    }, [checkStockAvailability]);
 
     const updateCartQuantity = useCallback((cartItemId: string, quantity: number) => {
         setCart(prevCart => {
+            const itemToUpdate = prevCart.find(item => item.cartItemId === cartItemId);
+            if (!itemToUpdate) return prevCart;
+
             if (quantity <= 0) {
                 return prevCart.filter(item => item.cartItemId !== cartItemId || item.isReward);
             }
+
+            // Check if increasing quantity
+            if (quantity > itemToUpdate.quantity) {
+                // Calculate total existing quantity of this product in cart EXCLUDING this item
+                const otherItemsQty = prevCart.filter(i => i.id === itemToUpdate.id && i.cartItemId !== cartItemId).reduce((sum, i) => sum + i.quantity, 0);
+                const totalRequested = otherItemsQty + quantity; // New total if update allowed
+                
+                // We use checkStockAvailability with current=otherItemsQty and added=quantity because logic sums them
+                // Actually easier: checkStockAvailability expects current (before add) and added (delta). 
+                // Let's pass 0 as current and Total Requested as Added to reuse logic for total check.
+                if (!checkStockAvailability(itemToUpdate.id, 0, totalRequested)) {
+                    return prevCart;
+                }
+            }
+
             return prevCart.map(item => item.cartItemId === cartItemId && !item.isReward ? { ...item, quantity } : item);
         });
-    }, []);
+    }, [checkStockAvailability]);
 
     const removeFromCart = useCallback((cartItemId: string) => {
         setCart(prevCart => prevCart.filter(item => item.cartItemId !== cartItemId || item.isReward));
@@ -324,9 +378,19 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
             return { ...item, costPrice: (item.costPrice || product?.costPrice || 0) + addonsCost };
         });
 
+        // GENERATE GLOBAL UNIQUE ID: [STORE_ID]-[TIMESTAMP]-[USER_SUFFIX]-[RANDOM_2]
+        const storeIdPrefix = receiptSettings.storeId ? receiptSettings.storeId.replace(/[^a-zA-Z0-9]/g, '') : 'LOC';
+        const timestampId = now.getTime().toString();
+        // User Suffix ensures 2 cashiers in same store at same second have different IDs
+        const userSuffix = currentUser.id.slice(-4).replace(/[^a-zA-Z0-9]/g, 'X').toUpperCase(); 
+        const randomSuffix = Math.random().toString(36).substring(2, 4).toUpperCase();
+        
+        const uniqueId = `${storeIdPrefix}-${timestampId}-${userSuffix}${randomSuffix}`;
+
         const newTransaction: TransactionType = {
-            id: now.getTime().toString(), items: cartWithCost, 
-            subtotal: getCartTotals().subtotal, // re-calc safe
+            id: uniqueId, 
+            items: cartWithCost, 
+            subtotal: getCartTotals().subtotal,
             cartDiscount, 
             total: finalTotal, amountPaid,
             tax: taxAmount, serviceCharge: serviceChargeAmount, orderType,
@@ -430,7 +494,8 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         
         switchActiveCart(null);
         
-        setTimeout(() => triggerAutoSync(), 500);
+        // Pass User Name for Sync Log
+        setTimeout(() => triggerAutoSync(currentUser.name), 500);
 
         return newTransaction;
     }, [cart, getCartTotals, setData, currentUser, appliedReward, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, rawMaterials, products, orderType, receiptSettings.storeId, triggerAutoSync]);

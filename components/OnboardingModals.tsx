@@ -6,6 +6,7 @@ import Icon from './Icon';
 import { useAuth } from '../context/AuthContext';
 import { APP_LICENSE_ID } from '../constants';
 import type { View } from '../types';
+import { dropboxService } from '../services/dropboxService';
 
 interface OnboardingModalsProps {
     setActiveView: (view: View) => void;
@@ -31,9 +32,8 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
                 setShowManagementWelcome(true);
             }
         } else if (currentUser.role === 'staff') {
-            // Cek konfigurasi cloud owner untuk menentukan pesan briefing
-            const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-            if (dbxToken) {
+            // Cek konfigurasi cloud owner untuk menentukan pesan briefing - SECURE CHECK
+            if (dropboxService.isConfigured()) {
                 setCloudMode('cloud');
             } else {
                 setCloudMode('local');

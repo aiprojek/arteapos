@@ -1,8 +1,8 @@
 
-# Artea POS - Aplikasi Kasir Offline
+# Artea POS - Aplikasi Kasir UMKM
 
 ![Lisensi](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
-![Status Proyek](https://img.shields.io/badge/status-aktif-brightgreen.svg)
+![Status Proyek](https://img.shields.io/badge/status-production--ready-brightgreen.svg)
 ![React](https://img.shields.io/badge/React-18-blue?logo=react)
 ![Vite](https://img.shields.io/badge/Vite-5-blue?logo=vite)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
@@ -14,197 +14,132 @@
 
 <h1 align="center">Artea POS</h1>
 
-**Artea POS** adalah aplikasi Point of Sale (POS) atau kasir _offline-first_ berbasis web yang dirancang untuk usaha kecil dan menengah di bidang makanan dan minuman. Aplikasi ini sepenuhnya berjalan di browser Anda, menyimpan semua data secara lokal, sehingga dapat beroperasi dengan lancar bahkan tanpa koneksi internet.
-
-Proyek ini bersifat _open-source_ dengan tujuan menyediakan alternatif aplikasi kasir yang gratis, mudah digunakan, dan dapat diandalkan.
-
-> **Catatan dari Pengembang:**
-> Tujuan awal dibuatnya aplikasi ini adalah untuk membantu merapikan administrasi di kedai kami yang bernama [Artea](https://artea.pages.dev). Jadi, harap maklum jika fiturnya belum selengkap aplikasi kasir komersial. Dengan dipublikasikannya aplikasi ini, kami berharap bisa bermanfaat bagi yang membutuhkan dan dapat berkembang bersama melalui kolaborasi komunitas.
+**Artea POS** adalah sistem Point of Sale (POS) modern, bebas, dan *open-source* yang dirancang khusus untuk UMKM (F&B, Retail, Jasa). Aplikasi ini dibangun dengan prinsip **Offline-First**, artinya dapat beroperasi penuh tanpa internet, namun memiliki kemampuan **Cloud Sync** canggih untuk manajemen multi-cabang.
 
 ---
 
-### Kolaborasi Manusia & AI dalam Pengembangan
+### ⚠️ Disclaimer & Latar Belakang
 
-Proyek Artea POS adalah sebuah studi kasus tentang sinergi antara pengembang manusia dan kecerdasan buatan (AI). Pengembangan aplikasi ini dipercepat secara signifikan melalui model kolaborasi berikut:
+> *"Dari UMKM, Untuk UMKM"*
 
--   **Peran Pengembang Manusia (AI Projek):**
-    -   **Konseptor & Pemilik Proyek:** Memberikan ide awal, visi, dan tujuan utama dari aplikasi Artea POS.
-    -   **Product Manager:** Menentukan fitur-fitur yang harus ada, alur kerja pengguna (UX flow), dan memberikan arahan spesifik melalui serangkaian _prompt_ (perintah).
-    -   **Penguji & Quality Assurance:** Melakukan pengujian fungsional secara menyeluruh, menemukan bug, dan meminta perbaikan untuk memastikan kualitas dan stabilitas aplikasi.
-    -   **Pengambil Keputusan Akhir:** Membuat keputusan final terkait desain, fungsionalitas, dan arah pengembangan proyek.
+Aplikasi ini pada awalnya dibuat dan dikembangkan secara spesifik untuk **memenuhi kebutuhan operasional di lini usaha kami sendiri yang bernama [Artea](https://arteagrup.my.id)**.
 
--   **Peran Asisten AI (Google Gemini):**
-    -   **Frontend Engineer:** Menulis sebagian besar kode React, TypeScript, dan Tailwind CSS berdasarkan spesifikasi dan perintah yang diberikan.
-    -   **UI/UX Implementer:** Menerjemahkan konsep desain dan fungsionalitas menjadi komponen antarmuka pengguna yang responsif dan interaktif.
-    -   **Problem Solver:** Memberikan solusi teknis, memperbaiki bug, dan melakukan _refactoring_ kode sesuai arahan untuk meningkatkan efisiensi dan keterbacaan.
+Kami memutuskan untuk membagikan kode sumbernya (*Open Source*) dengan harapan aplikasi ini dapat bermanfaat bagi rekan-rekan UMKM lain yang membutuhkan sistem kasir handal tanpa biaya langganan.
 
-Model kerja ini memungkinkan siklus pengembangan yang sangat cepat, di mana ide dan arahan dari manusia dapat langsung diwujudkan menjadi kode fungsional oleh AI.
+Namun, demi **kenyamanan bersama dan manajemen ekspektasi**, mohon dipahami bahwa:
+1.  Fitur-fitur di dalamnya dibangun berdasarkan alur kerja (*workflow*) dan kebutuhan spesifik usaha kami.
+2.  Aplikasi ini mungkin **tidak memiliki fitur selengkap** aplikasi kasir komersial/berbayar buatan perusahaan besar.
+3.  Pengembangan dan perbaikan bug dilakukan berdasarkan ketersediaan waktu kami.
+
+Kami sangat menghargai jika Anda ingin menggunakannya, dan lebih senang lagi jika Anda mau berkontribusi (Pull Request) untuk membuatnya lebih baik!
 
 ---
 
-### ➡️ [Coba Demo Langsung](https://arteapos.pages.dev)
+### 🌟 Fitur Unggulan
+
+#### 🚀 Performa & Stabilitas
+*   **Offline-First Architecture:** Data tersimpan lokal di browser (IndexedDB). Tidak ada loading lama karena internet lambat.
+*   **Lazy Loading Reports:** Mampu menangani ribuan transaksi tanpa lag. Laporan hanya memuat data yang diperlukan.
+*   **Data Archiving:** Fitur manajemen memori untuk mengarsipkan data lama ke Excel/PDF dan membersihkan database agar aplikasi tetap ringan selamanya.
+
+#### 🛒 Kasir & Operasional
+*   **Smart Cart:** Dukungan varian produk, modifier (topping/level gula), dan diskon per item.
+*   **Split Bill:** Fitur pisah bayar dalam satu meja/pesanan.
+*   **Hold Order (Open Bill):** Simpan pesanan sementara (cocok untuk restoran/kafe).
+*   **Shift Management:** Kontrol modal awal, kas masuk/keluar (petty cash), dan laporan tutup buku (z-report).
+
+#### ☁️ Cloud & Multi-Cabang (Dropbox)
+*   **Sync Otomatis:** Data transaksi terkirim otomatis ke Dropbox Admin saat kasir online.
+*   **Manajemen Pusat:** Admin dapat memantau omzet semua cabang dari satu dashboard.
+*   **Push Master Data:** Ubah harga/produk di Pusat, dan kirim update ke semua cabang dengan satu klik.
+*   **Secure Pairing:** Hubungkan perangkat staf ke Cloud tanpa perlu memberikan email/password Dropbox (menggunakan Scan QR/Kode Enkripsi).
+
+#### 🖨️ Dukungan Perangkat Keras
+*   **Bluetooth Printer:** Cetak struk langsung dari HP Android/Laptop ke printer thermal bluetooth (58mm/80mm).
+*   **Barcode Scanner:** Mendukung scanner USB fisik atau menggunakan kamera HP sebagai scanner.
+*   **Responsive UI:** Tampilan optimal di HP, Tablet, maupun Laptop/PC.
+
+#### 🛡️ Keamanan & Audit
+*   **Role Management:** Akses berbeda untuk Admin, Manager, dan Staf.
+*   **Audit Log:** Merekam setiap aktivitas sensitif (Hapus produk, Refund, Edit Stok, Login) untuk mencegah kecurangan.
+*   **Anti-Fraud Input:** Validasi ketat untuk mencegah input minus atau manipulasi data.
 
 ---
 
-## 🚀 Deployment & Penggunaan Offline (PWA)
+## 🚀 Cara Instalasi & Penggunaan
 
-Aplikasi ini adalah Progressive Web App (PWA), yang artinya dapat "diinstal" di perangkat Anda (Desktop atau Ponsel) untuk pengalaman seperti aplikasi native dan bekerja 100% offline. Ini adalah cara yang direkomendasikan untuk penggunaan sehari-hari.
+### 1. Penggunaan Langsung (PWA)
+Aplikasi ini adalah **Progressive Web App (PWA)**.
+1.  Buka aplikasi di browser (Chrome/Edge disarankan).
+2.  Klik ikon **"Install"** di bar alamat browser (biasanya ikon monitor+panah).
+3.  Aplikasi akan terpasang di layar utama HP/Desktop dan bisa dibuka secara offline.
 
-**Cara Instalasi:**
+### 2. Instalasi Lokal (Untuk Pengembang)
 
-1.  **Build Aplikasi:** Buka terminal di direktori `arteapos-jsx` dan jalankan:
-    ```bash
-    # Instal dependensi terlebih dahulu jika belum
-    npm install
-    # Build aplikasi untuk produksi
-    npm run build
-    ```
-    Perintah ini akan membuat folder `dist` yang berisi semua file aplikasi yang sudah jadi.
+```bash
+# 1. Clone repositori
+git clone https://github.com/aiprojek/arteapos.git
 
-2.  **Jalankan Server Lokal (Hanya untuk Instalasi Pertama):**
-    Sajikan folder `dist` menggunakan server lokal. Perintah sederhana yang bisa digunakan:
-    ```bash
-    # Pastikan Anda berada di direktori arteapos-jsx
-    npx serve -s dist
-    ```
-3.  **Buka di Browser:** Buka alamat lokal yang ditampilkan (misalnya `http://localhost:3000`) di browser modern seperti Chrome atau Edge.
-4.  **Instal Aplikasi:** Di bilah alamat browser, cari dan klik ikon "Instal" (biasanya ikon monitor dengan panah ke bawah).
-5.  **Selesai!** Aplikasi akan terinstal dan ikonnya akan muncul di desktop atau daftar aplikasi Anda. Anda kini bisa menutup server dan menjalankan aplikasi langsung dari ikon tersebut kapan saja, bahkan tanpa koneksi internet.
+# 2. Masuk ke direktori
+cd arteapos
 
-Untuk panduan instalasi di perangkat Android, lihat [USAGE_GUIDE.md](./arteapos-jsx/USAGE_GUIDE.md).
+# 3. Instal dependensi
+npm install
+
+# 4. Jalankan mode pengembangan
+npm run dev
+
+# 5. Build untuk produksi
+npm run build
+```
 
 ---
 
-## ✨ Fitur Utama
+## 📖 Skenario Penggunaan
 
-Artea POS dilengkapi dengan berbagai fitur untuk membantu mengelola operasional bisnis Anda secara efisien:
+### A. Toko Tunggal (Single Store)
+Cocok untuk warung, kedai kopi kecil, atau toko kelontong.
+*   Gunakan mode **Lokal**.
+*   Backup data secara rutin (mingguan) ke file JSON melalui menu Pengaturan > Data.
 
-#### 🛒 Manajemen Penjualan (POS)
-- **Antarmuka Kasir Intuitif:** Proses transaksi dengan cepat dan mudah.
-- **Keranjang Dinamis:** Tambah, hapus, dan ubah kuantitas produk dengan mudah.
-- **Pemindai Barcode:** Gunakan kamera perangkat untuk memindai barcode produk.
-- **Manajemen Sesi (Shift):** Kelola modal awal, catat kas masuk/keluar, dan ringkasan tutup buku kasir per sesi.
-- **Simpan Pesanan (Tab):** Simpan beberapa pesanan yang sedang berjalan dan beralih di antaranya (berguna untuk restoran/kafe).
-- **Beragam Metode Pembayaran:** Catat pembayaran tunai dan non-tunai dalam satu transaksi.
-- **Cetak & Bagikan Struk:** Cetak struk ke printer termal atau bagikan sebagai gambar ke pelanggan.
+### B. Pemilik + Karyawan (Remote Monitoring)
+Cocok jika pemilik tidak selalu di toko.
+1.  **Pemilik (Admin):** Buka aplikasi, masuk ke Pengaturan > Data, hubungkan akun **Dropbox**.
+2.  **Pemilik:** Klik "Bagikan Akses (Pairing)" untuk mendapatkan Kode Akses.
+3.  **Karyawan (Toko):** Buka aplikasi, masuk ke Pengaturan > Data, pilih "Input Kode" dan masukkan kode dari Pemilik.
+4.  **Hasil:** Setiap transaksi di toko akan otomatis terupload ke Dropbox Pemilik. Pemilik cukup klik tombol "Refresh" di Dashboardnya untuk melihat omzet real-time (tunda beberapa detik).
 
-#### 📦 Manajemen Produk & Inventaris
-- **Manajemen Produk:** Tambah dan kelola produk tak terbatas, lengkap dengan nama, harga, kategori, dan gambar.
-- **Manajemen Kategori:** Kelola kategori produk untuk mempermudah pencarian.
-- **Pelacakan Stok:**
-    - **Stok Sederhana:** Lacak jumlah stok produk jadi.
-    - **Stok Bahan Baku (Resep):** Definisikan resep untuk setiap produk dan lacak stok bahan baku secara otomatis saat penjualan.
-- **Penyesuaian Stok & Opname:** Catat penambahan/pengurangan stok dan lakukan audit stok fisik (Stock Opname).
-- **Impor/Ekspor Produk:** Kelola data produk secara massal menggunakan file CSV.
+---
 
-#### 💰 Manajemen Keuangan
-- **Arus Kas:** Pantau semua pemasukan dari penjualan dan pengeluaran dalam satu dasbor.
-- **Catat Pengeluaran:** Catat semua biaya operasional (listrik, gaji, sewa, dll.).
-- **Catat Pembelian:** Catat pembelian bahan baku dari pemasok.
-- **Manajemen Pemasok:** Kelola daftar pemasok Anda.
-- **Manajemen Utang & Piutang:** Lacak transaksi penjualan dan pembelian yang belum lunas.
+## 🛠️ Teknologi
 
-#### 📊 Laporan & Analitik
-- **Dasbor Laporan:** Visualisasikan data penjualan dengan grafik interaktif.
-- **Filter Fleksibel:** Lihat laporan berdasarkan periode waktu (harian, mingguan, bulanan, kustom).
-- **Analisis Produk:** Temukan produk terlaris dan penjualan berdasarkan kategori.
-- **Laporan Sesi:** Mulai dan akhiri sesi penjualan untuk rekap kas harian.
-- **Ekspor Laporan:** Unduh semua data laporan dalam format CSV.
+Dibuat dengan ❤️ menggunakan teknologi web modern yang cepat dan efisien:
+*   **React 18** (UI Library)
+*   **Vite** (Build Tool super cepat)
+*   **TypeScript** (Keamanan kode)
+*   **Dexie.js** (IndexedDB wrapper untuk database offline)
+*   **Dropbox SDK** (Penyimpanan Cloud gratis & stabil)
+*   **Tailwind CSS** (Styling)
 
-#### 👥 Manajemen Pelanggan (CRM)
-- **Database Pelanggan:** Simpan data pelanggan setia Anda.
-- **Sistem Poin & Reward:**
-    - Atur aturan perolehan poin (berdasarkan total belanja, produk, atau kategori).
-    - Buat reward yang dapat ditukar dengan poin (diskon atau produk gratis).
-
-#### ⚙️ Pengaturan & Keamanan
-- **Manajemen Pengguna:** Buat akun dengan peran berbeda (Admin & Staf) dengan akses terbatas melalui PIN.
-- **Audit Log (Log Aktivitas):** Rekam jejak aktivitas sensitif (seperti penghapusan produk, perubahan harga, stock opname, atau refund) untuk mencegah kecurangan.
-- **Reset PIN Darurat:** Fitur untuk mereset PIN admin jika terlupa.
-- **Kustomisasi Struk:** Atur nama toko, alamat, dan pesan di struk.
-
-#### 💾 Manajemen Data
-- **100% Offline:** Semua data disimpan di `IndexedDB` browser. Aplikasi tetap berfungsi tanpa internet.
-- **Backup & Restore Lokal:** Amankan seluruh data aplikasi ke dalam satu file JSON dan pulihkan kapan saja.
-- **Cloud Sync (Opsional):** Dukungan sinkronisasi data ke Dropbox (Backup) dan Supabase (Real-time Dashboard) untuk pemantauan jarak jauh atau multi-cabang.
-- **Progressive Web App (PWA):** "Instal" aplikasi ke layar utama perangkat Anda untuk akses seperti aplikasi native.
-
-## 🛠️ Teknologi yang Digunakan
-
-- **Frontend:** [React 18](https://react.dev/)
-- **Build Tool:** [Vite](https://vitejs.dev/)
-- **Bahasa:** [TypeScript](https://www.typescriptlang.org/)
-- **Styling:** [Tailwind CSS](https://tailwindcss.com/)
-- **Grafik & Laporan:** [Recharts](https://recharts.org/)
-- **Penyimpanan Data:** `Dexie.js` (IndexedDB Wrapper)
-
-## 🚀 Instalasi & Menjalankan Secara Lokal
-
-Untuk menjalankan proyek ini di mesin lokal Anda, ikuti langkah-langkah berikut:
-
-1.  **Clone repositori ini:**
-    ```bash
-    git clone https://github.com/aiprojek/arteapos.git
-    ```
-
-2.  **Masuk ke direktori proyek:**
-    ```bash
-    cd arteapos/arteapos-jsx
-    ```
-
-3.  **Install dependensi:**
-    ```bash
-    npm install
-    ```
-
-4.  **Jalankan server pengembangan:**
-    ```bash
-    npm run dev
-    ```
-
-5.  Buka browser Anda dan navigasikan ke alamat yang ditampilkan di terminal (biasanya `http://localhost:5173`).
-
-## 📖 Panduan Penggunaan Dasar
-
-1.  **Pengaturan Awal:**
-    - Buka halaman **Pengaturan**. Atur nama toko Anda dan aktifkan fitur yang diperlukan seperti "Pelacakan Stok" atau "Sistem Keanggotaan".
-    - Buka halaman **Produk** dan tambahkan item yang Anda jual.
-    - Jika pelacakan bahan baku diaktifkan, buka halaman **Bahan Baku** untuk menambahkan stok mentah.
-
-2.  **Melakukan Transaksi:**
-    - Di halaman **Kasir**, klik produk untuk menambahkannya ke keranjang.
-    - Klik tombol **Bayar**, masukkan jumlah yang dibayarkan, lalu selesaikan transaksi.
-    - Struk akan muncul dan siap untuk dicetak atau dibagikan.
-
-3.  **PENTING: Backup Data Anda!**
-    - Karena semua data disimpan di browser, **sangat penting** untuk melakukan backup secara berkala.
-    - Buka **Pengaturan** -> **Manajemen Data** -> klik **"Backup Data (JSON)"**.
-    - Simpan file yang diunduh di tempat yang aman (Google Drive, Flashdisk, dll).
-    - Jika Anda membersihkan cache browser atau berganti perangkat, Anda dapat memulihkan data menggunakan file backup ini.
+---
 
 ## 🤝 Berkontribusi
 
-Kontribusi dari komunitas sangat kami harapkan! Jika Anda ingin membantu mengembangkan Artea POS, silakan:
+Proyek ini terbuka untuk umum (*Open Source*). Kami sangat menghargai kontribusi Anda!
+1.  Fork repositori ini.
+2.  Buat branch fitur baru (`git checkout -b fitur-keren`).
+3.  Commit perubahan Anda.
+4.  Push ke branch tersebut.
+5.  Buat Pull Request.
 
-1.  **Fork** repositori ini.
-2.  Buat _branch_ baru untuk fitur Anda (`git checkout -b fitur/nama-fitur-keren`).
-3.  Lakukan perubahan dan **commit** (`git commit -m 'Menambahkan fitur keren'`).
-4.  **Push** ke _branch_ Anda (`git push origin fitur/nama-fitur-keren`).
-5.  Buat **Pull Request** baru.
-
-Jika Anda menemukan bug atau memiliki ide fitur, silakan buat [Issues](https://github.com/aiprojek/arteapos/issues) baru.
+---
 
 ## 📜 Lisensi
 
-Proyek ini dilisensikan di bawah [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
-
-## ❤️ Dukungan & Komunitas
-
-Aplikasi ini tersedia secara gratis, apa adanya, open-source, dan terbuka untuk kolaborasi.
-
--   [Donasi](https://lynk.id/aiprojek/s/bvBJvdA)
--   Memberi bintang ⭐ pada repositori [GitHub](https://github.com/aiprojek/arteapos) ini.
--   Bergabung dengan [grup diskusi di Telegram](https://t.me/aiprojek_community).
+Didistribusikan di bawah Lisensi **GNU General Public License v3.0**.
+Anda bebas menggunakan, memodifikasi, dan mendistribusikan aplikasi ini, bahkan untuk tujuan komersial, selama menyertakan kode sumber asli dan lisensi yang sama.
 
 ---
-Dibuat dengan ❤️ oleh [AI Projek](https://aiprojek01.my.id).
+
+**Dikembangkan oleh [AI Projek](https://aiprojek01.my.id)**
+*Kolaborasi Manusia & Kecerdasan Buatan*

@@ -120,21 +120,22 @@ const BranchManager: React.FC<{
         <div className="space-y-4">
             <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Identitas Perangkat Ini (Store ID)</label>
-                {branches.length > 0 ? (
-                    <select
-                        value={currentStoreId || ''}
-                        onChange={(e) => onSelectStore(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-bold"
-                    >
-                        <option value="">-- Pilih Cabang --</option>
-                        {branches.map(b => (
-                            <option key={b.id} value={b.id}>{b.name} ({b.id})</option>
-                        ))}
-                    </select>
-                ) : (
-                    <p className="text-sm text-red-400 italic">Belum ada daftar cabang. Silakan tambah cabang di bawah ini.</p>
-                )}
-                <p className="text-xs text-slate-500 mt-1">Pilih cabang mana yang dioperasikan oleh perangkat ini.</p>
+                <select
+                    value={currentStoreId || ''}
+                    onChange={(e) => onSelectStore(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-bold"
+                >
+                    <option value="">-- Pilih Identitas --</option>
+                    {/* Admin Override Option */}
+                    <option value="PUSAT" className="text-yellow-400 font-bold">★ PUSAT (ADMIN MONITORING)</option>
+                    
+                    {branches.length > 0 && <option disabled>-------------------</option>}
+                    
+                    {branches.map(b => (
+                        <option key={b.id} value={b.id}>{b.name} ({b.id})</option>
+                    ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">Pilih <strong>PUSAT</strong> jika ini perangkat Admin, atau pilih <strong>Cabang</strong> jika ini perangkat kasir toko.</p>
             </div>
 
             <div className="border-t border-slate-700 pt-3">

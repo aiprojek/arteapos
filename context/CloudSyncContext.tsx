@@ -7,7 +7,7 @@ import type { AppData } from '../types';
 interface CloudSyncContextType {
     syncStatus: 'idle' | 'syncing' | 'success' | 'error';
     syncErrorMessage: string | null;
-    triggerAutoSync: () => Promise<void>;
+    triggerAutoSync: (staffName?: string) => Promise<void>;
     triggerMasterDataPush: () => Promise<void>;
 }
 
@@ -23,15 +23,15 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     // --- Automatic Cloud Sync (Operational Data) ---
     // Called manually by Transaction logic or Effects
-    const triggerAutoSync = useCallback(async () => {
-        const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-        if (!dbxToken) return;
+    const triggerAutoSync = useCallback(async (staffName: string = 'Staff') => {
+        // SECURE CHECK
+        if (!dropboxService.isConfigured()) return;
 
         setSyncStatus('syncing');
         setSyncErrorMessage(null);
         
         try {
-            await dropboxService.uploadBranchData();
+            await dropboxService.uploadBranchData(staffName);
             setSyncStatus('success');
             setTimeout(() => setSyncStatus('idle'), 3000);
         } catch (error: any) {
@@ -45,8 +45,8 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     // --- Master Data Push (Admin Side) ---
     const triggerMasterDataPush = useCallback(async () => {
-        const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-        if (!dbxToken) return;
+        // SECURE CHECK
+        if (!dropboxService.isConfigured()) return;
 
         setSyncStatus('syncing');
         try {

@@ -38,7 +38,7 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
         type: 'product' | 'raw_material', 
         id: string, 
         qty: string, 
-        price: string // Price per unit
+        price: string // Price per unit input
     }>({ type: 'product', id: '', qty: '', price: '' });
 
     // --- Handlers ---
@@ -67,15 +67,14 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
         let conversionApplied = false;
 
         // CHECK FOR CONVERSION (Raw Material Only)
+        // If conversion exists, User inputs "Purchase Unit" (e.g. 1 Box) with "Price per Box" (e.g. 100.000)
+        // System must save: Quantity = 12 (Base Unit), Price = 8333 (Base Price)
         if (tempItem.type === 'raw_material' && selectedItemDetails && 'conversionRate' in selectedItemDetails) {
             const mat = selectedItemDetails as any; // Cast for TS check
             if (mat.conversionRate && mat.conversionRate > 1 && mat.purchaseUnit) {
-                // User input qty in Purchase Units (e.g. 2 Karton)
-                // We must store qty in Base Units (e.g. 24 Pcs)
-                // And calculate price per Base Unit
-                const totalCost = quantity * inputPrice;
-                quantity = quantity * mat.conversionRate;
-                finalPrice = totalCost / quantity; // Cost per base unit
+                const totalCost = quantity * inputPrice; // 1 Box * 100.000 = 100.000
+                quantity = quantity * mat.conversionRate; // 1 * 12 = 12 Pcs
+                finalPrice = totalCost / quantity; // 100.000 / 12 = 8333.33
                 conversionApplied = true;
             }
         }
@@ -248,14 +247,15 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                             </select>
                         </div>
 
-                        {/* INFO UNIT */}
+                        {/* INFO UNIT & CONVERSION LOGIC */}
                         {selectedItemDetails && (
                             <div className="text-xs text-slate-400 bg-slate-900/50 p-2 rounded">
-                                Satuan Pakai: <strong>{(selectedItemDetails as any).unit || 'Unit'}</strong>.
+                                <p>Satuan Pakai (Base): <strong>{(selectedItemDetails as any).unit || 'Unit'}</strong></p>
                                 {(selectedItemDetails as any).purchaseUnit && (selectedItemDetails as any).conversionRate > 1 && (
-                                    <span className="text-green-400 ml-1">
-                                        (Otomatis konversi: 1 {(selectedItemDetails as any).purchaseUnit} = {(selectedItemDetails as any).conversionRate} {(selectedItemDetails as any).unit})
-                                    </span>
+                                    <p className="text-green-400 mt-1">
+                                        💡 Item ini memiliki konversi:<br/>
+                                        1 {(selectedItemDetails as any).purchaseUnit} = {(selectedItemDetails as any).conversionRate} {(selectedItemDetails as any).unit}
+                                    </p>
                                 )}
                             </div>
                         )}
@@ -263,7 +263,10 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                         <div className="flex gap-2">
                             <div className="flex-1">
                                 <label className="text-[10px] text-slate-500 mb-1">
-                                    Qty ({(selectedItemDetails as any)?.purchaseUnit || 'Unit'})
+                                    {/* DYNAMIC LABEL based on Purchase Unit */}
+                                    Qty ({(selectedItemDetails as any)?.purchaseUnit && (selectedItemDetails as any)?.conversionRate > 1 
+                                        ? (selectedItemDetails as any).purchaseUnit 
+                                        : ((selectedItemDetails as any)?.unit || 'Unit')})
                                 </label>
                                 <input 
                                     type="number" placeholder="Qty" min="0" step="0.01"
@@ -273,7 +276,12 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                                 />
                             </div>
                             <div className="flex-1">
-                                <label className="text-[10px] text-slate-500 mb-1">Harga Satuan</label>
+                                <label className="text-[10px] text-slate-500 mb-1">
+                                    {/* DYNAMIC LABEL based on Purchase Unit */}
+                                    Harga Satuan (per {(selectedItemDetails as any)?.purchaseUnit && (selectedItemDetails as any)?.conversionRate > 1 
+                                        ? (selectedItemDetails as any).purchaseUnit 
+                                        : 'Unit'})
+                                </label>
                                 <input 
                                     type="number" placeholder="Harga (Rp)" min="0"
                                     value={tempItem.price} 
@@ -300,7 +308,7 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                                         <span className="text-white block">{getItemName(item)}</span>
                                         <span>
                                             {item.quantity} x {CURRENCY_FORMATTER.format(item.price)}
-                                            {item.conversionApplied && <span className="text-[9px] text-green-400 ml-1">(Terkonversi)</span>}
+                                            {item.conversionApplied && <span className="text-[9px] text-green-400 ml-1 block">(Telah dikonversi ke satuan pakai)</span>}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2">

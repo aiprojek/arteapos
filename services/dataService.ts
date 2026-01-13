@@ -1,5 +1,5 @@
 
-import type { AppData, Product, RawMaterial, Transaction as TransactionType, Expense, Purchase, Customer, StockAdjustment, Addon, CartItem, ProductVariant, ReceiptSettings } from '../types';
+import type { AppData, Product, RawMaterial, Transaction as TransactionType, Expense, Purchase, Customer, StockAdjustment, Addon, CartItem, ProductVariant, ReceiptSettings, BranchPrice, ModifierGroup } from '../types';
 import { db } from './db';
 import * as XLSX from 'xlsx';
 
@@ -22,6 +22,21 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
         reader.onerror = reject;
         reader.readAsDataURL(blob);
     });
+};
+
+const base64ToBlob = (base64: string): Blob => {
+    const [meta, data] = base64.split(',');
+    if (!meta || !data) {
+        return new Blob();
+    }
+    const mime = meta.match(/:(.*?);/)?.[1];
+    const bstr = atob(data);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
 };
 
 // Exported for external use (Dropbox/Supabase logging)
@@ -211,20 +226,6 @@ const exportStockAdjustmentsCSV = (stockAdjustments: StockAdjustment[]) => {
     downloadCSV(csvContent, 'stock_adjustments_report.csv');
 };
 
-// Helper for image conversion
-function base64ToBlob(base64: string): Blob {
-    const [meta, data] = base64.split(',');
-    if (!meta || !data) return new Blob();
-    const mime = meta.match(/:(.*?);/)?.[1];
-    const bstr = atob(data);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-        u8arr[n] = bstr.charCodeAt(n);
-    }
-    return new Blob([u8arr], { type: mime });
-}
-
 // Extracted internal function to get data object without downloading
 const getExportData = async (): Promise<Partial<AppData>> => {
     const data: Partial<AppData> = {};
@@ -277,7 +278,7 @@ const getExportData = async (): Promise<Partial<AppData>> => {
       data.discountDefinitions = discountDefinitions;
       data.heldCarts = heldCarts;
       data.sessionHistory = sessionHistory;
-      data.auditLogs = auditLogs; // INCLUDE AUDIT LOGS IN EXPORT
+      data.auditLogs = auditLogs;
 
       data.receiptSettings = settings.find(s => s.key === 'receiptSettings')?.value;
       data.inventorySettings = settings.find(s => s.key === 'inventorySettings')?.value;
@@ -289,8 +290,6 @@ const getExportData = async (): Promise<Partial<AppData>> => {
     return data;
 };
 
-// NEW: Function to merge master data (Products, Discounts, Rules) into local DB
-// Used by Dropbox 'Pull Master Data'
 const mergeMasterData = async (masterData: AppData) => {
     // 1. Get current Store ID
     const settings = await db.settings.get('receiptSettings');
@@ -301,22 +300,21 @@ const mergeMasterData = async (masterData: AppData) => {
         // A. Products: Smart Merge with Price Override
         if (masterData.products && masterData.products.length > 0) {
             const masterProducts = await Promise.all(masterData.products.map(async (mp) => {
-                // Restore image blob if needed
                 const prod: any = { ...mp };
                 if (prod.imageUrl && prod.imageUrl.startsWith('data:')) {
                     prod.image = base64ToBlob(prod.imageUrl);
                     delete prod.imageUrl;
                 }
 
-                // --- KEY LOGIC: Check for Branch Specific Price ---
+                // --- Check for Branch Specific Price ---
                 if (prod.branchPrices && Array.isArray(prod.branchPrices)) {
                     const branchPrice = prod.branchPrices.find((bp: any) => bp.storeId === myStoreId);
                     if (branchPrice) {
-                        prod.price = branchPrice.price; // OVERRIDE LOCAL PRICE
+                        prod.price = branchPrice.price; 
                     }
                 }
                 
-                // Keep local stock if tracking is enabled (don't overwrite with master's 0 stock)
+                // Keep local stock
                 const localProd = await db.products.get(mp.id);
                 if (localProd && localProd.trackStock) {
                     prod.stock = localProd.stock;
@@ -325,22 +323,18 @@ const mergeMasterData = async (masterData: AppData) => {
                 return prod;
             }));
             
-            // Put all Master Products (Overwriting definitions, keeping stock logic above)
             await db.products.bulkPut(masterProducts);
         }
 
-        // B. Categories
         if (masterData.categories) {
             await db.appState.put({ key: 'categories', value: masterData.categories });
         }
 
-        // C. Discounts
         if (masterData.discountDefinitions) {
-            await db.discountDefinitions.clear(); // Replace old rules with new master rules
+            await db.discountDefinitions.clear();
             await db.discountDefinitions.bulkPut(masterData.discountDefinitions);
         }
 
-        // D. Membership Rules (Inside Settings)
         if (masterData.membershipSettings) {
             const currentMemSettings = await db.settings.get('membershipSettings');
             const mergedMemSettings = {
@@ -352,22 +346,70 @@ const mergeMasterData = async (masterData: AppData) => {
             await db.settings.put({ key: 'membershipSettings', value: mergedMemSettings });
         }
 
-        // E. Customers (Merge, don't delete local ones)
         if (masterData.customers && masterData.customers.length > 0) {
             await db.customers.bulkPut(masterData.customers);
         }
         
-        // F. Suppliers
         if(masterData.suppliers) {
             await db.suppliers.bulkPut(masterData.suppliers);
         }
     });
 };
 
+const getDatabaseStats = async () => {
+    const transactions = await db.transactionRecords.count();
+    const logs = await db.auditLogs.count();
+    const stockLogs = await db.stockAdjustments.count();
+    const expenses = await db.expenses.count();
+    const sessions = await db.sessionHistory.count();
+    
+    return {
+        transactions,
+        logs,
+        stockLogs,
+        expenses,
+        sessions,
+        totalHeavyRecords: transactions + logs + stockLogs
+    };
+};
+
+const getOldOperationalData = async (cutoffDate: Date) => {
+    const cutoffStr = cutoffDate.toISOString();
+    
+    const transactions = await db.transactionRecords.where('createdAt').below(cutoffStr).toArray();
+    const expenses = await db.expenses.where('date').below(cutoffStr).toArray();
+    const incomes = await db.otherIncomes.where('date').below(cutoffStr).toArray();
+    const purchases = await db.purchases.where('date').below(cutoffStr).toArray();
+    const stockLogs = await db.stockAdjustments.where('createdAt').below(cutoffStr).toArray();
+    const auditLogs = await db.auditLogs.where('timestamp').below(cutoffStr).toArray();
+    const sessions = await db.sessionHistory.where('endTime').below(cutoffStr).toArray();
+
+    return {
+        transactions, expenses, incomes, purchases, stockLogs, auditLogs, sessions
+    };
+};
+
+const deleteOperationalDataByRange = async (cutoffDate: Date) => {
+    const cutoffStr = cutoffDate.toISOString();
+    
+    await db.transaction('rw', [db.transactionRecords, db.expenses, db.otherIncomes, db.purchases, db.stockAdjustments, db.auditLogs, db.sessionHistory], async () => {
+        await db.transactionRecords.where('createdAt').below(cutoffStr).delete();
+        await db.expenses.where('date').below(cutoffStr).delete();
+        await db.otherIncomes.where('date').below(cutoffStr).delete();
+        await db.purchases.where('date').below(cutoffStr).delete();
+        await db.stockAdjustments.where('createdAt').below(cutoffStr).delete();
+        await db.auditLogs.where('timestamp').below(cutoffStr).delete();
+        await db.sessionHistory.where('endTime').below(cutoffStr).delete();
+    });
+};
+
 export const dataService = {
-  getExportData, // Exposed for Dropbox service
-  mergeMasterData, // Exposed for Dropbox service
-  
+  getExportData, 
+  mergeMasterData, 
+  getDatabaseStats,
+  getOldOperationalData,
+  deleteOperationalDataByRange,
+
   exportData: async () => {
     const data = await getExportData();
     const jsonString = JSON.stringify(data, null, 2);
@@ -383,23 +425,12 @@ export const dataService = {
     URL.revokeObjectURL(url);
   },
 
-  // NEW: Universal Spreadsheet Export using XLSX
   exportToSpreadsheet: (headers: string[], rows: (string | number)[][], fileName: string, format: 'xlsx' | 'ods' | 'csv') => {
-      // 1. Prepare Data: [Headers, ...Rows]
       const worksheetData = [headers, ...rows];
-      
-      // 2. Create Worksheet
       const ws = XLSX.utils.aoa_to_sheet(worksheetData);
-      
-      // 3. Create Workbook
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Data");
-
-      // 4. Generate File
-      XLSX.writeFile(wb, `${fileName}.${format}`, { 
-          bookType: format,
-          type: 'binary'
-      });
+      XLSX.writeFile(wb, `${fileName}.${format}`, { bookType: format, type: 'binary' });
   },
 
   importData: (file: File): Promise<AppData> => {
@@ -409,7 +440,6 @@ export const dataService = {
         try {
           const result = event.target?.result as string;
           const parsedData = JSON.parse(result) as AppData;
-          // Simple validation check
           if (parsedData && typeof parsedData === 'object') {
             resolve(parsedData);
           } else {
@@ -425,20 +455,20 @@ export const dataService = {
   },
 
   exportProductsCSV: async (products: Product[]) => {
-    const headers = 'id,name,price,category,barcode,costPrice,stock,trackStock,isFavorite,imageUrl,addons,variants';
+    // Columns: ID, Name, Price, Category, Barcode, CostPrice, Stock, TrackStock, IsFavorite, ImageUrl, BranchPrices, ModifierGroups (JSON)
+    const headers = 'id,name,price,category,barcode,costPrice,stock,trackStock,isFavorite,imageUrl,branchPrices,modifierGroups';
     const rows = await Promise.all(products.map(async p => {
         const category = Array.isArray(p.category) ? p.category.join(';') : '';
-        const addonsString = (p.addons || [])
-            .map(a => `${a.name}:${a.price}:${a.costPrice || 0}`)
-            .join('|');
-        const variantsString = (p.variants || [])
-            .map(v => `${v.name}:${v.price}:${v.costPrice || 0}`)
-            .join('|');
         let imageUrl = p.imageUrl || '';
         if (p.image instanceof Blob) {
             imageUrl = await blobToBase64(p.image);
         }
-        return `${p.id},"${p.name}",${p.price},"${category}",${p.barcode || ''},${p.costPrice || 0},${p.stock || 0},${p.trackStock || false},${p.isFavorite || false},"${imageUrl}","${addonsString}","${variantsString}"`;
+        
+        // Serialize Complex Fields
+        const branchPricesStr = (p.branchPrices || []).map(bp => `${bp.storeId}:${bp.price}`).join('|');
+        const modifierGroupsStr = p.modifierGroups ? JSON.stringify(p.modifierGroups).replace(/"/g, '""') : ''; // Escape for CSV
+
+        return `${p.id},"${p.name}",${p.price},"${category}",${p.barcode || ''},${p.costPrice || 0},${p.stock || 0},${p.trackStock || false},${p.isFavorite || false},"${imageUrl}","${branchPricesStr}","${modifierGroupsStr}"`;
     }));
     const csvContent = [headers, ...rows].join('\n');
     downloadCSV(csvContent, 'products_export.csv');
@@ -461,7 +491,6 @@ export const dataService = {
           for (let i = 1; i < lines.length; i++) {
             if (!lines[i].trim()) continue;
             
-            // Use improved CSV parser
             const values = parseCSVLine(lines[i]);
             
             const productData = headers.reduce((acc, header, index) => {
@@ -481,33 +510,28 @@ export const dataService = {
                     case 'category':
                         value = typeof value === 'string' ? value.split(';').filter(Boolean) : [];
                         break;
-                    case 'addons':
-                        value = (value || '').split('|').filter(Boolean).map((addonStr: string, idx: number) => {
-                            const parts = addonStr.split(':');
-                            if (parts.length >= 2) {
-                                return {
-                                    id: `${Date.now()}-${idx}`,
-                                    name: parts[0] || '',
-                                    price: parseFloat(parts[1]) || 0,
-                                    costPrice: parseFloat(parts[2]) || 0,
-                                };
+                    case 'branchPrices':
+                        // Format: Store:Price|Store:Price
+                        value = (value || '').split('|').filter(Boolean).map((bpStr: string) => {
+                            const parts = bpStr.split(':');
+                            if(parts.length === 2) {
+                                return { storeId: parts[0], price: parseFloat(parts[1]) || 0 };
                             }
                             return null;
-                        }).filter((a: Addon | null): a is Addon => a !== null);
+                        }).filter(Boolean);
                         break;
-                    case 'variants':
-                        value = (value || '').split('|').filter(Boolean).map((varStr: string, idx: number) => {
-                            const parts = varStr.split(':');
-                            if (parts.length >= 2) {
-                                return {
-                                    id: `${Date.now()}-var-${idx}`,
-                                    name: parts[0] || '',
-                                    price: parseFloat(parts[1]) || 0,
-                                    costPrice: parseFloat(parts[2]) || 0,
-                                };
+                    case 'modifierGroups':
+                        // JSON String
+                        if(value && value.startsWith('[')) {
+                            try {
+                                value = JSON.parse(value.replace(/""/g, '"'));
+                            } catch(e) {
+                                console.warn('Failed to parse modifier JSON', e);
+                                value = [];
                             }
-                            return null;
-                        }).filter((v: ProductVariant | null): v is ProductVariant => v !== null);
+                        } else {
+                            value = [];
+                        }
                         break;
                     default:
                         break;
@@ -518,12 +542,17 @@ export const dataService = {
 
             }, {} as Partial<Product>);
             
-            // If ID is empty, it's a new product. Generate a unique ID.
             if (!productData.id) {
                 productData.id = `${Date.now()}-${i}`;
             }
 
             if(productData.name && productData.price !== undefined) {
+                // Ensure array fields are initialized
+                if(!productData.branchPrices) productData.branchPrices = [];
+                if(!productData.modifierGroups) productData.modifierGroups = [];
+                if(!productData.variants) productData.variants = [];
+                if(!productData.addons) productData.addons = [];
+                
                 products.push(productData as Product);
             }
           }
@@ -555,8 +584,12 @@ export const dataService = {
   },
 
   exportRawMaterialsCSV: (rawMaterials: RawMaterial[]) => {
-    const headers = 'id,name,stock,unit';
-    const rows = rawMaterials.map(rm => `${rm.id},"${rm.name}",${rm.stock},"${rm.unit}"`);
+    // Include all new fields
+    const headers = 'id,name,stock,unit,costPerUnit,purchaseUnit,conversionRate,validStoreIds';
+    const rows = rawMaterials.map(rm => {
+        const storeIds = (rm.validStoreIds || []).join(';');
+        return `${rm.id},"${rm.name}",${rm.stock},"${rm.unit}",${rm.costPerUnit || 0},"${rm.purchaseUnit || ''}",${rm.conversionRate || ''},"${storeIds}"`;
+    });
     const csvContent = [headers, ...rows].join('\n');
     downloadCSV(csvContent, 'raw_materials_export.csv');
   },
@@ -581,17 +614,29 @@ export const dataService = {
 
             const materialData = headers.reduce((acc, header, index) => {
               const key = header as keyof RawMaterial;
-              let value: string | number = values[index]?.replace(/"/g, '').trim();
-              if (key === 'stock') {
-                value = parseFloat(value) || 0;
+              let value: any = values[index]?.replace(/"/g, '').trim();
+              
+              switch (key) {
+                  case 'stock':
+                  case 'costPerUnit':
+                  case 'conversionRate':
+                      value = parseFloat(value) || 0;
+                      break;
+                  case 'validStoreIds':
+                      value = typeof value === 'string' ? value.split(';').filter(Boolean) : [];
+                      break;
+                  default:
+                      break;
               }
+              
               (acc as any)[key] = value;
               return acc;
             }, {} as Partial<RawMaterial>);
 
-
-            if (materialData.id && materialData.name && materialData.stock !== undefined && materialData.unit) {
-              materials.push(materialData as RawMaterial);
+            if (materialData.name && materialData.unit) {
+                if(!materialData.id) materialData.id = `${Date.now()}-${i}`;
+                if(materialData.stock === undefined) materialData.stock = 0;
+                materials.push(materialData as RawMaterial);
             }
           }
           resolve(materials);
@@ -613,6 +658,6 @@ export const dataService = {
   },
 
   generateTransactionsCSVString, 
-  generateStockAdjustmentsCSVString, // NEW Export
+  generateStockAdjustmentsCSVString,
   parseTransactionsCSV
 };

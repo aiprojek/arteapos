@@ -3,8 +3,11 @@ import CryptoJS from 'crypto-js';
 
 const SECRET_KEY = "ARTEA_POS_SECRET_KEY_v1"; // Kunci statis untuk data laporan
 const PAIRING_KEY = "ARTEA_PAIRING_SECURE_X99"; // Kunci khusus untuk pairing credentials
+const STORAGE_KEY = "ARTEA_STORAGE_SECURE_K88"; // NEW: Kunci untuk localStorage
+
 const PREFIX = "ARTEA_ENC::";
 const PAIRING_PREFIX = "ARTEA_PAIR_SECURE::";
+const STORAGE_PREFIX = "SEC::";
 
 export const encryptReport = (data: any): string => {
     try {
@@ -38,7 +41,7 @@ export const isEncryptedReport = (text: string): boolean => {
     return text.startsWith(PREFIX);
 };
 
-// --- NEW: Credential Pairing Encryption ---
+// --- Credential Pairing Encryption ---
 
 export const encryptCredentials = (payload: { k: string, s: string, t: string }): string => {
     try {
@@ -72,5 +75,37 @@ export const decryptCredentials = (ciphertext: string): { k: string, s: string, 
     } catch (error) {
         console.error("Credential decryption failed:", error);
         return null;
+    }
+};
+
+// --- NEW: Local Storage Encryption ---
+
+export const encryptStorage = (value: string): string => {
+    if (!value) return '';
+    try {
+        const encrypted = CryptoJS.AES.encrypt(value, STORAGE_KEY).toString();
+        return `${STORAGE_PREFIX}${encrypted}`;
+    } catch (e) {
+        console.error("Storage Encrypt Error", e);
+        return value;
+    }
+};
+
+export const decryptStorage = (value: string | null): string => {
+    if (!value) return '';
+    
+    // Backward Compatibility: If not encrypted with our prefix, return as is (Plain Text)
+    if (!value.startsWith(STORAGE_PREFIX)) {
+        return value;
+    }
+
+    try {
+        const actualCipher = value.replace(STORAGE_PREFIX, "");
+        const bytes = CryptoJS.AES.decrypt(actualCipher, STORAGE_KEY);
+        const originalText = bytes.toString(CryptoJS.enc.Utf8);
+        return originalText || '';
+    } catch (e) {
+        console.warn("Storage Decrypt Error (Returning original):", e);
+        return value;
     }
 };

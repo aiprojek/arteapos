@@ -65,6 +65,8 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
   const { showAlert } = useUI();
   const { currentUser } = useAuth();
 
+  const getStaffName = () => currentUser?.name || 'Staff';
+
   const addProduct = useCallback((product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: Date.now().toString() };
     setData(prev => ({ ...prev, products: [...prev.products, newProduct] }));
@@ -210,8 +212,8 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
             stockAdjustments: [newAdjustment, ...currentAdjustments],
         };
     });
-    setTimeout(() => triggerAutoSync(), 500);
-  }, [setData, triggerAutoSync]);
+    setTimeout(() => triggerAutoSync(getStaffName()), 500);
+  }, [setData, triggerAutoSync, currentUser]);
 
   const performStockOpname = useCallback((items: OpnameItem[], notes: string = '') => {
       const count = items.filter(i => i.systemStock !== i.actualStock).length;
@@ -259,7 +261,7 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
               stockAdjustments: [...newAdjustments, ...(prev.stockAdjustments || [])]
           };
       });
-      setTimeout(() => triggerAutoSync(), 500);
+      setTimeout(() => triggerAutoSync(getStaffName()), 500);
   }, [setData, logAudit, currentUser, triggerAutoSync]);
 
   const bulkAddProducts = useCallback((newProducts: Product[]) => {
@@ -290,16 +292,21 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
   const isProductAvailable = useCallback((product: Product): { available: boolean, reason: string } => {
     if (!inventorySettings.enabled) return { available: true, reason: '' };
 
+    // If Strict Mode (Prevent Negative Stock) is OFF, allow everything (legacy behavior)
+    if (!inventorySettings.preventNegativeStock) return { available: true, reason: '' };
+
     if (inventorySettings.trackIngredients && product.recipe && product.recipe.length > 0) {
       for (const recipeItem of product.recipe) {
         if (recipeItem.itemType === 'product' && recipeItem.productId) {
             const bundledProduct = products.find(p => p.id === recipeItem.productId);
             if (!bundledProduct) return { available: false, reason: 'Produk Komponen Hilang' };
             
+            // Check bundled product stock
             if (bundledProduct.trackStock && (bundledProduct.stock ?? 0) < recipeItem.quantity) {
                  return { available: false, reason: `Stok ${bundledProduct.name} Kurang` };
             }
             
+            // Recursive check if bundled product also has recipe
             if (!bundledProduct.trackStock && bundledProduct.recipe?.length) {
                  const result = isProductAvailable(bundledProduct);
                  if(!result.available) return { available: false, reason: `Komponen ${bundledProduct.name} Habis` };
@@ -308,8 +315,9 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
         } else {
             const materialId = recipeItem.rawMaterialId;
             const material = rawMaterials.find(m => m.id === materialId);
+            // Check raw material stock
             if (!material || material.stock < recipeItem.quantity) {
-              return { available: false, reason: 'Bahan Baku Habis' };
+              return { available: false, reason: `Bahan ${material?.name || 'Baku'} Habis` };
             }
         }
       }

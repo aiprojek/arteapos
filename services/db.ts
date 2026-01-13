@@ -63,6 +63,7 @@ export const initialData: AppData = {
     inventorySettings: {
         enabled: false,
         trackIngredients: false,
+        preventNegativeStock: false // Default to false (Allow negative)
     },
     authSettings: {
         enabled: false,

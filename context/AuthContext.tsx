@@ -86,9 +86,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     if (success) {
-        // Attempt Silent Sync on Login
-        const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-        if (dbxToken) {
+        // Attempt Silent Sync on Login - SECURE CHECK
+        if (dropboxService.isConfigured()) {
              dropboxService.downloadAndMergeMasterData().catch(err => console.warn("Login Sync Failed", err));
         }
         return true;

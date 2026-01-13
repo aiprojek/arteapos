@@ -192,6 +192,7 @@ export interface ReceiptSettings {
 export interface InventorySettings {
     enabled: boolean;
     trackIngredients: boolean;
+    preventNegativeStock?: boolean; // NEW: Prevent adding to cart if stock is low
 }
 
 export interface AuthSettings {

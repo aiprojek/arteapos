@@ -4,7 +4,7 @@ import { useFinance } from '../../context/FinanceContext';
 import { useSession } from '../../context/SessionContext'; // Import Session
 import { useUI } from '../../context/UIContext';
 import { useAuth } from '../../context/AuthContext';
-import { useData } from '../../context/DataContext';
+import { useAudit } from '../../context/AuditContext'; // Use new context
 import { CURRENCY_FORMATTER } from '../../constants';
 import Button from '../Button';
 import VirtualizedTable from '../VirtualizedTable';
@@ -20,7 +20,7 @@ interface DebtsTabProps {
 const DebtsTab: React.FC<DebtsTabProps> = ({ dataSource = 'local', cloudData = [] }) => {
     const { transactions: localTransactions, addPaymentToTransaction } = useFinance();
     const { addCashMovement, session } = useSession(); 
-    const { logAudit } = useData();
+    const { logAudit } = useAudit();
     const { currentUser } = useAuth();
     const { showAlert } = useUI();
 

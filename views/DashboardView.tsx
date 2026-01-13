@@ -49,10 +49,8 @@ const DashboardView: React.FC = () => {
         setIsCloudLoading(true);
         setIsDemoMode(false);
 
-        const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-        
-        // --- DEMO MODE TRIGGER ---
-        if (!dbxToken) {
+        // --- DEMO MODE TRIGGER IF NO CREDENTIALS ---
+        if (!dropboxService.isConfigured()) {
              const mock = mockDataService.getMockDashboardData();
              setCloudData({ 
                  transactions: mock.transactions, 
@@ -258,9 +256,14 @@ const DashboardView: React.FC = () => {
         setAiError('');
 
         try {
+            if (!navigator.onLine) {
+                throw new Error("Tidak ada koneksi internet. Fitur AI membutuhkan akses internet.");
+            }
+
             const salesContext = dashboardData.salesTrend;
             const topProducts = dashboardData.topProducts;
-            const branchInfo = dataSource !== 'local' ? dashboardData.branchPerformance : "Data cabang tidak tersedia (Mode Lokal)";
+            // Limit branch info to avoid huge payload
+            const branchInfo = dataSource !== 'local' ? dashboardData.branchPerformance.slice(0, 10) : "Data cabang tidak tersedia (Mode Lokal)";
             
             const systemInstruction = `You are "Artea AI", a smart business consultant. 
             Analyze the provided sales summary data.
@@ -271,7 +274,7 @@ const DashboardView: React.FC = () => {
             Selected Branch Filter: ${selectedBranch}
             Tren Penjualan 7 Hari: ${JSON.stringify(salesContext)}
             Produk Terlaris: ${JSON.stringify(topProducts)}
-            Performa Cabang: ${JSON.stringify(branchInfo)}
+            Performa Cabang (Top 10): ${JSON.stringify(branchInfo)}
             
             Pertanyaan User: ${question}`;
             
@@ -280,17 +283,31 @@ const DashboardView: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     messages: [{ role: 'system', content: systemInstruction }, { role: 'user', content: userContent }],
-                    model: 'openai', seed: Math.floor(Math.random() * 1000), jsonMode: false
+                    model: 'openai', 
+                    seed: Math.floor(Math.random() * 1000), 
+                    jsonMode: false
                 }),
             });
 
-            if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+            if (!response.ok) {
+                throw new Error(`Server AI merespon dengan status: ${response.status}`);
+            }
+            
             const text = await response.text();
             setAiResponse(text);
 
-        } catch (err) {
+        } catch (err: any) {
             console.error("AI Error:", err);
-            setAiError("Maaf, layanan AI sedang sibuk. Coba lagi nanti.");
+            let msg = "Maaf, layanan AI sedang sibuk. Coba lagi nanti.";
+            
+            // Handle Network Errors specifically
+            if (err.message && (err.message.includes('NetworkError') || err.message.includes('Failed to fetch'))) {
+                msg = "Gagal terhubung ke server AI. Periksa koneksi internet Anda atau coba matikan AdBlock/DNS Filter.";
+            } else if (err.message) {
+                msg = err.message;
+            }
+            
+            setAiError(msg);
         } finally {
             setIsLoadingAI(false);
         }
@@ -486,6 +503,12 @@ const DashboardView: React.FC = () => {
                                     {isLoadingAI ? <span className="animate-spin">↻</span> : <Icon name="chat" className="w-4 h-4" />}
                                 </Button>
                             </div>
+                            {aiError && (
+                                <div className="p-3 bg-red-900/30 border border-red-800 rounded text-red-300 text-sm">
+                                    <p className="font-bold flex items-center gap-2"><Icon name="warning" className="w-4 h-4"/> Error:</p>
+                                    <p>{aiError}</p>
+                                </div>
+                            )}
                             {aiResponse && (
                                 <div 
                                     className="prose prose-sm prose-invert max-w-none bg-slate-900/50 p-4 rounded-lg border border-slate-700 text-slate-300 max-h-60 overflow-y-auto" 
@@ -502,34 +525,32 @@ const DashboardView: React.FC = () => {
                         <h3 className="text-lg font-semibold text-white mb-4">Produk Terlaris (Minggu Ini)</h3>
                         <div className="space-y-3">
                             {dashboardData.topProducts.map((p, index) => (
-                                <div key={index} className="flex justify-between items-center text-sm border-b border-slate-700/50 pb-2 last:border-0 last:pb-0">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-slate-500 font-bold w-4">{index + 1}</span>
-                                        <span className="text-slate-300 truncate pr-2">{p.name}</span>
-                                    </div>
-                                    <span className="font-semibold text-white bg-slate-700 px-2 py-0.5 rounded-md text-xs">{p.quantity} terjual</span>
+                                <div key={index} className="flex justify-between items-center text-sm">
+                                    <span className="text-slate-300 truncate pr-2">{p.name}</span>
+                                    <span className="font-semibold text-white bg-slate-700 px-2 py-0.5 rounded">{p.quantity} terjual</span>
                                 </div>
                             ))}
-                            {dashboardData.topProducts.length === 0 && <p className="text-sm text-slate-500 italic">Belum ada penjualan minggu ini.</p>}
+                            {dashboardData.topProducts.length === 0 && <p className="text-xs text-slate-500">Belum ada data penjualan.</p>}
                         </div>
                     </div>
-                    
+
                     <div className="bg-slate-800 p-4 sm:p-6 rounded-xl shadow-lg border border-slate-700">
-                        <h3 className="text-lg font-semibold text-white mb-4">Aktivitas Terkini</h3>
-                         <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-white mb-4">Transaksi Terakhir</h3>
+                        <div className="space-y-3">
                             {dashboardData.recentTransactions.map((t: any) => (
-                                <div key={t.id} className="flex justify-between items-center text-sm border-b border-slate-700/50 pb-2 last:border-b-0 last:pb-0">
+                                <div key={t.id} className="flex justify-between items-center text-sm border-b border-slate-700 pb-2 last:border-0 last:pb-0">
                                     <div>
-                                        <p className="font-medium text-slate-200">{t.customerName || `Order #${t.id.slice(-4)}`}</p>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] text-slate-400">{new Date(t.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit'})}</span>
-                                            {dataSource !== 'local' && <span className="text-[9px] bg-slate-700 px-1 rounded text-slate-300 uppercase">{t.storeId}</span>}
+                                        <div className="font-medium text-white">{CURRENCY_FORMATTER.format(t.total)}</div>
+                                        <div className="text-xs text-slate-400">
+                                            {new Date(t.createdAt).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})} • {t.storeId || 'Local'}
                                         </div>
                                     </div>
-                                    <p className="font-semibold text-[#52a37c]">{CURRENCY_FORMATTER.format(t.total)}</p>
+                                    <span className={`text-[10px] px-2 py-1 rounded-full ${t.paymentStatus === 'paid' || t.payment_status === 'paid' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
+                                        {t.paymentStatus || t.payment_status}
+                                    </span>
                                 </div>
                             ))}
-                            {dashboardData.recentTransactions.length === 0 && <p className="text-sm text-slate-500 italic">Belum ada transaksi.</p>}
+                            {dashboardData.recentTransactions.length === 0 && <p className="text-xs text-slate-500">Belum ada transaksi.</p>}
                         </div>
                     </div>
                 </div>

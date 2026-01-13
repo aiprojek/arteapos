@@ -35,8 +35,8 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
 
     useEffect(() => {
         if (isOpen) {
-            const token = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-            setIsCloudConnected(!!token);
+            // SECURE CHECK
+            setIsCloudConnected(dropboxService.isConfigured());
         }
     }, [isOpen]);
 
@@ -252,9 +252,8 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
         setIsSyncing(true);
         let messages = [];
         
-        // 1. Coba Dropbox
-        const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-        if (dbxToken) {
+        // 1. Coba Dropbox - SECURE CHECK
+        if (dropboxService.isConfigured()) {
             try {
                 // A. Upload Full Backup (JSON) - Untuk Restore
                 await dropboxService.uploadBackup();

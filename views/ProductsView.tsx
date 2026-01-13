@@ -13,14 +13,14 @@ import ProductPlaceholder from '../components/ProductPlaceholder';
 import VirtualizedTable from '../components/VirtualizedTable';
 import StockOpnameModal from '../components/StockOpnameModal';
 import { useSettings } from '../context/SettingsContext';
-import { compressImage } from '../utils/imageCompression'; // NEW Import
+import { compressImage } from '../utils/imageCompression'; 
+import { dataService } from '../services/dataService';
 
 // Informasikan TypeScript tentang pustaka global JsBarcode
 declare const JsBarcode: any;
 
 type ImageSource = 'none' | 'url' | 'upload' | 'camera';
 
-// Helper functions for image conversion
 function base64ToBlob(base64: string): Blob {
     const [meta, data] = base64.split(',');
     if (!meta || !data) return new Blob();
@@ -34,6 +34,7 @@ function base64ToBlob(base64: string): Blob {
     return new Blob([u8arr], { type: mime });
 }
 
+// Improved Input Field with Strict Numeric Validation
 const InputField: React.FC<{
     name: string;
     label: string;
@@ -45,24 +46,45 @@ const InputField: React.FC<{
     className?: string;
     min?: string;
     placeholder?: string;
-}> = ({ name, label, value, onChange, type = 'text', required = false, step, className='', min, placeholder }) => (
-    <div>
-        <label htmlFor={name} className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
-        <input
-            type={type}
-            id={name}
-            name={name}
-            value={value}
-            onChange={onChange}
-            required={required}
-            step={step}
-            min={min}
-            placeholder={placeholder}
-            className={`w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white ${className}`}
-        />
-    </div>
-);
+}> = ({ name, label, value, onChange, type = 'text', required = false, step, className='', min, placeholder }) => {
+    
+    const handleStrictChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (type === 'number') {
+            const val = e.target.value;
+            // Prevent negative signs manually just in case
+            if (val.includes('-')) return;
+            // Ensure valid number format (regex: positive decimals or integers)
+            if (val && !/^\d*\.?\d*$/.test(val)) return;
+        }
+        onChange(e);
+    };
 
+    return (
+        <div>
+            <label htmlFor={name} className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
+            <input
+                type={type}
+                id={name}
+                name={name}
+                value={value}
+                onChange={handleStrictChange}
+                required={required}
+                step={step}
+                min={min || "0"}
+                onKeyDown={(e) => {
+                    // Block unwanted chars in number fields
+                    if (type === 'number' && ['e', 'E', '-', '+'].includes(e.key)) {
+                        e.preventDefault();
+                    }
+                }}
+                placeholder={placeholder}
+                className={`w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white ${className}`}
+            />
+        </div>
+    );
+};
+
+// ... CategoryInput, ModifierBuilder remain unchanged ...
 const CategoryInput: React.FC<{
     value: string[];
     onChange: (value: string[]) => void;
@@ -160,7 +182,6 @@ const CategoryInput: React.FC<{
     );
 };
 
-// --- ADVANCED MODIFIER BUILDER ---
 const ModifierBuilder: React.FC<{
     groups: ModifierGroup[];
     onChange: (groups: ModifierGroup[]) => void;
@@ -179,6 +200,10 @@ const ModifierBuilder: React.FC<{
 
     const updateGroup = (index: number, field: keyof ModifierGroup, value: any) => {
         const updated = [...groups];
+        // Ensure numbers
+        if (field === 'minSelection' || field === 'maxSelection') {
+            value = Math.max(0, parseInt(value) || 0);
+        }
         updated[index] = { ...updated[index], [field]: value };
         onChange(updated);
     };
@@ -192,7 +217,8 @@ const ModifierBuilder: React.FC<{
         updated[groupIndex].options.push({
             id: Date.now().toString(),
             name: '',
-            price: 0
+            price: 0,
+            costPrice: 0
         });
         onChange(updated);
     };
@@ -200,6 +226,8 @@ const ModifierBuilder: React.FC<{
     const updateOption = (groupIndex: number, optionIndex: number, field: keyof ModifierOption, value: any) => {
         const updated = [...groups];
         const opts = [...updated[groupIndex].options];
+        if(field === 'price' || field === 'costPrice') value = Math.max(0, parseFloat(value) || 0);
+        
         opts[optionIndex] = { ...opts[optionIndex], [field]: value };
         updated[groupIndex].options = opts;
         onChange(updated);
@@ -227,6 +255,7 @@ const ModifierBuilder: React.FC<{
                                 value={group.name} 
                                 onChange={e => updateGroup(gIdx, 'name', e.target.value)} 
                                 className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                                placeholder="Wajib diisi (cth: Ukuran)"
                             />
                         </div>
                         <div className="flex gap-2">
@@ -235,7 +264,7 @@ const ModifierBuilder: React.FC<{
                                 <input 
                                     type="number" min="0"
                                     value={group.minSelection} 
-                                    onChange={e => updateGroup(gIdx, 'minSelection', parseInt(e.target.value) || 0)} 
+                                    onChange={e => updateGroup(gIdx, 'minSelection', e.target.value)} 
                                     className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm"
                                 />
                             </div>
@@ -244,7 +273,7 @@ const ModifierBuilder: React.FC<{
                                 <input 
                                     type="number" min="1"
                                     value={group.maxSelection} 
-                                    onChange={e => updateGroup(gIdx, 'maxSelection', parseInt(e.target.value) || 1)} 
+                                    onChange={e => updateGroup(gIdx, 'maxSelection', e.target.value)} 
                                     className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm"
                                 />
                             </div>
@@ -257,30 +286,55 @@ const ModifierBuilder: React.FC<{
                         {group.maxSelection === 1 ? " (Radio Button - Pilih Satu)" : ` (Checkbox - Maks ${group.maxSelection})`}
                     </p>
 
-                    <div className="pl-4 border-l-2 border-slate-700 space-y-2">
+                    <div className="pl-0 sm:pl-4 sm:border-l-2 border-slate-700 space-y-2">
+                        {/* Headers for Options */}
+                        {group.options.length > 0 && (
+                            <div className="flex gap-2 mb-1 px-1">
+                                <span className="flex-1 text-[10px] text-slate-500 uppercase font-bold">Nama Opsi</span>
+                                <span className="w-20 text-[10px] text-slate-500 uppercase font-bold">Jual (+)</span>
+                                <span className="w-20 text-[10px] text-slate-500 uppercase font-bold">Modal</span>
+                                <span className="w-4"></span>
+                            </div>
+                        )}
+
                         {group.options.map((opt, oIdx) => (
                             <div key={opt.id} className="flex gap-2 items-center">
                                 <input 
                                     type="text" 
-                                    placeholder="Nama Opsi" 
+                                    placeholder="Nama (cth: Regular)" 
                                     value={opt.name}
                                     onChange={e => updateOption(gIdx, oIdx, 'name', e.target.value)}
                                     className="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-xs"
                                 />
-                                <input 
-                                    type="number" 
-                                    placeholder="Harga (+)" 
-                                    value={opt.price}
-                                    onChange={e => updateOption(gIdx, oIdx, 'price', parseFloat(e.target.value) || 0)}
-                                    className="w-20 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-xs"
-                                />
-                                <button type="button" onClick={() => removeOption(gIdx, oIdx)} className="text-red-400">
+                                <div className="flex flex-col w-20">
+                                    <input 
+                                        type="number" 
+                                        placeholder="0" 
+                                        value={opt.price}
+                                        onChange={e => updateOption(gIdx, oIdx, 'price', e.target.value)}
+                                        className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-xs"
+                                        title="Tambahan Harga Jual (Isi 0 jika gratis)"
+                                        onKeyDown={(e) => { if(['-','e'].includes(e.key)) e.preventDefault(); }}
+                                    />
+                                </div>
+                                <div className="flex flex-col w-20">
+                                    <input 
+                                        type="number" 
+                                        placeholder="0" 
+                                        value={opt.costPrice || 0}
+                                        onChange={e => updateOption(gIdx, oIdx, 'costPrice', e.target.value)}
+                                        className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-slate-400 text-xs focus:text-white"
+                                        title="Harga Modal/HPP (Opsional)"
+                                        onKeyDown={(e) => { if(['-','e'].includes(e.key)) e.preventDefault(); }}
+                                    />
+                                </div>
+                                <button type="button" onClick={() => removeOption(gIdx, oIdx)} className="text-red-400 hover:text-red-300">
                                     <Icon name="close" className="w-3 h-3"/>
                                 </button>
                             </div>
                         ))}
-                        <button type="button" onClick={() => addOption(gIdx)} className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1">
-                            <Icon name="plus" className="w-3 h-3"/> Tambah Opsi
+                        <button type="button" onClick={() => addOption(gIdx)} className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 mt-2">
+                            <Icon name="plus" className="w-3 h-3"/> Tambah Opsi (Minimal 1)
                         </button>
                     </div>
                 </div>
@@ -289,6 +343,240 @@ const ModifierBuilder: React.FC<{
                 <Icon name="plus" className="w-4 h-4"/> Tambah Grup Modifier
             </Button>
         </div>
+    );
+};
+
+// --- NEW: Bulk Product Modal ---
+const BulkProductModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (products: Product[]) => void;
+}> = ({ isOpen, onClose, onSave }) => {
+    const { showAlert } = useUI();
+    const [mode, setMode] = useState<'manual' | 'import'>('manual');
+    const [rows, setRows] = useState<Array<{
+        name: string, 
+        price: string, 
+        costPrice: string, 
+        stock: string, 
+        category: string,
+        barcode: string,
+        branchPrices: string // Format: STORE:PRICE;STORE:PRICE
+    }>>([
+        { name: '', price: '', costPrice: '', stock: '', category: '', barcode: '', branchPrices: '' },
+        { name: '', price: '', costPrice: '', stock: '', category: '', barcode: '', branchPrices: '' },
+        { name: '', price: '', costPrice: '', stock: '', category: '', barcode: '', branchPrices: '' },
+        { name: '', price: '', costPrice: '', stock: '', category: '', barcode: '', branchPrices: '' },
+        { name: '', price: '', costPrice: '', stock: '', category: '', barcode: '', branchPrices: '' },
+    ]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Manual Table Logic
+    const handleRowChange = (index: number, field: string, value: string) => {
+        const newRows = [...rows];
+        (newRows[index] as any)[field] = value;
+        setRows(newRows);
+    };
+
+    const addRow = () => {
+        setRows([...rows, { name: '', price: '', costPrice: '', stock: '', category: '', barcode: '', branchPrices: '' }]);
+    };
+
+    const removeRow = (index: number) => {
+        setRows(rows.filter((_, i) => i !== index));
+    };
+
+    const handleSaveManual = () => {
+        const validRows = rows.filter(r => r.name.trim() !== '' && r.price.trim() !== '');
+        
+        if (validRows.length === 0) {
+            showAlert({ type: 'alert', title: 'Data Kosong', message: 'Isi minimal satu Nama Produk dan Harga.' });
+            return;
+        }
+
+        const products: Product[] = validRows.map((r, i) => {
+            const parsedBranchPrices: BranchPrice[] = r.branchPrices.split(',').map(pair => {
+                const [id, priceStr] = pair.split(':');
+                if(id && priceStr) {
+                    return { storeId: id.trim().toUpperCase(), price: parseFloat(priceStr) || 0 };
+                }
+                return null;
+            }).filter(Boolean) as BranchPrice[];
+
+            return {
+                id: `${Date.now()}-${i}`,
+                name: r.name,
+                price: parseFloat(r.price) || 0,
+                costPrice: parseFloat(r.costPrice) || 0,
+                stock: parseInt(r.stock) || 0,
+                trackStock: !!r.stock, 
+                category: r.category.split(',').map(c => c.trim()).filter(c => c !== ''),
+                barcode: r.barcode,
+                branchPrices: parsedBranchPrices,
+                isFavorite: false,
+                variants: [], addons: [], modifierGroups: [], recipe: []
+            };
+        });
+
+        onSave(products);
+        setRows([{ name: '', price: '', costPrice: '', stock: '', category: '', barcode: '', branchPrices: '' }]); 
+    };
+
+    // Import Logic
+    const handleDownloadTemplate = () => {
+        // Updated Template with more columns
+        const headers = ['name', 'price', 'category', 'costPrice', 'stock', 'barcode', 'branchPrices', 'modifierGroups'];
+        const sample = [
+            'Kopi Susu', 
+            '18000', 
+            'Kopi', 
+            '10000', 
+            '100', 
+            '123456', 
+            'JKT01:20000|BDG01:18000', 
+            '[{"name":"Level Gula","minSelection":1,"maxSelection":1,"options":[{"name":"Normal","price":0},{"name":"Less","price":0}]}]' // JSON example
+        ];
+        const csvContent = [headers.join(','), sample.map(s => `"${s.replace(/"/g, '""')}"`).join(',')].join('\n');
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'template_produk_artea_lengkap.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const products = await dataService.importProductsCSV(file);
+            if (products.length > 0) {
+                onSave(products);
+            } else {
+                showAlert({ type: 'alert', title: 'Gagal', message: 'Tidak ada produk valid ditemukan di file CSV.' });
+            }
+        } catch (err: any) {
+            showAlert({ type: 'alert', title: 'Error Import', message: err.message });
+        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Tambah Produk Massal">
+            <div className="space-y-4">
+                <div className="flex bg-slate-700 p-1 rounded-lg">
+                    <button 
+                        onClick={() => setMode('manual')} 
+                        className={`flex-1 py-2 text-sm rounded transition-colors ${mode === 'manual' ? 'bg-[#347758] text-white font-bold' : 'text-slate-300'}`}
+                    >
+                        Input Manual (Tabel)
+                    </button>
+                    <button 
+                        onClick={() => setMode('import')} 
+                        className={`flex-1 py-2 text-sm rounded transition-colors ${mode === 'import' ? 'bg-[#347758] text-white font-bold' : 'text-slate-300'}`}
+                    >
+                        Upload CSV / Excel
+                    </button>
+                </div>
+
+                {mode === 'manual' ? (
+                    <div className="space-y-4">
+                        <div className="overflow-x-auto max-h-[50vh] border border-slate-600 rounded-lg">
+                            <table className="w-full text-left text-sm text-slate-300 min-w-[900px]">
+                                <thead className="bg-slate-700 text-white font-bold sticky top-0 z-10">
+                                    <tr>
+                                        <th className="p-2 w-48">Nama Produk*</th>
+                                        <th className="p-2 w-24">Harga*</th>
+                                        <th className="p-2 w-24">Modal</th>
+                                        <th className="p-2 w-20">Stok</th>
+                                        <th className="p-2 w-32">Kategori</th>
+                                        <th className="p-2 w-32">Barcode</th>
+                                        <th className="p-2 w-48">Harga Cabang (ID:Harga)</th>
+                                        <th className="p-2 w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rows.map((row, idx) => (
+                                        <tr key={idx} className="border-b border-slate-700 bg-slate-800">
+                                            <td className="p-1">
+                                                <input className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.name} onChange={e => handleRowChange(idx, 'name', e.target.value)} placeholder="Nama" />
+                                            </td>
+                                            <td className="p-1">
+                                                <input type="number" className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.price} onChange={e => handleRowChange(idx, 'price', e.target.value)} placeholder="0" />
+                                            </td>
+                                            <td className="p-1">
+                                                <input type="number" className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.costPrice} onChange={e => handleRowChange(idx, 'costPrice', e.target.value)} placeholder="0" />
+                                            </td>
+                                            <td className="p-1">
+                                                <input type="number" className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.stock} onChange={e => handleRowChange(idx, 'stock', e.target.value)} placeholder="-" />
+                                            </td>
+                                            <td className="p-1">
+                                                <input className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.category} onChange={e => handleRowChange(idx, 'category', e.target.value)} placeholder="Kopi, Makanan" />
+                                            </td>
+                                            <td className="p-1">
+                                                <input className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.barcode} onChange={e => handleRowChange(idx, 'barcode', e.target.value)} placeholder="Scan/Ketik" />
+                                            </td>
+                                            <td className="p-1">
+                                                <input className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.branchPrices} onChange={e => handleRowChange(idx, 'branchPrices', e.target.value)} placeholder="JKT:15000, BDG:14000" />
+                                            </td>
+                                            <td className="p-1 text-center">
+                                                <button onClick={() => removeRow(idx)} className="text-red-400 hover:text-white"><Icon name="trash" className="w-4 h-4" /></button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p className="text-xs text-yellow-500 italic">
+                            *Untuk input <strong>Varian & Modifier</strong> yang kompleks, silakan gunakan fitur Import CSV (Unduh Template untuk melihat formatnya).
+                        </p>
+                        <div className="flex gap-2">
+                            <Button size="sm" variant="secondary" onClick={addRow}><Icon name="plus" className="w-4 h-4" /> Tambah Baris</Button>
+                            <div className="flex-1"></div>
+                            <Button onClick={handleSaveManual}>Simpan Semua</Button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-6 text-center py-4">
+                        <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 inline-block text-left max-w-sm">
+                            <h4 className="font-bold text-white mb-2">Instruksi:</h4>
+                            <ol className="list-decimal pl-5 text-sm text-slate-300 space-y-1">
+                                <li>Unduh template CSV di bawah ini.</li>
+                                <li>Buka dengan Excel/Spreadsheet.</li>
+                                <li>Isi data produk. Jangan ubah judul kolom.</li>
+                                <li>Untuk <strong>Modifier/Varian</strong>, formatnya adalah JSON (Disarankan copy-paste dari export produk yang sudah ada).</li>
+                                <li>Simpan kembali sebagai file <strong>.CSV</strong> (Comma Separated).</li>
+                                <li>Upload file tersebut di sini.</li>
+                            </ol>
+                        </div>
+                        
+                        <div className="flex justify-center gap-4">
+                            <Button variant="secondary" onClick={handleDownloadTemplate}>
+                                <Icon name="download" className="w-4 h-4"/> Unduh Template Lengkap
+                            </Button>
+                            <div className="relative">
+                                <Button variant="primary" onClick={() => fileInputRef.current?.click()}>
+                                    <Icon name="upload" className="w-4 h-4"/> Upload CSV
+                                </Button>
+                                <input 
+                                    type="file" 
+                                    ref={fileInputRef} 
+                                    className="hidden" 
+                                    accept=".csv"
+                                    onChange={handleImportFile}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </Modal>
     );
 };
 
@@ -311,19 +599,17 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
         modifierGroups: [] as ModifierGroup[], 
         branchPrices: [] as BranchPrice[],
         validStoreIds: [] as string[],
-        taxRate: '' // New Field
+        taxRate: ''
     });
     const [imageSource, setImageSource] = useState<ImageSource>('none');
     const [isCompressing, setIsCompressing] = useState(false);
     
-    // New States for Branch Pricing
     const [newBranchId, setNewBranchId] = useState('');
     const [newBranchPrice, setNewBranchPrice] = useState('');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const barcodeRef = useRef<SVGSVGElement>(null);
 
-    // List of branches available for selection
     const availableBranches = receiptSettings.branches || [];
 
     useEffect(() => {
@@ -336,10 +622,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                 costPrice: product.costPrice?.toString() || '',
                 stock: product.stock?.toString() || '',
                 trackStock: product.trackStock || false,
-                recipe: product.recipe?.map(r => ({
-                    ...r,
-                    itemType: r.itemType || 'raw_material' 
-                })) || [],
+                recipe: product.recipe?.map(r => ({ ...r, itemType: r.itemType || 'raw_material' })) || [],
                 isFavorite: product.isFavorite || false,
                 barcode: product.barcode || '',
                 addons: product.addons || [],
@@ -410,7 +693,6 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
         if (file) {
             setIsCompressing(true);
             try {
-                // COMPRESS IMAGE AUTOMATICALLY BEFORE SAVING
                 const compressedBase64 = await compressImage(file);
                 setFormData(prev => ({ ...prev, imageUrl: compressedBase64 }));
             } catch (err) {
@@ -441,13 +723,11 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
         setFormData(prev => ({ ...prev, recipe: prev.recipe.filter((_, i) => i !== index) }));
     };
 
-    // --- Branch Price Handlers ---
     const addBranchPrice = () => {
         if (!newBranchId || !newBranchPrice) return;
-        const price = parseFloat(newBranchPrice);
+        const price = Math.max(0, parseFloat(newBranchPrice) || 0); // Strict check
         const storeId = newBranchId.toUpperCase().trim();
         
-        // Remove existing if exists for this store
         const filtered = formData.branchPrices.filter(bp => bp.storeId !== storeId);
         
         setFormData(prev => ({ 
@@ -483,25 +763,43 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // VALIDATION: Prevent Silent Deletion of Modifiers
+        const hasInvalidModifiers = formData.modifierGroups.some(g => !g.name.trim() || g.options.length === 0 || g.options.some(o => !o.name.trim()));
+        
+        if (hasInvalidModifiers) {
+            showAlert({
+                type: 'alert',
+                title: 'Data Modifier Tidak Lengkap',
+                message: 'Mohon periksa bagian "Varian & Modifier". Pastikan setiap grup memiliki Nama dan minimal satu Opsi yang juga memiliki nama.'
+            });
+            return;
+        }
+
+        // Final Validation & Sanitization
+        const price = Math.max(0, parseFloat(formData.price) || 0);
+        const costPrice = Math.max(0, parseFloat(formData.costPrice) || 0);
+        const stock = Math.max(0, parseInt(formData.stock, 10) || 0);
+        const taxRate = formData.taxRate !== '' ? Math.max(0, parseFloat(formData.taxRate)) : undefined;
+
         const productData = {
             ...formData,
-            price: parseFloat(formData.price) || 0,
-            costPrice: parseFloat(formData.costPrice) || 0,
-            stock: parseInt(formData.stock, 10) || 0,
+            price,
+            costPrice,
+            stock,
             recipe: formData.recipe.map(r => ({
                 ...r,
-                quantity: parseFloat(String(r.quantity)) || 0,
+                quantity: Math.max(0, parseFloat(String(r.quantity)) || 0),
                 rawMaterialId: r.itemType === 'raw_material' ? r.rawMaterialId : undefined,
                 productId: r.itemType === 'product' ? r.productId : undefined,
             })).filter(r => (r.itemType === 'raw_material' && r.rawMaterialId) || (r.itemType === 'product' && r.productId)),
-            // Filter empty mods
+            // Filter is now safe because we validated above
             modifierGroups: formData.modifierGroups.filter(g => g.name.trim() !== '' && g.options.length > 0),
-            // Legacy fallbacks (optional to keep or clear)
             addons: formData.addons, 
             variants: formData.variants,
             branchPrices: formData.branchPrices,
             validStoreIds: formData.validStoreIds.length === 0 ? undefined : formData.validStoreIds,
-            taxRate: formData.taxRate !== '' ? parseFloat(formData.taxRate) : undefined
+            taxRate
         };
         if (product && 'id' in product) {
             onSave({ ...productData, id: product.id });
@@ -557,14 +855,14 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-1">
-                    <InputField name="price" label="Harga Jual (IDR)" type="number" required value={formData.price} onChange={handleChange} min="0"/>
+                    <InputField name="price" label="Harga Jual (IDR)" type="number" required value={formData.price} onChange={handleChange} min="0" placeholder="0"/>
                 </div>
                 <div className="md:col-span-1">
                     <InputField name="taxRate" label="Pajak Khusus (%)" type="number" value={formData.taxRate} onChange={handleChange} min="0" placeholder={`Global: ${receiptSettings.taxRate || 0}%`}/>
                 </div>
                 {inventorySettings.enabled && (
                     <div className="md:col-span-1">
-                        <InputField name="costPrice" label="Harga Modal (IDR)" type="number" value={formData.costPrice} onChange={handleChange} min="0"/>
+                        <InputField name="costPrice" label="Harga Modal (IDR)" type="number" value={formData.costPrice} onChange={handleChange} min="0" placeholder="0"/>
                     </div>
                 )}
             </div>
@@ -687,6 +985,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                         value={newBranchPrice}
                         onChange={(e) => setNewBranchPrice(e.target.value)}
                         className="w-24 bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-white"
+                        onKeyDown={(e) => { if(['-','e'].includes(e.key)) e.preventDefault(); }}
                     />
                     <Button type="button" size="sm" onClick={addBranchPrice}>Tambah</Button>
                 </div>
@@ -783,10 +1082,12 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
                                     <input
                                         type="number"
                                         step="0.01"
+                                        min="0"
                                         value={item.quantity}
                                         onChange={e => handleRecipeChange(index, 'quantity', e.target.value)}
                                         placeholder="Jml"
                                         className="w-20 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                                        onKeyDown={(e) => { if(['-','e'].includes(e.key)) e.preventDefault(); }}
                                     />
                                     <span className="text-xs text-slate-400 w-10">
                                         {item.itemType === 'product' 
@@ -817,6 +1118,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, {
     );
 });
 
+// ... rest of file (CategoryManagerModal, ProductsView component) remains unchanged ...
 const CategoryManagerModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
     const { categories, addCategory, deleteCategory } = useProduct();
     const { showAlert } = useUI();
@@ -878,11 +1180,12 @@ const ProductsView: React.FC = () => {
     const [isCameraOpen, setCameraOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [isOpnameOpen, setIsOpnameOpen] = useState(false);
-    const [isCategoryModalOpen, setCategoryModalOpen] = useState(false); // State for category modal
+    const [isCategoryModalOpen, setCategoryModalOpen] = useState(false); 
     const [searchTerm, setSearchTerm] = useState('');
     const formRef = useRef<HTMLFormElement>(null);
     const isCameraAvailable = useCameraAvailability();
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
+    const [isBulkModalOpen, setBulkModalOpen] = useState(false);
 
     const filteredProducts = useMemo(() => {
         return products.filter(p => 
@@ -905,6 +1208,16 @@ const ProductsView: React.FC = () => {
         setFormOpen(false);
         setEditingProduct(null);
         setCapturedImage(null);
+    };
+
+    const handleBulkSave = (newProducts: Product[]) => {
+        bulkAddProducts(newProducts);
+        setBulkModalOpen(false);
+        showAlert({
+            type: 'alert',
+            title: 'Berhasil',
+            message: `${newProducts.length} produk berhasil ditambahkan.`
+        });
     };
 
     const onCameraCapture = (image: string) => {
@@ -962,18 +1275,21 @@ const ProductsView: React.FC = () => {
                         />
                          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     </div>
-                    {/* FIX: Changed `setIsCategoryModalOpen` to `setCategoryModalOpen` to match the state setter function name. */}
+                    <Button variant="secondary" onClick={() => setBulkModalOpen(true)} className="flex-shrink-0 bg-blue-900/30 text-blue-300 border-blue-800 hover:bg-blue-900/50">
+                        <Icon name="boxes" className="w-5 h-5"/>
+                        <span className="hidden lg:inline">Tambah Massal</span>
+                    </Button>
                     <Button variant="secondary" onClick={() => setCategoryModalOpen(true)} className="flex-shrink-0">
                         <Icon name="tag" className="w-5 h-5"/>
-                        <span className="hidden lg:inline">Kelola Kategori</span>
+                        <span className="hidden lg:inline">Kategori</span>
                     </Button>
                     <Button variant="secondary" onClick={() => setIsOpnameOpen(true)} className="flex-shrink-0">
-                        <Icon name="boxes" className="w-5 h-5"/>
-                        <span className="hidden lg:inline">Stock Opname</span>
+                        <Icon name="clipboard" className="w-5 h-5"/>
+                        <span className="hidden lg:inline">Opname</span>
                     </Button>
                     <Button variant="primary" onClick={() => { setEditingProduct(null); setFormOpen(true); }} className="flex-shrink-0">
                         <Icon name="plus" className="w-5 h-5"/>
-                        <span className="hidden sm:inline">Tambah Produk</span>
+                        <span className="hidden sm:inline">Tambah</span>
                     </Button>
                 </div>
             </div>
@@ -1015,6 +1331,12 @@ const ProductsView: React.FC = () => {
                 isOpen={isOpnameOpen} 
                 onClose={() => setIsOpnameOpen(false)} 
                 initialTab="product"
+            />
+
+            <BulkProductModal
+                isOpen={isBulkModalOpen}
+                onClose={() => setBulkModalOpen(false)}
+                onSave={handleBulkSave}
             />
         </div>
     );

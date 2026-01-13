@@ -4,6 +4,7 @@ import { useData } from './DataContext';
 import { useAuth } from './AuthContext';
 import { useCloudSync } from './CloudSyncContext'; // NEW
 import { useAudit } from './AuditContext'; // NEW
+import { useSettings } from './SettingsContext'; // For Store ID
 import type { Expense, Supplier, Purchase, ExpenseStatus, PurchaseStatus, StockAdjustment, Transaction as TransactionType, Payment, OtherIncome, Product, RawMaterial } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 
@@ -38,26 +39,40 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
     const { triggerAutoSync } = useCloudSync(); // Use new hook
     const { logAudit } = useAudit(); // Use new hook
     const { currentUser } = useAuth();
+    const { receiptSettings } = useSettings();
     const { expenses, otherIncomes = [], suppliers, purchases, transactionRecords: transactions } = data;
+
+    // Helper to get staff name
+    const getStaffName = () => currentUser?.name || 'Staff';
+
+    // Helper to generate unique ID: [STORE_ID]-[TIMESTAMP]-[USER]-[RANDOM]
+    const generateUniqueId = useCallback((prefix: string = '') => {
+        const storeId = receiptSettings.storeId ? receiptSettings.storeId.replace(/[^a-zA-Z0-9]/g, '') : 'LOC';
+        const timestamp = Date.now().toString();
+        // Include partial User ID to prevent collision if multiple staff in same store hit save at same second
+        const userSuffix = currentUser?.id ? currentUser.id.slice(-3).toUpperCase() : 'SYS';
+        const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+        return `${storeId}-${prefix}${timestamp}-${userSuffix}${random}`;
+    }, [receiptSettings.storeId, currentUser]);
 
     const addExpense = useCallback((expenseData: Omit<Expense, 'id' | 'status'>) => {
         const status: ExpenseStatus = expenseData.amountPaid >= expenseData.amount ? 'lunas' : 'belum-lunas';
-        const newExpense = { ...expenseData, id: Date.now().toString(), status };
+        const newExpense = { ...expenseData, id: generateUniqueId('EXP'), status };
         setData(prev => ({ ...prev, expenses: [newExpense, ...prev.expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
-        setTimeout(() => triggerAutoSync(), 500);
-    }, [setData, triggerAutoSync]);
+        setTimeout(() => triggerAutoSync(getStaffName()), 500);
+    }, [setData, triggerAutoSync, currentUser, generateUniqueId]);
 
     const updateExpense = useCallback((updatedExpenseData: Expense) => {
         const status: ExpenseStatus = updatedExpenseData.amountPaid >= updatedExpenseData.amount ? 'lunas' : 'belum-lunas';
         const updatedExpense = { ...updatedExpenseData, status };
         setData(prev => ({ ...prev, expenses: prev.expenses.map(e => e.id === updatedExpense.id ? updatedExpense : e).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
-        setTimeout(() => triggerAutoSync(), 500);
-    }, [setData, triggerAutoSync]);
+        setTimeout(() => triggerAutoSync(getStaffName()), 500);
+    }, [setData, triggerAutoSync, currentUser]);
 
     const deleteExpense = useCallback((expenseId: string) => {
         setData(prev => ({ ...prev, expenses: prev.expenses.filter(e => e.id !== expenseId) }));
-        setTimeout(() => triggerAutoSync(), 500);
-    }, [setData, triggerAutoSync]);
+        setTimeout(() => triggerAutoSync(getStaffName()), 500);
+    }, [setData, triggerAutoSync, currentUser]);
 
     const addPaymentToExpense = useCallback((expenseId: string, amount: number) => {
         setData(prev => {
@@ -71,24 +86,24 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
             });
             return { ...prev, expenses: updatedExpenses };
         });
-        setTimeout(() => triggerAutoSync(), 500);
-    }, [setData, triggerAutoSync]);
+        setTimeout(() => triggerAutoSync(getStaffName()), 500);
+    }, [setData, triggerAutoSync, currentUser]);
 
     const addOtherIncome = useCallback((incomeData: Omit<OtherIncome, 'id'>) => {
-        const newIncome = { ...incomeData, id: Date.now().toString() };
+        const newIncome = { ...incomeData, id: generateUniqueId('INC') };
         setData(prev => ({ ...prev, otherIncomes: [newIncome, ...(prev.otherIncomes || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
-        setTimeout(() => triggerAutoSync(), 500);
-    }, [setData, triggerAutoSync]);
+        setTimeout(() => triggerAutoSync(getStaffName()), 500);
+    }, [setData, triggerAutoSync, currentUser, generateUniqueId]);
 
     const updateOtherIncome = useCallback((updatedIncome: OtherIncome) => {
         setData(prev => ({ ...prev, otherIncomes: (prev.otherIncomes || []).map(i => i.id === updatedIncome.id ? updatedIncome : i).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
-        setTimeout(() => triggerAutoSync(), 500);
-    }, [setData, triggerAutoSync]);
+        setTimeout(() => triggerAutoSync(getStaffName()), 500);
+    }, [setData, triggerAutoSync, currentUser]);
 
     const deleteOtherIncome = useCallback((incomeId: string) => {
         setData(prev => ({ ...prev, otherIncomes: (prev.otherIncomes || []).filter(i => i.id !== incomeId) }));
-        setTimeout(() => triggerAutoSync(), 500);
-    }, [setData, triggerAutoSync]);
+        setTimeout(() => triggerAutoSync(getStaffName()), 500);
+    }, [setData, triggerAutoSync, currentUser]);
 
     const addSupplier = useCallback((supplier: Omit<Supplier, 'id'>) => {
         const newSupplier = { ...supplier, id: Date.now().toString() };
@@ -116,7 +131,7 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
 
             const newPurchase: Purchase = {
                 ...purchaseData,
-                id: Date.now().toString(),
+                id: generateUniqueId('PUR'),
                 supplierName: supplier.name,
                 totalAmount,
                 status,
@@ -141,7 +156,7 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                             updatedProducts[productIndex] = { ...product, stock: newStock };
 
                             const newAdjustment: StockAdjustment = {
-                                id: `${Date.now().toString()}-${item.productId}`,
+                                id: `${generateUniqueId('SA')}-${item.productId}`,
                                 productId: product.id,
                                 productName: product.name,
                                 change: item.quantity,
@@ -163,8 +178,8 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                 stockAdjustments: updatedStockAdjustments,
             };
         });
-        setTimeout(() => triggerAutoSync(), 500);
-    }, [setData, triggerAutoSync]);
+        setTimeout(() => triggerAutoSync(getStaffName()), 500);
+    }, [setData, triggerAutoSync, currentUser, generateUniqueId]);
 
     const addPaymentToPurchase = useCallback((purchaseId: string, amount: number) => {
         setData(prev => {
@@ -178,8 +193,8 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
             });
             return { ...prev, purchases: updatedPurchases };
         });
-        setTimeout(() => triggerAutoSync(), 500);
-    }, [setData, triggerAutoSync]);
+        setTimeout(() => triggerAutoSync(getStaffName()), 500);
+    }, [setData, triggerAutoSync, currentUser]);
 
     const addPaymentToTransaction = useCallback((transactionId: string, payments: Array<Omit<Payment, 'id' | 'createdAt'>>) => {
         setData(prev => {
@@ -221,8 +236,8 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
 
             return { ...prev, transactionRecords: updatedTransactions };
         });
-        setTimeout(() => triggerAutoSync(), 500);
-    }, [setData, triggerAutoSync]);
+        setTimeout(() => triggerAutoSync(getStaffName()), 500);
+    }, [setData, triggerAutoSync, currentUser]);
 
     const refundTransaction = useCallback((transactionId: string) => {
         setData(prev => {
@@ -261,7 +276,7 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                                     
                                     if(updatedProducts[pIdx].trackStock) {
                                         updatedStockAdjustments.unshift({
-                                            id: `${Date.now()}-ref-${recipeItem.productId}`,
+                                            id: `${generateUniqueId('SA')}-ref-${recipeItem.productId}`,
                                             productId: recipeItem.productId!,
                                             productName: updatedProducts[pIdx].name,
                                             change: totalToRestore,
@@ -287,7 +302,7 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                             updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: newStock };
 
                             updatedStockAdjustments.unshift({
-                                id: `${Date.now()}-ref-${product.id}`,
+                                id: `${generateUniqueId('SA')}-ref-${product.id}`,
                                 productId: product.id,
                                 productName: product.name,
                                 change: item.quantity,
@@ -321,8 +336,8 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                 stockAdjustments: updatedStockAdjustments
             };
         });
-        setTimeout(() => triggerAutoSync(), 500);
-    }, [setData, logAudit, currentUser, triggerAutoSync]);
+        setTimeout(() => triggerAutoSync(getStaffName()), 500);
+    }, [setData, logAudit, currentUser, triggerAutoSync, generateUniqueId]);
 
     const importTransactions = useCallback((newTransactions: TransactionType[]) => {
         setData(prev => {

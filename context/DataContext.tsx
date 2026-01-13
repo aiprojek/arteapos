@@ -3,11 +3,18 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import type { AppData } from '../types';
 import { db, initialData } from '../services/db';
 
+// New interface for DB Usage
+interface DbUsageStatus {
+    totalRecords: number;
+    isHeavy: boolean;
+}
+
 interface DataContextType {
   data: AppData;
   setData: (value: AppData | ((val: AppData) => AppData)) => void;
   restoreData: (backupData: AppData) => Promise<void>;
   isDataLoading: boolean;
+  dbUsageStatus: DbUsageStatus | null; // Exposed Status
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -30,6 +37,7 @@ function base64ToBlob(base64: string): Blob {
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isDataLoading, setIsLoading] = useState(true);
   const [data, _setData] = useState<AppData>(initialData);
+  const [dbUsageStatus, setDbUsageStatus] = useState<DbUsageStatus | null>(null);
   const prevDataRef = useRef<AppData | null>(null);
   
   useEffect(() => {
@@ -60,6 +68,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           db.auditLogs.toArray(),
         ]);
         
+        // Calculate DB Load
+        const totalRecs = transactionRecords.length + stockAdjustments.length + auditLogs.length;
+        setDbUsageStatus({
+            totalRecords: totalRecs,
+            isHeavy: totalRecs > 5000
+        });
+
         const loadedData = {
           products,
           categories: categoriesObj?.value || initialData.categories,
@@ -203,7 +218,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <DataContext.Provider value={{ data, setData, restoreData, isDataLoading }}>
+    <DataContext.Provider value={{ data, setData, restoreData, isDataLoading, dbUsageStatus }}>
       {children}
     </DataContext.Provider>
   );

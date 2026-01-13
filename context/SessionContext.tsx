@@ -34,6 +34,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }, [isDataLoading]);
 
+    const getStaffName = () => currentUser?.name || 'Staff';
+
     const updateSessionSettings = useCallback((settings: SessionSettings) => {
         setData(prev => ({ ...prev, sessionSettings: settings }));
     }, [setData]);
@@ -78,12 +80,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
             await db.session.delete('activeSession');
             setSession(null);
             
-            setTimeout(() => triggerAutoSync(), 1000);
+            setTimeout(() => triggerAutoSync(getStaffName()), 1000);
 
         } catch (error) {
             console.error("Failed to delete session from DB", error);
         }
-    }, [session, setData, triggerAutoSync]);
+    }, [session, setData, triggerAutoSync, currentUser]);
 
     const addCashMovement = useCallback(async (type: 'in' | 'out', amount: number, description: string) => {
         if (!session) return;

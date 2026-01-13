@@ -1,19 +1,10 @@
 
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { useCart } from '../context/CartContext';
-import { useCustomer } from '../context/CustomerContext';
-import { useDiscount } from '../context/DiscountContext';
-import { useFinance } from '../context/FinanceContext';
-import { useProduct } from '../context/ProductContext';
-import { useSession } from '../context/SessionContext';
-import { useSettings } from '../context/SettingsContext';
-import { useUI } from '../context/UIContext';
-import type { Product, CartItem as CartItemType, Transaction as TransactionType, Customer, Reward, Payment, PaymentMethod, HeldCart, Discount, Addon, DiscountDefinition, ProductVariant, ModifierGroup, SelectedModifier } from '../types';
+import React, { useEffect } from 'react';
+import { usePOSLogic } from '../hooks/usePOSLogic';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
 import Modal from '../components/Modal';
 import ReceiptModal from '../components/ReceiptModal';
-import { CURRENCY_FORMATTER } from '../constants';
 import BarcodeScannerModal from '../components/BarcodeScannerModal';
 import KitchenNoteModal from '../components/KitchenNoteModal';
 import EndSessionModal from '../components/EndSessionModal';
@@ -21,11 +12,13 @@ import SendReportModal from '../components/SendReportModal';
 import CustomerFormModal from '../components/CustomerFormModal';
 import StaffRestockModal from '../components/StaffRestockModal';
 import StockOpnameModal from '../components/StockOpnameModal';
+import { CURRENCY_FORMATTER } from '../constants';
 
 // Modular Components
 import ProductBrowser from '../components/pos/ProductBrowser';
 import CartSidebar from '../components/pos/CartSidebar';
 import { SessionHistoryModal, PaymentModal, RewardsModal, DiscountModal, CashManagementModal } from '../components/pos/POSModals';
+import type { ModifierGroup, Product, ProductVariant, Addon, SelectedModifier, CartItem } from '../types';
 
 // --- Local Modals ---
 
@@ -35,23 +28,22 @@ const ModifierModal: React.FC<{
     product: Product | null;
     onConfirm: (selectedModifiers: SelectedModifier[]) => void;
 }> = ({ isOpen, onClose, product, onConfirm }) => {
-    const [selections, setSelections] = useState<Record<string, SelectedModifier[]>>({});
+    const [selections, ReactSetSelections] = React.useState<Record<string, SelectedModifier[]>>({});
 
     useEffect(() => {
-        if (isOpen) setSelections({});
+        if (isOpen) ReactSetSelections({});
     }, [isOpen]);
 
     if (!isOpen || !product || !product.modifierGroups) return null;
 
     const handleToggle = (group: ModifierGroup, option: any) => {
-        setSelections(prev => {
+        ReactSetSelections(prev => {
             const current = prev[group.id] || [];
             const isSelected = current.find(s => s.optionId === option.id);
             
             // Single Choice (Radio)
             if (group.maxSelection === 1) {
                 if (isSelected) {
-                    // Only deselect if minSelection is 0 (optional)
                     if(group.minSelection === 0) return { ...prev, [group.id]: [] };
                     return prev;
                 }
@@ -68,7 +60,7 @@ const ModifierModal: React.FC<{
             if (isSelected) {
                 return { ...prev, [group.id]: current.filter(s => s.optionId !== option.id) };
             } else {
-                if (current.length >= group.maxSelection) return prev; // Limit reached
+                if (current.length >= group.maxSelection) return prev;
                 return { 
                     ...prev, 
                     [group.id]: [...current, { 
@@ -135,10 +127,10 @@ const ModifierModal: React.FC<{
 const SplitBillModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
-    cartItems: CartItemType[];
+    cartItems: CartItem[];
     onConfirm: (itemsToPay: string[]) => void;
 }> = ({ isOpen, onClose, cartItems, onConfirm }) => {
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
     useEffect(() => {
         if(isOpen) setSelectedIds(new Set());
@@ -228,7 +220,7 @@ const VariantModal: React.FC<{isOpen: boolean, onClose: () => void, product: Pro
 }
 
 const AddonModal: React.FC<{isOpen: boolean, onClose: () => void, product: Product | null, variant: ProductVariant | null, onConfirm: (a: Addon[]) => void}> = ({isOpen, onClose, product, variant, onConfirm}) => {
-    const [selected, setSelected] = useState<Addon[]>([]);
+    const [selected, setSelected] = React.useState<Addon[]>([]);
     useEffect(() => { if (!isOpen) setSelected([]); }, [isOpen]);
     if(!isOpen || !product || !product.addons) return null;
     const toggle = (addon: Addon) => setSelected(prev => prev.find(a => a.id === addon.id) ? prev.filter(a => a.id !== addon.id) : [...prev, addon]);
@@ -236,68 +228,21 @@ const AddonModal: React.FC<{isOpen: boolean, onClose: () => void, product: Produ
 }
 
 const NameCartModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (n: string) => void, currentName?: string}> = ({isOpen, onClose, onSave, currentName = ''}) => {
-    const [name, setName] = useState('');
+    const [name, setName] = React.useState('');
     useEffect(() => { if (isOpen) setName(currentName); }, [isOpen, currentName]);
     return <Modal isOpen={isOpen} onClose={onClose} title={currentName ? "Ganti Nama" : "Simpan Pesanan"}><div className="space-y-4"><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="cth: Meja 5" className="w-full bg-slate-700 p-2 rounded-md text-white" autoFocus/><Button onClick={() => name.trim() && onSave(name.trim())} className="w-full">Simpan</Button></div></Modal>;
 }
 
 const POSView: React.FC = () => {
-    const { findProductByBarcode } = useProduct();
-    const {
-        cart, addToCart, addConfiguredItemToCart, saveTransaction, 
-        appliedReward, removeRewardFromCart,
-        holdActiveCart, updateHeldCartName,
-        applyItemDiscount, removeItemDiscount,
-        cartDiscount, applyCartDiscount, removeCartDiscount,
-        getCartTotals, clearCart, splitCart
-    } = useCart();
-    const { showAlert } = useUI();
-    const { sessionSettings, session, startSession } = useSession();
-    const { transactions, refundTransaction } = useFinance();
-    const { receiptSettings } = useSettings();
-    const { addCustomer } = useCustomer();
-
-    const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
-    const [lastTransaction, setLastTransaction] = useState<TransactionType | null>(null);
-    const [isReceiptModalOpen, setReceiptModalOpen] = useState(false);
-    const [isBarcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
-    const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-    const [isRewardsModalOpen, setRewardsModalOpen] = useState(false);
-    const [isNameModalOpen, setNameModalOpen] = useState(false);
-    const [cartToRename, setCartToRename] = useState<HeldCart | null>(null);
-    const [discountingItem, setDiscountingItem] = useState<CartItemType | null>(null);
-    const [isCartDiscountModalOpen, setCartDiscountModalOpen] = useState(false);
-    const [isAddonModalOpen, setAddonModalOpen] = useState(false);
-    const [productForAddons, setProductForAddons] = useState<Product | null>(null);
-    const [isVariantModalOpen, setVariantModalOpen] = useState(false);
-    const [productForVariant, setProductForVariant] = useState<Product | null>(null);
-    const [selectedVariantForAddons, setSelectedVariantForAddons] = useState<ProductVariant | null>(null);
-    const [transactionForKitchenNote, setTransactionForKitchenNote] = useState<TransactionType | null>(null);
-    const [isCashMgmtOpen, setCashMgmtOpen] = useState(false);
-    const [isStartSessionModalOpen, setStartSessionModalOpen] = useState(false);
-    const [startingCashInput, setStartingCashInput] = useState('');
-    const [isEndSessionModalOpen, setEndSessionModalOpen] = useState(false);
-    const [isSendReportModalOpen, setSendReportModalOpen] = useState(false);
-    const [isCustomerModalOpen, setCustomerModalOpen] = useState(false);
-    const [isHistoryModalOpen, setHistoryModalOpen] = useState(false);
-    const [receiptToView, setReceiptToView] = useState<TransactionType | null>(null);
-    const [isStaffRestockOpen, setStaffRestockOpen] = useState(false); 
-    const [isOpnameOpen, setIsOpnameOpen] = useState(false); 
-    
-    const [isModifierModalOpen, setModifierModalOpen] = useState(false);
-    const [productForModifier, setProductForModifier] = useState<Product | null>(null);
-    const [isSplitBillModalOpen, setSplitBillModalOpen] = useState(false);
-    const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products');
-
-    const totalCartItems = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
-    const { finalTotal } = getCartTotals();
+    // Extracted Logic Hook
+    const logic = usePOSLogic();
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (sessionSettings.enabled && !session) return; 
+            if (logic.isSessionLocked) return; 
             if (e.key === 'F2') {
                 e.preventDefault();
-                if (cart.length > 0) setPaymentModalOpen(true);
+                if (logic.cart.length > 0) logic.setPaymentModalOpen(true);
             }
             if (e.key === 'F4') {
                 e.preventDefault();
@@ -306,204 +251,33 @@ const POSView: React.FC = () => {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [cart.length, session, sessionSettings.enabled]);
-
-    useEffect(() => {
-        if (!selectedCustomer && appliedReward) {
-            removeRewardFromCart();
-        }
-    }, [selectedCustomer, appliedReward, removeRewardFromCart]);
-    
-    const handleProductClick = (product: Product) => {
-        if (product.modifierGroups && product.modifierGroups.length > 0) {
-            setProductForModifier(product);
-            setModifierModalOpen(true);
-            return;
-        }
-        if (product.variants && product.variants.length > 0) {
-            setProductForVariant(product);
-            setVariantModalOpen(true);
-            return;
-        }
-        if (product.addons && product.addons.length > 0) {
-            setProductForAddons(product);
-            setSelectedVariantForAddons(null);
-            setAddonModalOpen(true);
-            return;
-        }
-        addToCart(product);
-    };
-
-    const handleVariantSelect = (variant: ProductVariant) => {
-        setVariantModalOpen(false);
-        if (productForVariant) {
-            if (productForVariant.addons && productForVariant.addons.length > 0) {
-                setProductForAddons(productForVariant);
-                setSelectedVariantForAddons(variant);
-                setAddonModalOpen(true);
-            } else {
-                addConfiguredItemToCart(productForVariant, [], variant);
-                setProductForVariant(null);
-            }
-        }
-    };
-
-    const handleAddonConfirm = (selectedAddons: Addon[]) => {
-        if (productForAddons) {
-            addConfiguredItemToCart(productForAddons, selectedAddons, selectedVariantForAddons || undefined);
-        }
-        setAddonModalOpen(false);
-        setProductForAddons(null);
-        setSelectedVariantForAddons(null);
-        setProductForVariant(null);
-    };
-
-    const handleModifierConfirm = (selectedModifiers: SelectedModifier[]) => {
-        if (productForModifier) {
-            // @ts-ignore
-            addConfiguredItemToCart(productForModifier, [], undefined, selectedModifiers); 
-        }
-        setModifierModalOpen(false);
-        setProductForModifier(null);
-    }
-
-    const handleStartSession = () => {
-        startSession(parseFloat(startingCashInput) || 0);
-        setStartSessionModalOpen(false);
-        setStartingCashInput('');
-    }
-
-    const handleSaveCustomer = (customerData: Omit<Customer, 'id' | 'memberId' | 'points' | 'createdAt'> | Customer) => {
-        addCustomer(customerData);
-        setCustomerModalOpen(false);
-        showAlert({ type: 'alert', title: 'Berhasil', message: 'Pelanggan berhasil ditambahkan.' });
-    };
-
-    const handleRefundTransaction = (transaction: TransactionType) => {
-        showAlert({
-            type: 'confirm',
-            title: 'Refund Transaksi?',
-            message: 'Stok akan dikembalikan dan omzet dikurangi. Yakin?',
-            confirmVariant: 'danger',
-            onConfirm: () => refundTransaction(transaction.id)
-        });
-    };
-
-    const handleSaveTransaction = useCallback((payments: Array<Omit<Payment, 'id' | 'createdAt'>>, customerDetails: { customerId?: string, customerName?: string, customerContact?: string }) => {
-        try {
-            const newTransaction = saveTransaction({ payments, ...customerDetails });
-            if (newTransaction.paymentStatus !== 'paid' && customerDetails.customerName && !customerDetails.customerId) {
-                 showAlert({ type: 'alert', title: 'Transaksi Utang Disimpan', message: `Transaksi utang untuk "${customerDetails.customerName}" telah disimpan.` });
-            }
-            setLastTransaction(newTransaction);
-            setPaymentModalOpen(false);
-            setReceiptModalOpen(true);
-            if (receiptSettings.enableKitchenPrinter) setTransactionForKitchenNote(newTransaction);
-            setSelectedCustomer(null);
-        } catch (error) {
-            console.error(error);
-            showAlert({type: 'alert', title: 'Error', message: 'Gagal menyimpan transaksi.'});
-        }
-    }, [saveTransaction, showAlert, receiptSettings.enableKitchenPrinter]);
-
-    const handleQuickPay = useCallback((paymentAmount: number) => {
-        if (cart.length === 0) return;
-        const { finalTotal } = getCartTotals();
-        if (paymentAmount < finalTotal - 0.01) {
-            showAlert({ type: 'alert', title: 'Pembayaran Kurang', message: `Jumlah pembayaran cepat tidak mencukupi total tagihan.` });
-            return;
-        }
-        const payments = [{ method: 'cash' as PaymentMethod, amount: paymentAmount }];
-        let customerDetails: { customerId?: string; customerName?: string; customerContact?: string } = {};
-        if (selectedCustomer) {
-            customerDetails = { customerId: selectedCustomer.id, customerName: selectedCustomer.name, customerContact: selectedCustomer.contact };
-        }
-        try {
-            const newTransaction = saveTransaction({ payments, ...customerDetails });
-            setLastTransaction(newTransaction);
-            setReceiptModalOpen(true);
-            if (receiptSettings.enableKitchenPrinter) setTransactionForKitchenNote(newTransaction);
-            setSelectedCustomer(null);
-        } catch (error) {
-            console.error(error);
-            showAlert({type: 'alert', title: 'Error', message: 'Gagal menyimpan transaksi.'});
-        }
-    }, [cart.length, getCartTotals, saveTransaction, showAlert, selectedCustomer, receiptSettings.enableKitchenPrinter]);
-
-    const handleBarcodeScan = useCallback((barcode: string) => {
-        const product = findProductByBarcode(barcode);
-        if (product) handleProductClick(product);
-        else showAlert({type: 'alert', title: 'Produk Tidak Ditemukan', message: `Tidak ada produk dengan barcode: ${barcode}`});
-        setBarcodeScannerOpen(false);
-    }, [findProductByBarcode, showAlert]);
-
-    const handleSaveName = (name: string) => {
-        if (cartToRename) {
-            updateHeldCartName(cartToRename.id, name);
-            setCartToRename(null);
-        } else {
-            holdActiveCart(name);
-        }
-        setNameModalOpen(false);
-    };
-
-    const handleOpenDiscountModal = (cartItemId: string) => {
-        const item = cart.find(i => i.cartItemId === cartItemId && !i.isReward);
-        if (item) setDiscountingItem(item);
-    };
-
-    const handleSplitBill = (itemsToPay: string[]) => {
-        splitCart(itemsToPay);
-        setSplitBillModalOpen(false);
-    };
-
-    const sessionSummary = useMemo(() => {
-        if (!session) return { cashSales: 0, cashIn: 0, cashOut: 0 };
-        const sessionTrans = transactions.filter(t => new Date(t.createdAt) >= new Date(session.startTime) && t.paymentStatus !== 'refunded');
-        const cashSales = sessionTrans.reduce((sum, t) => {
-            const cashPay = t.payments.find(p => p.method === 'cash');
-            return sum + (cashPay ? cashPay.amount : 0);
-        }, 0);
-        let cashIn = 0, cashOut = 0;
-        session.cashMovements.forEach(m => {
-            if (m.type === 'in') cashIn += m.amount;
-            else cashOut += m.amount;
-        });
-        return { cashSales, cashIn, cashOut };
-    }, [session, transactions]);
-
-    const sessionTransactions = useMemo(() => {
-        if (!session) return [];
-        return transactions.filter(t => new Date(t.createdAt) >= new Date(session.startTime) && t.paymentStatus !== 'refunded');
-    }, [session, transactions]);
-
-    const isSessionLocked = sessionSettings.enabled && !session;
+    }, [logic.cart.length, logic.isSessionLocked]);
 
     return (
         <div className="flex flex-col h-full">
             <div className="md:hidden flex p-1 bg-slate-800 mb-4 rounded-lg gap-1 shrink-0">
                 <button
-                    onClick={() => setMobileTab('products')}
-                    className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 ${mobileTab === 'products' ? 'bg-[#347758] text-white' : 'text-slate-400 hover:text-white'}`}
+                    onClick={() => logic.setMobileTab('products')}
+                    className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 ${logic.mobileTab === 'products' ? 'bg-[#347758] text-white' : 'text-slate-400 hover:text-white'}`}
                 >
                     <Icon name="products" className="w-4 h-4"/> Menu
                 </button>
                 <button
-                    onClick={() => setMobileTab('cart')}
-                    className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 ${mobileTab === 'cart' ? 'bg-[#347758] text-white' : 'text-slate-400 hover:text-white'}`}
+                    onClick={() => logic.setMobileTab('cart')}
+                    className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 ${logic.mobileTab === 'cart' ? 'bg-[#347758] text-white' : 'text-slate-400 hover:text-white'}`}
                 >
                     <Icon name="cash" className="w-4 h-4"/> Keranjang
-                    {totalCartItems > 0 && (
+                    {logic.totalCartItems > 0 && (
                         <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">
-                            {totalCartItems}
+                            {logic.totalCartItems}
                         </span>
                     )}
                 </button>
             </div>
 
             <div className="flex flex-col md:flex-row h-full gap-6 overflow-hidden">
-                <div className={`flex-col min-w-0 md:flex-1 h-full ${mobileTab === 'cart' ? 'hidden md:flex' : 'flex'}`}>
-                    {isSessionLocked ? (
+                <div className={`flex-col min-w-0 md:flex-1 h-full ${logic.mobileTab === 'cart' ? 'hidden md:flex' : 'flex'}`}>
+                    {logic.isSessionLocked ? (
                         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-800/50 rounded-xl border-2 border-dashed border-slate-700">
                             <div className="bg-slate-800 p-4 rounded-full mb-4 shadow-lg">
                                 <Icon name="lock" className="w-12 h-12 text-slate-500" />
@@ -512,150 +286,147 @@ const POSView: React.FC = () => {
                             <p className="text-slate-400 mb-6 max-w-xs text-sm">
                                 Untuk keamanan dan pencatatan yang akurat, silakan mulai sesi baru dan masukkan modal awal kasir.
                             </p>
-                            <Button onClick={() => setStartSessionModalOpen(true)} variant="primary" size="lg">
+                            <Button onClick={() => logic.setStartSessionModalOpen(true)} variant="primary" size="lg">
                                 Mulai Sesi Sekarang
                             </Button>
                         </div>
                     ) : (
                         <>
-                            {sessionSettings.enabled && session && (
+                            {logic.receiptSettings.enableKitchenPrinter && logic.session && (
                                 <div className="flex items-center gap-2 mb-4 bg-slate-800 p-2 rounded-lg border border-slate-700 overflow-x-auto">
-                                    <Button variant="secondary" size="sm" onClick={() => setHistoryModalOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
+                                    <Button variant="secondary" size="sm" onClick={() => logic.setHistoryModalOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
                                         <Icon name="book" className="w-4 h-4" /> Riwayat
                                     </Button>
-                                    <Button variant="secondary" size="sm" onClick={() => setCashMgmtOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
+                                    <Button variant="secondary" size="sm" onClick={() => logic.setCashMgmtOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
                                         <Icon name="finance" className="w-4 h-4" /> Kas
                                     </Button>
-                                    <Button variant="secondary" size="sm" onClick={() => setSendReportModalOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
+                                    <Button variant="secondary" size="sm" onClick={() => logic.setSendReportModalOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
                                         <Icon name="chat" className="w-4 h-4" /> Laporan
                                     </Button>
-                                    <Button variant="danger" size="sm" onClick={() => setEndSessionModalOpen(true)} className="border-none bg-red-900/30 hover:bg-red-900/50 text-red-300 ml-auto">
+                                    <Button variant="danger" size="sm" onClick={() => logic.setEndSessionModalOpen(true)} className="border-none bg-red-900/30 hover:bg-red-900/50 text-red-300 ml-auto">
                                         <Icon name="logout" className="w-4 h-4" /> Tutup
                                     </Button>
                                 </div>
                             )}
 
                             <ProductBrowser 
-                                onProductClick={handleProductClick}
-                                isSessionLocked={isSessionLocked}
-                                onOpenScanner={() => setBarcodeScannerOpen(true)}
-                                onOpenRestock={() => setStaffRestockOpen(true)}
-                                onOpenOpname={() => setIsOpnameOpen(true)}
+                                onProductClick={logic.handleProductClick}
+                                isSessionLocked={logic.isSessionLocked}
+                                onOpenScanner={() => logic.setBarcodeScannerOpen(true)}
+                                onOpenRestock={() => logic.setStaffRestockOpen(true)}
+                                onOpenOpname={() => logic.setIsOpnameOpen(true)}
                             />
                         </>
                     )}
                 </div>
                 
-                <div className={`h-full ${mobileTab === 'products' ? 'hidden md:block' : 'block'}`}>
+                <div className={`h-full ${logic.mobileTab === 'products' ? 'hidden md:block' : 'block'}`}>
                     <CartSidebar 
-                        isSessionLocked={isSessionLocked}
-                        onOpenDiscountModal={handleOpenDiscountModal}
-                        onOpenCartDiscountModal={() => setCartDiscountModalOpen(true)}
-                        onOpenRewardModal={() => selectedCustomer ? setRewardsModalOpen(true) : showAlert({type: 'alert', title: 'Pilih Pelanggan', message: 'Silakan pilih pelanggan.'})}
-                        onOpenPaymentModal={() => setPaymentModalOpen(true)}
-                        onOpenNameModal={(cart) => { setCartToRename(cart); setNameModalOpen(true); }}
-                        onQuickPay={handleQuickPay}
-                        selectedCustomer={selectedCustomer}
-                        setSelectedCustomer={setSelectedCustomer}
-                        onOpenCustomerForm={() => setCustomerModalOpen(true)}
-                        onSplitBill={() => {
-                            if(cart.length > 0) setSplitBillModalOpen(true);
-                            else showAlert({type: 'alert', title: 'Keranjang Kosong', message: 'Tidak ada item untuk dipisah.'});
-                        }}
+                        isSessionLocked={logic.isSessionLocked}
+                        onOpenDiscountModal={logic.handleOpenDiscountModal}
+                        onOpenCartDiscountModal={() => logic.setCartDiscountModalOpen(true)}
+                        onOpenRewardModal={() => logic.selectedCustomer ? logic.setRewardsModalOpen(true) : alert('Silakan pilih pelanggan.')}
+                        onOpenPaymentModal={() => logic.setPaymentModalOpen(true)}
+                        onOpenNameModal={(cart) => { logic.setCartToRename(cart); logic.setNameModalOpen(true); }}
+                        onQuickPay={logic.handleQuickPay}
+                        selectedCustomer={logic.selectedCustomer}
+                        setSelectedCustomer={logic.setSelectedCustomer}
+                        onOpenCustomerForm={() => logic.setCustomerModalOpen(true)}
+                        onSplitBill={() => logic.setSplitBillModalOpen(true)}
                     />
                 </div>
             </div>
             
-            {isPaymentModalOpen && (
+            {logic.isPaymentModalOpen && (
                 <PaymentModal 
-                    isOpen={isPaymentModalOpen} 
-                    onClose={() => setPaymentModalOpen(false)} 
-                    onConfirm={handleSaveTransaction}
-                    total={finalTotal}
-                    selectedCustomer={selectedCustomer}
+                    isOpen={logic.isPaymentModalOpen} 
+                    onClose={() => logic.setPaymentModalOpen(false)} 
+                    onConfirm={logic.handleSaveTransaction}
+                    total={logic.finalTotal}
+                    selectedCustomer={logic.selectedCustomer}
                 />
             )}
             
-            <CashManagementModal isOpen={isCashMgmtOpen} onClose={() => setCashMgmtOpen(false)} />
+            <CashManagementModal isOpen={logic.isCashMgmtOpen} onClose={() => logic.setCashMgmtOpen(false)} />
             
-            {isHistoryModalOpen && <SessionHistoryModal 
-                isOpen={isHistoryModalOpen} 
-                onClose={() => setHistoryModalOpen(false)} 
-                onViewReceipt={(t: TransactionType) => { setReceiptToView(t); setReceiptModalOpen(true); }}
-                onRefund={handleRefundTransaction}
+            {logic.isHistoryModalOpen && <SessionHistoryModal 
+                isOpen={logic.isHistoryModalOpen} 
+                onClose={() => logic.setHistoryModalOpen(false)} 
+                onViewReceipt={(t) => { logic.setReceiptToView(t); logic.setReceiptModalOpen(true); }}
+                onRefund={logic.handleRefundTransaction}
             />}
 
-            {(lastTransaction || receiptToView) && (
+            {(logic.lastTransaction || logic.receiptToView) && (
                 <ReceiptModal 
-                    isOpen={isReceiptModalOpen} 
-                    onClose={() => { setReceiptModalOpen(false); setReceiptToView(null); }} 
-                    transaction={receiptToView || lastTransaction!}
+                    isOpen={logic.isReceiptModalOpen} 
+                    onClose={() => { logic.setReceiptModalOpen(false); logic.setReceiptToView(null); }} 
+                    transaction={logic.receiptToView || logic.lastTransaction!}
                 />
             )}
 
-            <BarcodeScannerModal isOpen={isBarcodeScannerOpen} onClose={() => setBarcodeScannerOpen(false)} onScan={handleBarcodeScan} />
-            {selectedCustomer && <RewardsModal isOpen={isRewardsModalOpen} onClose={() => setRewardsModalOpen(false)} customer={selectedCustomer} />}
-            <NameCartModal isOpen={isNameModalOpen} onClose={() => setNameModalOpen(false)} onSave={handleSaveName} currentName={cartToRename?.name}/>
+            <BarcodeScannerModal isOpen={logic.isBarcodeScannerOpen} onClose={() => logic.setBarcodeScannerOpen(false)} onScan={logic.handleBarcodeScan} />
+            {logic.selectedCustomer && <RewardsModal isOpen={logic.isRewardsModalOpen} onClose={() => logic.setRewardsModalOpen(false)} customer={logic.selectedCustomer} />}
+            <NameCartModal isOpen={logic.isNameModalOpen} onClose={() => logic.setNameModalOpen(false)} onSave={logic.handleSaveName} currentName={logic.cartToRename?.name}/>
             <DiscountModal
-                isOpen={!!discountingItem}
-                onClose={() => setDiscountingItem(null)}
-                title={`Diskon untuk ${discountingItem?.name}`}
-                initialDiscount={discountingItem?.discount || null}
-                onSave={(discount) => discountingItem && applyItemDiscount(discountingItem.cartItemId, discount)}
-                onRemove={() => discountingItem && removeItemDiscount(discountingItem.cartItemId)}
+                isOpen={!!logic.discountingItem}
+                onClose={() => logic.setDiscountingItem(null)}
+                title={`Diskon untuk ${logic.discountingItem?.name}`}
+                initialDiscount={logic.discountingItem?.discount || null}
+                onSave={(discount) => logic.discountingItem && logic.applyItemDiscount(logic.discountingItem.cartItemId, discount)}
+                onRemove={() => logic.discountingItem && logic.removeItemDiscount(logic.discountingItem.cartItemId)}
             />
              <DiscountModal
-                isOpen={isCartDiscountModalOpen}
-                onClose={() => setCartDiscountModalOpen(false)}
+                isOpen={logic.isCartDiscountModalOpen}
+                onClose={() => logic.setCartDiscountModalOpen(false)}
                 title="Diskon Keranjang"
-                initialDiscount={cartDiscount}
-                onSave={applyCartDiscount}
-                onRemove={removeCartDiscount}
+                initialDiscount={logic.cartDiscount}
+                onSave={logic.applyCartDiscount}
+                onRemove={logic.removeCartDiscount}
             />
             <VariantModal
-                isOpen={isVariantModalOpen}
-                onClose={() => { setVariantModalOpen(false); setProductForVariant(null); }}
-                product={productForVariant}
-                onSelect={handleVariantSelect}
+                isOpen={logic.isVariantModalOpen}
+                onClose={() => { logic.setVariantModalOpen(false); logic.setProductForVariant(null); }}
+                product={logic.productForVariant}
+                onSelect={logic.handleVariantSelect}
             />
             <AddonModal
-                isOpen={isAddonModalOpen}
-                onClose={() => { setAddonModalOpen(false); setProductForAddons(null); setSelectedVariantForAddons(null); }}
-                product={productForAddons}
-                variant={selectedVariantForAddons}
-                onConfirm={handleAddonConfirm}
+                isOpen={logic.isAddonModalOpen}
+                onClose={() => { logic.setAddonModalOpen(false); logic.setProductForAddons(null); logic.setSelectedVariantForAddons(null); }}
+                product={logic.productForAddons}
+                variant={logic.selectedVariantForAddons}
+                onConfirm={logic.handleAddonConfirm}
             />
             <ModifierModal
-                isOpen={isModifierModalOpen}
-                onClose={() => { setModifierModalOpen(false); setProductForModifier(null); }}
-                product={productForModifier}
-                onConfirm={handleModifierConfirm}
+                isOpen={logic.isModifierModalOpen}
+                onClose={() => { logic.setModifierModalOpen(false); logic.setProductForModifier(null); }}
+                product={logic.productForModifier}
+                onConfirm={logic.handleModifierConfirm}
             />
             <SplitBillModal 
-                isOpen={isSplitBillModalOpen}
-                onClose={() => setSplitBillModalOpen(false)}
-                cartItems={cart}
-                onConfirm={handleSplitBill}
+                isOpen={logic.isSplitBillModalOpen}
+                onClose={() => logic.setSplitBillModalOpen(false)}
+                cartItems={logic.cart}
+                onConfirm={logic.handleSplitBill}
             />
 
-            {transactionForKitchenNote && (
+            {logic.transactionForKitchenNote && (
                 <KitchenNoteModal
-                    isOpen={!!transactionForKitchenNote}
-                    onClose={() => setTransactionForKitchenNote(null)}
-                    transaction={transactionForKitchenNote}
+                    isOpen={!!logic.transactionForKitchenNote}
+                    onClose={() => logic.setTransactionForKitchenNote(null)}
+                    transaction={logic.transactionForKitchenNote}
                 />
             )}
             
             <CustomerFormModal 
-                isOpen={isCustomerModalOpen} 
-                onClose={() => setCustomerModalOpen(false)} 
-                onSave={handleSaveCustomer} 
+                isOpen={logic.isCustomerModalOpen} 
+                onClose={() => logic.setCustomerModalOpen(false)} 
+                onSave={logic.handleSaveCustomer} 
                 customer={null} 
             />
-            <StaffRestockModal isOpen={isStaffRestockOpen} onClose={() => setStaffRestockOpen(false)} />
-            <StockOpnameModal isOpen={isOpnameOpen} onClose={() => setIsOpnameOpen(false)} initialTab="product" />
+            <StaffRestockModal isOpen={logic.isStaffRestockOpen} onClose={() => logic.setStaffRestockOpen(false)} />
+            <StockOpnameModal isOpen={logic.isOpnameOpen} onClose={() => logic.setIsOpnameOpen(false)} initialTab="product" />
 
-            <Modal isOpen={isStartSessionModalOpen} onClose={() => setStartSessionModalOpen(false)} title="Mulai Sesi Penjualan">
+            <Modal isOpen={logic.isStartSessionModalOpen} onClose={() => logic.setStartSessionModalOpen(false)} title="Mulai Sesi Penjualan">
                 <div className="space-y-4">
                     <p className="text-slate-300">Masukkan jumlah uang tunai awal (modal) yang tersedia di laci kasir.</p>
                     <div>
@@ -664,39 +435,39 @@ const POSView: React.FC = () => {
                             id="startingCashPOS"
                             type="number"
                             min="0"
-                            value={startingCashInput}
-                            onChange={(e) => setStartingCashInput(e.target.value)}
+                            value={logic.startingCashInput}
+                            onChange={(e) => logic.setStartingCashInput(e.target.value)}
                             className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg"
                             placeholder="0"
                             autoFocus
                         />
                     </div>
-                    <Button onClick={handleStartSession} className="w-full py-3">
+                    <Button onClick={logic.handleStartSession} className="w-full py-3">
                         Mulai Sesi
                     </Button>
                 </div>
             </Modal>
 
-            {session && (
+            {logic.session && (
                 <EndSessionModal
-                    isOpen={isEndSessionModalOpen}
-                    onClose={() => setEndSessionModalOpen(false)}
-                    sessionSales={sessionSummary.cashSales}
-                    startingCash={session.startingCash}
-                    cashIn={sessionSummary.cashIn}
-                    cashOut={sessionSummary.cashOut}
+                    isOpen={logic.isEndSessionModalOpen}
+                    onClose={() => logic.setEndSessionModalOpen(false)}
+                    sessionSales={logic.sessionSummary.cashSales}
+                    startingCash={logic.session.startingCash}
+                    cashIn={logic.sessionSummary.cashIn}
+                    cashOut={logic.sessionSummary.cashOut}
                 />
             )}
 
             <SendReportModal
-                isOpen={isSendReportModalOpen}
-                onClose={() => setSendReportModalOpen(false)}
-                data={sessionTransactions}
-                adminWhatsapp={receiptSettings.adminWhatsapp}
-                adminTelegram={receiptSettings.adminTelegram}
-                startingCash={session?.startingCash || 0}
-                cashIn={sessionSummary.cashIn}
-                cashOut={sessionSummary.cashOut}
+                isOpen={logic.isSendReportModalOpen}
+                onClose={() => logic.setSendReportModalOpen(false)}
+                data={logic.sessionTransactions}
+                adminWhatsapp={logic.receiptSettings.adminWhatsapp}
+                adminTelegram={logic.receiptSettings.adminTelegram}
+                startingCash={logic.session?.startingCash || 0}
+                cashIn={logic.sessionSummary.cashIn}
+                cashOut={logic.sessionSummary.cashOut}
             />
         </div>
     );

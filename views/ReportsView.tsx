@@ -19,6 +19,7 @@ import { dropboxService } from '../services/dropboxService';
 import { mockDataService } from '../services/mockData';
 import ReportCharts from '../components/reports/ReportCharts';
 import { generateSalesReportPDF } from '../utils/pdfGenerator';
+import { db } from '../services/db'; // Direct DB Access for Lazy Loading
 
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
 type ReportScope = 'session' | 'historical' | 'session_history';
@@ -147,12 +148,14 @@ const SessionHistoryTable: React.FC<{ history: SessionHistory[] }> = ({ history 
 };
 
 const ReportsView: React.FC = () => {
-    const { transactions: localTransactions, addPaymentToTransaction, refundTransaction, importTransactions } = useFinance();
-    const { inventorySettings, stockAdjustments: localStockAdjustments, importStockAdjustments } = useProduct();
+    const { addPaymentToTransaction, refundTransaction, importTransactions } = useFinance();
+    const { importStockAdjustments } = useProduct();
     const { session, sessionSettings } = useSession();
     const { data: appData } = useData();
     const { receiptSettings } = useSettings();
     const { showAlert } = useUI();
+    
+    // UI State
     const [filter, setFilter] = useState<TimeFilter>('today');
     const [reportScope, setReportScope] = useState<ReportScope>('session');
     const [activeTab, setActiveTab] = useState<ReportTab>('sales');
@@ -162,6 +165,11 @@ const ReportsView: React.FC = () => {
     const [customEndDate, setCustomEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [isFilterDropdownOpen, setFilterDropdownOpen] = useState(false);
     const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+    // OPTIMIZATION: Local Data State (Lazy Loaded from Dexie)
+    const [localTransactions, setLocalTransactions] = useState<TransactionType[]>([]);
+    const [localStockLogs, setLocalStockLogs] = useState<StockAdjustment[]>([]);
+    const [isLocalLoading, setIsLocalLoading] = useState(false);
 
     // Export Dropdown
     const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
@@ -185,14 +193,15 @@ const ReportsView: React.FC = () => {
             message: `Anda yakin ingin membatalkan transaksi ini? Stok produk akan dikembalikan dan omzet akan dikurangi. Tindakan ini tidak dapat dibatalkan.`,
             confirmVariant: 'danger',
             confirmText: 'Ya, Refund',
-            onConfirm: () => {
-                refundTransaction(transaction.id);
+            onConfirm: async () => {
+                await refundTransaction(transaction.id);
+                // Re-fetch data to show update
+                if(dataSource === 'local') fetchLocalData();
             }
         });
     };
     
     useEffect(() => {
-        // Automatically switch to historical view if session mode is on but no session is active.
         if (sessionSettings.enabled && !session) {
           setReportScope('historical');
         }
@@ -213,14 +222,78 @@ const ReportsView: React.FC = () => {
         };
     }, []);
 
+    // --- LAZY LOADING FROM DEXIE (PERFORMANCE OPTIMIZATION) ---
+    const fetchLocalData = useCallback(async () => {
+        if (dataSource !== 'local') return;
+        setIsLocalLoading(true);
+
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        let startDate: Date;
+        let endDate: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+        // Determine Range based on Filter
+        if (sessionSettings.enabled && reportScope === 'session' && session) {
+            startDate = new Date(session.startTime);
+        } else {
+            switch (filter) {
+                case 'today':
+                    startDate = today;
+                    break;
+                case 'week':
+                    startDate = new Date(today);
+                    startDate.setDate(today.getDate() - 7);
+                    break;
+                case 'month':
+                    startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+                    break;
+                case 'custom':
+                    startDate = new Date(customStartDate);
+                    startDate.setHours(0, 0, 0, 0);
+                    endDate = new Date(customEndDate);
+                    endDate.setHours(23, 59, 59, 999);
+                    break;
+                case 'all':
+                    startDate = new Date(0); // Epoch
+                    break;
+                default:
+                    startDate = today;
+            }
+        }
+
+        try {
+            // Query IndexedDB directly
+            const [txns, logs] = await Promise.all([
+                db.transactionRecords.where('createdAt').between(startDate.toISOString(), endDate.toISOString(), true, true).toArray(),
+                db.stockAdjustments.where('createdAt').between(startDate.toISOString(), endDate.toISOString(), true, true).toArray()
+            ]);
+
+            // Sort Descending (Newest first)
+            setLocalTransactions(txns.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+            setLocalStockLogs(logs.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+
+        } catch (error) {
+            console.error("Error fetching local reports:", error);
+            showAlert({type: 'alert', title: 'Error', message: 'Gagal memuat data laporan dari database.'});
+        } finally {
+            setIsLocalLoading(false);
+        }
+    }, [filter, customStartDate, customEndDate, dataSource, session, reportScope, sessionSettings.enabled, showAlert]);
+
+    // Trigger fetch when filters change
+    useEffect(() => {
+        fetchLocalData();
+    }, [fetchLocalData]);
+
+
     const loadCloudData = useCallback(async () => {
         setIsCloudLoading(true);
         setCloudTransactions([]);
         setCloudStockLogs([]);
         setIsDemoMode(false);
 
-        const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-        if (!dbxToken) {
+        // Updated Security Check
+        if (!dropboxService.isConfigured()) {
             const mock = mockDataService.getMockDashboardData();
             setCloudTransactions(mock.transactions);
             setCloudStockLogs(mock.stockAdjustments);
@@ -294,8 +367,9 @@ const ReportsView: React.FC = () => {
     };
     
     const isSessionMode = sessionSettings.enabled && session;
+    // Use Local State or Cloud State based on source
     const transactions = dataSource === 'local' ? localTransactions : cloudTransactions;
-    const stockLogs = dataSource === 'local' ? localStockAdjustments : cloudStockLogs;
+    const stockLogs = dataSource === 'local' ? localStockLogs : cloudStockLogs;
 
     const availableBranches = useMemo(() => {
         const branches = new Set<string>();
@@ -306,47 +380,13 @@ const ReportsView: React.FC = () => {
         return Array.from(branches).sort();
     }, [transactions, receiptSettings.storeId]);
 
-    const dateFilterPredicate = (dateStr: string) => {
-        const tDate = new Date(dateStr);
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-        switch (filter) {
-            case 'today':
-                return tDate >= today;
-            case 'week':
-                const weekStart = new Date(today);
-                weekStart.setDate(today.getDate() - today.getDay());
-                return tDate >= weekStart;
-            case 'month':
-                const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                return tDate >= monthStart;
-            case 'custom': {
-                if (!customStartDate || !customEndDate) return true;
-                const start = new Date(customStartDate);
-                start.setHours(0, 0, 0, 0); 
-                const end = new Date(customEndDate);
-                end.setHours(23, 59, 59, 999);
-                return tDate >= start && tDate <= end;
-            }
-            case 'all':
-            default:
-                return true;
-        }
-    };
-
     const filteredTransactions = useMemo(() => {
         let result = transactions;
         if (selectedBranch !== 'ALL') {
             result = result.filter(t => t.storeId === selectedBranch);
         }
-        if (isSessionMode && reportScope === 'session' && dataSource === 'local') {
-            result = result.filter(t => new Date(t.createdAt) >= new Date(session.startTime));
-        } else {
-            result = result.filter(t => dateFilterPredicate(t.createdAt));
-        }
-        return result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }, [transactions, filter, session, isSessionMode, reportScope, customStartDate, customEndDate, dataSource, selectedBranch]);
+        return result;
+    }, [transactions, selectedBranch]);
 
     const filteredStockLogs = useMemo(() => {
         let result = stockLogs;
@@ -354,9 +394,8 @@ const ReportsView: React.FC = () => {
              // @ts-ignore
              result = result.filter(s => s.storeId === selectedBranch);
         }
-        result = result.filter(s => dateFilterPredicate(s.createdAt)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         return result;
-    }, [stockLogs, filter, customStartDate, customEndDate, dataSource, selectedBranch]);
+    }, [stockLogs, dataSource, selectedBranch]);
 
     const activeTransactions = useMemo(() => filteredTransactions.filter(t => t.paymentStatus !== 'refunded'), [filteredTransactions]);
 
@@ -532,7 +571,7 @@ const ReportsView: React.FC = () => {
         today: 'Hari Ini',
         week: 'Minggu Ini',
         month: 'Bulan Ini',
-        all: 'Semua',
+        all: 'Semua (Hati-hati)',
         custom: 'Kustom'
     };
 
@@ -562,12 +601,15 @@ const ReportsView: React.FC = () => {
             <ActionMenu 
                 transaction={t}
                 onViewReceipt={setSelectedTransaction}
-                onPay={setUpdatingTransaction}
+                onPay={(txn) => {
+                    setUpdatingTransaction(txn);
+                    if(dataSource === 'local') fetchLocalData(); // Refresh local list after payment update
+                }}
                 onRefund={handleRefund}
                 disabled={dataSource !== 'local'}
             />
         )}
-    ], [setSelectedTransaction, setUpdatingTransaction, handleRefund, dataSource]);
+    ], [setSelectedTransaction, setUpdatingTransaction, handleRefund, dataSource, fetchLocalData]);
 
     const stockColumns = useMemo(() => [
         { label: 'Waktu', width: '1.5fr', render: (s: StockAdjustment) => <span className="text-slate-400 whitespace-nowrap">{new Date(s.createdAt).toLocaleString('id-ID')}</span> },
@@ -829,7 +871,12 @@ const ReportsView: React.FC = () => {
                                 </div>
 
                                 {/* Table Content */}
-                                <div className="h-[600px]">
+                                <div className="h-[600px] relative">
+                                    {isLocalLoading && (
+                                        <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center z-10">
+                                            <span className="text-white animate-pulse">Mengambil data dari database...</span>
+                                        </div>
+                                    )}
                                     {activeTab === 'sales' && (
                                         <VirtualizedTable 
                                             data={filteredTransactions} 
@@ -876,11 +923,16 @@ const ReportsView: React.FC = () => {
             {updatingTransaction && (
                 <UpdatePaymentModal 
                     isOpen={!!updatingTransaction} 
-                    onClose={() => setUpdatingTransaction(null)} 
+                    onClose={() => {
+                        setUpdatingTransaction(null);
+                        // Refresh logic handled inside useEffect monitoring filters
+                        if(dataSource === 'local') fetchLocalData();
+                    }} 
                     transaction={updatingTransaction}
                     onConfirm={(payments) => {
                         addPaymentToTransaction(updatingTransaction.id, payments);
                         setUpdatingTransaction(null);
+                        if(dataSource === 'local') fetchLocalData();
                     }}
                 />
             )}

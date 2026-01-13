@@ -30,10 +30,11 @@ const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose }
     
     const [mode, setMode] = useState<AdjustmentType>('in');
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedItem, setSelectedItem] = useState<{id: string, name: string, type: 'product' | 'raw_material', currentStock: number} | null>(null);
+    const [selectedItem, setSelectedItem] = useState<{id: string, name: string, type: 'product' | 'raw_material', currentStock: number, unit?: string, purchaseUnit?: string, conversionRate?: number} | null>(null);
     const [quantity, setQuantity] = useState('');
     const [selectedReason, setSelectedReason] = useState(REASONS[0]);
     const [notes, setNotes] = useState('');
+    const [usePurchaseUnit, setUsePurchaseUnit] = useState(false);
 
     const filteredItems = useMemo(() => {
         if (!searchTerm) return [];
@@ -45,7 +46,15 @@ const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose }
             
         const matchingMaterials = rawMaterials
             .filter(m => m.name.toLowerCase().includes(term))
-            .map(m => ({ id: m.id, name: m.name, type: 'raw_material' as const, currentStock: m.stock || 0 }));
+            .map(m => ({ 
+                id: m.id, 
+                name: m.name, 
+                type: 'raw_material' as const, 
+                currentStock: m.stock || 0,
+                unit: m.unit,
+                purchaseUnit: m.purchaseUnit,
+                conversionRate: m.conversionRate
+            }));
 
         return [...matchingProducts, ...matchingMaterials];
     }, [searchTerm, products, rawMaterials]);
@@ -53,15 +62,29 @@ const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose }
     const handleSelect = (item: any) => {
         setSelectedItem(item);
         setSearchTerm('');
+        setUsePurchaseUnit(false); // Reset toggle
+    };
+
+    const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        // Strictly prevent negative numbers
+        if (val.includes('-')) return;
+        if (val && !/^\d*\.?\d*$/.test(val)) return;
+        setQuantity(val);
     };
 
     const handleSave = () => {
         if (!selectedItem || !quantity) return;
         
-        const qty = parseFloat(quantity);
-        if (qty <= 0) {
+        let qty = parseFloat(quantity);
+        if (isNaN(qty) || qty <= 0) {
             showAlert({ type: 'alert', title: 'Jumlah Salah', message: 'Jumlah stok harus lebih dari 0.' });
             return;
+        }
+
+        // Apply Conversion if toggle is ON
+        if (usePurchaseUnit && selectedItem.conversionRate && selectedItem.conversionRate > 1) {
+            qty = qty * selectedItem.conversionRate;
         }
 
         const isOut = mode === 'out';
@@ -70,12 +93,13 @@ const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose }
         // Construct detailed note
         const userLabel = currentUser ? `[Oleh: ${currentUser.name}]` : '[Oleh: Staff]';
         const reasonLabel = isOut ? `[${selectedReason}]` : '[Restock Masuk]';
-        const finalNote = `${reasonLabel} ${notes ? `- ${notes}` : ''} ${userLabel}`;
+        const unitLabel = usePurchaseUnit ? `(Input: ${quantity} ${selectedItem.purchaseUnit})` : '';
+        const finalNote = `${reasonLabel} ${unitLabel} ${notes ? `- ${notes}` : ''} ${userLabel}`;
 
         addStockAdjustment(selectedItem.id, finalQty, finalNote);
         
         const actionText = isOut ? 'dilaporkan (Keluar)' : 'ditambahkan (Masuk)';
-        showAlert({ type: 'alert', title: 'Berhasil', message: `Stok ${selectedItem.name} berhasil ${actionText}.` });
+        showAlert({ type: 'alert', title: 'Berhasil', message: `Stok ${selectedItem.name} berhasil ${actionText} sebanyak ${qty} ${selectedItem.unit || 'Unit'}.` });
         
         handleReset();
     };
@@ -86,6 +110,7 @@ const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose }
         setQuantity('');
         setNotes('');
         setSelectedReason(REASONS[0]);
+        setUsePurchaseUnit(false);
     };
 
     const handleClose = () => {
@@ -168,25 +193,50 @@ const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose }
                                     </span>
                                 </div>
                                 <h3 className="font-bold text-lg text-white">{selectedItem.name}</h3>
-                                <p className="text-sm text-slate-400">Stok Saat Ini: <span className="text-white font-bold">{selectedItem.currentStock}</span></p>
+                                <p className="text-sm text-slate-400">Stok Saat Ini: <span className="text-white font-bold">{selectedItem.currentStock} {selectedItem.unit || ''}</span></p>
                             </div>
                             <button onClick={() => setSelectedItem(null)} className="text-sm text-sky-400 hover:underline">Ganti Barang</button>
                         </div>
 
                         <div className="space-y-3">
+                            
+                            {/* CONVERSION TOGGLE */}
+                            {selectedItem.purchaseUnit && selectedItem.conversionRate && selectedItem.conversionRate > 1 && (
+                                <div className="bg-slate-800 p-2 rounded flex items-center justify-between">
+                                    <label className="text-sm text-slate-300 flex-1 cursor-pointer" htmlFor="unitToggle">
+                                        Input dalam <strong>{selectedItem.purchaseUnit}</strong> (Besar)?
+                                        <span className="block text-xs text-slate-500">1 {selectedItem.purchaseUnit} = {selectedItem.conversionRate} {selectedItem.unit}</span>
+                                    </label>
+                                    <input 
+                                        type="checkbox" 
+                                        id="unitToggle"
+                                        checked={usePurchaseUnit}
+                                        onChange={e => setUsePurchaseUnit(e.target.checked)}
+                                        className="h-5 w-5 rounded bg-slate-900 border-slate-600 text-[#347758]"
+                                    />
+                                </div>
+                            )}
+
                             <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-1">
-                                    {mode === 'in' ? 'Jumlah Diterima' : 'Jumlah Dibuang/Rusak'}
+                                    {mode === 'in' ? 'Jumlah Diterima' : 'Jumlah Dibuang/Rusak'} ({usePurchaseUnit ? selectedItem.purchaseUnit : (selectedItem.unit || 'Pcs')})
                                 </label>
                                 <input 
                                     type="number" 
                                     min="0"
+                                    step="0.01"
                                     value={quantity} 
-                                    onChange={e => setQuantity(e.target.value)} 
+                                    onChange={handleQuantityChange} 
+                                    onKeyDown={(e) => { if(['-','e'].includes(e.key)) e.preventDefault(); }}
                                     className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg font-bold"
                                     placeholder="0"
                                     autoFocus
                                 />
+                                {usePurchaseUnit && quantity && selectedItem.conversionRate && (
+                                    <p className="text-xs text-green-400 mt-1 text-right">
+                                        Akan menambah: {parseFloat(quantity) * selectedItem.conversionRate} {selectedItem.unit}
+                                    </p>
+                                )}
                             </div>
 
                             {mode === 'out' && (

@@ -46,13 +46,25 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ form, onChange }) => {
                         checked={form.enabled} 
                         onChange={(val) => onChange({...form, enabled: val})} 
                     />
+                    
                     {form.enabled && (
-                        <ToggleSwitch 
-                            label="Mode Resep & Bahan Baku (Advanced)" 
-                            description="Stok produk berkurang berdasarkan bahan baku (Resep). Jika dimatikan, stok produk berkurang langsung."
-                            checked={form.trackIngredients} 
-                            onChange={(val) => onChange({...form, trackIngredients: val})} 
-                        />
+                        <>
+                            <div className="border-t border-slate-700 my-2"></div>
+                            
+                            <ToggleSwitch 
+                                label="Cegah Transaksi Stok Habis (Strict Mode)" 
+                                description="Jika aktif, produk tidak bisa ditambahkan ke keranjang jika stok 0 atau kurang (Termasuk bahan baku)."
+                                checked={form.preventNegativeStock || false} 
+                                onChange={(val) => onChange({...form, preventNegativeStock: val})} 
+                            />
+
+                            <ToggleSwitch 
+                                label="Mode Resep & Bahan Baku (Advanced)" 
+                                description="Stok produk berkurang berdasarkan bahan baku (Resep). Jika dimatikan, stok produk berkurang langsung."
+                                checked={form.trackIngredients} 
+                                onChange={(val) => onChange({...form, trackIngredients: val})} 
+                            />
+                        </>
                     )}
                 </div>
             </SettingsCard>

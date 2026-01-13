@@ -70,9 +70,8 @@ const FinanceView: React.FC = () => {
         setIsCloudLoading(true);
         setIsDemoMode(false);
 
-        // 1. Pre-check credentials
-        const dbxToken = localStorage.getItem('ARTEA_DBX_REFRESH_TOKEN');
-        if (!dbxToken) {
+        // 1. Pre-check credentials - SECURE CHECK
+        if (!dropboxService.isConfigured()) {
             const mock = mockDataService.getMockDashboardData();
             setCloudData({
                 transactions: mock.transactions,

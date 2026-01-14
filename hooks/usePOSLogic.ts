@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { 
     Product, CartItem as CartItemType, Transaction as TransactionType, 
     Customer, Payment, PaymentMethod, HeldCart, Addon, ProductVariant, 
@@ -27,7 +27,7 @@ export const usePOSLogic = () => {
     const { sessionSettings, session, startSession } = useSession();
     const { transactions, refundTransaction } = useFinance();
     const { receiptSettings } = useSettings();
-    const { addCustomer } = useCustomer();
+    const { addCustomer, customers } = useCustomer(); // Get customers list for sync
 
     // -- State Definitions --
     const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -60,9 +60,22 @@ export const usePOSLogic = () => {
     const [productForModifier, setProductForModifier] = useState<Product | null>(null);
     const [isSplitBillModalOpen, setSplitBillModalOpen] = useState(false);
     const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products');
+    
+    // New State for Member Search
+    const [isMemberSearchOpen, setMemberSearchOpen] = useState(false);
 
     const totalCartItems = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
     const { finalTotal } = getCartTotals();
+
+    // --- REAL-TIME CUSTOMER SYNC ---
+    useEffect(() => {
+        if (selectedCustomer) {
+            const freshCustomerData = customers.find(c => c.id === selectedCustomer.id);
+            if (freshCustomerData && JSON.stringify(freshCustomerData) !== JSON.stringify(selectedCustomer)) {
+                setSelectedCustomer(freshCustomerData);
+            }
+        }
+    }, [customers, selectedCustomer]);
 
     // -- Handlers --
 
@@ -182,12 +195,33 @@ export const usePOSLogic = () => {
         }
     }, [cart.length, getCartTotals, saveTransaction, showAlert, selectedCustomer, receiptSettings.enableKitchenPrinter]);
 
+    // UPDATED: Logic Scan Barcode to support Member Card
     const handleBarcodeScan = useCallback((barcode: string) => {
-        const product = findProductByBarcode(barcode);
-        if (product) handleProductClick(product);
-        else showAlert({type: 'alert', title: 'Produk Tidak Ditemukan', message: `Tidak ada produk dengan barcode: ${barcode}`});
-        setBarcodeScannerOpen(false);
-    }, [findProductByBarcode, showAlert]);
+        const cleanedBarcode = barcode.trim();
+
+        // 1. Cek Apakah ID Member?
+        const member = customers.find(c => c.memberId === cleanedBarcode);
+        if (member) {
+            setSelectedCustomer(member);
+            showAlert({ 
+                type: 'alert', 
+                title: 'Member Terdeteksi', 
+                message: `Berhasil login member: ${member.name} (${member.points} pts)` 
+            });
+            setBarcodeScannerOpen(false);
+            return;
+        }
+
+        // 2. Jika bukan Member, Cek Produk
+        const product = findProductByBarcode(cleanedBarcode);
+        if (product) {
+            handleProductClick(product);
+            // Optional: Close scanner after scan if preferred, or keep open for multiple scans
+            // setBarcodeScannerOpen(false); 
+        } else {
+            showAlert({type: 'alert', title: 'Tidak Ditemukan', message: `Kode "${cleanedBarcode}" tidak dikenali sebagai Produk atau Member.`});
+        }
+    }, [findProductByBarcode, showAlert, customers, handleProductClick]);
 
     const handleSaveName = (name: string) => {
         if (cartToRename) {
@@ -263,6 +297,7 @@ export const usePOSLogic = () => {
         productForModifier, setProductForModifier,
         isSplitBillModalOpen, setSplitBillModalOpen,
         mobileTab, setMobileTab,
+        isMemberSearchOpen, setMemberSearchOpen, // Export new state
         
         // Computed
         totalCartItems,

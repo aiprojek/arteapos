@@ -50,10 +50,19 @@ const ManualTab: React.FC = () => {
                         <ol className="list-decimal pl-5 space-y-1">
                             <li><strong>Pilih Produk:</strong> Klik produk di daftar atau gunakan scan barcode.</li>
                             <li><strong>Edit Keranjang:</strong> Klik item di keranjang kiri untuk mengubah jumlah, memberi diskon per item, atau menghapus.</li>
-                            <li><strong>Pilih Pelanggan (Opsional):</strong> Di bagian bawah keranjang, pilih pelanggan untuk mencatat poin member.</li>
+                            <li><strong>Pilih Pelanggan (Opsional):</strong> Di bagian bawah keranjang, klik "Cari" untuk memilih pelanggan.</li>
                             <li><strong>Bayar:</strong> Klik tombol "Bayar", pilih Tunai/Non-Tunai, masukkan nominal.</li>
                             <li><strong>Struk:</strong> Setelah sukses, struk muncul. Bisa dicetak atau dibagikan gambar via WA.</li>
                         </ol>
+                    </AccordionItem>
+                    <AccordionItem title="Membership, Cari & Scan Kartu" isOpen={openAccordion === 'pos_member'} onToggle={() => toggleAccordion('pos_member')} icon="users" colorClass="text-pink-400" badge="Update">
+                        <p>Kelola pelanggan dengan lebih cepat:</p>
+                        <ul className="list-disc pl-5 space-y-1 mt-2">
+                            <li><strong>Pencarian Cepat:</strong> Tidak perlu scroll dropdown. Klik tombol <strong>"Cari"</strong>, lalu ketik Nama, No HP, atau ID Member.</li>
+                            <li><strong>Smart Scanner:</strong> Gunakan tombol Scanner di kasir untuk memindai kartu member. Sistem otomatis mengenali apakah itu Produk atau Member.</li>
+                            <li><strong>Top Up Cepat:</strong> Klik tombol kecil <strong>"Isi"</strong> di sebelah saldo member untuk menambah deposit.</li>
+                            <li><strong>Bayar Pakai Saldo:</strong> Saat menekan tombol "Bayar", pilih metode <strong>"Saldo"</strong>.</li>
+                        </ul>
                     </AccordionItem>
                     <AccordionItem title="Modifier & Varian (Advanced)" isOpen={openAccordion === 'pos_2'} onToggle={() => toggleAccordion('pos_2')} icon="tag" colorClass="text-blue-400" badge="Update">
                         <p>Fitur baru untuk menangani pesanan yang kompleks (misal: Kopi Gula Aren).</p>
@@ -63,13 +72,13 @@ const ManualTab: React.FC = () => {
                             <li>Harga akan otomatis bertambah sesuai pilihan (misal: Extra Shot +5.000).</li>
                         </ul>
                     </AccordionItem>
-                    <AccordionItem title="Split Bill (Pisah Bayar)" isOpen={openAccordion === 'pos_3'} onToggle={() => toggleAccordion('pos_3')} icon="share" colorClass="text-orange-400" badge="Baru">
+                    <AccordionItem title="Split Bill (Pisah Bayar)" isOpen={openAccordion === 'pos_3'} onToggle={() => toggleAccordion('pos_3')} icon="share" colorClass="text-orange-400" badge="Update">
                         <p>Fitur untuk memecah satu pesanan menjadi beberapa pembayaran.</p>
                         <ol className="list-decimal pl-5 space-y-1 mt-2">
-                            <li>Masukkan semua pesanan ke keranjang.</li>
                             <li>Klik tombol <strong>Split</strong> di bawah keranjang.</li>
                             <li>Centang item mana saja yang mau dibayar <strong>sekarang</strong>.</li>
-                            <li>Klik "Pisahkan & Bayar". Item sisanya akan otomatis disimpan ke tab "Sisa Split" untuk dibayar orang berikutnya.</li>
+                            <li><strong>Hitung Kembalian:</strong> Masukkan uang tunai yang diterima untuk item terpilih, sistem akan menghitung kembalian khusus untuk split tersebut.</li>
+                            <li>Klik "Konfirmasi". Item sisanya akan otomatis dipindahkan ke tab baru untuk dibayar orang berikutnya.</li>
                         </ol>
                     </AccordionItem>
                     <AccordionItem title="Simpan Pesanan (Open Bill)" isOpen={openAccordion === 'pos_4'} onToggle={() => toggleAccordion('pos_4')} icon="clipboard" colorClass="text-slate-400">
@@ -99,7 +108,7 @@ const ManualTab: React.FC = () => {
                     <AccordionItem title="Konversi Satuan & Kalkulator HPP" isOpen={openAccordion === 'prod_conv'} onToggle={() => toggleAccordion('prod_conv')} icon="finance" colorClass="text-green-400" badge="Penting">
                         <p>Fitur cerdas untuk Bahan Baku agar stok akurat:</p>
                         <ul className="list-disc pl-5 mt-2 space-y-1">
-                            <li><strong>Kalkulator HPP:</strong> Tidak perlu hitung manual harga per gram. Cukup masukkan "Harga Beli Total" (misal: 25.000) dan "Berat/Isi Kemasan" (misal: 1000 gram). Sistem otomatis menghitung modal per unit (25 rupiah/gr).</li>
+                            <li><strong>Kalkulator HPP:</strong> Tidak perlu hitung manual harga per gram. Cukup masukkan "Harga Beli Total" (misal: 25.000) dan "Jumlah Isi/Berat" (misal: 1000 gram). Sistem otomatis menghitung modal per unit (25 rupiah/gr).</li>
                             <li><strong>Konversi Satuan Beli:</strong> Atur jika Anda belanja dalam satuan besar (Dus/Karton) tapi pakai satuan kecil (Pcs/Ml).</li>
                             <li><em>Contoh:</em> 1 Karton = 12 Pcs. Saat belanja (Restock), staff pilih input "1 Karton", sistem otomatis menambah stok "12 Pcs".</li>
                         </ul>
@@ -157,9 +166,40 @@ const ManualTab: React.FC = () => {
                 </div>
             </div>
 
-            {/* MENU 5: PENGATURAN */}
+            {/* MENU 5: PELANGGAN (NEW) */}
             <div>
-                <SectionHeader title="Menu: Pengaturan" icon="settings" desc="Konfigurasi sistem, user, dan data." />
+                <SectionHeader title="Menu: Pelanggan (Membership)" icon="users" desc="Kelola database member dan kartu digital." />
+                <div className="space-y-2">
+                    <AccordionItem title="Data Identitas Bebas (Sekolah/Kantor)" isOpen={openAccordion === 'cust_identity'} onToggle={() => toggleAccordion('cust_identity')} icon="tag" colorClass="text-sky-400" badge="Baru">
+                        <p>Kolom 'Kontak' pada data pelanggan kini bersifat fleksibel. Anda tidak harus mengisinya dengan Nomor HP.</p>
+                        <ul className="list-disc pl-5 space-y-1 mt-2">
+                            <li><strong>Koperasi Sekolah/Pesantren:</strong> Isi dengan Kelas, Asrama, atau NIS.</li>
+                            <li><strong>Kantor/Karyawan:</strong> Isi dengan Divisi atau NIK.</li>
+                            <li>Data ini bisa digunakan untuk pencarian di kasir.</li>
+                        </ul>
+                    </AccordionItem>
+                    <AccordionItem title="Kartu Member Digital & QR Code" isOpen={openAccordion === 'cust_card'} onToggle={() => toggleAccordion('cust_card')} icon="award" colorClass="text-yellow-400" badge="Baru">
+                        <p>Berikan pengalaman profesional kepada pelanggan setia Anda tanpa biaya cetak kartu fisik.</p>
+                        <ul className="list-disc pl-5 space-y-1 mt-2">
+                            <li>Masuk ke menu <strong>Keuangan &rarr; Tab Pelanggan</strong>.</li>
+                            <li>Klik ikon <strong>"Kartu"</strong> pada nama pelanggan.</li>
+                            <li>Akan muncul Kartu Member Digital dengan Nama, ID Unik, dan QR Code.</li>
+                            <li>Klik <strong>"Share WA"</strong> untuk mengirim gambar kartu langsung ke WhatsApp pelanggan.</li>
+                            <li><strong>Fungsi QR:</strong> Saat pelanggan datang kembali, scan QR di kartu mereka menggunakan "Barcode Scanner" di menu Kasir untuk menemukan data mereka secara instan.</li>
+                        </ul>
+                    </AccordionItem>
+                    <AccordionItem title="Saldo & Poin" isOpen={openAccordion === 'cust_bal'} onToggle={() => toggleAccordion('cust_bal')} icon="finance" colorClass="text-green-400">
+                        <ul className="list-disc pl-5 space-y-1">
+                            <li><strong>Top Up:</strong> Di tab Pelanggan, klik tombol "Isi Saldo". Uang yang diterima akan masuk ke Laporan Kas (Cash In).</li>
+                            <li><strong>Poin:</strong> Poin bertambah otomatis saat transaksi. Atur rumus poin di Pengaturan.</li>
+                        </ul>
+                    </AccordionItem>
+                </div>
+            </div>
+
+            {/* MENU 6: PENGATURAN & CLOUD */}
+            <div>
+                <SectionHeader title="Menu: Pengaturan & Cloud" icon="settings" desc="Konfigurasi sistem, sinkronisasi, dan manajemen memori." />
                 <div className="space-y-2">
                     <AccordionItem title="Setup Perangkat Pusat (Admin)" isOpen={openAccordion === 'set_central'} onToggle={() => toggleAccordion('set_central')} icon="star" colorClass="text-yellow-400" badge="Baru">
                         <p className="mb-2">Jika Anda adalah Owner/Admin yang ingin memantau cabang dari jauh:</p>
@@ -171,25 +211,24 @@ const ManualTab: React.FC = () => {
                         </ol>
                     </AccordionItem>
 
-                    <AccordionItem title="Cloud Sync & Multi-Cabang (Dropbox)" isOpen={openAccordion === 'set_1'} onToggle={() => toggleAccordion('set_1')} icon="wifi" colorClass="text-sky-400">
-                        <p>Fitur Cloud kini terpusat menggunakan <strong>Dropbox</strong> untuk kemudahan dan stabilitas.</p>
-                        <div className="bg-slate-800 p-3 rounded border border-slate-600 mt-2 mb-3">
-                            <strong className="text-blue-400 block mb-1">Fungsi Dropbox:</strong>
-                            <ul className="list-disc pl-4 text-xs text-slate-400 space-y-1">
-                                <li><strong>Backup Otomatis:</strong> Data penting disimpan ke folder aplikasi di Dropbox Anda.</li>
-                                <li><strong>Laporan Pusat:</strong> Jika Anda punya banyak cabang, setiap cabang akan mengirim data penjualan ke Dropbox.</li>
-                                <li><strong>Push Master Data (Penting):</strong> Admin pusat bisa mengubah Harga/Produk di perangkat pusat, lalu menekan tombol <strong>"Kirim Master" (di menu Data)</strong>. Seluruh cabang bisa langsung mengambil update tersebut via tombol "Update Menu Baru".</li>
-                            </ul>
+                    <AccordionItem title="Strategi Admin Ringan (Mode Intip)" isOpen={openAccordion === 'cloud_strategy'} onToggle={() => toggleAccordion('cloud_strategy')} icon="eye" colorClass="text-sky-400" badge="Recommended">
+                        <div className="bg-sky-900/20 border border-sky-700 p-3 rounded-lg mb-2">
+                            <strong className="text-sky-300">Konsep Utama:</strong> Agar perangkat Admin tidak berat/lemot, Anda TIDAK PERLU menyimpan data semua cabang ke database HP Anda secara permanen.
                         </div>
-                        
-                        <div className="space-y-2 border-t border-slate-700 pt-2">
-                            <strong className="text-yellow-400 text-sm block">Cara Pairing Cabang (Tanpa Login Email):</strong>
-                            <ol className="list-decimal pl-5 text-sm text-slate-300 space-y-1">
-                                <li><strong>Di Perangkat Admin (Pusat):</strong> Pastikan Dropbox terhubung. Di menu Data & Cloud, klik tombol biru <strong>"Bagikan Akses (Pairing)"</strong>.</li>
-                                <li><strong>Di Perangkat Cabang:</strong> Buka Pengaturan &rarr; Data & Cloud. Klik tombol <strong>"Scan Akses Pusat"</strong> atau <strong>"Input Kode"</strong>.</li>
-                                <li>Scan QR dari Admin. Selesai! Perangkat Cabang terhubung dan siap mengirim laporan.</li>
-                            </ol>
-                        </div>
+                        <ul className="list-disc pl-5 text-sm text-slate-300 space-y-2">
+                            <li><strong>Mode Intip (Viewer):</strong> Saat Anda menekan tombol "Refresh" di Dashboard/Laporan, data dari Cloud hanya ditampilkan sementara di layar (RAM). Ini sangat ringan.</li>
+                            <li><strong>Kapan harus Simpan ke Lokal?</strong> Hanya jika Anda ingin mengedit data tersebut, melakukan refund, atau mengubah stok secara manual. Jika hanya untuk melihat omzet, biarkan dalam Mode Intip (Dropbox).</li>
+                        </ul>
+                    </AccordionItem>
+
+                    <AccordionItem title="Siklus Bulanan (Jika Cloud Penuh)" isOpen={openAccordion === 'cloud_full'} onToggle={() => toggleAccordion('cloud_full')} icon="database" colorClass="text-orange-400">
+                        <p>Apa yang harus dilakukan jika penyimpanan Dropbox penuh?</p>
+                        <ol className="list-decimal pl-5 mt-2 space-y-1 text-sm text-slate-300">
+                            <li>Buka menu <strong>Pengaturan &rarr; Data & Cloud</strong>.</li>
+                            <li>Klik tombol <strong>"Download Arsip Cloud"</strong>. Pilih format (Excel/PDF) yang diinginkan. Simpan file ini di Laptop/Google Drive sebagai arsip bulanan.</li>
+                            <li>Setelah file aman terunduh, klik tombol merah <strong>"Kosongkan Folder Laporan"</strong>.</li>
+                            <li>Dropbox Anda kembali bersih dan siap menerima data bulan berikutnya. Perangkat Admin Anda tetap ringan karena tidak perlu menampung ribuan data lama.</li>
+                        </ol>
                     </AccordionItem>
 
                     <AccordionItem title="Perangkat Keras (Printer & Scanner)" isOpen={openAccordion === 'set_hw'} onToggle={() => toggleAccordion('set_hw')} icon="bluetooth" colorClass="text-purple-400">
@@ -201,21 +240,41 @@ const ManualTab: React.FC = () => {
                         </ul>
                     </AccordionItem>
                     
-                    <AccordionItem title="Manajemen Memori & Arsip" isOpen={openAccordion === 'set_mem'} onToggle={() => toggleAccordion('set_mem')} icon="database" colorClass="text-orange-400">
-                        <p className="mb-2">Solusi jika aplikasi terasa lambat karena data menumpuk.</p>
-                        <ul className="list-disc pl-5 space-y-1 text-sm">
-                            <li><strong>Indikator:</strong> Tombol "Memori Penuh" muncul di header.</li>
-                            <li><strong>Cara Arsip:</strong> Pengaturan &rarr; Data & Cloud &rarr; Buka Menu Pengarsipan.</li>
-                            <li><strong>Proses:</strong> Pilih rentang waktu &rarr; Unduh Arsip &rarr; Hapus Permanen. Data akan terhapus dari aplikasi tapi aman di file arsip Anda.</li>
-                        </ul>
-                    </AccordionItem>
-                    
-                    <AccordionItem title="Keamanan & User" isOpen={openAccordion === 'set_2'} onToggle={() => toggleAccordion('set_2')} icon="lock" colorClass="text-red-400">
+                    <AccordionItem title="Keamanan, User & Audit" isOpen={openAccordion === 'set_2'} onToggle={() => toggleAccordion('set_2')} icon="lock" colorClass="text-red-400" badge="Update">
                         <ul className="list-disc pl-5 space-y-1">
-                            <li><strong>Buat User Baru:</strong> Tambahkan akun Staf atau Manager.</li>
-                            <li><strong>PIN:</strong> Setiap user wajib punya PIN 4 digit.</li>
+                            <li><strong>Audit Log:</strong> Semua aktivitas Top Up Saldo, Refund, dan Hapus Produk kini tercatat di tab Audit Log (Pengaturan).</li>
+                            <li><strong>PIN:</strong> Setiap user wajib punya PIN 4 digit untuk mencatat siapa yang melakukan transaksi.</li>
                             <li><strong>Security Question:</strong> Jawaban rahasia untuk mereset PIN Admin jika lupa.</li>
                         </ul>
+                    </AccordionItem>
+                </div>
+            </div>
+
+            {/* MENU 7: KOMUNITAS & BERBAGI */}
+            <div>
+                <SectionHeader title="Komunitas & Berbagi" icon="share" desc="Bantu UMKM lain naik kelas dengan membagikan aplikasi ini." />
+                <div className="space-y-2">
+                    <AccordionItem title="Template Broadcast WhatsApp" isOpen={openAccordion === 'promo_wa'} onToggle={() => toggleAccordion('promo_wa')} icon="whatsapp" colorClass="text-green-500" badge="Teks Siap Salin">
+                        <p>Ingin mengajak rekan pengusaha lain untuk menggunakan Artea POS? Salin pesan di bawah ini:</p>
+                        <div className="bg-slate-900 p-3 rounded border border-slate-600 mt-2 font-mono text-xs text-slate-300 select-all cursor-text" onClick={(e) => {
+                            const range = document.createRange();
+                            range.selectNode(e.currentTarget);
+                            window.getSelection()?.removeAllRanges();
+                            window.getSelection()?.addRange(range);
+                        }}>
+                            Halo rekan-rekan pengusaha! 👋<br/><br/>
+                            Saya mau berbagi info aplikasi kasir (POS) yang baru saya coba dan sangat membantu, namanya *Artea POS*.<br/><br/>
+                            Kelebihannya yang bikin saya suka:<br/>
+                            1. *Gratis & Open Source*, gak ada biaya langganan bulanan.<br/>
+                            2. *Jalan Offline*, jadi gak ketergantungan sinyal internet.<br/>
+                            3. *Bisa Multi-Cabang* pakai sinkronisasi Dropbox (Hemat banget!).<br/>
+                            4. Fiturnya lengkap: Stok bahan baku, Laporan Laba Rugi, sampai ada AI consultant-nya.<br/><br/>
+                            Buat teman-teman yang lagi cari sistem kasir buat usahanya tapi mau hemat budget, ini *recommended* banget.<br/><br/>
+                            Bisa dicoba langsung di sini:<br/>
+                            👉 https://arteapos.pages.dev<br/><br/>
+                            Semoga bermanfaat dan usahanya makin laris! 🙏😊
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-1 italic">*Klik teks di atas untuk menyorot semua, lalu salin (Copy).</p>
                     </AccordionItem>
                 </div>
             </div>

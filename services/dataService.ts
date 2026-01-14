@@ -214,6 +214,51 @@ const exportCustomersCSV = (customers: Customer[]) => {
     downloadCSV(csvContent, 'customers_report.csv');
 };
 
+// NEW: Import Customers
+const importCustomersCSV = (file: File): Promise<Omit<Customer, 'id' | 'memberId' | 'createdAt'>[]> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const csv = event.target?.result as string;
+                const lines = csv.split('\n');
+                if (lines.length < 2) {
+                    resolve([]);
+                    return;
+                }
+                const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+                const customers: Omit<Customer, 'id' | 'memberId' | 'createdAt'>[] = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    const values = parseCSVLine(lines[i]);
+                    
+                    const nameIdx = headers.findIndex(h => h.includes('name') || h.includes('nama'));
+                    const contactIdx = headers.findIndex(h => h.includes('contact') || h.includes('kontak') || h.includes('hp'));
+                    const pointsIdx = headers.findIndex(h => h.includes('point') || h.includes('poin'));
+                    const balanceIdx = headers.findIndex(h => h.includes('balance') || h.includes('saldo'));
+
+                    if (nameIdx === -1) continue; // Name is mandatory
+
+                    const cust = {
+                        name: values[nameIdx]?.replace(/"/g, '').trim(),
+                        contact: contactIdx > -1 ? values[contactIdx]?.replace(/"/g, '').trim() : '',
+                        points: pointsIdx > -1 ? (parseInt(values[pointsIdx]) || 0) : 0,
+                        balance: balanceIdx > -1 ? (parseFloat(values[balanceIdx]) || 0) : 0
+                    };
+
+                    if (cust.name) customers.push(cust);
+                }
+                resolve(customers);
+            } catch (error) {
+                reject(new Error('Gagal mem-parsing file CSV pelanggan.'));
+            }
+        };
+        reader.onerror = (error) => reject(error);
+        reader.readAsText(file);
+    });
+};
+
 // Exported for external use
 export const generateStockAdjustmentsCSVString = (stockAdjustments: StockAdjustment[]) => {
     const headers = 'id,createdAt,productName,change,newStock,notes';
@@ -648,6 +693,8 @@ export const dataService = {
       reader.readAsText(file);
     });
   },
+  
+  importCustomersCSV,
 
   exportAllReportsCSV: (data: AppData) => {
     if (data.transactionRecords.length > 0) exportTransactionsCSV(data.transactionRecords);

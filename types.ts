@@ -136,7 +136,7 @@ export interface User {
   assignedBranch?: string; // NEW: 'all' or specific Branch ID
 }
 
-export type PaymentMethod = 'cash' | 'non-cash';
+export type PaymentMethod = 'cash' | 'non-cash' | 'member-balance'; // Added member-balance
 
 export interface Payment {
   id: string;
@@ -306,7 +306,18 @@ export interface Customer {
   name: string;
   contact?: string; // phone or email
   points: number;
+  balance: number; // NEW: Wallet Balance
   createdAt: string; // ISO string
+}
+
+export interface BalanceLog {
+    id: string;
+    customerId: string;
+    type: 'topup' | 'payment' | 'refund' | 'correction' | 'change_deposit';
+    amount: number;
+    description: string;
+    timestamp: string;
+    transactionId?: string; // Linked transaction
 }
 
 export type PointRuleType = 'spend' | 'product' | 'category';
@@ -344,7 +355,7 @@ export interface MembershipSettings {
 }
 
 // --- AUDIT LOG ---
-export type AuditAction = 'DELETE_PRODUCT' | 'UPDATE_PRICE' | 'STOCK_OPNAME' | 'REFUND_TRANSACTION' | 'LOGIN_ATTEMPT' | 'OTHER';
+export type AuditAction = 'DELETE_PRODUCT' | 'UPDATE_PRICE' | 'STOCK_OPNAME' | 'REFUND_TRANSACTION' | 'LOGIN_ATTEMPT' | 'OTHER' | 'BALANCE_TOPUP';
 
 export interface AuditLog {
     id: string;
@@ -377,6 +388,7 @@ export interface AppData {
   heldCarts?: HeldCart[];
   sessionHistory: SessionHistory[];
   auditLogs?: AuditLog[]; // NEW: Audit Trail
+  balanceLogs?: BalanceLog[]; // NEW: Customer Balance History
 }
 
 export type View = 'dashboard' | 'pos' | 'products' | 'raw-materials' | 'reports' | 'settings' | 'finance' | 'help';

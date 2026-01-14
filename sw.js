@@ -20,7 +20,11 @@ const urlsToCache = [
   'https://esm.sh/crypto-js@4.1.1',
   'https://esm.sh/jspdf@2.5.1',
   'https://esm.sh/jspdf-autotable@3.8.2',
-  'https://esm.sh/xlsx@0.18.5'
+  'https://esm.sh/xlsx@0.18.5',
+  // Bootstrap Icons CSS & Fonts for Offline
+  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css',
+  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/fonts/bootstrap-icons.woff2',
+  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/fonts/bootstrap-icons.woff'
 ];
 
 self.addEventListener('install', event => {

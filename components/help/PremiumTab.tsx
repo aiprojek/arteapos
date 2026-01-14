@@ -113,8 +113,9 @@ const PremiumTab: React.FC = () => {
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {services.map((service) => (
                     <div key={service.id} className="bg-slate-800 border border-slate-700 rounded-xl p-5 hover:border-[#52a37c] transition-all flex flex-col h-full group relative overflow-hidden">
+                        {/* Background Icon - Made larger using text-[8rem] */}
                         <div className={`absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity ${service.color}`}>
-                            <Icon name={service.icon} className="w-32 h-32" />
+                            <Icon name={service.icon} className="w-32 h-32 text-[8rem]" />
                         </div>
                         
                         <div className="flex items-center gap-3 mb-4">

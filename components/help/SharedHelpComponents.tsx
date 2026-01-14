@@ -70,7 +70,8 @@ export const ScenarioCard: React.FC<{
     return (
         <div className={`bg-slate-800 p-5 rounded-xl border border-slate-700 hover:border-slate-500 transition-colors relative overflow-hidden group h-full`}>
             <div className={`absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity ${textColor}`}>
-                <Icon name={icon} className="w-24 h-24" />
+                {/* Gunakan style fontSize eksplisit untuk memastikan ikon font menjadi besar */}
+                <Icon name={icon} className="w-32 h-32" style={{ fontSize: '8rem' }} />
             </div>
             <h3 className={`text-lg font-bold mb-2 flex items-center gap-2 ${textColor}`}>
                 <Icon name={icon} className="w-6 h-6" /> {title}

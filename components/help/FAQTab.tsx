@@ -8,6 +8,65 @@ const FAQTab: React.FC = () => {
                 <h3 className="font-bold text-white mb-2 text-lg">Tanya Jawab & Masalah Umum</h3>
                 <div className="space-y-4">
                     
+                    {/* --- NEW FAQ FOR MEMBER CARD --- */}
+                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah barcode scanner bisa untuk kartu member?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: <strong>Ya!</strong> Tombol Scanner di menu Kasir sekarang sudah "Smart".
+                            Jika yang discan adalah kartu member, sistem otomatis login pelanggan tersebut.
+                            Jika yang discan adalah barang, sistem otomatis menambahkannya ke keranjang.
+                        </p>
+                    </div>
+
+                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Saya koperasi sekolah/kantor, bisa pakai data Kelas/Divisi?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: <strong>Bisa.</strong> Kolom "Kontak" pada data pelanggan bersifat bebas. Anda bisa mengisinya dengan 
+                            "Kelas 12A", "NIK 12345", atau "Divisi Gudang". 
+                            Data ini juga bisa digunakan sebagai kata kunci pencarian di halaman kasir.
+                        </p>
+                    </div>
+
+                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Bagaimana cara mengirim Kartu Member ke Pelanggan?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: Di menu <strong>Keuangan &rarr; Tab Pelanggan &rarr; Ikon Kartu</strong>, klik tombol <strong>"Share WA"</strong>. 
+                            Ini akan otomatis mengunduh gambar kartu (PNG) dan membuka WhatsApp. Anda tinggal melampirkan gambar tersebut ke chat pelanggan.
+                        </p>
+                    </div>
+                    {/* ------------------------------- */}
+
+                    <div className="bg-slate-900/50 p-4 rounded-lg">
+                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah uang Top Up Saldo dihitung sebagai Omzet Penjualan?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: <strong>Tidak.</strong> Dalam akuntansi, uang Top Up dianggap sebagai <strong>Deposit (Titipan)</strong> atau Uang Muka. 
+                            Di Artea POS, saat Anda melakukan Top Up member, uang tersebut masuk ke laporan <strong>Arus Kas (Kas Masuk)</strong> sehingga jumlah uang di laci kasir tetap balance saat tutup shift.
+                            <br/><br/>
+                            Omzet Penjualan baru akan bertambah ketika member tersebut <strong>membelanjakan</strong> saldonya untuk membeli produk.
+                        </p>
+                    </div>
+
+                    <div className="bg-slate-900/50 p-4 rounded-lg">
+                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah data cabang otomatis tersimpan di HP Admin?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: <strong>Tidak otomatis.</strong> Aplikasi ini didesain agar perangkat Admin tetap ringan ("Mode Intip"). Data cabang tersimpan di Dropbox. Saat Anda menekan tombol "Refresh" di Dashboard, aplikasi hanya mengunduh data tersebut ke memori sementara untuk ditampilkan (View Only).
+                            <br/>Data tidak akan memenuhi penyimpanan lokal HP Anda kecuali Anda menekan tombol "Simpan ke Lokal".
+                        </p>
+                    </div>
+
+                    <div className="bg-slate-900/50 p-4 rounded-lg">
+                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Dropbox penuh! Apa yang harus saya lakukan?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: Anda tidak perlu upgrade Dropbox berbayar. Lakukan prosedur <strong>Arsip & Bersihkan</strong>:
+                            <ol className="list-decimal pl-5 mt-1">
+                                <li>Masuk menu <strong>Pengaturan &rarr; Data & Cloud</strong>.</li>
+                                <li>Klik <strong>"Download Arsip Cloud"</strong>. Simpan file backup (Excel/JSON) ke tempat aman (Laptop/Google Drive).</li>
+                                <li>Setelah file terunduh, klik tombol merah <strong>"Kosongkan Folder Laporan"</strong>.</li>
+                            </ol>
+                            Ini akan membersihkan Dropbox sehingga cabang bisa mengirim data baru lagi, tanpa membebani memori HP Admin.
+                        </p>
+                    </div>
+
                     <div className="bg-slate-900/50 p-4 rounded-lg">
                         <h4 className="font-bold text-[#52a37c] mb-1">Q: Apa bedanya setting identitas "PUSAT" dengan Cabang biasa?</h4>
                         <p className="text-slate-300 text-sm">
@@ -26,15 +85,6 @@ const FAQTab: React.FC = () => {
                     </div>
 
                     <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apa bedanya "Satuan Pakai" dan "Satuan Beli"?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: <strong>Satuan Pakai</strong> adalah unit terkecil yang digunakan dalam resep (misal: Gram, Ml, Pcs). 
-                            <strong>Satuan Beli</strong> adalah unit kemasan saat Anda belanja ke supplier (misal: Karton, Bal, Dus). 
-                            <br/>Dengan fitur konversi, Anda bisa input beli "1 Karton", dan sistem otomatis menambah stok "24 Pcs" (jika disetting 1 Karton = 24 Pcs).
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
                         <h4 className="font-bold text-[#52a37c] mb-1">Q: Bagaimana cara input banyak bahan baku sekaligus?</h4>
                         <p className="text-slate-300 text-sm">
                             A: Gunakan fitur <strong>Tambah Massal (Bulk Add)</strong>. Anda bisa mengetik langsung di tabel (seperti Excel) atau mengunggah file CSV. 
@@ -43,102 +93,24 @@ const FAQTab: React.FC = () => {
                     </div>
 
                     <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Mengapa HPP (Harga Modal) otomatis terisi?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Di formulir bahan baku, terdapat <strong>Kalkulator HPP</strong>. Jika Anda mengisi "Harga Beli Total" dan "Jumlah Isi/Berat", sistem akan membaginya secara otomatis untuk mendapatkan harga modal per unit terkecil (per gram/ml). Ini mencegah kesalahan hitung manual.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
                         <h4 className="font-bold text-[#52a37c] mb-1">Q: Bisakah banyak kasir/cabang input data bersamaan?</h4>
                         <p className="text-slate-300 text-sm">
                             A: <strong>YA, Sangat Aman!</strong> Sistem Artea POS telah diperbarui dengan teknologi <em>Smart Unique ID</em>.
-                            Setiap transaksi kini memiliki sidik jari unik yang mencakup Kode Cabang, Nama Kasir, dan Waktu.
-                            Jadi, meskipun ada 10 kasir menekan tombol "Bayar" di detik yang sama, semua data akan tersimpan rapi di Cloud tanpa ada yang tertimpa atau hilang.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Mengapa muncul peringatan "Memori Penuh"?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Aplikasi mendeteksi bahwa database lokal (di browser) sudah menyimpan lebih dari 5000 catatan (transaksi + log). 
-                            Hal ini bisa membuat aplikasi menjadi lambat (lag). Disarankan untuk segera melakukan <strong>Pengarsipan & Pembersihan Data</strong> di menu Pengaturan.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah data saya hilang setelah "Hapus Data Lama"?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Data akan hilang dari <strong>tampilan aplikasi</strong>, tetapi Anda <strong>WAJIB</strong> mengunduh file backup (Excel/PDF) sebelum menghapusnya. 
-                            Jadi, data historis Anda tetap aman di file yang Anda unduh tersebut.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apa itu "Scan Akses Pusat (Pairing)" dan siapa yang menggunakannya?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Fitur ini <strong>khusus untuk perangkat cabang</strong>. Fungsinya untuk menghubungkan Perangkat Cabang ke akun Dropbox Admin Pusat tanpa perlu login email. 
-                            <br/>Admin Pusat cukup membuat kode lewat tombol "Bagikan Akses", lalu staf cabang memindai (scan) atau memasukkan kode tersebut.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Kamera scan barcode error / tidak muncul?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Cek hal berikut:
-                            <ol className="list-decimal pl-5 mt-1">
-                                <li>Lihat ikon "Gembok" di sebelah alamat website (URL bar). Pastikan izin <strong>Kamera</strong> diatur ke "Allow" atau "Izinkan".</li>
-                                <li>Pastikan kamera tidak sedang dipakai aplikasi lain (Zoom/Meet/Aplikasi Lain).</li>
-                                <li>Jika di Laptop tanpa kamera belakang, sistem akan otomatis beralih ke Webcam depan.</li>
-                            </ol>
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Hasil print struk ada tulisan URL/Tanggal di atasnya?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Ini adalah pengaturan bawaan browser. Saat jendela print muncul, cari menu "More Settings" (Setelan Lainnya), lalu <strong>hilangkan centang</strong> pada opsi <strong>"Headers and footers"</strong>.
+                            Setiap transaksi kini memiliki sidik jari unik. Jadi meskipun banyak kasir menekan tombol "Bayar" bersamaan, semua data akan tersimpan rapi di Cloud tanpa ada yang tertimpa.
                         </p>
                     </div>
 
                     <div className="bg-slate-900/50 p-4 rounded-lg">
                         <h4 className="font-bold text-[#52a37c] mb-1">Q: Mengapa data cabang tidak muncul otomatis di Admin?</h4>
                         <p className="text-slate-300 text-sm">
-                            A: Sistem Dropbox berbasis file, bukan database real-time. Data cabang sudah terkirim secara otomatis, namun Admin perlu menekan tombol <strong>"Refresh Data"</strong> (ikon panah melingkar) di Dashboard, Laporan, atau Keuangan untuk menarik/mengunduh update terbaru tersebut ke layar Anda.
+                            A: Sistem Dropbox berbasis file, bukan database real-time. Data cabang sudah terkirim secara otomatis, namun Admin perlu menekan tombol <strong>"Refresh Data"</strong> (ikon panah melingkar) di Dashboard untuk menarik/mengunduh update terbaru tersebut ke layar Anda (Mode Intip).
                         </p>
                     </div>
 
                     <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Bagaimana cara print struk via Bluetooth?</h4>
+                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah aplikasi ini boleh disebarkan/dijual lagi?</h4>
                         <p className="text-slate-300 text-sm">
-                            A: Pastikan Anda menggunakan browser <strong>Google Chrome</strong> di Android atau Desktop. 
-                            Hidupkan Bluetooth dan pasangkan (pair) printer di pengaturan Perangkat dulu. 
-                            Di aplikasi, klik "Cetak BT" &rarr; Pilih printer Anda.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Saya lupa PIN Admin, bagaimana cara masuk?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Di layar Login, ketuk <strong>Logo Aplikasi</strong> di atas sebanyak <strong>5 kali</strong> dengan cepat. 
-                            Anda akan diminta menjawab "Pertanyaan Keamanan" yang dibuat di pengaturan. Jika benar, Anda bisa membuat PIN baru.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah data saya hilang jika Perangkat rusak?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: <strong>YA</strong>, jika Anda tidak menghubungkan Dropbox. Aplikasi ini Offline-first (data di Perangkat). 
-                            Solusi: Segera hubungkan Dropbox di menu Pengaturan. Data akan otomatis ter-backup ke cloud.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Sinkronisasi Cloud gagal / Penuh?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Penyimpanan gratis Dropbox mungkin penuh. 
-                            Masuk ke Pengaturan &rarr; Data &rarr; Klik tombol merah <strong>"Kosongkan Folder Laporan"</strong>. 
-                            Ini akan menghapus log transaksi lama di cloud (tapi data di Perangkat aman) agar sync bisa berjalan lagi.
+                            A: <strong>Sangat Boleh!</strong> Artea POS adalah Open Source (GPL v3.0). Anda bebas membagikannya ke teman, komunitas, atau bahkan menjadikannya paket bundling dengan hardware (Tablet/Printer) yang Anda jual, selama Anda menyertakan informasi lisensi aslinya.
                         </p>
                     </div>
 

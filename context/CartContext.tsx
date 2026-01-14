@@ -6,6 +6,7 @@ import { useAuth } from './AuthContext';
 import { useProduct } from './ProductContext';
 import { useSettings } from './SettingsContext';
 import { useCloudSync } from './CloudSyncContext'; // NEW
+import { useAudit } from './AuditContext'; // IMPORT AUDIT
 import { calculateCartTotals } from '../utils/cartCalculations'; // NEW
 import type { CartItem, Discount, Product, HeldCart, Transaction as TransactionType, Payment, PaymentMethod, PaymentStatus, Addon, Reward, Customer, OrderType, ProductVariant, SelectedModifier } from '../types';
 
@@ -54,6 +55,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children }) => {
     const { data, setData } = useData();
     const { triggerAutoSync } = useCloudSync(); // Use new hook
+    const { logAudit } = useAudit(); // Hook Audit
     const { showAlert } = useUI();
     const { currentUser } = useAuth();
     const { receiptSettings } = useSettings();
@@ -444,6 +446,14 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                             pointsSpent: pointsSpent,
                             description: appliedReward.reward.name,
                         };
+                        
+                        // AUDIT LOG: Record Reward Redemption
+                        logAudit(
+                            currentUser,
+                            'OTHER', // Generic action type or define REWARD
+                            `Tukar Poin: ${appliedReward.reward.name} (-${pointsSpent} pts) oleh ${customer.name}`,
+                            uniqueId
+                        );
                     }
                     updatedCustomers = prev.customers.map(c => c.id === customerId ? {...c, points: c.points + pointsEarned - pointsSpent} : c);
                 }
@@ -498,7 +508,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         setTimeout(() => triggerAutoSync(currentUser.name), 500);
 
         return newTransaction;
-    }, [cart, getCartTotals, setData, currentUser, appliedReward, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, rawMaterials, products, orderType, receiptSettings.storeId, triggerAutoSync]);
+    }, [cart, getCartTotals, setData, currentUser, appliedReward, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, rawMaterials, products, orderType, receiptSettings.storeId, triggerAutoSync, logAudit]);
     
     return (
         <CartContext.Provider value={{

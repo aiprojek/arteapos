@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useCart } from '../../context/CartContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useCustomer } from '../../context/CustomerContext';
@@ -8,6 +8,8 @@ import { CURRENCY_FORMATTER } from '../../constants';
 import Icon from '../Icon';
 import Button from '../Button';
 import ActiveOrderList from './ActiveOrderList';
+import Modal from '../Modal';
+import { MemberSearchModal } from './POSModals'; // Import new modal
 import type { Customer, OrderType } from '../../types';
 
 // Sub-components moved here for cleaner file structure
@@ -52,10 +54,13 @@ const CustomerSelection: React.FC<{
     selectedCustomer: Customer | null;
     onSelectCustomer: (customer: Customer | null) => void;
     onOpenAddModal: () => void;
+    onOpenSearchModal: () => void; // New Prop
+    onOpenScanner: () => void; // New Prop
     onSelectOrderType: (type: OrderType) => void;
+    onTopUpClick: () => void;
     orderType: OrderType;
-}> = ({ selectedCustomer, onSelectCustomer, onOpenAddModal, onSelectOrderType, orderType }) => {
-    const { customers, membershipSettings } = useCustomer();
+}> = ({ selectedCustomer, onSelectCustomer, onOpenAddModal, onOpenSearchModal, onOpenScanner, onSelectOrderType, onTopUpClick, orderType }) => {
+    const { membershipSettings } = useCustomer();
     const { receiptSettings } = useSettings();
     
     const availableOrderTypes = receiptSettings.orderTypes && receiptSettings.orderTypes.length > 0
@@ -77,22 +82,59 @@ const CustomerSelection: React.FC<{
             </div>
             
             {membershipSettings.enabled && (
-                <div className="flex gap-2">
-                    <select 
-                        value={selectedCustomer?.id || ''}
-                        onChange={(e) => onSelectCustomer(customers.find(c => c.id === e.target.value) || null)}
-                        className="w-full bg-slate-700 p-2 rounded-md text-sm text-white outline-none focus:ring-1 focus:ring-[#347758]"
-                    >
-                        <option value="">Pelanggan Umum</option>
-                        {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.points} poin)</option>)}
-                    </select>
-                    <button 
-                        onClick={onOpenAddModal}
-                        className="bg-[#347758] p-2 rounded-md text-white hover:bg-[#2a6046]"
-                        title="Tambah Pelanggan Baru"
-                    >
-                        <Icon name="plus" className="w-5 h-5" />
-                    </button>
+                <div className="space-y-2">
+                    {/* CUSTOMER CARD UI */}
+                    <div className="flex gap-2 items-center">
+                        <div className={`flex-1 flex items-center justify-between p-2 rounded-lg border ${selectedCustomer ? 'bg-slate-700 border-[#347758]' : 'bg-slate-700 border-slate-600'}`}>
+                            <div className="flex items-center gap-2 overflow-hidden">
+                                <div className={`p-1.5 rounded-full ${selectedCustomer ? 'bg-[#347758]/20 text-[#52a37c]' : 'bg-slate-600 text-slate-400'}`}>
+                                    <Icon name={selectedCustomer ? "users" : "users"} className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className={`font-bold text-sm truncate ${selectedCustomer ? 'text-white' : 'text-slate-400'}`}>
+                                        {selectedCustomer ? selectedCustomer.name : 'Pelanggan Umum'}
+                                    </p>
+                                    {selectedCustomer && <p className="text-[10px] text-slate-400 truncate">{selectedCustomer.memberId}</p>}
+                                </div>
+                            </div>
+                            
+                            {selectedCustomer ? (
+                                <button onClick={() => onSelectCustomer(null)} className="text-slate-400 hover:text-red-400 p-1">
+                                    <Icon name="close" className="w-4 h-4"/>
+                                </button>
+                            ) : (
+                                <button onClick={onOpenSearchModal} className="text-[#52a37c] hover:text-white text-xs font-bold px-2 py-1 bg-[#347758]/10 hover:bg-[#347758] rounded transition-colors">
+                                    Cari
+                                </button>
+                            )}
+                        </div>
+                        
+                        {!selectedCustomer && (
+                            <button 
+                                onClick={onOpenScanner}
+                                className="bg-slate-700 border border-slate-600 p-2.5 rounded-lg text-slate-300 hover:bg-slate-600 hover:text-white transition-colors"
+                                title="Scan Kartu Member"
+                            >
+                                <Icon name="barcode" className="w-5 h-5" />
+                            </button>
+                        )}
+                    </div>
+                    
+                    {/* Show Wallet Balance with Top Up Button */}
+                    {selectedCustomer && (
+                        <div className="flex items-center justify-between text-xs bg-slate-900/50 p-2 rounded border border-slate-700 animate-fade-in">
+                            <span className="text-slate-400">Saldo Member:</span>
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold text-green-400 text-sm">{CURRENCY_FORMATTER.format(selectedCustomer.balance || 0)}</span>
+                                <button 
+                                    onClick={onTopUpClick}
+                                    className="bg-[#347758] hover:bg-[#2a6046] text-white px-2 py-0.5 rounded text-[10px] flex items-center gap-1 transition-colors"
+                                >
+                                    <Icon name="plus" className="w-3 h-3"/> Isi
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -133,11 +175,18 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     } = useCart();
     
     const { sessionSettings } = useSession();
-    const { membershipSettings } = useCustomer();
+    const { membershipSettings, addBalance } = useCustomer();
     const { receiptSettings } = useSettings();
 
     const { subtotal, itemDiscountAmount, cartDiscountAmount, taxAmount, serviceChargeAmount, finalTotal } = getCartTotals();
     const quickPayAmounts = [20000, 50000, 100000];
+
+    // --- Top Up State ---
+    const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+    const [topUpAmount, setTopUpAmount] = useState('');
+    
+    // --- Member Search State ---
+    const [isMemberSearchOpen, setIsMemberSearchOpen] = useState(false);
 
     // Actions Logic
     const handleSwitchCart = (cartId: string | null) => {
@@ -149,6 +198,45 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         clearCart();
         setSelectedCustomer(null);
     }
+
+    const handleConfirmTopUp = () => {
+        if (!selectedCustomer || !topUpAmount) return;
+        const amount = parseFloat(topUpAmount);
+        if (amount > 0) {
+            addBalance(selectedCustomer.id, amount, "Top Up via Kasir", true);
+            setIsTopUpOpen(false);
+            setTopUpAmount('');
+        }
+    };
+
+    // Helper to open main scanner in product browser mode (handled by parent props ideally, 
+    // but here we might need to signal parent to open scanner specifically for member?)
+    // Actually, checking `usePOSLogic`, the scanner is global. 
+    // We can emit a custom event or use a prop if provided.
+    // For now, let's assume we dispatch an event that `ProductBrowser` or `POSView` listens to, 
+    // OR better, we need `onOpenScanner` prop passed down if not already.
+    // Wait, `CartSidebar` props don't have `onOpenScanner`. 
+    // I will simulate a click on the main scanner button via DOM or just dispatch event?
+    // Better: Add the logic to open scanner directly here? 
+    // NO, `POSView` controls the scanner state.
+    // Let's dispatch a custom event 'open-scanner' as a workaround if prop isn't available, 
+    // OR assume the user will use the main scanner button.
+    // To solve this properly, I should have updated `POSView` to pass `onOpenScanner` to `CartSidebar`.
+    // BUT I can't edit POSView in this change block easily without bloating response.
+    // WORKAROUND: I will dispatch a window event `open-barcode-scanner` which POSView *should* listen to?
+    // No, standard way: Add `onOpenScanner` to props? 
+    // Let's check `POSView.tsx` content... it does NOT pass `onOpenScanner` to `CartSidebar`.
+    // So I will trigger it by dispatching the 'F4' key event (search) or just rely on the search modal's scan button which I can implement?
+    
+    // Actually, `usePOSLogic` has `setBarcodeScannerOpen`. I can't access it here.
+    // I will trigger the scanner via a CustomEvent `trigger-scan-member` which `POSView` will listen.
+    // OR simpler: `MemberSearchModal` has `onScan`. 
+    
+    const triggerScanner = () => {
+        // Dispatch custom event that POSView listens to (I'll add listener in POSView or just reuse F9 hotkey if exists?)
+        // Let's create a custom event.
+        window.dispatchEvent(new CustomEvent('open-pos-scanner'));
+    };
 
     const CartActions = () => {
         if (!sessionSettings.enableCartHolding) return null;
@@ -177,7 +265,16 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     };
 
     return (
-        <div className={`w-full md:w-96 lg:w-[420px] bg-slate-800 md:rounded-xl shadow-none md:shadow-2xl flex flex-col p-4 flex-shrink-0 h-full border-l-0 md:border-l border-slate-700 ${isSessionLocked ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className="w-full md:w-96 lg:w-[420px] bg-slate-800 md:rounded-xl shadow-none md:shadow-2xl flex flex-col p-4 flex-shrink-0 h-full border-l-0 md:border-l border-slate-700 transition-all">
+            {isSessionLocked && (
+                <div className="absolute inset-0 bg-slate-900/80 z-20 flex items-center justify-center rounded-xl backdrop-blur-sm">
+                    <div className="text-center p-4">
+                        <Icon name="lock" className="w-12 h-12 text-slate-500 mx-auto mb-2"/>
+                        <p className="text-slate-300 font-bold">Sesi Terkunci</p>
+                    </div>
+                </div>
+            )}
+            
             {sessionSettings.enabled && sessionSettings.enableCartHolding && <HeldCartsTabs onSwitch={handleSwitchCart} />}
             
             <h2 className="text-xl font-bold mb-2 text-white hidden md:block">Keranjang</h2>
@@ -197,7 +294,10 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                             selectedCustomer={selectedCustomer} 
                             onSelectCustomer={setSelectedCustomer}
                             onOpenAddModal={onOpenCustomerForm}
+                            onOpenSearchModal={() => setIsMemberSearchOpen(true)}
+                            onOpenScanner={triggerScanner}
                             onSelectOrderType={setOrderType}
+                            onTopUpClick={() => setIsTopUpOpen(true)}
                             orderType={orderType}
                         />
                         
@@ -292,6 +392,62 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                     </div>
                 </>
             )}
+
+            {/* Quick Top Up Modal */}
+            <Modal isOpen={isTopUpOpen} onClose={() => setIsTopUpOpen(false)} title="Top Up Cepat">
+                <div className="space-y-4">
+                    {selectedCustomer && (
+                        <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
+                            <p className="text-sm text-slate-400">Member:</p>
+                            <p className="font-bold text-white text-lg">{selectedCustomer.name}</p>
+                            <p className="text-xs text-slate-500">Saldo Saat Ini: {CURRENCY_FORMATTER.format(selectedCustomer.balance || 0)}</p>
+                        </div>
+                    )}
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Nominal Top Up (Rp)</label>
+                        <input 
+                            type="number" 
+                            min="0"
+                            value={topUpAmount}
+                            onChange={(e) => setTopUpAmount(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-lg font-bold"
+                            placeholder="0"
+                            autoFocus
+                        />
+                    </div>
+
+                    <div className="flex gap-2">
+                        {[10000, 20000, 50000, 100000].map(amt => (
+                            <button 
+                                key={amt}
+                                onClick={() => setTopUpAmount(amt.toString())}
+                                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white text-xs py-2 rounded"
+                            >
+                                {amt/1000}k
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="text-xs text-yellow-500 bg-yellow-900/20 p-2 rounded">
+                        <p>Catatan: Uang yang diterima akan dicatat sebagai <strong>Kas Masuk</strong> pada sesi kasir saat ini.</p>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-2">
+                        <Button variant="secondary" onClick={() => setIsTopUpOpen(false)}>Batal</Button>
+                        <Button onClick={handleConfirmTopUp} disabled={!topUpAmount || parseFloat(topUpAmount) <= 0}>Konfirmasi</Button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Member Search Modal */}
+            <MemberSearchModal 
+                isOpen={isMemberSearchOpen}
+                onClose={() => setIsMemberSearchOpen(false)}
+                onSelect={(c) => setSelectedCustomer(c)}
+                onAddNew={onOpenCustomerForm}
+                onScan={triggerScanner}
+            />
         </div>
     );
 };

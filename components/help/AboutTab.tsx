@@ -7,7 +7,7 @@ const AboutTab: React.FC = () => {
     return (
         <div className="max-w-2xl mx-auto text-center animate-fade-in space-y-8">
             <div className="bg-slate-800 p-8 rounded-2xl shadow-lg border border-slate-700">
-                <Icon name="logo" className="w-20 h-20 text-[#52a37c] mx-auto mb-4" />
+                <Icon name="logo" className="w-24 h-24 text-[#52a37c] mx-auto mb-4" />
                 <h2 className="text-2xl font-bold text-white mb-2">Artea POS</h2>
                 <p className="text-slate-400 font-mono text-sm mb-6">Versi 20260113 (Community Edition)</p>
                 

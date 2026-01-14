@@ -17,7 +17,7 @@ import { CURRENCY_FORMATTER } from '../constants';
 // Modular Components
 import ProductBrowser from '../components/pos/ProductBrowser';
 import CartSidebar from '../components/pos/CartSidebar';
-import { SessionHistoryModal, PaymentModal, RewardsModal, DiscountModal, CashManagementModal } from '../components/pos/POSModals';
+import { SessionHistoryModal, PaymentModal, RewardsModal, DiscountModal, CashManagementModal, MemberSearchModal } from '../components/pos/POSModals';
 import type { ModifierGroup, Product, ProductVariant, Addon, SelectedModifier, CartItem } from '../types';
 
 // --- Local Modals ---
@@ -249,9 +249,18 @@ const POSView: React.FC = () => {
                 window.dispatchEvent(new CustomEvent('focus-search'));
             }
         };
+        
+        // Listener for Event from CartSidebar
+        const handleOpenScannerEvent = () => logic.setBarcodeScannerOpen(true);
+
         window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [logic.cart.length, logic.isSessionLocked]);
+        window.addEventListener('open-pos-scanner', handleOpenScannerEvent);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('open-pos-scanner', handleOpenScannerEvent);
+        };
+    }, [logic.cart.length, logic.isSessionLocked, logic]);
 
     return (
         <div className="flex flex-col h-full">

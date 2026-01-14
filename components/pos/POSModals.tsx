@@ -8,7 +8,90 @@ import { useCart } from '../../context/CartContext';
 import { useSession } from '../../context/SessionContext';
 import { useFinance } from '../../context/FinanceContext';
 import { useCustomer } from '../../context/CustomerContext';
+import { useAudit } from '../../context/AuditContext'; // IMPORT AUDIT
+import { useAuth } from '../../context/AuthContext'; // IMPORT AUTH
 import type { Customer, Transaction, PaymentMethod, Discount, Reward } from '../../types';
+
+// --- NEW: MEMBER SEARCH MODAL ---
+interface MemberSearchModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSelect: (customer: Customer) => void;
+    onAddNew: () => void;
+    onScan: () => void;
+}
+
+export const MemberSearchModal: React.FC<MemberSearchModalProps> = ({ isOpen, onClose, onSelect, onAddNew, onScan }) => {
+    const { customers } = useCustomer();
+    const [search, setSearch] = useState('');
+
+    useEffect(() => {
+        if (isOpen) setSearch('');
+    }, [isOpen]);
+
+    const filtered = useMemo(() => {
+        if (!search) return customers.slice(0, 10); // Show recent 10 if empty
+        const s = search.toLowerCase();
+        return customers.filter(c => 
+            c.name.toLowerCase().includes(s) || 
+            (c.contact && c.contact.includes(s)) ||
+            c.memberId.toLowerCase().includes(s)
+        );
+    }, [customers, search]);
+
+    if (!isOpen) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Cari Pelanggan Member">
+            <div className="space-y-4">
+                <div className="flex gap-2">
+                    <div className="relative flex-1">
+                        <input 
+                            type="text" 
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Cari Nama / HP / ID..."
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg pl-9 pr-3 py-2 text-white auto-focus"
+                            autoFocus
+                        />
+                        <Icon name="search" className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                    </div>
+                    <Button onClick={onScan} variant="secondary" className="px-3" title="Scan Kartu Member">
+                        <Icon name="barcode" className="w-5 h-5"/>
+                    </Button>
+                </div>
+
+                <div className="max-h-60 overflow-y-auto space-y-2 bg-slate-900/50 p-1 rounded-lg">
+                    {filtered.map(c => (
+                        <button 
+                            key={c.id}
+                            onClick={() => { onSelect(c); onClose(); }}
+                            className="w-full flex justify-between items-center p-3 rounded bg-slate-800 hover:bg-slate-700 transition-colors border border-slate-700 hover:border-slate-500 text-left group"
+                        >
+                            <div>
+                                <p className="font-bold text-white group-hover:text-[#52a37c]">{c.name}</p>
+                                <p className="text-xs text-slate-400">{c.memberId} {c.contact ? `• ${c.contact}` : ''}</p>
+                            </div>
+                            <div className="text-right">
+                                <span className="block text-xs text-yellow-400 font-bold">{c.points} Pts</span>
+                                {c.balance > 0 && <span className="block text-xs text-green-400">{CURRENCY_FORMATTER.format(c.balance)}</span>}
+                            </div>
+                        </button>
+                    ))}
+                    {filtered.length === 0 && (
+                        <div className="text-center py-4 text-slate-500 text-sm">
+                            Member tidak ditemukan.
+                        </div>
+                    )}
+                </div>
+
+                <Button onClick={() => { onClose(); onAddNew(); }} className="w-full" variant="secondary">
+                    <Icon name="plus" className="w-4 h-4" /> Daftar Member Baru
+                </Button>
+            </div>
+        </Modal>
+    );
+}
 
 // --- PAYMENT MODAL ---
 interface PaymentModalProps {
@@ -20,15 +103,29 @@ interface PaymentModalProps {
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onConfirm, total, selectedCustomer }) => {
+    const { addBalance } = useCustomer();
+    const { logAudit } = useAudit(); 
+    const { currentUser } = useAuth();
+    
     const [amountPaid, setAmountPaid] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
-    const [customerName, setCustomerName] = useState(''); // Fallback if no selectedCustomer
+    const [customerName, setCustomerName] = useState(''); 
+    const [depositChange, setDepositChange] = useState(false); 
+    
+    // Instant Top Up State
+    const [instantTopUpAmount, setInstantTopUpAmount] = useState('');
+    
+    // Split Bill State
+    const [splitCashInput, setSplitCashInput] = useState('');
 
     useEffect(() => {
         if (isOpen) {
             setAmountPaid('');
             setPaymentMethod('cash');
             setCustomerName(selectedCustomer ? selectedCustomer.name : '');
+            setDepositChange(false);
+            setInstantTopUpAmount('');
+            setSplitCashInput('');
         }
     }, [isOpen, selectedCustomer]);
 
@@ -36,9 +133,90 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
         setAmountPaid(amt.toString());
     };
 
+    const handleMethodChange = (method: PaymentMethod) => {
+        setPaymentMethod(method);
+        setInstantTopUpAmount(''); 
+        setSplitCashInput('');
+        if (method === 'member-balance' || method === 'non-cash') {
+            setAmountPaid(total.toString());
+        } else {
+            setAmountPaid(''); 
+        }
+    };
+
+    const handleInstantTopUp = () => {
+        if (!selectedCustomer || !instantTopUpAmount) return;
+        const amt = parseFloat(instantTopUpAmount);
+        if (amt > 0) {
+            addBalance(selectedCustomer.id, amt, "Top Up Instan (Kasir)", true); 
+            setInstantTopUpAmount('');
+        }
+    };
+
+    // --- LOGIC BARU: SPLIT PAYMENT DENGAN KEMBALIAN ---
+    const handleConfirmSplitPayment = () => {
+        if (!selectedCustomer) return;
+        
+        const balanceAvailable = selectedCustomer.balance || 0;
+        const cashTendered = parseFloat(splitCashInput) || 0;
+        const shortage = total - balanceAvailable;
+
+        if (cashTendered < shortage) {
+            alert("Uang tunai kurang dari sisa tagihan!");
+            return;
+        }
+
+        // 1. Potong Saldo Member (Full)
+        addBalance(selectedCustomer.id, -balanceAvailable, "Pembayaran Split (Saldo)");
+        
+        // 2. Audit Log
+        logAudit(
+            currentUser, 
+            'OTHER', 
+            `Split Bayar: Saldo ${CURRENCY_FORMATTER.format(balanceAvailable)} + Tunai ${CURRENCY_FORMATTER.format(cashTendered)}`, 
+            selectedCustomer.id
+        );
+
+        // 3. Catat Pembayaran
+        // Kita mencatat 'amount' tunai sesuai yang diberikan (tendered) agar kembalian tercatat di struk
+        const payments = [
+            { method: 'member-balance' as PaymentMethod, amount: balanceAvailable },
+            { method: 'cash' as PaymentMethod, amount: cashTendered } 
+        ];
+
+        const details = { 
+            customerId: selectedCustomer.id, 
+            customerName: selectedCustomer.name, 
+            customerContact: selectedCustomer.contact 
+        };
+
+        onConfirm(payments, details);
+    };
+
     const handleConfirm = () => {
-        const payAmount = parseFloat(amountPaid) || 0;
-        const payments = [{ method: paymentMethod, amount: payAmount }];
+        const payAmountInput = parseFloat(amountPaid) || 0;
+        
+        let payments: any[] = [];
+        let finalPayAmount = payAmountInput;
+
+        // Logic Saldo Full
+        if (paymentMethod === 'member-balance' && selectedCustomer) {
+            if (payAmountInput > (selectedCustomer.balance || 0)) {
+                return; // UI sudah memblokir, double check
+            }
+            addBalance(selectedCustomer.id, -payAmountInput, "Pembayaran Belanja");
+            logAudit(currentUser, 'OTHER', `Pembayaran via Saldo Member: ${CURRENCY_FORMATTER.format(payAmountInput)}`, selectedCustomer.id);
+        }
+
+        // Logic Deposit Kembalian
+        const change = payAmountInput - total;
+        if (paymentMethod === 'cash' && change > 0 && depositChange && selectedCustomer) {
+            finalPayAmount = total; 
+            addBalance(selectedCustomer.id, change, "Kembalian Belanja Disimpan");
+            logAudit(currentUser, 'OTHER', `Simpan Kembalian ke Saldo: ${CURRENCY_FORMATTER.format(change)}`, selectedCustomer.id);
+        }
+
+        payments = [{ method: paymentMethod, amount: finalPayAmount }];
         
         const details = selectedCustomer 
             ? { customerId: selectedCustomer.id, customerName: selectedCustomer.name, customerContact: selectedCustomer.contact }
@@ -49,6 +227,21 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
 
     const change = (parseFloat(amountPaid) || 0) - total;
     const quickAmounts = [total, 20000, 50000, 100000];
+    
+    // Balance Check
+    const memberBalance = selectedCustomer?.balance || 0;
+    const canPayWithBalance = selectedCustomer && memberBalance >= total;
+    const balanceShortage = total - memberBalance;
+    
+    // Split Calculation
+    const splitCashTendered = parseFloat(splitCashInput) || 0;
+    const splitChange = splitCashTendered - balanceShortage;
+
+    const getInputLabel = () => {
+        if (paymentMethod === 'member-balance') return 'Nominal Potong Saldo';
+        if (paymentMethod === 'non-cash') return 'Nominal Transaksi';
+        return 'Uang Tunai Diterima';
+    };
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Pembayaran">
@@ -58,45 +251,147 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                     <p className="text-3xl font-bold text-white">{CURRENCY_FORMATTER.format(total)}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-2">
                     <button 
-                        onClick={() => setPaymentMethod('cash')}
-                        className={`p-3 rounded-lg border text-center transition-colors ${paymentMethod === 'cash' ? 'bg-[#347758] border-[#347758] text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}`}
+                        onClick={() => handleMethodChange('cash')}
+                        className={`p-2 rounded-lg border text-center transition-colors flex flex-col items-center justify-center ${paymentMethod === 'cash' ? 'bg-[#347758] border-[#347758] text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}`}
                     >
-                        <Icon name="cash" className="w-6 h-6 mx-auto mb-1"/> Tunai
+                        <Icon name="cash" className="w-5 h-5 mb-1"/> 
+                        <span className="text-xs font-bold">Tunai</span>
                     </button>
                     <button 
-                        onClick={() => setPaymentMethod('non-cash')}
-                        className={`p-3 rounded-lg border text-center transition-colors ${paymentMethod === 'non-cash' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}`}
+                        onClick={() => handleMethodChange('non-cash')}
+                        className={`p-2 rounded-lg border text-center transition-colors flex flex-col items-center justify-center ${paymentMethod === 'non-cash' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}`}
                     >
-                        <Icon name="pay" className="w-6 h-6 mx-auto mb-1"/> Non-Tunai (QRIS/Card)
+                        <Icon name="pay" className="w-5 h-5 mb-1"/> 
+                        <span className="text-xs font-bold">QRIS/Card</span>
+                    </button>
+                    <button 
+                        onClick={() => selectedCustomer ? handleMethodChange('member-balance') : alert("Pilih pelanggan member terlebih dahulu.")}
+                        disabled={!selectedCustomer}
+                        className={`p-2 rounded-lg border text-center transition-colors flex flex-col items-center justify-center disabled:opacity-50 relative overflow-hidden ${paymentMethod === 'member-balance' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}`}
+                    >
+                        <Icon name="finance" className="w-5 h-5 mb-1"/> 
+                        <span className="text-xs font-bold">Saldo</span>
+                        {selectedCustomer && (
+                            <span className="text-[10px] block mt-0.5 bg-black/20 px-1 rounded">
+                                {CURRENCY_FORMATTER.format(memberBalance).replace(',00','').replace('Rp','')}
+                            </span>
+                        )}
                     </button>
                 </div>
 
-                <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Jumlah Diterima</label>
-                    <input 
-                        type="number" 
-                        value={amountPaid}
-                        onChange={e => setAmountPaid(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-3 text-white text-xl font-bold text-center"
-                        placeholder="0"
-                        autoFocus
-                    />
-                </div>
+                {/* --- LOGIC: MEMBER BALANCE PAYMENT --- */}
+                {paymentMethod === 'member-balance' && selectedCustomer && (
+                    <div className={`p-3 border rounded-lg text-sm ${canPayWithBalance ? 'bg-purple-900/30 border-purple-700' : 'bg-slate-800 border-slate-700'}`}>
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-slate-300">Saldo Member:</span>
+                            <span className={`font-bold ${canPayWithBalance ? 'text-white' : 'text-red-400'}`}>{CURRENCY_FORMATTER.format(memberBalance)}</span>
+                        </div>
 
-                {paymentMethod === 'cash' && (
-                    <div className="flex gap-2 justify-center">
-                        {quickAmounts.map((amt, idx) => (
-                            <button 
-                                key={idx}
-                                onClick={() => handleQuickAmount(amt)}
-                                disabled={amt < total && idx !== 0} // Allow exact if it's the first option
-                                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white disabled:opacity-50"
-                            >
-                                {idx === 0 ? 'Uang Pas' : CURRENCY_FORMATTER.format(amt).replace(',00', '').replace('Rp', '')}
-                            </button>
-                        ))}
+                        {!canPayWithBalance ? (
+                            <div className="space-y-3 animate-fade-in">
+                                <div className="p-3 bg-red-900/40 rounded flex justify-between items-center">
+                                    <span className="text-red-300 text-xs font-bold">⚠️ Saldo Kurang</span>
+                                    <span className="text-white font-bold text-sm">{CURRENCY_FORMATTER.format(balanceShortage)}</span>
+                                </div>
+                                
+                                <div className="border-t border-slate-700/50 my-1"></div>
+
+                                {/* MENU SPLIT BILL YANG DISEMPURNAKAN */}
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <p className="text-xs text-slate-400 font-bold uppercase">Split Bill: Bayar Sisa Tunai</p>
+                                        <p className="text-[10px] text-slate-500">Potong Saldo: {CURRENCY_FORMATTER.format(memberBalance)}</p>
+                                    </div>
+                                    
+                                    <div className="bg-slate-900 p-2 rounded border border-slate-600 mb-2">
+                                        <label className="block text-[10px] text-slate-400 mb-1">Uang Tunai Diterima (untuk kekurangan):</label>
+                                        <input 
+                                            type="number" 
+                                            placeholder={`Min ${balanceShortage}`}
+                                            value={splitCashInput}
+                                            onChange={(e) => setSplitCashInput(e.target.value)}
+                                            className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-2 text-white font-bold text-center text-lg focus:border-[#347758]"
+                                            autoFocus
+                                        />
+                                    </div>
+
+                                    {splitCashTendered >= balanceShortage && (
+                                        <div className="bg-green-900/30 p-2 rounded mb-2 text-center animate-fade-in">
+                                            <p className="text-xs text-green-300">Kembalian</p>
+                                            <p className="text-lg font-bold text-white">{CURRENCY_FORMATTER.format(splitChange)}</p>
+                                        </div>
+                                    )}
+
+                                    <Button 
+                                        onClick={handleConfirmSplitPayment} 
+                                        disabled={splitCashTendered < balanceShortage}
+                                        className="w-full"
+                                    >
+                                        Konfirmasi Bayar Split
+                                    </Button>
+                                </div>
+
+                                <div className="border-t border-slate-700/50 my-2 pt-2">
+                                    <p className="text-xs text-slate-500 text-center mb-1">Atau Top Up dulu:</p>
+                                    <div className="flex gap-2 justify-center">
+                                        {[10000, 20000, 50000].map(amt => (
+                                            <button 
+                                                key={amt} 
+                                                onClick={() => setInstantTopUpAmount(amt.toString())}
+                                                className="text-[10px] bg-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-600"
+                                            >
+                                                +{amt/1000}k
+                                            </button>
+                                        ))}
+                                        <button onClick={handleInstantTopUp} disabled={!instantTopUpAmount} className="text-[10px] bg-[#347758] text-white px-2 py-1 rounded">Isi</button>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                <div className="text-center bg-green-900/20 p-2 rounded border border-green-800">
+                                    <Icon name="check-circle-fill" className="w-4 h-4 inline mr-1 text-green-400"/> 
+                                    <span className="text-xs text-green-300 font-bold">Saldo Mencukupi</span>
+                                </div>
+                                <Button onClick={handleConfirm} className="w-full">
+                                    Bayar dengan Saldo
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Hide Standard Input if Balance is insufficient (User must choose an option above) */}
+                {!(paymentMethod === 'member-balance') && (
+                    <div className="animate-fade-in">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-300 mb-1">{getInputLabel()}</label>
+                            <input 
+                                type="number" 
+                                value={amountPaid}
+                                onChange={e => setAmountPaid(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-3 text-white text-xl font-bold text-center"
+                                placeholder="0"
+                                autoFocus
+                            />
+                        </div>
+
+                        {paymentMethod === 'cash' && (
+                            <div className="flex gap-2 justify-center mt-2">
+                                {quickAmounts.map((amt, idx) => (
+                                    <button 
+                                        key={idx}
+                                        onClick={() => handleQuickAmount(amt)}
+                                        disabled={amt < total && idx !== 0}
+                                        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white disabled:opacity-50"
+                                    >
+                                        {idx === 0 ? 'Uang Pas' : CURRENCY_FORMATTER.format(amt).replace(',00', '').replace('Rp', '')}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -114,15 +409,38 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                 )}
 
                 {change >= 0 && (
-                    <div className="bg-slate-700 p-3 rounded-lg flex justify-between items-center">
-                        <span className="text-slate-300">Kembalian</span>
-                        <span className="text-xl font-bold text-yellow-400">{CURRENCY_FORMATTER.format(change)}</span>
+                    <div className="bg-slate-700 p-3 rounded-lg animate-fade-in">
+                        <div className="flex justify-between items-center mb-1">
+                            <span className="text-slate-300">Kembalian</span>
+                            <span className="text-xl font-bold text-yellow-400">{CURRENCY_FORMATTER.format(change)}</span>
+                        </div>
+                        
+                        {/* Deposit Change Option */}
+                        {paymentMethod === 'cash' && selectedCustomer && change > 0 && (
+                            <div className="mt-2 pt-2 border-t border-slate-600">
+                                <label className="flex items-center space-x-2 cursor-pointer p-2 hover:bg-slate-600 rounded transition-colors">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={depositChange}
+                                        onChange={(e) => setDepositChange(e.target.checked)}
+                                        className="h-5 w-5 rounded bg-slate-800 border-slate-500 text-purple-600 focus:ring-purple-500" 
+                                    />
+                                    <div className="text-left">
+                                        <span className="text-sm text-purple-300 font-bold block">Simpan kembalian ke Saldo?</span>
+                                        <span className="text-[10px] text-slate-400">Saldo {selectedCustomer.name} bertambah {CURRENCY_FORMATTER.format(change)}.</span>
+                                    </div>
+                                </label>
+                            </div>
+                        )}
                     </div>
                 )}
 
-                <Button onClick={handleConfirm} disabled={!amountPaid} className="w-full py-3 text-lg">
-                    {change >= 0 ? 'Selesaikan Transaksi' : 'Simpan Sebagai Piutang (Kurang Bayar)'}
-                </Button>
+                {/* Main Action Button - Hide for Member Balance because it has its own logic above */}
+                {paymentMethod !== 'member-balance' && (
+                    <Button onClick={handleConfirm} disabled={!amountPaid} className="w-full py-3 text-lg">
+                        {change >= 0 ? 'Selesaikan Transaksi' : 'Simpan Sebagai Piutang (Kurang Bayar)'}
+                    </Button>
+                )}
             </div>
         </Modal>
     );

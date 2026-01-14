@@ -13,6 +13,8 @@ import { db } from '../../services/db';
 import type { CartItem, Transaction as TransactionType } from '../../types';
 import BarcodeScannerModal from '../BarcodeScannerModal'; 
 import DataArchivingModal from '../DataArchivingModal'; 
+import { generateTablePDF } from '../../utils/pdfGenerator';
+import { CURRENCY_FORMATTER } from '../../constants';
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
     <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
@@ -52,6 +54,11 @@ const DataTab: React.FC = () => {
     const jsonInputRef = useRef<HTMLInputElement>(null);
     const csvInputRef = useRef<HTMLInputElement>(null);
     const [isCleaning, setIsCleaning] = useState(false);
+    const [isArchivingCloud, setIsArchivingCloud] = useState(false); 
+
+    // Cloud Archive Dropdown
+    const [isCloudArchiveDropdownOpen, setCloudArchiveDropdownOpen] = useState(false);
+    const cloudArchiveDropdownRef = useRef<HTMLDivElement>(null);
 
     // Health Check State
     const [healthStatus, setHealthStatus] = useState<any>(null);
@@ -90,6 +97,18 @@ const DataTab: React.FC = () => {
         }
     }, [data]);
 
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (cloudArchiveDropdownRef.current && !cloudArchiveDropdownRef.current.contains(event.target as Node)) {
+                setCloudArchiveDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
+
     const checkDropboxQuota = async () => {
         if (!dropboxService.isConfigured()) return;
         setStorageStats(prev => ({...prev, dropboxChecking: true}));
@@ -117,10 +136,6 @@ const DataTab: React.FC = () => {
     };
 
     const saveCloudSettings = () => {
-        // Note: Manually saving just key/secret without token isn't enough for connection, 
-        // but useful if user wants to update app credentials before auth
-        // To properly save, we usually do it after Exchange Code.
-        // However, if we just want to save partially:
         const currentCreds = dropboxService.getCredentials();
         dropboxService.saveCredentials(dbxKey, dbxSecret, currentCreds?.refreshToken || '');
         showAlert({ type: 'alert', title: 'Tersimpan', message: 'Kredensial App Key/Secret diperbarui (Enkripsi Aktif).' });
@@ -136,7 +151,6 @@ const DataTab: React.FC = () => {
 
     // --- Pairing Logic (QR & Text) ---
     
-    // Admin: Generate Codes
     const handleOpenPairingGenerator = () => {
         const creds = dropboxService.getCredentials();
         if (!creds) {
@@ -144,7 +158,6 @@ const DataTab: React.FC = () => {
             return;
         }
         
-        // Generate Text Code (Encrypted)
         const textCode = encryptCredentials({
             k: creds.clientId,
             s: creds.clientSecret,
@@ -156,20 +169,17 @@ const DataTab: React.FC = () => {
         setShowPairingModal(true);
     };
 
-    // Staff: Process Input Code (QR or Text)
     const processPairingCode = async (code: string) => {
         try {
             const payload = decryptCredentials(code.trim());
 
             if (payload && payload.k && payload.s && payload.t) {
-                // 1. Save Credentials Securely
                 dropboxService.saveCredentials(payload.k, payload.s, payload.t);
                 
                 setDbxKey(payload.k);
                 setDbxSecret(payload.s);
                 setIsConfigured(true);
 
-                // 2. Auto-Sync Master Data
                 showAlert({ 
                     type: 'alert', 
                     title: 'Kredensial Diterima', 
@@ -204,11 +214,9 @@ const DataTab: React.FC = () => {
         }
     };
 
-    // QR Generate
     const getQRPairingString = () => {
         const creds = dropboxService.getCredentials();
         if (!creds) return '';
-        // Base64 is smaller for QR codes than the encrypted hex string
         const payload = { k: creds.clientId, s: creds.clientSecret, t: creds.refreshToken };
         return `ARTEA_PAIR::${btoa(JSON.stringify(payload))}`;
     };
@@ -270,7 +278,6 @@ const DataTab: React.FC = () => {
         setIsDbxConnecting(true);
         try {
             const refreshToken = await dropboxService.exchangeCodeForToken(dbxKey, dbxSecret, dbxAuthCode);
-            // SAVE ENCRYPTED
             dropboxService.saveCredentials(dbxKey, dbxSecret, refreshToken);
             setIsConfigured(true);
             
@@ -282,6 +289,120 @@ const DataTab: React.FC = () => {
         } finally {
             setIsDbxConnecting(false);
         }
+    };
+
+    // NEW: Handle Cloud Archive with Multiple Formats
+    const handleCloudArchive = async (format: 'json' | 'xlsx' | 'csv' | 'ods' | 'pdf' = 'json') => {
+        if (!isConfigured) return;
+        setIsArchivingCloud(true);
+        setCloudArchiveDropdownOpen(false);
+        
+        try {
+            // 1. Fetch ALL data from Dropbox (Aggregate)
+            const aggregatedData = await dropboxService.fetchAllBranchData();
+            
+            if (aggregatedData.length === 0) {
+                showAlert({ type: 'alert', title: 'Data Kosong', message: 'Tidak ada data di Dropbox untuk diarsipkan.' });
+                setIsArchivingCloud(false);
+                return;
+            }
+
+            const timestamp = new Date().toISOString().slice(0, 10);
+            
+            if (format === 'json') {
+                // Original JSON Backup Logic (Raw Data for Restore)
+                const fileName = `Artea_Cloud_Archive_${timestamp}.json`;
+                const jsonString = JSON.stringify(aggregatedData, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            } else {
+                // Readable Formats (Flattened Transactions from all branches)
+                const allTxns = aggregatedData.flatMap((branch: any) => {
+                    const storeId = branch.storeId || 'Unknown';
+                    return (branch.transactionRecords || []).map((t: any) => ({
+                        ...t,
+                        storeId: storeId
+                    }));
+                }).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+                const headers = ['Waktu', 'Cabang', 'ID', 'Pelanggan', 'Total', 'Status', 'Item'];
+                const rows = allTxns.map((t: any) => [
+                    new Date(t.createdAt).toLocaleString('id-ID'),
+                    t.storeId,
+                    t.id.slice(-6),
+                    t.customerName || '-',
+                    t.total, // Keep number for excel/csv
+                    t.paymentStatus,
+                    (t.items || []).map((i: any) => `${i.name} (x${i.quantity})`).join('; ')
+                ]);
+
+                const fileNameBase = `Artea_Cloud_Report_${timestamp}`;
+
+                if (format === 'pdf') {
+                    // Format currency string specifically for PDF visual
+                    const pdfRows = rows.map(r => r.map((c, i) => i === 4 ? CURRENCY_FORMATTER.format(c as number) : c));
+                    generateTablePDF('Arsip Transaksi Cloud (Semua Cabang)', headers, pdfRows, data.receiptSettings);
+                } else {
+                    dataService.exportToSpreadsheet(headers, rows, fileNameBase, format);
+                }
+            }
+
+            showAlert({ 
+                type: 'alert', 
+                title: 'Arsip Siap', 
+                message: `Data Cloud berhasil diunduh dalam format ${format.toUpperCase()}. Simpan file ini baik-baik sebagai backup.` 
+            });
+
+        } catch (e: any) {
+            console.error(e);
+            showAlert({ type: 'alert', title: 'Gagal Mengarsipkan', message: e.message });
+        } finally {
+            setIsArchivingCloud(false);
+        }
+    };
+
+    const handleCloudPurge = () => {
+        showAlert({
+            type: 'confirm',
+            title: 'Kosongkan Folder Laporan?',
+            message: (
+                <div className="text-left text-sm space-y-2">
+                    <p className="text-red-400 font-bold">PERINGATAN: Tindakan ini permanen!</p>
+                    <p>Folder "Laporan" di Dropbox akan dihapus untuk mengosongkan ruang.</p>
+                    <p className="bg-slate-700 p-2 rounded border border-slate-600">
+                        Disarankan untuk menekan tombol <strong>"Download Arsip Cloud"</strong> terlebih dahulu agar Anda memiliki salinan data penjualan cabang.
+                    </p>
+                </div>
+            ),
+            confirmVariant: 'danger',
+            confirmText: 'Ya, Hapus Data Cloud',
+            onConfirm: async () => {
+                setIsCleaning(true);
+                try {
+                    if (isConfigured) {
+                        const res = await dropboxService.clearOldBackups();
+                        checkDropboxQuota(); // Refresh quota
+                        showAlert({
+                            type: 'alert',
+                            title: 'Pembersihan Selesai',
+                            message: res.message
+                        });
+                    }
+                } catch (e: any) {
+                    showAlert({ type: 'alert', title: 'Gagal', message: e.message });
+                } finally {
+                    setIsCleaning(false);
+                }
+            }
+        });
     };
 
     const handleJSONRestore = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -371,48 +492,6 @@ const DataTab: React.FC = () => {
         } catch (e: any) {
             showAlert({ type: 'alert', title: 'Gagal Dekripsi', message: e.message });
         }
-    };
-
-    const handleCloudPurge = () => {
-        showAlert({
-            type: 'confirm',
-            title: 'Kosongkan Folder Laporan?',
-            message: (
-                <div className="text-left text-sm space-y-2">
-                    <p>Tindakan ini akan menghapus folder "Laporan" di Dropbox Anda untuk mengosongkan ruang.</p>
-                    <p className="bg-slate-700 p-2 rounded border border-slate-600">
-                        ⚠️ File Master Data (Produk, Pelanggan, Diskon) di Dropbox <strong>TIDAK</strong> akan dihapus.
-                    </p>
-                    <p>Sebelum menghapus, sistem akan otomatis mengunduh <strong>Backup Lokal (JSON)</strong> ke perangkat ini sebagai arsip.</p>
-                </div>
-            ),
-            confirmVariant: 'danger',
-            confirmText: 'Unduh Backup & Hapus',
-            onConfirm: async () => {
-                setIsCleaning(true);
-                try {
-                    await dataService.exportData(); 
-
-                    if (isConfigured) {
-                        const res = await dropboxService.clearOldBackups();
-                        showAlert({
-                            type: 'alert',
-                            title: 'Proses Selesai',
-                            message: (
-                                <ul className="list-disc pl-5 text-left text-sm">
-                                    <li>File Backup telah diunduh. Simpan baik-baik.</li>
-                                    <li>{res.success ? "✅ Dropbox: Berhasil dibersihkan" : `❌ Dropbox: ${res.message}`}</li>
-                                </ul>
-                            )
-                        });
-                    }
-                } catch (e: any) {
-                    showAlert({ type: 'alert', title: 'Gagal', message: e.message });
-                } finally {
-                    setIsCleaning(false);
-                }
-            }
-        });
     };
 
     const lastPullTime = localStorage.getItem('ARTEA_LAST_MASTER_PULL');
@@ -511,11 +590,6 @@ const DataTab: React.FC = () => {
                                         ></div>
                                     </div>
                                 )}
-                                {!storageStats.dropboxChecking && storageStats.dropboxTotal > 0 && (
-                                    <p className="text-[10px] text-right text-slate-500">
-                                        Sisa: {formatBytes(storageStats.dropboxTotal - storageStats.dropboxUsed)}
-                                    </p>
-                                )}
                             </div>
                         ) : (
                             <div className="text-xs text-slate-500 italic">Hubungkan Dropbox untuk melihat kuota.</div>
@@ -523,9 +597,50 @@ const DataTab: React.FC = () => {
                     </div>
                 </div>
 
-                <Button onClick={handleCloudPurge} disabled={isCleaning} variant="danger" className="w-full sm:w-auto">
-                    {isCleaning ? 'Sedang Memproses...' : <><Icon name="trash" className="w-4 h-4"/> Kosongkan Folder Laporan</>}
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-3">
+                    {/* NEW: Download Archive Dropdown */}
+                    <div className="relative flex-1" ref={cloudArchiveDropdownRef}>
+                        <Button 
+                            onClick={() => setCloudArchiveDropdownOpen(!isCloudArchiveDropdownOpen)} 
+                            disabled={isArchivingCloud || !isConfigured} 
+                            variant="secondary" 
+                            className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-900/30"
+                        >
+                            {isArchivingCloud ? 'Mengunduh...' : <><Icon name="download" className="w-4 h-4"/> Download Arsip Cloud</>}
+                            <Icon name="chevron-down" className="w-3 h-3 ml-1"/>
+                        </Button>
+                        {isCloudArchiveDropdownOpen && (
+                            <div className="absolute top-full left-0 mt-2 w-full sm:w-48 bg-slate-700 rounded-lg shadow-xl z-20 border border-slate-600 overflow-hidden">
+                                <button onClick={() => handleCloudArchive('json')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-xs flex items-center gap-2">
+                                    <Icon name="database" className="w-4 h-4 text-green-400"/> JSON (Backup Full)
+                                </button>
+                                <div className="border-t border-slate-600 my-1"></div>
+                                <p className="px-4 py-1 text-[10px] text-slate-400 uppercase font-bold">Laporan Terbaca</p>
+                                <button onClick={() => handleCloudArchive('xlsx')} className="w-full text-left px-4 py-2 hover:bg-slate-600 text-white text-xs flex items-center gap-2">
+                                    <Icon name="boxes" className="w-4 h-4"/> Excel (.xlsx)
+                                </button>
+                                <button onClick={() => handleCloudArchive('csv')} className="w-full text-left px-4 py-2 hover:bg-slate-600 text-white text-xs flex items-center gap-2">
+                                    <Icon name="tag" className="w-4 h-4"/> CSV
+                                </button>
+                                <button onClick={() => handleCloudArchive('pdf')} className="w-full text-left px-4 py-2 hover:bg-slate-600 text-white text-xs flex items-center gap-2">
+                                    <Icon name="printer" className="w-4 h-4"/> PDF
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    <Button 
+                        onClick={handleCloudPurge} 
+                        disabled={isCleaning || !isConfigured} 
+                        variant="danger" 
+                        className="flex-1"
+                    >
+                        {isCleaning ? 'Memproses...' : <><Icon name="trash" className="w-4 h-4"/> Kosongkan Folder Laporan</>}
+                    </Button>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-2 text-center">
+                    Gunakan "Download Arsip Cloud" untuk menyimpan data cabang ke file sebelum Anda menghapusnya dari Dropbox.
+                </p>
             </SettingsCard>
 
             <SettingsCard title="Backup & Restore Lokal" description="Unduh file database (.json) ke perangkat ini atau pulihkan data dari file cadangan.">

@@ -4,7 +4,7 @@ import Dexie, { type EntityTable } from 'dexie';
 import type { 
     Product, RawMaterial, Transaction as TransactionType, User, Expense, Supplier, Purchase, 
     StockAdjustment, Customer, DiscountDefinition, HeldCart, ReceiptSettings, 
-    InventorySettings, AuthSettings, SessionSettings, MembershipSettings, AppData, SessionState, OtherIncome, SessionHistory, AuditLog
+    InventorySettings, AuthSettings, SessionSettings, MembershipSettings, AppData, SessionState, OtherIncome, SessionHistory, AuditLog, BalanceLog
 } from '../types';
 import { INITIAL_PRODUCTS } from '../constants';
 
@@ -89,6 +89,7 @@ export const initialData: AppData = {
     heldCarts: [],
     sessionHistory: [],
     auditLogs: [],
+    balanceLogs: [],
 };
 
 
@@ -111,7 +112,8 @@ export const db = new Dexie('ArteaPosDB') as Dexie & {
     discountDefinitions: EntityTable<DiscountDefinition, 'id'>;
     heldCarts: EntityTable<HeldCart, 'id'>;
     sessionHistory: EntityTable<SessionHistory, 'id'>; 
-    auditLogs: EntityTable<AuditLog, 'id'>; // NEW TABLE
+    auditLogs: EntityTable<AuditLog, 'id'>; 
+    balanceLogs: EntityTable<BalanceLog, 'id'>; // NEW TABLE
 
     // Key-value stores
     settings: EntityTable<KeyValueStore<ReceiptSettings | InventorySettings | AuthSettings | SessionSettings | MembershipSettings>, 'key'>;
@@ -157,6 +159,15 @@ db.version(4).stores({
 
 db.version(5).stores({
     auditLogs: 'id, timestamp, action, userId'
+});
+
+db.version(6).stores({
+    balanceLogs: 'id, customerId, type, timestamp'
+}).upgrade(async (tx) => {
+    // Initialize balance for existing customers
+    await tx.table('customers').toCollection().modify(c => {
+        if (c.balance === undefined) c.balance = 0;
+    });
 });
 
 

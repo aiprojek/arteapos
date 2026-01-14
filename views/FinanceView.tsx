@@ -3,16 +3,15 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../context/AuthContext';
 import { useFinance } from '../context/FinanceContext';
 import { useSettings } from '../context/SettingsContext';
-import { useCustomer } from '../context/CustomerContext'; 
+import { useCustomer } from '../context/CustomerContext'; // Import Customer Context
 import Button from '../components/Button';
 import Icon from '../components/Icon';
 import { dropboxService } from '../services/dropboxService';
 import { mockDataService } from '../services/mockData';
 import { useUI } from '../context/UIContext';
 import { generateTablePDF } from '../utils/pdfGenerator';
-import { dataService } from '../services/dataService';
+import { dataService } from '../services/dataService'; // NEW Import
 import { CURRENCY_FORMATTER } from '../constants';
-import { db } from '../services/db'; // Import Direct DB Access
 
 // Modular Imports
 import CashFlowTab from '../components/finance/CashFlowTab';
@@ -27,21 +26,14 @@ import type { Expense, OtherIncome, Transaction as TransactionType, Purchase, Cu
 const FinanceView: React.FC = () => {
     const { currentUser } = useAuth();
     const { receiptSettings } = useSettings();
-    const { importFinanceData } = useFinance();
-    const { customers: localCustomers } = useCustomer();
+    const { transactions: localTransactions, expenses: localExpenses, purchases: localPurchases, otherIncomes: localIncomes, importFinanceData } = useFinance();
+    const { customers: localCustomers } = useCustomer(); // Get local customers
     const { showAlert } = useUI();
     const isManagement = currentUser?.role === 'admin' || currentUser?.role === 'manager';
     
     // Tab State
     const [mainView, setMainView] = useState<'finance' | 'customers'>('finance');
     const [activeTab, setActiveTab] = useState<string>(isManagement ? 'cashflow' : 'expenses');
-
-    // --- LAZY LOADING STATE ---
-    const [localTransactions, setLocalTransactions] = useState<TransactionType[]>([]);
-    const [localExpenses, setLocalExpenses] = useState<Expense[]>([]);
-    const [localPurchases, setLocalPurchases] = useState<Purchase[]>([]);
-    const [localIncomes, setLocalIncomes] = useState<OtherIncome[]>([]);
-    const [isLocalLoading, setIsLocalLoading] = useState(true);
 
     // Cloud Aggregation State
     const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
@@ -50,7 +42,7 @@ const FinanceView: React.FC = () => {
         expenses: Expense[], 
         otherIncomes: OtherIncome[],
         purchases: Purchase[],
-        customers: Customer[]
+        customers: Customer[] // Added Customers
     }>({ transactions: [], expenses: [], otherIncomes: [], purchases: [], customers: [] });
     
     const [isCloudLoading, setIsCloudLoading] = useState(false);
@@ -60,33 +52,6 @@ const FinanceView: React.FC = () => {
     // Dropdown State
     const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
     const exportDropdownRef = useRef<HTMLDivElement>(null);
-
-    // --- EFFECT: LOAD LOCAL DATA FROM DEXIE ---
-    useEffect(() => {
-        if (dataSource === 'local') {
-            setIsLocalLoading(true);
-            const fetchData = async () => {
-                try {
-                    const [txs, exps, purs, incs] = await Promise.all([
-                        db.transactionRecords.toArray(),
-                        db.expenses.toArray(),
-                        db.purchases.toArray(),
-                        db.otherIncomes.toArray()
-                    ]);
-                    // Sort descending date
-                    setLocalTransactions(txs.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-                    setLocalExpenses(exps.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-                    setLocalPurchases(purs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-                    setLocalIncomes(incs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-                } catch (err) {
-                    console.error("Failed to load local finance data", err);
-                } finally {
-                    setIsLocalLoading(false);
-                }
-            };
-            fetchData();
-        }
-    }, [dataSource]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -100,10 +65,12 @@ const FinanceView: React.FC = () => {
         };
     }, []);
 
+    // Refactored Load Data to be callable via Refresh Button
     const loadCloudData = useCallback(async () => {
         setIsCloudLoading(true);
         setIsDemoMode(false);
 
+        // 1. Pre-check credentials - SECURE CHECK
         if (!dropboxService.isConfigured()) {
             const mock = mockDataService.getMockDashboardData();
             setCloudData({
@@ -111,7 +78,7 @@ const FinanceView: React.FC = () => {
                 expenses: mock.expenses,
                 otherIncomes: mock.otherIncomes,
                 purchases: [],
-                customers: []
+                customers: [] // Mock customers usually empty in basic mock
             });
             setIsDemoMode(true);
             setLastUpdated(new Date());
@@ -120,10 +87,12 @@ const FinanceView: React.FC = () => {
         }
 
         try {
+            // Dropbox Logic
             const allBranches = await dropboxService.fetchAllBranchData();
             let txns: any[] = [], exps: any[] = [], incs: any[] = [], custs: any[] = [];
 
             allBranches.forEach(branch => {
+                // STANDARDIZED: Ensure we use 'storeId' (camelCase)
                 if (branch.transactionRecords) txns.push(...branch.transactionRecords.map((t:any) => ({...t, storeId: branch.storeId})));
                 if (branch.expenses) exps.push(...branch.expenses.map((e:any) => ({...e, storeId: branch.storeId})));
                 if (branch.otherIncomes) incs.push(...branch.otherIncomes.map((i:any) => ({...i, storeId: branch.storeId})));
@@ -134,7 +103,7 @@ const FinanceView: React.FC = () => {
                 transactions: txns,
                 expenses: exps,
                 otherIncomes: incs,
-                purchases: [],
+                purchases: [], // Placeholder until dropbox service syncs purchases
                 customers: custs
             });
             setLastUpdated(new Date());
@@ -147,12 +116,14 @@ const FinanceView: React.FC = () => {
         }
     }, [showAlert]);
 
+    // Effect to trigger load when switching to dropbox
     useEffect(() => {
         if (dataSource === 'dropbox') {
             loadCloudData();
         }
     }, [dataSource, loadCloudData]);
 
+    // NEW: Merge Cloud to Local Logic for Finance
     const handleMergeToLocal = () => {
         if (cloudData.expenses.length === 0 && cloudData.otherIncomes.length === 0) {
             showAlert({ type: 'alert', title: 'Data Kosong', message: 'Tidak ada data keuangan cloud untuk disimpan.' });
@@ -178,7 +149,7 @@ const FinanceView: React.FC = () => {
             onConfirm: () => {
                 importFinanceData(cloudData.expenses, cloudData.otherIncomes, cloudData.purchases);
                 showAlert({ type: 'alert', title: 'Berhasil', message: 'Data keuangan berhasil digabungkan.' });
-                setDataSource('local'); 
+                setDataSource('local'); // Switch back
             }
         });
     };
@@ -189,6 +160,7 @@ const FinanceView: React.FC = () => {
         </button>
     );
 
+    // --- DATA PREPARATION FOR EXPORT (SHARED) ---
     const prepareTableData = () => {
         const source = dataSource === 'local' ? {
             tx: localTransactions,
@@ -204,6 +176,7 @@ const FinanceView: React.FC = () => {
             cust: cloudData.customers
         };
 
+        // Helper sort
         const sortByBranchAndDate = (a: any, b: any) => {
             if (dataSource !== 'local') {
                 const storeA = a.storeId || a.store_id || '';
@@ -235,12 +208,11 @@ const FinanceView: React.FC = () => {
             headers = isCloud ? ['Tanggal', 'Cabang', 'Tipe', 'Keterangan', 'Jumlah'] : ['Tanggal', 'Tipe', 'Keterangan', 'Jumlah'];
             rows = flows.map(f => {
                 const date = new Date(f.date).toLocaleDateString('id-ID');
-                const amt = f.amount;
+                const amt = f.amount; // Use raw number for Excel/CSV, formatted in PDF
                 return isCloud ? [date, f.storeId || '-', f.type, f.desc, amt] : [date, f.type, f.desc, amt];
             });
             fileNameBase = 'Laporan_Arus_Kas';
         }
-        // ... (Other export logic remains same) ...
         else if (mode === 'expenses') {
             const exp = [...source.exp].sort(sortByBranchAndDate);
             headers = isCloud ? ['Tanggal', 'Cabang', 'Keterangan', 'Kategori', 'Jumlah'] : ['Tanggal', 'Keterangan', 'Kategori', 'Jumlah'];
@@ -292,6 +264,7 @@ const FinanceView: React.FC = () => {
 
     const handleExportPDF = () => {
         const { headers, rows, fileNameBase } = prepareTableData();
+        // Format numbers for PDF display
         const pdfRows = rows.map(row => row.map(cell => typeof cell === 'number' ? CURRENCY_FORMATTER.format(cell) : cell));
         generateTablePDF(fileNameBase.replace(/_/g, ' '), headers, pdfRows, receiptSettings);
         setIsExportDropdownOpen(false);
@@ -304,23 +277,10 @@ const FinanceView: React.FC = () => {
         setIsExportDropdownOpen(false);
     };
 
-    // Override local data in the components if necessary (Passing as props)
-    // NOTE: Child components (ExpensesTab, etc) use `useFinance()` which relies on `DataContext`.
-    // Since we cleared `DataContext`, we must pass the data explicitly via props.
-    // The components need to be updated to accept `localData` override if `dataSource === 'local'`.
-    // *Correction*: The components already accept `cloudData` prop. 
-    // We will abuse the `cloudData` prop to pass `localData` when source is local, effectively bypassing Context.
-    
-    const displayData = {
-        transactions: dataSource === 'local' ? localTransactions : cloudData.transactions,
-        expenses: dataSource === 'local' ? localExpenses : cloudData.expenses,
-        purchases: dataSource === 'local' ? localPurchases : cloudData.purchases,
-        otherIncomes: dataSource === 'local' ? localIncomes : cloudData.otherIncomes,
-    };
-
     return (
         <div className="flex flex-col h-full">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+                {/* Title Section */}
                 <div>
                     <h1 className="text-2xl font-bold text-white flex items-center gap-2">
                         Keuangan & Pelanggan
@@ -338,7 +298,10 @@ const FinanceView: React.FC = () => {
                     )}
                 </div>
                 
+                {/* Controls Section */}
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center flex-wrap w-full lg:w-auto">
+                    
+                    {/* Action Group: Sync & Export */}
                     <div className="flex items-center gap-2 flex-wrap">
                         {dataSource === 'dropbox' && (
                             <>
@@ -347,14 +310,17 @@ const FinanceView: React.FC = () => {
                                     onClick={loadCloudData} 
                                     disabled={isCloudLoading} 
                                     className="bg-blue-600 hover:bg-blue-500 text-white border-none whitespace-nowrap"
+                                    title="Tarik data terbaru"
                                 >
                                     <Icon name="reset" className={`w-4 h-4 ${isCloudLoading ? 'animate-spin' : ''}`} />
                                     <span className="hidden sm:inline">Refresh</span>
                                 </Button>
+                                {/* NEW: Merge to Local Button */}
                                 <Button
                                     size="sm"
                                     onClick={handleMergeToLocal}
                                     className="bg-green-600 hover:bg-green-500 text-white border-none whitespace-nowrap"
+                                    title="Simpan data cloud ke lokal"
                                 >
                                     <Icon name="download" className="w-4 h-4" /> 
                                     <span className="hidden sm:inline">Simpan</span>
@@ -362,6 +328,7 @@ const FinanceView: React.FC = () => {
                             </>
                         )}
 
+                        {/* Export Dropdown */}
                         <div className="relative" ref={exportDropdownRef}>
                             <Button variant="secondary" size="sm" onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)} title="Export Data">
                                 <Icon name="download" className="w-4 h-4"/>
@@ -376,6 +343,9 @@ const FinanceView: React.FC = () => {
                                     <button onClick={() => handleExportSpreadsheet('xlsx')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2 border-t border-slate-600">
                                         <Icon name="boxes" className="w-4 h-4"/> Excel (.xlsx)
                                     </button>
+                                    <button onClick={() => handleExportSpreadsheet('ods')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2">
+                                        <Icon name="file-lock" className="w-4 h-4"/> OpenDoc (.ods)
+                                    </button>
                                     <button onClick={() => handleExportSpreadsheet('csv')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2 border-t border-slate-600">
                                         <Icon name="database" className="w-4 h-4"/> CSV (Raw)
                                     </button>
@@ -384,14 +354,30 @@ const FinanceView: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* Divider for larger screens */}
                     <div className="hidden sm:block h-6 w-px bg-slate-700 mx-1"></div>
 
+                    {/* Toggle Group: Source & View */}
                     <div className="flex items-center gap-2 flex-wrap">
+                        {/* Data Source Toggle */}
                         <div className="bg-slate-700 p-1 rounded-lg flex items-center border border-slate-600">
-                            <button onClick={() => setDataSource('local')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>Lokal</button>
-                            <button onClick={() => setDataSource('dropbox')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>Cloud</button>
+                            <button
+                                onClick={() => setDataSource('local')}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                                title="Data Lokal"
+                            >
+                                Lokal
+                            </button>
+                            <button
+                                onClick={() => setDataSource('dropbox')}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                                title="Data Gabungan dari Dropbox"
+                            >
+                                Cloud
+                            </button>
                         </div>
 
+                        {/* View Switcher */}
                         <div className="bg-slate-700 p-1 rounded-lg flex border border-slate-600">
                             <button onClick={() => setMainView('finance')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${mainView === 'finance' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Keuangan</button>
                             <button onClick={() => setMainView('customers')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${mainView === 'customers' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Pelanggan</button>
@@ -400,20 +386,23 @@ const FinanceView: React.FC = () => {
                 </div>
             </div>
 
+            {/* Info Banner for Demo Mode */}
             {isDemoMode && dataSource === 'dropbox' && (
                 <div className="mb-4 bg-yellow-900/30 border border-yellow-700 p-3 rounded-lg flex items-center gap-3 text-yellow-200 text-sm animate-fade-in">
                     <Icon name="warning" className="w-5 h-5 flex-shrink-0" />
                     <div className="flex-1">
                         <p className="font-bold">Mode Demo (Simulasi)</p>
-                        <p className="opacity-80">Dropbox belum diatur. Data simulasi.</p>
+                        <p className="opacity-80">
+                            Dropbox belum diatur. Data di bawah ini adalah data palsu untuk menunjukkan tampilan laporan terpusat dari beberapa cabang.
+                        </p>
                     </div>
                 </div>
             )}
 
             <div className="flex-1 overflow-y-auto">
-                {isCloudLoading || (dataSource === 'local' && isLocalLoading) ? (
+                {isCloudLoading ? (
                     <div className="w-full h-64 flex items-center justify-center text-slate-400 animate-pulse">
-                        Memuat data keuangan...
+                        Sedang mengambil data keuangan gabungan...
                     </div>
                 ) : mainView === 'finance' ? (
                     <div className="space-y-6">
@@ -425,19 +414,16 @@ const FinanceView: React.FC = () => {
                             {renderSubTabButton('debt-receivables', 'Utang & Piutang')}
                         </div>
                         
-                        {/* 
-                            CRITICAL: Passing 'cloudData' prop even for Local mode 
-                            to override empty context data. 
-                            The components should prioritize 'cloudData' if provided.
-                        */}
-                        {isManagement && activeTab === 'cashflow' && <CashFlowTab dataSource={dataSource} cloudData={displayData} />}
-                        {activeTab === 'expenses' && <ExpensesTab dataSource={dataSource} cloudData={displayData.expenses} />}
-                        {activeTab === 'other_income' && <IncomeTab dataSource={dataSource} cloudData={displayData.otherIncomes} />}
-                        {activeTab === 'purchasing' && <PurchasingTab dataSource={dataSource} cloudData={displayData.purchases} />}
-                        {activeTab === 'debt-receivables' && <DebtsTab dataSource={dataSource} cloudData={displayData.transactions} />}
+                        {/* Pass dataSource and cloudData to children via props */}
+                        {isManagement && activeTab === 'cashflow' && <CashFlowTab dataSource={dataSource} cloudData={cloudData} />}
+                        {activeTab === 'expenses' && <ExpensesTab dataSource={dataSource} cloudData={cloudData.expenses} />}
+                        {activeTab === 'other_income' && <IncomeTab dataSource={dataSource} cloudData={cloudData.otherIncomes} />}
+                        {activeTab === 'purchasing' && <PurchasingTab dataSource={dataSource} cloudData={cloudData.purchases} />}
+                        {activeTab === 'debt-receivables' && <DebtsTab dataSource={dataSource} cloudData={cloudData.transactions} />}
                         
                     </div>
                 ) : (
+                    // Customers View
                     <CustomersTab />
                 )}
             </div>

@@ -46,26 +46,43 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await db.open();
         console.log("Database opened successfully");
         
-        // MEMORY OPTIMIZATION:
-        // Removed heavy tables (transactionRecords, stockAdjustments, auditLogs, etc.) from initial load.
-        // These will be loaded lazily in their respective views using direct DB queries.
+        // AUDIT OPTIMIZATION: Only load heavy tables partially (Latest 500 records) or empty for lazy loading
+        // Master data is still loaded fully.
+        
         const [
           products, categoriesObj, rawMaterials, users, settings,
-          suppliers, customers, discountDefinitions, heldCarts
+          expenses, otherIncomes, suppliers, purchases, customers, discountDefinitions, heldCarts, sessionHistory, balanceLogs,
+          // Count heavy tables instead of loading all
+          txnStats, logStats, adjStats
         ] = await Promise.all([
           db.products.toArray(),
           db.appState.get('categories'),
           db.rawMaterials.toArray(),
           db.users.toArray(),
           db.settings.toArray(),
+          db.expenses.toArray(), // Expenses usually less than transactions, okay to load
+          db.otherIncomes.toArray(),
           db.suppliers.toArray(),
+          db.purchases.toArray(),
           db.customers.toArray(),
           db.discountDefinitions.toArray(),
           db.heldCarts.toArray(),
+          db.sessionHistory.toArray(),
+          db.balanceLogs.toArray(),
+          // Metadata
+          db.transactionRecords.count(),
+          db.auditLogs.count(),
+          db.stockAdjustments.count()
         ]);
         
-        // Count DB Load for Status
-        const totalRecs = (await db.transactionRecords.count()) + (await db.stockAdjustments.count()) + (await db.auditLogs.count());
+        // MEMORY SAFETY: Load only recent 200 items for context availability. 
+        // Full reports should use direct DB queries in Views.
+        const recentTransactions = await db.transactionRecords.orderBy('createdAt').reverse().limit(200).toArray();
+        const recentAuditLogs = await db.auditLogs.orderBy('timestamp').reverse().limit(100).toArray();
+        const recentStockAdj = await db.stockAdjustments.orderBy('createdAt').reverse().limit(100).toArray();
+
+        // Calculate DB Load
+        const totalRecs = txnStats + logStats + adjStats + (balanceLogs?.length || 0);
         setDbUsageStatus({
             totalRecords: totalRecs,
             isHeavy: totalRecs > 5000
@@ -75,21 +92,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           products,
           categories: categoriesObj?.value || initialData.categories,
           rawMaterials,
+          transactionRecords: recentTransactions, // LOAD LIMITED
           users,
+          expenses,
+          otherIncomes: otherIncomes || [],
           suppliers,
+          purchases,
+          stockAdjustments: recentStockAdj, // LOAD LIMITED
           customers,
           discountDefinitions,
           heldCarts,
-          // Initialize Heavy Arrays as Empty to save memory
-          transactionRecords: [], 
-          stockAdjustments: [], 
-          sessionHistory: [], 
-          auditLogs: [], 
-          expenses: [],
-          otherIncomes: [],
-          purchases: [],
-          balanceLogs: [],
-          // Settings
+          sessionHistory: sessionHistory || [],
+          auditLogs: recentAuditLogs, // LOAD LIMITED
+          balanceLogs: balanceLogs || [],
           receiptSettings: settings.find(s => s.key === 'receiptSettings')?.value || initialData.receiptSettings,
           inventorySettings: settings.find(s => s.key === 'inventorySettings')?.value || initialData.inventorySettings,
           authSettings: settings.find(s => s.key === 'authSettings')?.value || initialData.authSettings,
@@ -128,17 +143,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const value = data[key];
               
               switch(key) {
-                // Only persist Master Data (Products, Users, etc) via Context.
-                // Heavy transactional data updates are now handled directly by views/hooks writing to DB.
+                // LIGHT TABLES (Full Sync)
                 case 'products':
                 case 'rawMaterials':
                 case 'users':
+                case 'expenses':
+                case 'otherIncomes':
                 case 'suppliers':
+                case 'purchases':
                 case 'customers':
                 case 'discountDefinitions':
                 case 'heldCarts':
+                case 'sessionHistory':
+                case 'balanceLogs':
                   promises.push(db.table(key).clear().then(() => db.table(key).bulkAdd(value as any[])));
                   break;
+                
+                // HEAVY TABLES (Append Only via Context Actions recommended, avoiding full overwrite here if possible)
+                // However, for consistency with 'setData' usage in other contexts:
+                case 'transactionRecords':
+                case 'stockAdjustments':
+                case 'auditLogs':
+                   // WARNING: With partial loading, we should NOT clear and save back what we have in memory
+                   // because we only have the last 200 items!
+                   // Data mutations for these tables should happen via db.table.add() directly in Contexts
+                   // NOT via setData global state.
+                   // Current App Architecture relies on setData. This is a trade-off.
+                   // Ideally, we skip persistence here for heavy tables and rely on direct DB calls in addTransaction etc.
+                   break;
+
                 case 'categories':
                   promises.push(db.appState.put({ key: 'categories', value }));
                   break;
@@ -149,7 +182,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 case 'membershipSettings':
                   promises.push(db.settings.put({ key: key, value }));
                   break;
-                // Heavy tables are ignored here to prevent overwriting DB with empty arrays
               }
           });
 

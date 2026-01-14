@@ -13,8 +13,8 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(({ transaction, s
         <div 
             ref={ref} 
             id="receipt-to-print" 
-            className="bg-white text-black p-2 w-full relative overflow-hidden min-h-[300px]"
-            style={{ fontFamily: "'Courier New', Courier, monospace", fontSize: '12px' }}
+            className="bg-white text-black text-xs p-2 w-full relative overflow-hidden min-h-[300px]"
+            style={{ fontFamily: "'Courier New', Courier, monospace" }} // FORCE MONOSPACE
         >
             {/* --- WATERMARK START --- */}
             <div className="absolute inset-0 flex flex-col items-center justify-center z-0 opacity-[0.08] pointer-events-none select-none overflow-hidden">

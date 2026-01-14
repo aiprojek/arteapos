@@ -9,22 +9,26 @@
     <link rel="manifest" href="/manifest.json" />
     
     <!-- ================================================================================= -->
-    <!-- HYBRID MODE: DEVELOPMENT / PREVIEW (CDN)                                          -->
-    <!-- Biarkan bagian ini AKTIF saat development di Google AI Studio / Preview online.   -->
+    <!-- HYBRID MODE: PREVIEW & DEV -->
+    <!-- Kode di bawah ini diperlukan agar tampilan berjalan di Google AI Studio Preview.    -->
+    <!-- Untuk BUILD PRODUKSI (Offline PWA), 'npm run build' akan menghandle dependensi    -->
+    <!-- secara lokal. Anda bisa membiarkan ini atau menghapusnya jika ingin benar-benar   -->
+    <!-- bersih (No External Requests).                                                    -->
     <!-- ================================================================================= -->
 
     <!-- 1. Tailwind CSS (Preview Only) -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- 2. External Libraries (Global Polyfills via CDN) -->
+    <!-- 2. External Libraries (Global Polyfills) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     
-    <!-- 3. Bootstrap Icons (CDN) -->
+    <!-- 3. Bootstrap Icons (Preview & Offline Fallback) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
     <!-- 4. Import Maps (Preview Only) -->
+    <!-- Ini memetakan import 'react' dkk ke URL CDN agar browser bisa merendernya tanpa build step -->
     <script type="importmap">
 {
   "imports": {
@@ -47,14 +51,6 @@
   }
 }
 </script>
-
-    <!-- ================================================================================= -->
-    <!-- PRODUCTION / OFFLINE BUILD INSTRUCTIONS                                           -->
-    <!-- Untuk membuat versi OFFLINE (tanpa internet):                                     -->
-    <!-- 1. Hapus/Komen semua script CDN & Import Map di atas.                             -->
-    <!-- 2. Pastikan 'package.json' sudah lengkap (npm install).                           -->
-    <!-- 3. Jalankan 'npm run build'. Vite akan membundle semua library ke lokal.          -->
-    <!-- 4. Inject CSS Tailwind di index.tsx: import './index.css';                        -->
     <!-- ================================================================================= -->
 
     <style>

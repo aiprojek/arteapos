@@ -228,29 +228,6 @@ export const bluetoothPrinterService = {
              data += `Kurang: ${formatCurrencySafe(Math.abs(kembalian))}` + LF;
         }
 
-        // --- Member Info (Saldo & Poin) ---
-        // ADDED: Logic to print member info on thermal receipt
-        if (transaction.customerId) {
-            data += '--------------------------------' + LF;
-            data += COMMANDS.ALIGN_LEFT;
-            
-            // Saldo Snapshot
-            if (transaction.customerBalanceSnapshot !== undefined) {
-                const saldo = formatCurrencySafe(transaction.customerBalanceSnapshot);
-                data += `Sisa Saldo: ${saldo}` + LF;
-            }
-            
-            // Poin Snapshot
-            if (transaction.customerPointsSnapshot !== undefined) {
-                data += `Sisa Poin : ${transaction.customerPointsSnapshot} pts` + LF;
-            }
-            
-            // Poin Earned
-            if (transaction.pointsEarned && transaction.pointsEarned > 0) {
-                data += `Poin Dapat: +${transaction.pointsEarned} pts` + LF;
-            }
-        }
-
         // --- Footer ---
         data += COMMANDS.ALIGN_CENTER;
         data += LF + settings.footerMessage + LF;
@@ -258,8 +235,7 @@ export const bluetoothPrinterService = {
         // --- Branding ---
         data += COMMANDS.FONT_B; // Small font
         data += '--------------------------------' + LF;
-        data += 'Powered by Artea POS' + LF;
-        data += 'aiprojek01.my.id' + LF;
+        data += 'Powered by ARTEA POS' + LF;
         data += COMMANDS.FONT_A; // Reset font
         
         data += LF + LF + LF; // Feed

@@ -46,31 +46,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await db.open();
         console.log("Database opened successfully");
         
+        // MEMORY OPTIMIZATION:
+        // Removed heavy tables (transactionRecords, stockAdjustments, auditLogs, etc.) from initial load.
+        // These will be loaded lazily in their respective views using direct DB queries.
         const [
-          products, categoriesObj, rawMaterials, transactionRecords, users, settings,
-          expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts, sessionHistory, auditLogs, balanceLogs
+          products, categoriesObj, rawMaterials, users, settings,
+          suppliers, customers, discountDefinitions, heldCarts
         ] = await Promise.all([
           db.products.toArray(),
           db.appState.get('categories'),
           db.rawMaterials.toArray(),
-          db.transactionRecords.toArray(),
           db.users.toArray(),
           db.settings.toArray(),
-          db.expenses.toArray(),
-          db.otherIncomes.toArray(),
           db.suppliers.toArray(),
-          db.purchases.toArray(),
-          db.stockAdjustments.toArray(),
           db.customers.toArray(),
           db.discountDefinitions.toArray(),
           db.heldCarts.toArray(),
-          db.sessionHistory.toArray(),
-          db.auditLogs.toArray(),
-          db.balanceLogs.toArray(),
         ]);
         
-        // Calculate DB Load
-        const totalRecs = transactionRecords.length + stockAdjustments.length + auditLogs.length + (balanceLogs?.length || 0);
+        // Count DB Load for Status
+        const totalRecs = (await db.transactionRecords.count()) + (await db.stockAdjustments.count()) + (await db.auditLogs.count());
         setDbUsageStatus({
             totalRecords: totalRecs,
             isHeavy: totalRecs > 5000
@@ -80,19 +75,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           products,
           categories: categoriesObj?.value || initialData.categories,
           rawMaterials,
-          transactionRecords,
           users,
-          expenses,
-          otherIncomes: otherIncomes || [],
           suppliers,
-          purchases,
-          stockAdjustments,
           customers,
           discountDefinitions,
           heldCarts,
-          sessionHistory: sessionHistory || [],
-          auditLogs: auditLogs || [],
-          balanceLogs: balanceLogs || [],
+          // Initialize Heavy Arrays as Empty to save memory
+          transactionRecords: [], 
+          stockAdjustments: [], 
+          sessionHistory: [], 
+          auditLogs: [], 
+          expenses: [],
+          otherIncomes: [],
+          purchases: [],
+          balanceLogs: [],
+          // Settings
           receiptSettings: settings.find(s => s.key === 'receiptSettings')?.value || initialData.receiptSettings,
           inventorySettings: settings.find(s => s.key === 'inventorySettings')?.value || initialData.inventorySettings,
           authSettings: settings.find(s => s.key === 'authSettings')?.value || initialData.authSettings,
@@ -131,23 +128,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const value = data[key];
               
               switch(key) {
+                // Only persist Master Data (Products, Users, etc) via Context.
+                // Heavy transactional data updates are now handled directly by views/hooks writing to DB.
                 case 'products':
                 case 'rawMaterials':
-                case 'transactionRecords':
                 case 'users':
-                case 'expenses':
-                case 'otherIncomes':
                 case 'suppliers':
-                case 'purchases':
-                case 'stockAdjustments':
                 case 'customers':
                 case 'discountDefinitions':
                 case 'heldCarts':
-                case 'sessionHistory':
-                case 'auditLogs':
-                case 'balanceLogs':
-                  // Note: Full table replace on change is inefficient for large datasets, 
-                  // but retained here for consistency with original architecture until further refactor.
                   promises.push(db.table(key).clear().then(() => db.table(key).bulkAdd(value as any[])));
                   break;
                 case 'categories':
@@ -160,6 +149,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 case 'membershipSettings':
                   promises.push(db.settings.put({ key: key, value }));
                   break;
+                // Heavy tables are ignored here to prevent overwriting DB with empty arrays
               }
           });
 

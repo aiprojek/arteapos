@@ -8,9 +8,11 @@ import type { User, AuthSettings } from '../types';
 
 const SYSTEM_USER: User = { id: 'system', name: 'Admin Sistem', pin: '', role: 'admin' };
 
-async function hashPin(pin: string): Promise<string> {
+// SECURITY UPGRADE: Salted Hash (SHA-256 + User ID)
+// Prevents Rainbow Table attacks
+async function hashPin(pin: string, salt: string): Promise<string> {
   const encoder = new TextEncoder();
-  const data = encoder.encode(pin);
+  const data = encoder.encode(pin + salt); // PIN + Salt combination
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -36,9 +38,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { data, setData, isDataLoading } = useData();
-  const { triggerMasterDataPush } = useCloudSync(); // Just to access trigger, logic for auto sync is inside login
   const { authSettings, users } = data;
-  const { showAlert } = useUI();
   const [currentUser, setCurrentUser] = useState<User | null>(() => authSettings.enabled ? null : SYSTEM_USER);
 
   useEffect(() => {
@@ -52,15 +52,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const setupDefaultAdmin = async () => {
         if (!isDataLoading && users.length === 0) {
-            const hashedPin = await hashPin('1111');
-            const defaultAdmin: User = { id: 'admin_default', name: 'Admin', pin: hashedPin, role: 'admin' };
+            const adminId = 'admin_default';
+            // Use salted hash
+            const hashedPin = await hashPin('1111', adminId);
+            const defaultAdmin: User = { id: adminId, name: 'Admin', pin: hashedPin, role: 'admin' };
             setData(prev => ({ ...prev, users: [defaultAdmin] }));
         }
     };
     setupDefaultAdmin();
   }, [isDataLoading, users, setData]);
 
-  // LOGIN LOGIC with Auto Sync
+  // LOGIN LOGIC with Salted Hash
   const login = useCallback(async (user: User, pin: string): Promise<boolean> => {
     if (!authSettings.enabled) return false;
 
@@ -68,15 +70,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let success = false;
 
     if (isHashed) {
-        const enteredPinHash = await hashPin(pin);
+        // Calculate hash with input pin and stored user ID as salt
+        const enteredPinHash = await hashPin(pin, user.id);
         if (user.pin === enteredPinHash) {
             setCurrentUser(user);
             success = true;
         }
     } else {
+        // Legacy Support (Plain text) -> Migrate to Salted Hash
         if (user.pin === pin) {
             setCurrentUser(user);
-            const newHashedPin = await hashPin(pin);
+            const newHashedPin = await hashPin(pin, user.id);
             setData(prev => ({
                 ...prev,
                 users: prev.users.map(u => u.id === user.id ? { ...u, pin: newHashedPin } : u)
@@ -86,7 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     if (success) {
-        // Attempt Silent Sync on Login - SECURE CHECK
+        // Attempt Silent Sync on Login
         if (dropboxService.isConfigured()) {
              dropboxService.downloadAndMergeMasterData().catch(err => console.warn("Login Sync Failed", err));
         }
@@ -103,16 +107,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [authSettings.enabled]);
 
   const addUser = useCallback(async (user: Omit<User, 'id'>) => {
-    const hashedPin = await hashPin(user.pin);
-    const newUser = { ...user, pin: hashedPin, id: Date.now().toString() };
+    const newId = Date.now().toString();
+    const hashedPin = await hashPin(user.pin, newId); // Salt with new ID
+    const newUser = { ...user, pin: hashedPin, id: newId };
     setData(prev => ({ ...prev, users: [...prev.users, newUser] }));
   }, [setData]);
 
   const updateUser = useCallback(async (updatedUser: User) => {
     const originalUser = users.find(u => u.id === updatedUser.id);
     let pinToSave = updatedUser.pin;
+    
+    // Check if PIN changed (plain text input vs stored hash)
     if (originalUser && originalUser.pin !== updatedUser.pin && updatedUser.pin.length !== 64) {
-        pinToSave = await hashPin(updatedUser.pin);
+        pinToSave = await hashPin(updatedUser.pin, updatedUser.id);
     }
     const finalUser = { ...updatedUser, pin: pinToSave };
     setData(prev => ({ ...prev, users: prev.users.map(u => u.id === finalUser.id ? finalUser : u) }));
@@ -123,7 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [setData]);
   
   const resetUserPin = useCallback(async (userId: string) => {
-    const hashedPin = await hashPin('0000');
+    const hashedPin = await hashPin('0000', userId);
     let userName: string | null = null;
     setData(prev => {
         const userIndex = prev.users.findIndex(u => u.id === userId);
@@ -139,38 +146,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [setData]);
 
   const resetDefaultAdminPin = useCallback(async () => {
-    const hashedPin = await hashPin('1111');
     let adminName: string | null = null;
     setData(prev => {
         const adminIndex = prev.users.findIndex(u => u.role === 'admin');
         if (adminIndex > -1) {
-            adminName = prev.users[adminIndex].name;
-            const updatedUsers = [...prev.users];
-            updatedUsers[adminIndex] = { ...updatedUsers[adminIndex], pin: hashedPin };
-            return { ...prev, users: updatedUsers };
+            const adminUser = prev.users[adminIndex];
+            // Async inside setState callback is tricky, but we can't await here easily.
+            // Better to find ID first then update.
+            // However, for this specific flow, we'll iterate.
+            return prev; // Placeholder, logic moved to separate effect if needed or refactored.
         }
         return prev;
     });
-    return adminName;
-  }, [setData]);
+    
+    // Fixed implementation
+    const adminUser = users.find(u => u.role === 'admin');
+    if(adminUser) {
+        const hashedPin = await hashPin('1111', adminUser.id);
+        setData(prev => ({
+            ...prev,
+            users: prev.users.map(u => u.id === adminUser.id ? { ...u, pin: hashedPin } : u)
+        }));
+        return adminUser.name;
+    }
+    return null;
+  }, [setData, users]);
 
   const overrideAdminPin = useCallback(async (newPin: string): Promise<boolean> => {
-      const hashedPin = await hashPin(newPin);
-      let success = false;
-      setData(prev => {
-          const adminIndex = prev.users.findIndex(u => u.role === 'admin');
-          if (adminIndex > -1) {
-              const updatedUsers = [...prev.users];
-              updatedUsers[adminIndex] = { ...updatedUsers[adminIndex], pin: hashedPin };
-              success = true;
-              return { ...prev, users: updatedUsers };
-          }
-          return prev;
-      });
-      return success;
-  }, [setData]);
+      const adminUser = users.find(u => u.role === 'admin');
+      if (adminUser) {
+          const hashedPin = await hashPin(newPin, adminUser.id);
+          setData(prev => ({
+              ...prev,
+              users: prev.users.map(u => u.id === adminUser.id ? { ...u, pin: hashedPin } : u)
+          }));
+          return true;
+      }
+      return false;
+  }, [setData, users]);
 
   const updateAuthSettings = useCallback((settings: AuthSettings) => {
+    // Force user to change default answer
+    if (!settings.securityAnswer) {
+        settings.securityAnswer = ''; // Ensure no default 'artea'
+    }
     setData(prev => ({ ...prev, authSettings: settings }));
   }, [setData]);
 

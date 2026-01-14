@@ -7,13 +7,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Artea POS - Offline Cashier</title>
     <link rel="manifest" href="/manifest.json" />
-    <!-- Bootstrap Icons CDN -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     
+    <!-- ================================================================================= -->
+    <!-- HYBRID MODE: DEVELOPMENT / PREVIEW (CDN)                                          -->
+    <!-- Biarkan bagian ini AKTIF saat development di Google AI Studio / Preview online.   -->
+    <!-- ================================================================================= -->
+
+    <!-- 1. Tailwind CSS (Preview Only) -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 2. External Libraries (Global Polyfills via CDN) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    
+    <!-- 3. Bootstrap Icons (CDN) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <!-- 4. Import Maps (Preview Only) -->
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react/": "https://esm.sh/react@18.3.1/",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "xlsx": "https://esm.sh/xlsx@0.18.5",
+    "crypto-js": "https://esm.sh/crypto-js@4.2.0",
+    "vite": "https://esm.sh/vite@5.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@4.3.1",
+    "dropbox": "https://esm.sh/dropbox@10.34.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.0",
+    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.2",
+    "jspdf": "https://esm.sh/jspdf@2.5.1",
+    "recharts": "https://esm.sh/recharts@2.12.7?external=react,react-dom",
+    "dexie": "https://esm.sh/dexie@4.0.7",
+    "react-window": "https://esm.sh/react-window@1.8.10?external=react,react-dom",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+  }
+}
+</script>
+
+    <!-- ================================================================================= -->
+    <!-- PRODUCTION / OFFLINE BUILD INSTRUCTIONS                                           -->
+    <!-- Untuk membuat versi OFFLINE (tanpa internet):                                     -->
+    <!-- 1. Hapus/Komen semua script CDN & Import Map di atas.                             -->
+    <!-- 2. Pastikan 'package.json' sudah lengkap (npm install).                           -->
+    <!-- 3. Jalankan 'npm run build'. Vite akan membundle semua library ke lokal.          -->
+    <!-- 4. Inject CSS Tailwind di index.tsx: import './index.css';                        -->
+    <!-- ================================================================================= -->
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; }
@@ -47,31 +90,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.3.1",
-    "react-dom": "https://esm.sh/react-dom@18.3.1",
-    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
-    "recharts": "https://esm.sh/recharts@2.12.7?external=react,react-dom",
-    "html5-qrcode": "https://aistudiocdn.com/html5-qrcode@^2.3.8",
-    "dexie": "https://aistudiocdn.com/dexie@^4.0.7",
-    "react-window": "https://esm.sh/react-window@1.8.10?external=react,react-dom",
-    "crypto-js": "https://esm.sh/crypto-js@4.1.1",
-    "react/": "https://esm.sh/react@18.3.1/",
-    "react-dom/": "https://esm.sh/react-dom@18.3.1/",
-    "vite": "https://esm.sh/vite@^5.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^4.3.1",
-    "dropbox": "https://esm.sh/dropbox@^10.34.0",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.87.1",
-    "jspdf": "https://esm.sh/jspdf@2.5.1",
-    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.2",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
-    "xlsx": "https://esm.sh/xlsx@0.18.5"
-  }
-}
-</script>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

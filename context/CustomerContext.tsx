@@ -32,7 +32,7 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const addCustomer = useCallback((customerData: Omit<Customer, 'id' | 'memberId' | 'points' | 'balance' | 'createdAt'>) => {
         setData(prev => {
-            const sortedCustomers = [...prev.customers].sort((a,b) => {
+            const sortedCustomers = prev.customers.slice().sort((a,b) => {
                 const idA = parseInt(a.memberId.split('-')[1] || '0');
                 const idB = parseInt(b.memberId.split('-')[1] || '0');
                 return idA - idB;
@@ -69,7 +69,7 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 if (c.id && existingMap.has(c.id)) {
                     // UPDATE EXISTING
                     const old = existingMap.get(c.id)!;
-                    // Fix: Use Object.assign instead of spread to avoid "Spread types may only be created from object types" error
+                    // Use explicit cast or Object.assign to be safe, though spread should work on objects
                     existingMap.set(c.id, Object.assign({}, old, c) as Customer);
                 } else {
                     // CREATE NEW

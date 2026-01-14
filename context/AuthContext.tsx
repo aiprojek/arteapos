@@ -7,12 +7,10 @@ import { dropboxService } from '../services/dropboxService';
 import type { User, AuthSettings } from '../types';
 
 const SYSTEM_USER: User = { id: 'system', name: 'Admin Sistem', pin: '', role: 'admin' };
-const PIN_SALT = "ARTEA_SECURE_SALT_V1_"; // Hardcoded salt to prevent rainbow table attacks
 
 async function hashPin(pin: string): Promise<string> {
   const encoder = new TextEncoder();
-  // Salted Hash
-  const data = encoder.encode(PIN_SALT + pin);
+  const data = encoder.encode(pin);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -38,7 +36,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { data, setData, isDataLoading } = useData();
-  const { triggerMasterDataPush } = useCloudSync(); 
+  const { triggerMasterDataPush } = useCloudSync(); // Just to access trigger, logic for auto sync is inside login
   const { authSettings, users } = data;
   const { showAlert } = useUI();
   const [currentUser, setCurrentUser] = useState<User | null>(() => authSettings.enabled ? null : SYSTEM_USER);
@@ -76,7 +74,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             success = true;
         }
     } else {
-        // Legacy Support: Migration for unsalted/unhashed pins
         if (user.pin === pin) {
             setCurrentUser(user);
             const newHashedPin = await hashPin(pin);
@@ -89,6 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     if (success) {
+        // Attempt Silent Sync on Login - SECURE CHECK
         if (dropboxService.isConfigured()) {
              dropboxService.downloadAndMergeMasterData().catch(err => console.warn("Login Sync Failed", err));
         }

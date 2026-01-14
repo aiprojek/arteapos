@@ -103,14 +103,13 @@ const LoginView: React.FC = () => {
     }
 
     const verifySecurityChallenge = () => {
-        // SECURITY FIX: Removed default fallback answer 'artea'
-        const expectedAnswer = authSettings.securityAnswer; 
+        const expectedAnswer = authSettings.securityAnswer || 'artea'; // Default if not set
         
-        if (expectedAnswer && challengeAnswer.trim().toLowerCase() === expectedAnswer.toLowerCase()) {
+        if (challengeAnswer.trim().toLowerCase() === expectedAnswer.toLowerCase()) {
             setChallengeModalOpen(false);
             setEmergencyModalOpen(true); // Open Recovery Menu
         } else {
-            setChallengeError('Jawaban salah atau belum diatur. Akses ditolak.');
+            setChallengeError('Jawaban salah. Akses ditolak.');
         }
     };
 

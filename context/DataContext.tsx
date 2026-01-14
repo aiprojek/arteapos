@@ -46,43 +46,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await db.open();
         console.log("Database opened successfully");
         
-        // AUDIT OPTIMIZATION: Only load heavy tables partially (Latest 500 records) or empty for lazy loading
-        // Master data is still loaded fully.
-        
         const [
-          products, categoriesObj, rawMaterials, users, settings,
-          expenses, otherIncomes, suppliers, purchases, customers, discountDefinitions, heldCarts, sessionHistory, balanceLogs,
-          // Count heavy tables instead of loading all
-          txnStats, logStats, adjStats
+          products, categoriesObj, rawMaterials, transactionRecords, users, settings,
+          expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts, sessionHistory, auditLogs, balanceLogs
         ] = await Promise.all([
           db.products.toArray(),
           db.appState.get('categories'),
           db.rawMaterials.toArray(),
+          db.transactionRecords.toArray(),
           db.users.toArray(),
           db.settings.toArray(),
-          db.expenses.toArray(), // Expenses usually less than transactions, okay to load
+          db.expenses.toArray(),
           db.otherIncomes.toArray(),
           db.suppliers.toArray(),
           db.purchases.toArray(),
+          db.stockAdjustments.toArray(),
           db.customers.toArray(),
           db.discountDefinitions.toArray(),
           db.heldCarts.toArray(),
           db.sessionHistory.toArray(),
+          db.auditLogs.toArray(),
           db.balanceLogs.toArray(),
-          // Metadata
-          db.transactionRecords.count(),
-          db.auditLogs.count(),
-          db.stockAdjustments.count()
         ]);
         
-        // MEMORY SAFETY: Load only recent 200 items for context availability. 
-        // Full reports should use direct DB queries in Views.
-        const recentTransactions = await db.transactionRecords.orderBy('createdAt').reverse().limit(200).toArray();
-        const recentAuditLogs = await db.auditLogs.orderBy('timestamp').reverse().limit(100).toArray();
-        const recentStockAdj = await db.stockAdjustments.orderBy('createdAt').reverse().limit(100).toArray();
-
         // Calculate DB Load
-        const totalRecs = txnStats + logStats + adjStats + (balanceLogs?.length || 0);
+        const totalRecs = transactionRecords.length + stockAdjustments.length + auditLogs.length + (balanceLogs?.length || 0);
         setDbUsageStatus({
             totalRecords: totalRecs,
             isHeavy: totalRecs > 5000
@@ -92,18 +80,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           products,
           categories: categoriesObj?.value || initialData.categories,
           rawMaterials,
-          transactionRecords: recentTransactions, // LOAD LIMITED
+          transactionRecords,
           users,
           expenses,
           otherIncomes: otherIncomes || [],
           suppliers,
           purchases,
-          stockAdjustments: recentStockAdj, // LOAD LIMITED
+          stockAdjustments,
           customers,
           discountDefinitions,
           heldCarts,
           sessionHistory: sessionHistory || [],
-          auditLogs: recentAuditLogs, // LOAD LIMITED
+          auditLogs: auditLogs || [],
           balanceLogs: balanceLogs || [],
           receiptSettings: settings.find(s => s.key === 'receiptSettings')?.value || initialData.receiptSettings,
           inventorySettings: settings.find(s => s.key === 'inventorySettings')?.value || initialData.inventorySettings,
@@ -143,35 +131,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const value = data[key];
               
               switch(key) {
-                // LIGHT TABLES (Full Sync)
                 case 'products':
                 case 'rawMaterials':
+                case 'transactionRecords':
                 case 'users':
                 case 'expenses':
                 case 'otherIncomes':
                 case 'suppliers':
                 case 'purchases':
+                case 'stockAdjustments':
                 case 'customers':
                 case 'discountDefinitions':
                 case 'heldCarts':
                 case 'sessionHistory':
+                case 'auditLogs':
                 case 'balanceLogs':
+                  // Note: Full table replace on change is inefficient for large datasets, 
+                  // but retained here for consistency with original architecture until further refactor.
                   promises.push(db.table(key).clear().then(() => db.table(key).bulkAdd(value as any[])));
                   break;
-                
-                // HEAVY TABLES (Append Only via Context Actions recommended, avoiding full overwrite here if possible)
-                // However, for consistency with 'setData' usage in other contexts:
-                case 'transactionRecords':
-                case 'stockAdjustments':
-                case 'auditLogs':
-                   // WARNING: With partial loading, we should NOT clear and save back what we have in memory
-                   // because we only have the last 200 items!
-                   // Data mutations for these tables should happen via db.table.add() directly in Contexts
-                   // NOT via setData global state.
-                   // Current App Architecture relies on setData. This is a trade-off.
-                   // Ideally, we skip persistence here for heavy tables and rely on direct DB calls in addTransaction etc.
-                   break;
-
                 case 'categories':
                   promises.push(db.appState.put({ key: 'categories', value }));
                   break;

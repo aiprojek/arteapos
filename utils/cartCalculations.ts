@@ -12,7 +12,7 @@ interface CartTotals {
 
 /**
  * Menghitung total keranjang belanja termasuk diskon, pajak, dan service charge.
- * FIX: Added rigorous Math.round() to prevent floating point errors (e.g. 0.1 + 0.2 != 0.3)
+ * Logic Update: Support Tax per Product Override.
  */
 export const calculateCartTotals = (
     cart: CartItem[], 
@@ -27,7 +27,7 @@ export const calculateCartTotals = (
     cart.forEach(item => {
         if(item.isReward) {
             // Reward items typically have 0 or negative price
-            subtotal = Math.round(subtotal + (item.price * item.quantity));
+            subtotal += item.price * item.quantity;
             return;
         }
         
@@ -35,16 +35,14 @@ export const calculateCartTotals = (
         const addonsTotal = item.selectedAddons?.reduce((sum, addon) => sum + addon.price, 0) || 0;
         const modifiersTotal = item.selectedModifiers?.reduce((sum, mod) => sum + mod.price, 0) || 0;
 
-        // Use round to ensure no fractional prices creep in
-        const singleItemPrice = Math.round(item.price + addonsTotal + modifiersTotal);
-        const itemOriginalTotal = singleItemPrice * item.quantity;
+        const itemOriginalTotal = (item.price + addonsTotal + modifiersTotal) * item.quantity;
         
         let currentItemDiscount = 0;
         if (item.discount) {
             if (item.discount.type === 'amount') {
-                currentItemDiscount = Math.round(item.discount.value * item.quantity);
+                currentItemDiscount = item.discount.value * item.quantity;
             } else {
-                currentItemDiscount = Math.round(itemOriginalTotal * (item.discount.value / 100));
+                currentItemDiscount = itemOriginalTotal * (item.discount.value / 100);
             }
         }
         
@@ -62,6 +60,9 @@ export const calculateCartTotals = (
         
         if (applicableTaxRate > 0) {
             // Tax is calculated on the price AFTER item discount
+            // Note: In this logic, cart-level discount reduces tax base proportionally later, 
+            // but simple POS often taxes the item price directly. 
+            // Let's assume tax is on the item's selling price after item discount.
             const itemTax = Math.round(itemTotalAfterDiscount * (applicableTaxRate / 100));
             totalTaxAmount += itemTax;
         }
@@ -73,16 +74,17 @@ export const calculateCartTotals = (
     
     if (cartDiscount) {
         if (cartDiscount.type === 'amount') {
-            cartDiscountAmount = Math.round(cartDiscount.value);
+            cartDiscountAmount = cartDiscount.value;
         } else {
-            cartDiscountAmount = Math.round(subtotalAfterItemDiscounts * (cartDiscount.value / 100));
+            cartDiscountAmount = subtotalAfterItemDiscounts * (cartDiscount.value / 100);
         }
     }
     // Diskon keranjang tidak boleh melebihi subtotal tersisa
     cartDiscountAmount = Math.min(cartDiscountAmount, subtotalAfterItemDiscounts);
     
     // 3. Taxable Amount & Service Charge
-    // If cart discount exists, we need to adjust the Tax Amount proportionally 
+    // If cart discount exists, we need to adjust the Tax Amount proportionally if using the per-item tax logic above?
+    // COMPLEXITY: If we calculated tax per item, a global discount complicates things.
     // SIMPLIFICATION: If Cart Discount is applied, we reduce the totalTaxAmount proportionally.
     
     if (cartDiscountAmount > 0 && subtotalAfterItemDiscounts > 0) {
@@ -92,18 +94,25 @@ export const calculateCartTotals = (
 
     const taxableAmount = subtotalAfterItemDiscounts - cartDiscountAmount;
     
+    // 4. Hitung Service Charge (biasanya sebelum pajak, dan kena pajak lagi? atau terpisah?)
+    // Di Indonesia biasanya SC kena pajak. Tapi untuk simplifikasi aplikasi UMKM ini:
+    // Service Charge dihitung dari subtotal akhir, dan Pajak adalah akumulasi pajak item.
+    
     const serviceChargeRate = settings.serviceChargeRate || 0;
     const serviceChargeAmount = Math.round(taxableAmount * (serviceChargeRate / 100));
+    
+    // If service charge is taxable, we add tax on SC here using global rate? 
+    // Let's keep it simple: SC is separate. Tax is sum of item taxes.
     
     // 6. Final Total
     const finalTotal = taxableAmount + serviceChargeAmount + totalTaxAmount;
     
     return { 
-        subtotal: Math.round(subtotal), 
-        itemDiscountAmount: Math.round(itemDiscountAmount), 
-        cartDiscountAmount: Math.round(cartDiscountAmount), 
-        taxAmount: Math.round(totalTaxAmount), 
-        serviceChargeAmount: Math.round(serviceChargeAmount), 
-        finalTotal: Math.round(finalTotal) 
+        subtotal, 
+        itemDiscountAmount, 
+        cartDiscountAmount, 
+        taxAmount: totalTaxAmount, 
+        serviceChargeAmount, 
+        finalTotal 
     };
 };

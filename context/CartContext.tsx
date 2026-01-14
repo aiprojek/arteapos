@@ -401,6 +401,52 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
             storeId: receiptSettings.storeId || 'LOCAL'
         };
 
+        // --- SNAPSHOT CALCULATION FOR RECEIPT ---
+        // We calculate what the balance/points *will be* after this transaction
+        // based on the current state in `data` context.
+        if (customerId) {
+            const customer = data.customers.find(c => c.id === customerId);
+            if (customer) {
+                // 1. Calculate Points
+                let pointsEarned = 0;
+                // ... (Logic same as below for earning)
+                const currentStoreId = receiptSettings.storeId || '';
+                const cartWithoutRewards = cart.filter(item => !item.isReward);
+                const spendTotal = cartWithoutRewards.reduce((sum, item) => {
+                    const addonsTotal = item.selectedAddons?.reduce((s, addon) => s + addon.price, 0) || 0;
+                    const modifierTotal = item.selectedModifiers?.reduce((s, mod) => s + mod.price, 0) || 0;
+                    const itemTotal = (item.price + addonsTotal + modifierTotal) * item.quantity;
+                    return sum + itemTotal;
+                }, 0);
+                
+                if (data.membershipSettings.enabled) {
+                    data.membershipSettings.pointRules.forEach(rule => {
+                        if (rule.validStoreIds && rule.validStoreIds.length > 0 && !rule.validStoreIds.includes(currentStoreId)) return;
+                        if(rule.type === 'spend' && rule.spendAmount && rule.spendAmount > 0 && rule.pointsEarned) {
+                            pointsEarned += Math.floor(spendTotal / rule.spendAmount) * rule.pointsEarned;
+                        } else if ((rule.type === 'product' || rule.type === 'category') && rule.targetId && rule.pointsPerItem) {
+                            cartWithoutRewards.forEach(item => {
+                                const isMatch = (rule.type === 'product' && item.id === rule.targetId) || 
+                                                (rule.type === 'category' && item.category.includes(rule.targetId));
+                                if(isMatch) pointsEarned += (item.quantity * rule.pointsPerItem);
+                            });
+                        }
+                    });
+                }
+
+                const pointsSpent = appliedReward ? appliedReward.reward.pointsCost : 0;
+                newTransaction.customerPointsSnapshot = Math.max(0, (customer.points || 0) + pointsEarned - pointsSpent);
+
+                // 2. Calculate Balance
+                // Note: PaymentModal might have added balance (Change Deposit) separately before this.
+                // We assume `customer.balance` here is the state *before* this transaction's deductions.
+                // If payment uses balance:
+                const balanceUsed = payments.filter(p => p.method === 'member-balance').reduce((sum, p) => sum + p.amount, 0);
+                newTransaction.customerBalanceSnapshot = (customer.balance || 0) - balanceUsed;
+            }
+        }
+        // ----------------------------------------
+
         setData(prev => {
             let updatedCustomers = prev.customers;
             let updatedProducts = prev.products;
@@ -508,7 +554,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         setTimeout(() => triggerAutoSync(currentUser.name), 500);
 
         return newTransaction;
-    }, [cart, getCartTotals, setData, currentUser, appliedReward, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, rawMaterials, products, orderType, receiptSettings.storeId, triggerAutoSync, logAudit]);
+    }, [cart, getCartTotals, setData, currentUser, appliedReward, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, rawMaterials, products, orderType, receiptSettings.storeId, triggerAutoSync, logAudit, data.customers, data.membershipSettings]); // Added data.customers dependency
     
     return (
         <CartContext.Provider value={{

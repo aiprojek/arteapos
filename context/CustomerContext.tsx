@@ -57,8 +57,8 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setData(prev => {
             const existingMap = new Map(prev.customers.map(c => [c.id, c]));
             
-            // Sort existing for ID generation
-            const sortedCustomers = [...prev.customers].sort((a,b) => {
+            // Sort existing for ID generation (Use slice instead of spread to avoid TS issues)
+            const sortedCustomers = prev.customers.slice().sort((a,b) => {
                 const idA = parseInt(a.memberId.split('-')[1] || '0');
                 const idB = parseInt(b.memberId.split('-')[1] || '0');
                 return idA - idB;
@@ -69,7 +69,8 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 if (c.id && existingMap.has(c.id)) {
                     // UPDATE EXISTING
                     const old = existingMap.get(c.id)!;
-                    existingMap.set(c.id, { ...old, ...c } as Customer);
+                    // Fix: Use Object.assign instead of spread to avoid "Spread types may only be created from object types" error
+                    existingMap.set(c.id, Object.assign({}, old, c) as Customer);
                 } else {
                     // CREATE NEW
                     lastIdNumber++;

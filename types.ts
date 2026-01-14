@@ -168,6 +168,9 @@ export interface Transaction {
   customerContact?: string;
   customerId?: string;
   pointsEarned?: number;
+  // Snapshot data for Receipt
+  customerBalanceSnapshot?: number; // Saldo akhir saat transaksi
+  customerPointsSnapshot?: number; // Poin akhir saat transaksi
   rewardRedeemed?: {
     rewardId: string;
     pointsSpent: number;

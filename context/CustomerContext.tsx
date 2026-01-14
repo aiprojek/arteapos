@@ -17,7 +17,7 @@ interface CustomerContextType {
     deleteCustomer: (customerId: string) => void;
     updateMembershipSettings: (settings: MembershipSettings) => void;
     addBalance: (customerId: string, amount: number, description: string, isTopUp?: boolean) => void;
-    bulkAddCustomers: (newCustomers: Omit<Customer, 'id' | 'memberId' | 'createdAt'>[]) => void;
+    bulkAddCustomers: (newCustomers: Partial<Customer>[]) => void;
 }
 
 const CustomerContext = createContext<CustomerContextType | undefined>(undefined);
@@ -52,28 +52,44 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
     }, [setData]);
 
-    const bulkAddCustomers = useCallback((newCustomers: Omit<Customer, 'id' | 'memberId' | 'createdAt'>[]) => {
+    // UPDATED: Support Upsert (Update Existing if ID present)
+    const bulkAddCustomers = useCallback((newCustomers: Partial<Customer>[]) => {
         setData(prev => {
+            const existingMap = new Map(prev.customers.map(c => [c.id, c]));
+            
+            // Sort existing for ID generation
             const sortedCustomers = [...prev.customers].sort((a,b) => {
                 const idA = parseInt(a.memberId.split('-')[1] || '0');
                 const idB = parseInt(b.memberId.split('-')[1] || '0');
                 return idA - idB;
             });
-            
             let lastIdNumber = sortedCustomers.length > 0 ? parseInt(sortedCustomers[sortedCustomers.length - 1].memberId.split('-')[1] || '0', 10) : 0;
             
-            const processedCustomers: Customer[] = newCustomers.map((c, index) => {
-                lastIdNumber++;
-                const newMemberId = `CUST-${String(lastIdNumber).padStart(4, '0')}`;
-                return {
-                    ...c,
-                    id: `${Date.now()}-${index}`,
-                    memberId: newMemberId,
-                    createdAt: new Date().toISOString()
-                };
+            newCustomers.forEach((c, index) => {
+                if (c.id && existingMap.has(c.id)) {
+                    // UPDATE EXISTING
+                    const old = existingMap.get(c.id)!;
+                    existingMap.set(c.id, { ...old, ...c } as Customer);
+                } else {
+                    // CREATE NEW
+                    lastIdNumber++;
+                    const newMemberId = c.memberId || `CUST-${String(lastIdNumber).padStart(4, '0')}`;
+                    const newId = c.id || `${Date.now()}-${index}`;
+                    
+                    const newCust: Customer = {
+                        id: newId,
+                        memberId: newMemberId,
+                        name: c.name || 'Unnamed',
+                        contact: c.contact || '',
+                        points: c.points || 0,
+                        balance: c.balance || 0,
+                        createdAt: c.createdAt || new Date().toISOString()
+                    };
+                    existingMap.set(newId, newCust);
+                }
             });
 
-            return { ...prev, customers: [...processedCustomers, ...prev.customers] };
+            return { ...prev, customers: Array.from(existingMap.values()) };
         });
     }, [setData]);
 

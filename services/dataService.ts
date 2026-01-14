@@ -214,8 +214,8 @@ const exportCustomersCSV = (customers: Customer[]) => {
     downloadCSV(csvContent, 'customers_report.csv');
 };
 
-// NEW: Import Customers
-const importCustomersCSV = (file: File): Promise<Omit<Customer, 'id' | 'memberId' | 'createdAt'>[]> => {
+// NEW: Import Customers - UPDATED TO SUPPORT ID
+const importCustomersCSV = (file: File): Promise<Customer[]> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -227,12 +227,14 @@ const importCustomersCSV = (file: File): Promise<Omit<Customer, 'id' | 'memberId
                     return;
                 }
                 const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-                const customers: Omit<Customer, 'id' | 'memberId' | 'createdAt'>[] = [];
+                const customers: Customer[] = [];
 
                 for (let i = 1; i < lines.length; i++) {
                     if (!lines[i].trim()) continue;
                     const values = parseCSVLine(lines[i]);
                     
+                    const idIdx = headers.findIndex(h => h === 'id'); // Exact match preferred
+                    const memberIdIdx = headers.findIndex(h => h.includes('memberid') || h.includes('id member'));
                     const nameIdx = headers.findIndex(h => h.includes('name') || h.includes('nama'));
                     const contactIdx = headers.findIndex(h => h.includes('contact') || h.includes('kontak') || h.includes('hp'));
                     const pointsIdx = headers.findIndex(h => h.includes('point') || h.includes('poin'));
@@ -240,12 +242,22 @@ const importCustomersCSV = (file: File): Promise<Omit<Customer, 'id' | 'memberId
 
                     if (nameIdx === -1) continue; // Name is mandatory
 
-                    const cust = {
+                    const cust: any = {
                         name: values[nameIdx]?.replace(/"/g, '').trim(),
                         contact: contactIdx > -1 ? values[contactIdx]?.replace(/"/g, '').trim() : '',
                         points: pointsIdx > -1 ? (parseInt(values[pointsIdx]) || 0) : 0,
-                        balance: balanceIdx > -1 ? (parseFloat(values[balanceIdx]) || 0) : 0
+                        balance: balanceIdx > -1 ? (parseFloat(values[balanceIdx]) || 0) : 0,
+                        createdAt: new Date().toISOString()
                     };
+
+                    // Capture ID if exists (for Update/Edit Ulang)
+                    if (idIdx > -1 && values[idIdx]) {
+                        cust.id = values[idIdx].replace(/"/g, '').trim();
+                    }
+                    
+                    if (memberIdIdx > -1 && values[memberIdIdx]) {
+                        cust.memberId = values[memberIdIdx].replace(/"/g, '').trim();
+                    }
 
                     if (cust.name) customers.push(cust);
                 }
@@ -695,6 +707,7 @@ export const dataService = {
   },
   
   importCustomersCSV,
+  exportCustomersCSV, // ADDED HERE
 
   exportAllReportsCSV: (data: AppData) => {
     if (data.transactionRecords.length > 0) exportTransactionsCSV(data.transactionRecords);

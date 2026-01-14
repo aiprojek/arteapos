@@ -1220,6 +1220,16 @@ const ProductsView: React.FC = () => {
         });
     };
 
+    // --- NEW: Handle Export CSV ---
+    const handleExport = () => {
+        dataService.exportProductsCSV(products);
+        showAlert({
+            type: 'alert',
+            title: 'Export Berhasil',
+            message: 'Data produk (CSV) berhasil diunduh. Anda bisa mengeditnya di Excel dan menguploadnya kembali (update otomatis berdasarkan ID).'
+        });
+    };
+
     const onCameraCapture = (image: string) => {
         setCapturedImage(image);
         setCameraOpen(false);
@@ -1275,6 +1285,12 @@ const ProductsView: React.FC = () => {
                         />
                          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     </div>
+                    {/* NEW EXPORT BUTTON */}
+                    <Button variant="secondary" onClick={handleExport} className="flex-shrink-0 bg-slate-700 border-slate-600 hover:bg-slate-600">
+                        <Icon name="download" className="w-5 h-5"/>
+                        <span className="hidden lg:inline">Export</span>
+                    </Button>
+
                     <Button variant="secondary" onClick={() => setBulkModalOpen(true)} className="flex-shrink-0 bg-blue-900/30 text-blue-300 border-blue-800 hover:bg-blue-900/50">
                         <Icon name="boxes" className="w-5 h-5"/>
                         <span className="hidden lg:inline">Tambah Massal</span>

@@ -550,7 +550,17 @@ const CustomersTab: React.FC = () => {
     const handleBulkSave = (newCustomers: any[]) => {
         bulkAddCustomers(newCustomers);
         setBulkModalOpen(false);
-        showAlert({ type: 'alert', title: 'Berhasil', message: `${newCustomers.length} pelanggan ditambahkan. ID Member telah dibuat otomatis.` });
+        showAlert({ type: 'alert', title: 'Berhasil', message: `${newCustomers.length} data pelanggan berhasil diproses.` });
+    };
+
+    // --- NEW: Handle Export CSV ---
+    const handleExport = () => {
+        dataService.exportCustomersCSV(customers);
+        showAlert({ 
+            type: 'alert', 
+            title: 'Export Berhasil', 
+            message: 'Data pelanggan (CSV) berhasil diunduh. Anda bisa menggunakannya untuk backup atau edit massal (re-import).' 
+        });
     };
 
     const handleEdit = (customer: Customer) => {
@@ -647,6 +657,11 @@ const CustomersTab: React.FC = () => {
                     <Icon name="search" className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
                 </div>
                 <div className="flex gap-2">
+                    {/* NEW EXPORT BUTTON */}
+                    <Button variant="secondary" onClick={handleExport}>
+                        <Icon name="download" className="w-4 h-4"/> Export
+                    </Button>
+
                     <Button variant="secondary" onClick={() => setBulkModalOpen(true)}>
                         <Icon name="boxes" className="w-4 h-4"/> Tambah Massal
                     </Button>

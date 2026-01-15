@@ -1,10 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AppProviders from './context/AppProviders';
 import { useAuth } from './context/AuthContext';
 import { useData } from './context/DataContext';
 import { useUI } from './context/UIContext';
 import { useProduct } from './context/ProductContext';
+import { useIdleTimer } from './hooks/useIdleTimer'; // Import Auto Lock
 import type { View } from './types';
 import POSView from './views/POSView';
 import ProductsView from './views/ProductsView';
@@ -18,7 +19,41 @@ import Header from './components/Header';
 import Icon from './components/Icon';
 import AlertModal from './components/AlertModal';
 import DashboardView from './views/DashboardView';
-import OnboardingModals from './components/OnboardingModals'; // Import komponen baru
+import OnboardingModals from './components/OnboardingModals'; 
+
+// --- Hook untuk Mencegah Back Button / Refresh ---
+const usePreventNavigation = (shouldPrevent: boolean) => {
+  useEffect(() => {
+    if (!shouldPrevent) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = ''; // Chrome requires returnValue to be set
+    };
+
+    const handlePopState = (e: PopStateEvent) => {
+      e.preventDefault();
+      // Push state kembali agar user tetap di halaman
+      window.history.pushState(null, '', window.location.pathname);
+      const confirmLeave = window.confirm("Keluar dari aplikasi? Data keranjang yang belum disimpan mungkin hilang.");
+      if (confirmLeave) {
+         // Biarkan history back terjadi (butuh interaksi manual user biasanya)
+         window.history.back(); 
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    // Hack untuk tombol back Android/Browser
+    window.history.pushState(null, '', window.location.pathname);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [shouldPrevent]);
+};
 
 const Nav = ({ activeView, setActiveView, onNavigate }: { 
   activeView: View, 
@@ -31,7 +66,7 @@ const Nav = ({ activeView, setActiveView, onNavigate }: {
 
   const handleNavigation = (view: View) => {
     setActiveView(view);
-    onNavigate(); // This will close the sidebar on mobile
+    onNavigate(); 
   };
 
   const NavItem = ({ view, label, icon }: { view: View; label: string; icon: 'cash' | 'products' | 'reports' | 'settings' | 'ingredients' | 'finance' | 'book' | 'award' }) => (
@@ -78,6 +113,12 @@ const AppContent = () => {
   const [activeView, setActiveView] = useState<View>(isManagement ? 'dashboard' : 'pos');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   
+  // ACTIVATE AUTO LOCK (10 Minutes)
+  useIdleTimer(10 * 60 * 1000); 
+  
+  // PREVENT ACCIDENTAL EXIT
+  usePreventNavigation(true);
+  
   const closeSidebar = () => setSidebarOpen(false);
   const toggleSidebar = () => setSidebarOpen(prev => !prev);
 
@@ -106,10 +147,8 @@ const AppContent = () => {
 
   return (
     <div className="flex flex-col md:flex-row h-screen font-sans bg-slate-900 text-slate-100">
-      {/* Modals for Welcome/Briefing */}
       <OnboardingModals setActiveView={setActiveView} />
 
-      {/* Overlay for mobile */}
       {isSidebarOpen && (
         <div 
           onClick={closeSidebar} 
@@ -118,7 +157,6 @@ const AppContent = () => {
         />
       )}
 
-      {/* Unified Sidebar */}
       <nav className={`
         flex flex-col w-64 bg-slate-800 p-4 space-y-2 border-r border-slate-700
         fixed md:relative h-full z-30 transition-transform duration-300 ease-in-out

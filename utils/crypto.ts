@@ -2,8 +2,8 @@
 import CryptoJS from 'crypto-js';
 
 const SECRET_KEY = "ARTEA_POS_SECRET_KEY_v1"; // Kunci statis untuk data laporan
-const PAIRING_KEY = "ARTEA_PAIRING_SECURE_X99"; // Kunci khusus untuk pairing credentials
-const STORAGE_KEY = "ARTEA_STORAGE_SECURE_K88"; // NEW: Kunci untuk localStorage
+const PAIRING_KEY_BASE = "ARTEA_PAIRING_SECURE_X99"; // Kunci dasar
+const STORAGE_KEY = "ARTEA_STORAGE_SECURE_K88"; 
 
 const PREFIX = "ARTEA_ENC::";
 const PAIRING_PREFIX = "ARTEA_PAIR_SECURE::";
@@ -41,12 +41,14 @@ export const isEncryptedReport = (text: string): boolean => {
     return text.startsWith(PREFIX);
 };
 
-// --- Credential Pairing Encryption ---
+// --- Credential Pairing Encryption (UPDATED with Dynamic Passphrase) ---
 
-export const encryptCredentials = (payload: { k: string, s: string, t: string }): string => {
+export const encryptCredentials = (payload: { k: string, s: string, t: string }, passphrase: string = ''): string => {
     try {
         const jsonString = JSON.stringify(payload);
-        const encrypted = CryptoJS.AES.encrypt(jsonString, PAIRING_KEY).toString();
+        // Combine Base Key + Dynamic Passphrase for stronger security
+        const dynamicKey = PAIRING_KEY_BASE + passphrase;
+        const encrypted = CryptoJS.AES.encrypt(jsonString, dynamicKey).toString();
         return `${PAIRING_PREFIX}${encrypted}`;
     } catch (error) {
         console.error("Credential encryption failed:", error);
@@ -54,9 +56,9 @@ export const encryptCredentials = (payload: { k: string, s: string, t: string })
     }
 };
 
-export const decryptCredentials = (ciphertext: string): { k: string, s: string, t: string } | null => {
+export const decryptCredentials = (ciphertext: string, passphrase: string = ''): { k: string, s: string, t: string } | null => {
     try {
-        // Support both Raw Base64 (QR) and AES Encrypted (Text) for backward compatibility
+        // Support Legacy (QR Lama tanpa PIN - fallback)
         if (ciphertext.startsWith("ARTEA_PAIR::")) {
              const base64 = ciphertext.replace('ARTEA_PAIR::', '');
              const json = atob(base64);
@@ -66,7 +68,9 @@ export const decryptCredentials = (ciphertext: string): { k: string, s: string, 
         if (!ciphertext.startsWith(PAIRING_PREFIX)) return null;
         
         const actualCipher = ciphertext.replace(PAIRING_PREFIX, "");
-        const bytes = CryptoJS.AES.decrypt(actualCipher, PAIRING_KEY);
+        const dynamicKey = PAIRING_KEY_BASE + passphrase;
+        
+        const bytes = CryptoJS.AES.decrypt(actualCipher, dynamicKey);
         const originalText = bytes.toString(CryptoJS.enc.Utf8);
         
         if (!originalText) return null;
@@ -78,7 +82,7 @@ export const decryptCredentials = (ciphertext: string): { k: string, s: string, 
     }
 };
 
-// --- NEW: Local Storage Encryption ---
+// --- Local Storage Encryption ---
 
 export const encryptStorage = (value: string): string => {
     if (!value) return '';
@@ -94,7 +98,6 @@ export const encryptStorage = (value: string): string => {
 export const decryptStorage = (value: string | null): string => {
     if (!value) return '';
     
-    // Backward Compatibility: If not encrypted with our prefix, return as is (Plain Text)
     if (!value.startsWith(STORAGE_PREFIX)) {
         return value;
     }

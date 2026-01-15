@@ -121,8 +121,9 @@ const HardwareTab: React.FC = () => {
             >
                 {isBleSupported ? (
                     <>
-                        <div className="bg-blue-900/20 border-l-4 border-blue-500 p-3 rounded-r text-xs text-slate-300">
-                            <strong>Cara Pakai:</strong> Nyalakan Bluetooth Perangkat & Printer. Pasangkan (Pair) di pengaturan Bluetooth perangkat, lalu klik tombol di bawah.
+                        <div className="bg-blue-900/20 border-l-4 border-blue-500 p-3 rounded-r text-xs text-slate-300 space-y-1">
+                            <p><strong>Cara Pakai:</strong> Nyalakan Bluetooth Perangkat & Printer. Pasangkan (Pair) di pengaturan Bluetooth HP/Laptop, lalu klik tombol di bawah.</p>
+                            <p className="text-blue-200">ℹ️ Fitur ini membutuhkan browser berbasis Chromium (Chrome, Edge, Samsung Internet) di Android atau Desktop.</p>
                         </div>
                         <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-slate-900 p-4 rounded-lg border border-slate-600">
                             <div className="flex items-center gap-3">
@@ -159,13 +160,24 @@ const HardwareTab: React.FC = () => {
                         </div>
                     </>
                 ) : (
-                    <div className="bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r">
-                        <h4 className="font-bold text-red-300 text-sm flex items-center gap-2">
-                            <Icon name="warning" className="w-4 h-4"/> Browser Tidak Mendukung
-                        </h4>
-                        <p className="text-xs text-slate-300 mt-1">
-                            Fitur ini butuh "Web Bluetooth API" (Hanya ada di Chrome/Edge). Untuk pengguna iOS, gunakan aplikasi browser khusus "Bluefy".
-                        </p>
+                    <div className="space-y-3">
+                        <div className="bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r">
+                            <h4 className="font-bold text-red-300 text-sm flex items-center gap-2">
+                                <Icon name="warning" className="w-4 h-4"/> Browser Tidak Mendukung Bluetooth
+                            </h4>
+                            <p className="text-xs text-slate-300 mt-1">
+                                Browser Anda (kemungkinan <strong>Safari di iPhone/iPad</strong> atau Firefox) tidak mengizinkan akses Bluetooth Web.
+                            </p>
+                        </div>
+                        
+                        <div className="bg-slate-700 p-3 rounded-lg border border-slate-600">
+                            <h5 className="text-sm font-bold text-white mb-2">Solusi untuk Pengguna iPhone/iPad (iOS):</h5>
+                            <ol className="list-decimal pl-5 text-xs text-slate-300 space-y-1">
+                                <li>Gunakan aplikasi browser khusus bernama <strong>"Bluefy"</strong> (Download di App Store).</li>
+                                <li>Buka aplikasi ini melalui Bluefy.</li>
+                                <li>Atau, gunakan <strong>Printer WiFi/LAN</strong> dan gunakan fitur "System Printer" di bawah.</li>
+                            </ol>
+                        </div>
                     </div>
                 )}
             </SettingsCard>

@@ -48,6 +48,9 @@ const DataTab: React.FC = () => {
     const [pairingTextCode, setPairingTextCode] = useState(''); 
     const [inputPairingCode, setInputPairingCode] = useState(''); 
     const [pairingMode, setPairingMode] = useState<'generate' | 'input'>('generate');
+    // SECURITY UPDATE: PIN for Pairing
+    const [pairingPin, setPairingPin] = useState(''); 
+    const [pairingStep, setPairingStep] = useState<'pin_input' | 'show_code' | 'scan_success'>('pin_input');
 
     // Import State
     const [encryptedInput, setEncryptedInput] = useState('');
@@ -158,20 +161,60 @@ const DataTab: React.FC = () => {
             return;
         }
         
-        const textCode = encryptCredentials({
-            k: creds.clientId,
-            s: creds.clientSecret,
-            t: creds.refreshToken
-        });
-        setPairingTextCode(textCode);
-        
+        setPairingPin(''); 
+        setPairingStep('pin_input');
         setPairingMode('generate');
         setShowPairingModal(true);
     };
 
+    const generatePairingCode = () => {
+        if (pairingPin.length < 4) {
+            alert("PIN Minimal 4 Karakter");
+            return;
+        }
+
+        const creds = dropboxService.getCredentials();
+        if (!creds) return;
+
+        // Encrypt using the PIN provided by user
+        const textCode = encryptCredentials({
+            k: creds.clientId,
+            s: creds.clientSecret,
+            t: creds.refreshToken
+        }, pairingPin);
+
+        setPairingTextCode(textCode);
+        setPairingStep('show_code');
+    };
+
+    const handleInputCodeInit = () => {
+        setPairingMode('input');
+        setPairingPin('');
+        setPairingStep('pin_input'); // Ask for code first? No, standard is input code then PIN.
+        // Let's modify: Input Code screen first, then if valid format, ask PIN.
+        // For simplicity: We use the modal to capture code, then ask PIN if needed inside 'processPairingCode'.
+        setShowPairingModal(true);
+    };
+
     const processPairingCode = async (code: string) => {
+        // We need to ask for PIN to decrypt
+        // Use Prompt logic or simple flow
+        // Since `window.prompt` is ugly, let's assume we use the state `pairingPin` if available
+        // OR we enforce the flow: Scan -> Enter PIN -> Decrypt.
+        
+        // Let's use the modal flow for PIN entry
+        setInputPairingCode(code);
+        setIsScanningPairing(false); // Close scanner if open
+        setPairingMode('input');
+        setPairingStep('pin_input'); // Re-use pin input step for decryption
+        setShowPairingModal(true);
+    };
+
+    const executeDecryption = async () => {
+        if (!inputPairingCode || !pairingPin) return;
+
         try {
-            const payload = decryptCredentials(code.trim());
+            const payload = decryptCredentials(inputPairingCode.trim(), pairingPin);
 
             if (payload && payload.k && payload.s && payload.t) {
                 dropboxService.saveCredentials(payload.k, payload.s, payload.t);
@@ -183,7 +226,7 @@ const DataTab: React.FC = () => {
                 showAlert({ 
                     type: 'alert', 
                     title: 'Kredensial Diterima', 
-                    message: 'Sedang mengunduh Master Data (Produk & User) dari Cloud...' 
+                    message: 'PIN Benar! Sedang mengunduh Master Data dari Cloud...' 
                 });
                 
                 try {
@@ -192,7 +235,7 @@ const DataTab: React.FC = () => {
                     showAlert({ 
                         type: 'alert', 
                         title: 'Pairing & Sync Sukses!', 
-                        message: 'Perangkat berhasil terhubung dan data Master telah diperbarui. Aplikasi akan dimuat ulang.',
+                        message: 'Perangkat berhasil terhubung. Aplikasi akan dimuat ulang.',
                         onConfirm: () => window.location.reload()
                     });
                 } catch (syncErr: any) {
@@ -200,25 +243,21 @@ const DataTab: React.FC = () => {
                     showAlert({ 
                         type: 'alert', 
                         title: 'Pairing Sukses, Sync Gagal', 
-                        message: 'Terhubung ke Dropbox, tapi gagal download Master Data. Coba "Update dari Pusat" nanti. Error: ' + syncErr.message 
+                        message: 'Terhubung, tapi gagal download Master Data. Coba "Update dari Pusat" nanti.' 
                     });
                 }
 
                 setShowPairingModal(false);
-                setIsScanningPairing(false);
             } else {
-                throw new Error("Format kode tidak valid atau password salah.");
+                throw new Error("PIN Salah atau Kode Rusak.");
             }
         } catch (e: any) {
-            showAlert({ type: 'alert', title: 'Gagal Pairing', message: e.message || 'Kode rusak.' });
+            showAlert({ type: 'alert', title: 'Gagal Pairing', message: e.message });
         }
     };
 
     const getQRPairingString = () => {
-        const creds = dropboxService.getCredentials();
-        if (!creds) return '';
-        const payload = { k: creds.clientId, s: creds.clientSecret, t: creds.refreshToken };
-        return `ARTEA_PAIR::${btoa(JSON.stringify(payload))}`;
+        return pairingTextCode;
     };
 
     // --- System Health Check ---
@@ -747,7 +786,7 @@ const DataTab: React.FC = () => {
                                         <Button onClick={() => setIsScanningPairing(true)} variant="secondary" className="flex-1 border-dashed border-2 border-slate-500">
                                             <Icon name="camera" className="w-4 h-4" /> Scan QR
                                         </Button>
-                                        <Button onClick={() => { setPairingMode('input'); setShowPairingModal(true); }} variant="secondary" className="flex-1 border-dashed border-2 border-slate-500">
+                                        <Button onClick={handleInputCodeInit} variant="secondary" className="flex-1 border-dashed border-2 border-slate-500">
                                             <Icon name="keyboard" className="w-4 h-4" /> Input Kode
                                         </Button>
                                     </div>
@@ -766,69 +805,99 @@ const DataTab: React.FC = () => {
             <Modal isOpen={showPairingModal} onClose={() => setShowPairingModal(false)} title={pairingMode === 'generate' ? "Bagikan Akses Dropbox" : "Hubungkan ke Pusat"}>
                 {pairingMode === 'generate' ? (
                     <div className="flex flex-col items-center justify-center space-y-4 p-2 text-center">
-                        <p className="text-sm text-slate-300">
-                            Pilih metode untuk membagikan akses ke perangkat cabang:
-                        </p>
-                        
-                        {/* Option 1: QR */}
-                        <div className="bg-white p-3 rounded-lg">
-                            <img 
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getQRPairingString())}`} 
-                                alt="Pairing QR" 
-                                className="w-40 h-40"
-                            />
-                        </div>
-                        <p className="text-xs text-slate-400">Scan QR di atas dengan aplikasi Artea POS di cabang.</p>
+                        {pairingStep === 'pin_input' ? (
+                            <div className="w-full space-y-3">
+                                <p className="text-sm text-slate-300">
+                                    Buat PIN Sementara untuk mengamankan kode QR ini.
+                                </p>
+                                <input 
+                                    type="text" 
+                                    maxLength={6}
+                                    placeholder="PIN (cth: 1234)" 
+                                    value={pairingPin}
+                                    onChange={e => setPairingPin(e.target.value.replace(/[^0-9]/g, ''))}
+                                    className="w-full bg-slate-900 border border-slate-600 rounded p-3 text-center text-xl text-white font-mono tracking-widest"
+                                    autoFocus
+                                />
+                                <p className="text-xs text-yellow-500">
+                                    *Berikan PIN ini kepada Staff yang akan melakukan scan.
+                                </p>
+                                <Button onClick={generatePairingCode} disabled={pairingPin.length < 4} className="w-full">
+                                    Buat QR Code Aman
+                                </Button>
+                            </div>
+                        ) : (
+                            <>
+                                <p className="text-sm text-slate-300">
+                                    Pilih metode untuk membagikan akses ke perangkat cabang:
+                                </p>
+                                
+                                {/* Option 1: QR */}
+                                <div className="bg-white p-3 rounded-lg">
+                                    <img 
+                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getQRPairingString())}`} 
+                                        alt="Pairing QR" 
+                                        className="w-40 h-40"
+                                    />
+                                </div>
+                                <div className="bg-yellow-900/30 text-yellow-300 text-xs p-2 rounded border border-yellow-700">
+                                    <strong>PIN: {pairingPin}</strong> (Berikan ke Staff)
+                                </div>
 
-                        <div className="w-full border-t border-slate-700 my-2"></div>
+                                <div className="w-full border-t border-slate-700 my-2"></div>
 
-                        {/* Option 2: Text Code */}
-                        <div className="w-full">
-                            <p className="text-sm text-white font-bold mb-2">Alternatif: Kode Teks (Tanpa Kamera)</p>
-                            <textarea 
-                                readOnly
-                                value={pairingTextCode}
-                                className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-slate-300 font-mono h-24 break-all"
-                                onClick={(e) => e.currentTarget.select()}
-                            />
-                            <Button 
-                                onClick={() => { navigator.clipboard.writeText(pairingTextCode); showAlert({type:'alert', title:'Disalin', message:'Kode disalin ke clipboard.'}); }}
-                                variant="secondary"
-                                className="w-full mt-2"
-                                size="sm"
-                            >
-                                <Icon name="clipboard" className="w-4 h-4"/> Salin & Kirim ke Staff
-                            </Button>
-                        </div>
+                                {/* Option 2: Text Code */}
+                                <div className="w-full">
+                                    <p className="text-sm text-white font-bold mb-2">Alternatif: Kode Teks</p>
+                                    <textarea 
+                                        readOnly
+                                        value={pairingTextCode}
+                                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-slate-300 font-mono h-24 break-all"
+                                        onClick={(e) => e.currentTarget.select()}
+                                    />
+                                    <Button 
+                                        onClick={() => { navigator.clipboard.writeText(pairingTextCode); showAlert({type:'alert', title:'Disalin', message:'Kode disalin ke clipboard.'}); }}
+                                        variant="secondary"
+                                        className="w-full mt-2"
+                                        size="sm"
+                                    >
+                                        <Icon name="clipboard" className="w-4 h-4"/> Salin & Kirim ke Staff
+                                    </Button>
+                                </div>
 
-                        <p className="text-xs text-red-400 mt-2 bg-red-900/20 p-2 rounded border border-red-800 text-left w-full">
-                            ⚠️ <strong>PENTING:</strong> Kode ini memberikan akses penuh ke folder Dropbox App Anda. Hanya berikan kepada orang terpercaya.
-                        </p>
-                        <Button onClick={() => setShowPairingModal(false)} className="w-full">Tutup</Button>
+                                <Button onClick={() => setShowPairingModal(false)} className="w-full">Tutup</Button>
+                            </>
+                        )}
                     </div>
                 ) : (
-                    // INPUT MODE
+                    // INPUT MODE (Decrypt)
                     <div className="space-y-4">
-                        <p className="text-sm text-slate-300">
-                            Tempel (Paste) kode teks panjang yang diberikan oleh Admin Pusat di bawah ini.
-                        </p>
-                        <textarea 
-                            value={inputPairingCode}
-                            onChange={(e) => setInputPairingCode(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-white font-mono h-32 break-all"
-                            placeholder="ARTEA_PAIR_SECURE::..."
-                        />
-                        <div className="bg-blue-900/20 p-2 rounded border border-blue-800 text-xs text-blue-200">
-                            <p><strong>Apa yang akan terjadi?</strong></p>
-                            <ul className="list-disc pl-4 mt-1 space-y-1">
-                                <li>Aplikasi akan terhubung ke Dropbox Admin.</li>
-                                <li>Master Data (Produk, Harga, User) akan <strong>otomatis diunduh</strong>.</li>
-                                <li>Halaman akan dimuat ulang untuk menerapkan perubahan.</li>
-                            </ul>
-                        </div>
-                        <Button onClick={() => processPairingCode(inputPairingCode)} disabled={!inputPairingCode} className="w-full">
-                            <Icon name="wifi" className="w-4 h-4"/> Proses Pairing & Sync
-                        </Button>
+                        {pairingStep === 'pin_input' ? (
+                            <>
+                                <p className="text-sm text-slate-300">
+                                    Tempel (Paste) kode panjang dan masukkan PIN dari Admin Pusat.
+                                </p>
+                                <textarea 
+                                    value={inputPairingCode}
+                                    onChange={(e) => setInputPairingCode(e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-white font-mono h-24 break-all"
+                                    placeholder="ARTEA_PAIR_SECURE::..."
+                                />
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 mb-1">PIN Keamanan</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="PIN"
+                                        value={pairingPin}
+                                        onChange={e => setPairingPin(e.target.value.replace(/[^0-9]/g, ''))}
+                                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white font-mono text-center tracking-widest"
+                                    />
+                                </div>
+                                <Button onClick={executeDecryption} disabled={!inputPairingCode || !pairingPin} className="w-full">
+                                    <Icon name="wifi" className="w-4 h-4"/> Dekripsi & Hubungkan
+                                </Button>
+                            </>
+                        ) : null}
                     </div>
                 )}
             </Modal>

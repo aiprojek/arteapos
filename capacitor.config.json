@@ -1,0 +1,14 @@
+
+{
+  "appId": "com.arteapos.app",
+  "appName": "Artea POS",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}

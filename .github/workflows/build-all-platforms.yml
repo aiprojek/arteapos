@@ -18,7 +18,13 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-      - run: npm install
+      
+      # FIX: Hapus package-lock.json agar npm install membaca package.json terbaru
+      - name: Force Install Dependencies
+        run: |
+          rm -f package-lock.json
+          npm install
+          
       - run: npm run build
       - name: Upload Dist
         uses: actions/upload-artifact@v4
@@ -46,9 +52,17 @@ jobs:
           name: web-dist
           path: dist
           
-      - run: npm install
-      - run: npx cap add android
-      - run: npx cap sync
+      # FIX: Install Dependencies Fresh
+      - name: Install Dependencies
+        run: |
+          rm -f package-lock.json
+          npm install
+      
+      # Inisialisasi Android project
+      - name: Setup Capacitor Android
+        run: |
+          npx cap add android
+          npx cap sync
       
       - name: Build APK
         run: |
@@ -78,9 +92,13 @@ jobs:
           name: web-dist
           path: dist
 
-      - run: npm install
+      # FIX: Install Dependencies Fresh
+      - name: Install Dependencies
+        run: |
+          rm -f package-lock.json
+          npm install
       
-      # Build untuk Linux & Windows (Electron Builder di Linux bisa build Win/Linux)
+      # Build untuk Linux & Windows
       - name: Build Desktop Apps
         run: npm run electron:build -- --linux --win
 

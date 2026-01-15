@@ -1,0 +1,97 @@
+
+name: Build All Platforms (Android & Desktop)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-web:
+    name: Build Web Assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - run: npm install
+      - run: npm run build
+      - name: Upload Dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+  build-android:
+    name: Build Android APK
+    needs: build-web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      
+      # Restore web build
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+          
+      - run: npm install
+      - run: npx cap add android
+      - run: npx cap sync
+      
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+          
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArteaPOS-Android
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+  build-desktop:
+    name: Build Desktop (Win/Linux/Mac)
+    needs: build-web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      
+      # Restore web build
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - run: npm install
+      
+      # Build untuk Linux & Windows (Electron Builder di Linux bisa build Win/Linux)
+      - name: Build Desktop Apps
+        run: npm run electron:build -- --linux --win
+
+      - name: Upload Windows Exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArteaPOS-Windows
+          path: release/*.exe
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArteaPOS-Linux
+          path: release/*.AppImage

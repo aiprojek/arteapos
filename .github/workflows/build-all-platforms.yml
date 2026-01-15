@@ -76,8 +76,8 @@ jobs:
           name: ArteaPOS-Android
           path: android/app/build/outputs/apk/debug/app-debug.apk
 
-  build-desktop:
-    name: Build Desktop (Win/Linux/Mac)
+  build-desktop-linux:
+    name: Build Desktop (Linux)
     needs: build-web
     runs-on: ubuntu-latest
     steps:
@@ -92,24 +92,48 @@ jobs:
           name: web-dist
           path: dist
 
-      # FIX: Install Dependencies Fresh
       - name: Install Dependencies
         run: |
           rm -f package-lock.json
           npm install
       
-      # Build untuk Linux & Windows
-      - name: Build Desktop Apps
-        run: npm run electron:build -- --linux --win
-
-      - name: Upload Windows Exe
-        uses: actions/upload-artifact@v4
-        with:
-          name: ArteaPOS-Windows
-          path: release/*.exe
+      # Build untuk Linux only
+      - name: Build Linux AppImage
+        run: npx electron-builder --linux
 
       - name: Upload Linux AppImage
         uses: actions/upload-artifact@v4
         with:
           name: ArteaPOS-Linux
           path: release/*.AppImage
+
+  build-desktop-win:
+    name: Build Desktop (Windows)
+    needs: build-web
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      
+      # Restore web build
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - name: Install Dependencies
+        run: |
+          if (Test-Path package-lock.json) { Remove-Item package-lock.json }
+          npm install
+      
+      # Build untuk Windows only
+      - name: Build Windows Exe
+        run: npx electron-builder --win
+
+      - name: Upload Windows Exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArteaPOS-Windows
+          path: release/*.exe

@@ -140,11 +140,7 @@ const AppContent = () => {
       </nav>
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="p-4 bg-slate-800 border-b border-slate-700 flex justify-between items-center md:hidden shrink-0">
-            <button onClick={() => setSidebarOpen(true)} className="p-2 -ml-2"><Icon name="menu" /></button>
-            <span className="font-bold">Artea POS</span>
-            <div className="w-6"></div>
-        </header>
+        {/* Header redundan telah dihapus dari sini */}
         
         <div className="flex-1 flex flex-col min-h-0">
             <Header activeView={activeView} setActiveView={setActiveView} onMenuClick={() => setSidebarOpen(true)} />

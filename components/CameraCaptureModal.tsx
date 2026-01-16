@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import Icon from './Icon';
-import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Camera, CameraResultType, CameraSource, CameraDirection } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 
 interface CameraCaptureModalProps {
@@ -27,12 +27,15 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
               allowEditing: false,
               resultType: CameraResultType.Base64,
               source: CameraSource.Camera,
+              direction: CameraDirection.Rear, // Force Back Camera
               width: 500 // Resize otomatis
           });
 
           if (image.base64String) {
               // Tambahkan prefix data url
               onCapture(`data:image/jpeg;base64,${image.base64String}`);
+              onClose();
+          } else {
               onClose();
           }
       } catch (e) {
@@ -66,6 +69,7 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
       }
       
       try {
+        // Default to facingMode environment (Back Camera) for Web too
         const mediaStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment' },
           audio: false,

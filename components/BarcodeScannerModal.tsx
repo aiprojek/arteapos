@@ -30,26 +30,32 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
 
   const startNativeScan = async () => {
       try {
-          // Native Only: Permission Check
-          const status = await BarcodeScanner.checkPermission({ force: true });
+          // 1. Check Permission
+          const status = await BarcodeScanner.checkPermission({ force: false });
           
-          if (status.granted) {
-              setIsNativeScanning(true);
-              // Hide WebView Background to see Camera
-              await BarcodeScanner.hideBackground();
-              document.body.classList.add('barcode-scanner-active');
-              
-              const result = await BarcodeScanner.startScan(); 
-              
-              if (result.hasContent) {
-                  await stopNativeScan(); // Stop before processing
-                  onScan(result.content);
-              } else {
-                  await stopNativeScan();
-                  onClose();
+          if (!status.granted) {
+              // 2. Request if not granted
+              const request = await BarcodeScanner.checkPermission({ force: true });
+              if (!request.granted) {
+                  setError("Izin kamera ditolak. Mohon izinkan akses kamera di Pengaturan.");
+                  // Optional: BarcodeScanner.openAppSettings();
+                  return;
               }
+          }
+
+          setIsNativeScanning(true);
+          // Hide WebView Background to see Camera
+          await BarcodeScanner.hideBackground();
+          document.body.classList.add('barcode-scanner-active');
+          
+          const result = await BarcodeScanner.startScan(); 
+          
+          if (result.hasContent) {
+              await stopNativeScan(); // Stop before processing
+              onScan(result.content);
           } else {
-              setError("Izin kamera ditolak. Buka Pengaturan Aplikasi untuk mengizinkan.");
+              await stopNativeScan();
+              onClose();
           }
       } catch (e: any) {
           console.error("Native Scan Error", e);

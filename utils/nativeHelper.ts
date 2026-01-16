@@ -17,12 +17,27 @@ export const blobToBase64 = (blob: Blob): Promise<string> => {
     });
 };
 
+// Helper: Ensure ArteaPOS directory exists
+const ensureDirectoryExists = async () => {
+    try {
+        await Filesystem.mkdir({
+            path: 'ArteaPOS',
+            directory: Directory.Documents,
+            recursive: true
+        });
+    } catch (e) {
+        // Directory might already exist or permission issue, 
+        // ignore error but log it.
+        console.log("Directory creation check:", e);
+    }
+};
+
 /**
  * Membagikan file (Gambar/PDF) menggunakan Native Share Sheet
  */
 export async function shareFileNative(fileName: string, base64Data: string, title: string = 'Bagikan File') {
     try {
-        // Tulis file ke cache terlebih dahulu
+        // Tulis file ke cache terlebih dahulu untuk sharing
         const result = await Filesystem.writeFile({
             path: fileName,
             data: base64Data,
@@ -42,12 +57,13 @@ export async function shareFileNative(fileName: string, base64Data: string, titl
 
 /**
  * Menyimpan file teks (CSV/JSON/SVG) ke perangkat
- * Android: Menyimpan ke folder Documents
+ * Android: Menyimpan ke folder Documents/ArteaPOS
  */
 export async function saveTextFileNative(fileName: string, content: string) {
     try {
+        await ensureDirectoryExists();
         const result = await Filesystem.writeFile({
-            path: fileName,
+            path: `ArteaPOS/${fileName}`,
             data: content,
             directory: Directory.Documents,
             encoding: Encoding.UTF8,
@@ -72,11 +88,13 @@ export async function saveTextFileNative(fileName: string, content: string) {
 
 /**
  * Menyimpan file Binary (Excel/PDF) ke perangkat
+ * Android: Menyimpan ke folder Documents/ArteaPOS
  */
 export async function saveBinaryFileNative(fileName: string, base64Data: string) {
     try {
+        await ensureDirectoryExists();
         const result = await Filesystem.writeFile({
-            path: fileName,
+            path: `ArteaPOS/${fileName}`,
             data: base64Data,
             directory: Directory.Documents,
         });

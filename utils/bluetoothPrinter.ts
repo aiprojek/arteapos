@@ -178,6 +178,7 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
     data += COMMANDS.FONT_B; 
     data += '--------------------------------' + LF;
     data += 'Powered by Artea POS' + LF;
+    data += 'aiprojek01.my.id' + LF; 
     data += COMMANDS.FONT_A; 
     
     data += LF + LF + LF; // Feed

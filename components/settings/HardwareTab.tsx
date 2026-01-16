@@ -72,21 +72,25 @@ const HardwareTab: React.FC = () => {
         if (isNative) {
             // NATIVE: List paired devices first
             try {
+                // This call triggers permission prompt on Android 12+ if not granted
                 const devices = await bluetoothPrinterService.listNativeDevices();
                 setPairedDevices(devices);
                 if (devices.length === 0) {
                     showAlert({type: 'alert', title: 'Kosong', message: 'Tidak ada perangkat Bluetooth yang terpasang (Paired). Silakan pasangkan printer di Pengaturan Bluetooth Android terlebih dahulu.'});
                 }
             } catch (e: any) {
-                // BUG FIX: Android 12 "Nearby Devices" permission error handling
-                if (e && e.toString().toLowerCase().includes('permission')) {
+                console.error("Bluetooth Error:", e);
+                const errorStr = e ? e.toString().toLowerCase() : "";
+                
+                // Handle Permission Errors specifically for Android 12+
+                if (errorStr.includes('permission') || errorStr.includes('denied')) {
                     showAlert({
                         type: 'alert', 
-                        title: 'Izin Diperlukan', 
-                        message: 'Aplikasi membutuhkan izin "Perangkat Sekitar" (Nearby Devices) untuk menemukan printer. Mohon aktifkan di Pengaturan Aplikasi Android.'
+                        title: 'Izin Bluetooth Ditolak', 
+                        message: 'Untuk mencari printer, Aplikasi membutuhkan izin "Perangkat Sekitar" (Nearby Devices) dan "Bluetooth Connect". Mohon izinkan saat muncul pop-up, atau aktifkan manual di Pengaturan Aplikasi.'
                     });
                 } else {
-                    showAlert({type: 'alert', title: 'Error', message: 'Gagal memuat perangkat: ' + e});
+                    showAlert({type: 'alert', title: 'Gagal Memuat', message: 'Pastikan Bluetooth Aktif. Error: ' + e});
                 }
             } finally {
                 setIsBleScanning(false);
@@ -253,7 +257,7 @@ const HardwareTab: React.FC = () => {
                                         className="flex-1"
                                         size="sm"
                                     >
-                                        {isBleScanning ? 'Memuat...' : (isNative ? 'Lihat Perangkat Terpasang' : 'Cari Printer')}
+                                        {isBleScanning ? 'Memindai...' : (isNative ? 'Cari Printer & Izin' : 'Cari Printer')}
                                     </Button>
                                 )}
                                 <Button 

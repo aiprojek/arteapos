@@ -3,8 +3,10 @@ import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
 import { CURRENCY_FORMATTER } from "../constants";
 import type { Transaction, ReceiptSettings } from "../types";
+import { Capacitor } from '@capacitor/core';
+import { saveBinaryFileNative, shareFileNative } from './nativeHelper';
 
-export const generateSalesReportPDF = (
+export const generateSalesReportPDF = async (
     transactions: Transaction[], 
     settings: ReceiptSettings, 
     periodLabel: string,
@@ -96,13 +98,25 @@ export const generateSalesReportPDF = (
         doc.text(`Halaman ${i} dari ${pageCount} - Dibuat oleh Artea POS`, pageWidth / 2, doc.internal.pageSize.height - 10, { align: "center" });
     }
 
-    // 7. Save
+    // 7. Save / Share (Native Support)
     const fileName = `Laporan_Penjualan_${periodLabel.replace(/\s/g, '_')}_${new Date().getTime()}.pdf`;
-    doc.save(fileName);
+    
+    if (Capacitor.isNativePlatform()) {
+        try {
+            const base64PDF = doc.output('datauristring').split(',')[1];
+            await saveBinaryFileNative(fileName, base64PDF);
+            await shareFileNative(fileName, base64PDF, 'Laporan Penjualan');
+            alert(`File berhasil disimpan di Dokumen/ArteaPOS`);
+        } catch (e: any) {
+            alert(`Gagal menyimpan PDF: ${e.message}`);
+        }
+    } else {
+        doc.save(fileName);
+    }
 };
 
-// --- NEW: Generic Generator for Finance Tables ---
-export const generateTablePDF = (
+// --- Generic Generator for Finance Tables ---
+export const generateTablePDF = async (
     title: string,
     headers: string[],
     rows: (string | number)[][],
@@ -150,5 +164,17 @@ export const generateTablePDF = (
     }
 
     const fileName = `${title.replace(/\s/g, '_')}_${new Date().getTime()}.pdf`;
-    doc.save(fileName);
+    
+    if (Capacitor.isNativePlatform()) {
+        try {
+            const base64PDF = doc.output('datauristring').split(',')[1];
+            await saveBinaryFileNative(fileName, base64PDF);
+            await shareFileNative(fileName, base64PDF, title);
+            alert(`File berhasil disimpan di Dokumen/ArteaPOS`);
+        } catch (e: any) {
+            alert(`Gagal menyimpan PDF: ${e.message}`);
+        }
+    } else {
+        doc.save(fileName);
+    }
 };

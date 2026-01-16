@@ -15,6 +15,10 @@ interface BluetoothSerialPlugin {
 declare global {
     interface Window {
         bluetoothSerial?: BluetoothSerialPlugin;
+        // Jembatan untuk Kodular / App Inventor
+        AppInventor?: {
+            setWebViewString: (value: string) => void;
+        };
     }
     interface Navigator {
         bluetooth?: any;
@@ -68,13 +72,6 @@ const COMMANDS = {
     FONT_B: ESC + 'M' + '\x01', 
     FONT_A: ESC + 'M' + '\x00', 
 };
-
-// State untuk Web Bluetooth
-let webBluetoothDevice: BluetoothDevice | null = null;
-let webPrinterCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
-
-// State untuk Native Bluetooth (Android ID/MAC Address)
-let nativeConnectedId: string | null = null;
 
 const formatCurrencySafe = (amount: number): string => {
     const numStr = Math.round(amount).toString();
@@ -189,6 +186,9 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
     return data.replace(/[^\x00-\x7F]/g, "");
 };
 
+// State untuk Web Bluetooth
+let webPrinterCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
+
 export const bluetoothPrinterService = {
     // --- NATIVE ANDROID METHODS ---
     
@@ -209,7 +209,6 @@ export const bluetoothPrinterService = {
                 return;
             }
             window.bluetoothSerial.connect(macAddress, () => {
-                nativeConnectedId = macAddress;
                 resolve(true);
             }, reject);
         });
@@ -219,7 +218,6 @@ export const bluetoothPrinterService = {
         return new Promise((resolve) => {
             if (window.bluetoothSerial) {
                 window.bluetoothSerial.disconnect(() => {
-                    nativeConnectedId = null;
                     resolve();
                 }, () => resolve());
             } else {
@@ -237,23 +235,15 @@ export const bluetoothPrinterService = {
         }
 
         try {
-            webBluetoothDevice = await navigator.bluetooth.requestDevice({
+            const device = await navigator.bluetooth.requestDevice({
                 filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }],
                 optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb'],
                 acceptAllDevices: false 
-            }).catch(async () => {
-                 if (navigator.bluetooth) {
-                    return await navigator.bluetooth.requestDevice({
-                        acceptAllDevices: true,
-                        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb'] 
-                    });
-                 }
-                 throw new Error("Bluetooth API unavailable");
             });
 
-            if (!webBluetoothDevice || !webBluetoothDevice.gatt) return false;
+            if (!device || !device.gatt) return false;
 
-            const server = await webBluetoothDevice.gatt.connect();
+            const server = await device.gatt.connect();
             const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
             const characteristics = await service.getCharacteristics();
             const writeChar = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
@@ -277,25 +267,24 @@ export const bluetoothPrinterService = {
     printReceipt: async (transaction: Transaction, settings: ReceiptSettings) => {
         const rawData = generateReceiptData(transaction, settings);
 
-        // 1. ANDROID NATIVE
+        // 0. KODULAR / APP INVENTOR BRIDGE (NEW)
+        // Kita kirim string perintah ke Kodular lewat WebViewString
+        if (window.AppInventor) {
+            window.AppInventor.setWebViewString(rawData);
+            return;
+        }
+
+        // 1. ANDROID NATIVE CAPACITOR
         if (Capacitor.isNativePlatform()) {
             if (!window.bluetoothSerial) {
-                alert("Plugin Bluetooth belum dimuat. Restart aplikasi.");
+                alert("Plugin Bluetooth belum dimuat.");
                 return;
             }
-
-            // Check connection first
             window.bluetoothSerial.isConnected(
                 () => {
-                    // Connected, send data
-                    window.bluetoothSerial!.write(rawData, 
-                        () => console.log("Print success"), 
-                        (err) => alert("Gagal mengirim data ke printer: " + err)
-                    );
+                    window.bluetoothSerial!.write(rawData, () => {}, (err) => alert(err));
                 },
-                () => {
-                    alert("Printer tidak terhubung. Silakan masuk ke Menu Pengaturan > Hardware untuk menghubungkan printer.");
-                }
+                () => alert("Printer belum terhubung.")
             );
             return;
         }
@@ -310,7 +299,6 @@ export const bluetoothPrinterService = {
         try {
             const encodedData = encoder.encode(rawData);
             const CHUNK_SIZE = 100; 
-            
             for (let i = 0; i < encodedData.length; i += CHUNK_SIZE) {
                 const chunk = encodedData.slice(i, i + CHUNK_SIZE);
                 await webPrinterCharacteristic?.writeValue(chunk);
@@ -318,7 +306,6 @@ export const bluetoothPrinterService = {
             }
         } catch (e) {
             console.error('Failed to print', e);
-            alert('Gagal mengirim data. Coba sambungkan ulang.');
             webPrinterCharacteristic = null; 
         }
     }

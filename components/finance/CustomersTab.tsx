@@ -333,6 +333,7 @@ const MemberCardModal: React.FC<{
                                 <img 
                                     src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${customer.memberId}&color=000000&bgcolor=FFFFFF`}
                                     alt="QR"
+                                    crossOrigin="anonymous"
                                     className="w-14 h-14"
                                     onError={(e) => e.currentTarget.style.display = 'none'}
                                 />

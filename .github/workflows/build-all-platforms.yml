@@ -58,11 +58,32 @@ jobs:
           rm -f package-lock.json
           npm install
       
-      # FIX: Hapus 'npx cap add android' karena folder sudah ada
-      # Cukup jalankan sync untuk update aset web
+      # FIX: Re-initialize Android platform safely
+      # 1. Backup custom Manifest
+      # 2. Clean android folder
+      # 3. Add platform (generates gradlew)
+      # 4. Restore Manifest
       - name: Setup Capacitor Android
         run: |
-          npx cap sync android
+          echo "Backing up custom Manifest..."
+          mkdir -p temp_backup
+          if [ -f android/app/src/main/AndroidManifest.xml ]; then
+            cp android/app/src/main/AndroidManifest.xml temp_backup/AndroidManifest.xml
+          fi
+          
+          echo "Cleaning existing android directory..."
+          rm -rf android
+          
+          echo "Adding Android platform..."
+          npx cap add android
+          
+          echo "Restoring custom Manifest..."
+          if [ -f temp_backup/AndroidManifest.xml ]; then
+            cp temp_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          fi
+          
+          echo "Syncing web assets..."
+          npx cap sync
       
       - name: Build APK
         run: |

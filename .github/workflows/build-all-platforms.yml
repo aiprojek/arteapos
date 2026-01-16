@@ -57,9 +57,10 @@ jobs:
           npm install
       
       # Logic: 
-      # 1. Bersihkan folder android lama (jika ada cache)
-      # 2. Add platform android (ini akan membuat folder android baru)
-      # 3. Jalankan 'npx cap sync' untuk menyalin dependensi native dan file dist ke folder android
+      # 1. Bersihkan folder android lama
+      # 2. Add platform android
+      # 3. GENERATE ICONS (npm run resources) <-- PENTING: Dijalankan sebelum sync
+      # 4. Sync
       - name: Setup Capacitor Android & Icons
         run: |
           echo "Backing up custom Manifest if exists..."
@@ -74,16 +75,11 @@ jobs:
           echo "Adding Android platform..."
           npx cap add android
           
+          echo "Generating App Icons & Splash..."
+          npm run resources
+          
           echo "Syncing plugins and web assets..."
           npx cap sync
-          
-          echo "Preparing Icon Source..."
-          mkdir -p assets
-          cp public/favicon.svg assets/logo.svg
-          cp public/favicon.svg assets/icon.svg
-          
-          echo "Generating Android Icons..."
-          npx @capacitor/assets generate --android --iconBackgroundColor '#1a3c2d' --iconBackgroundColorDark '#1a3c2d' --splashBackgroundColor '#1a3c2d' --splashBackgroundColorDark '#1a3c2d'
           
           echo "Restoring custom Manifest..."
           if [ -f temp_backup/AndroidManifest.xml ]; then

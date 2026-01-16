@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef } from 'react';
 import KitchenNote from './KitchenNote';
 import { useSettings } from '../context/SettingsContext';
@@ -39,49 +40,54 @@ const KitchenNoteModal: React.FC<KitchenNoteModalProps> = ({ isOpen, onClose, tr
         return;
     }
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        showAlert({
-            type: 'alert',
-            title: 'Gagal Membuka Jendela Cetak',
-            message: 'Browser memblokir jendela pop-up. Izinkan pop-up untuk situs ini agar fitur cetak otomatis berfungsi.'
-        });
-        // Keep modal open so user can try again or close manually
-        return;
-    }
-    
-    const styles = `
-      @media print {
-        @page { 
-          margin: 0.2in; 
+    try {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            showAlert({
+                type: 'alert',
+                title: 'Gagal Membuka Jendela Cetak',
+                message: 'Browser memblokir jendela pop-up. Izinkan pop-up untuk situs ini agar fitur cetak otomatis berfungsi.'
+            });
+            // Keep modal open so user can try again or close manually
+            return;
         }
-        body { 
-          margin: 0; 
-          -webkit-print-color-adjust: exact;
-          color-adjust: exact;
-        }
-      }
-    `;
+        
+        const styles = `
+          @media print {
+            @page { 
+              margin: 0.2in; 
+            }
+            body { 
+              margin: 0; 
+              -webkit-print-color-adjust: exact;
+              color-adjust: exact;
+            }
+          }
+        `;
 
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Catatan Dapur</title>
-           <style>${styles}</style>
-        </head>
-        <body style="font-family: monospace;">
-          ${noteElement.outerHTML}
-          <script>
-              window.print();
-              window.onafterprint = () => window.close();
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    
-    // We close the modal after triggering print window
-    onClose();
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Catatan Dapur</title>
+               <style>${styles}</style>
+            </head>
+            <body style="font-family: monospace;">
+              ${noteElement.outerHTML}
+              <script>
+                  window.print();
+                  window.onafterprint = () => window.close();
+              </script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        
+        // We close the modal after triggering print window
+        onClose();
+    } catch (e: any) {
+        console.error("Print error:", e);
+        // Fallback or silent fail - let user try manually via button if exists
+    }
   };
 
   if (!isOpen) {

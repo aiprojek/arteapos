@@ -20,39 +20,55 @@ import Icon from './components/Icon';
 import AlertModal from './components/AlertModal';
 import DashboardView from './views/DashboardView';
 import OnboardingModals from './components/OnboardingModals'; 
+import { App as CapacitorApp } from '@capacitor/app';
 
 // --- Hook untuk Mencegah Back Button / Refresh ---
-const usePreventNavigation = (shouldPrevent: boolean) => {
+const usePreventNavigation = (shouldPrevent: boolean, setActiveView: (v: View) => void, activeView: View, currentUser: any) => {
   useEffect(() => {
     if (!shouldPrevent) return;
 
+    // Browser/Desktop Handling
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
-      e.returnValue = ''; // Chrome requires returnValue to be set
+      e.returnValue = ''; 
     };
 
     const handlePopState = (e: PopStateEvent) => {
       e.preventDefault();
-      // Push state kembali agar user tetap di halaman
       window.history.pushState(null, '', window.location.pathname);
-      const confirmLeave = window.confirm("Keluar dari aplikasi? Data keranjang yang belum disimpan mungkin hilang.");
-      if (confirmLeave) {
-         // Biarkan history back terjadi (butuh interaksi manual user biasanya)
-         window.history.back(); 
-      }
+    };
+
+    // Android Hardware Back Button Handling
+    const handleAndroidBack = async () => {
+        // Jika sedang di sub-menu (bukan dashboard/kasir), kembali ke menu utama
+        if (activeView !== 'pos' && activeView !== 'dashboard') {
+            if (currentUser?.role === 'admin' || currentUser?.role === 'manager') {
+                setActiveView('dashboard');
+            } else {
+                setActiveView('pos');
+            }
+        } else {
+            // Jika di root menu, konfirmasi keluar
+            const confirm = window.confirm("Keluar dari aplikasi?");
+            if (confirm) {
+                CapacitorApp.exitApp();
+            }
+        }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    // Hack untuk tombol back Android/Browser
     window.history.pushState(null, '', window.location.pathname);
     window.addEventListener('popstate', handlePopState);
+    
+    // Capacitor Listener
+    const backListener = CapacitorApp.addListener('backButton', handleAndroidBack);
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('popstate', handlePopState);
+      backListener.then(h => h.remove());
     };
-  }, [shouldPrevent]);
+  }, [shouldPrevent, activeView, setActiveView, currentUser]);
 };
 
 const Nav = ({ activeView, setActiveView, onNavigate }: { 
@@ -116,8 +132,8 @@ const AppContent = () => {
   // ACTIVATE AUTO LOCK (10 Minutes)
   useIdleTimer(10 * 60 * 1000); 
   
-  // PREVENT ACCIDENTAL EXIT
-  usePreventNavigation(true);
+  // PREVENT ACCIDENTAL EXIT & HANDLE ANDROID BACK
+  usePreventNavigation(true, setActiveView, activeView, currentUser);
   
   const closeSidebar = () => setSidebarOpen(false);
   const toggleSidebar = () => setSidebarOpen(prev => !prev);

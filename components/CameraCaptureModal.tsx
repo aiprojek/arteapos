@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import Icon from './Icon';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
 
 interface CameraCaptureModalProps {
   isOpen: boolean;
@@ -17,7 +19,36 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // --- NATIVE CAMERA LOGIC ---
+  const takeNativePhoto = async () => {
+      try {
+          const image = await Camera.getPhoto({
+              quality: 70,
+              allowEditing: false,
+              resultType: CameraResultType.Base64,
+              source: CameraSource.Camera,
+              width: 500 // Resize otomatis
+          });
+
+          if (image.base64String) {
+              // Tambahkan prefix data url
+              onCapture(`data:image/jpeg;base64,${image.base64String}`);
+              onClose();
+          }
+      } catch (e) {
+          console.error("Native Camera Error:", e);
+          onClose(); // Close modal if user cancels or error
+      }
+  };
+
   useEffect(() => {
+    // Jika Native Android, langsung buka kamera sistem, jangan buka modal video
+    if (isOpen && Capacitor.isNativePlatform()) {
+        takeNativePhoto();
+        return; 
+    }
+
+    // --- WEB BROWSER LOGIC ---
     const stopStream = () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
@@ -34,38 +65,7 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
         return;
       }
       
-      const handleCameraError = (err: any) => {
-        console.error("Camera Error:", err);
-        let message = "Gagal mengakses kamera.";
-        
-        // Detailed Error Mapping
-        if (err instanceof DOMException) {
-          switch(err.name) {
-              case "NotAllowedError":
-              case "PermissionDeniedError":
-                  message = "Izin kamera ditolak. Silakan aktifkan di pengaturan browser.";
-                  break;
-              case "NotFoundError":
-              case "DevicesNotFoundError":
-                  message = "Kamera tidak ditemukan. Cek koneksi hardware Anda.";
-                  break;
-              case "NotReadableError":
-              case "TrackStartError":
-                  message = "Kamera rusak atau sedang dipakai aplikasi lain (Zoom/Meet).";
-                  break;
-              default:
-                  message = `Error kamera: ${err.name}`;
-                  break;
-          }
-        } else {
-            message = `Gagal: ${err.message}`;
-        }
-        setError(message);
-      };
-
       try {
-        // For Product Photos, usually Back Camera (Environment) is still preferred as default
-        // But we add fallback logic
         const mediaStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment' },
           audio: false,
@@ -77,7 +77,6 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
       } catch (err: any) {
         console.warn("Back camera failed, trying default...", err.name);
         try {
-             // Fallback to any available video source
              const mediaStream = await navigator.mediaDevices.getUserMedia({
                 video: true,
                 audio: false,
@@ -87,12 +86,12 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
                videoRef.current.srcObject = mediaStream;
              }
         } catch (fallbackErr: any) {
-             handleCameraError(fallbackErr);
+             setError("Gagal mengakses kamera. Pastikan izin diberikan.");
         }
       }
     };
 
-    if (isOpen) {
+    if (isOpen && !Capacitor.isNativePlatform()) {
       startStream();
     }
 
@@ -112,7 +111,6 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
     const context = canvas.getContext('2d');
     
     if (context) {
-      // OPTIMIZED: Max dimension 500px for Database Performance
       const MAX_SIZE = 500;
       let targetWidth = video.videoWidth;
       let targetHeight = video.videoHeight;
@@ -133,13 +131,15 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
       canvas.height = targetHeight;
       context.drawImage(video, 0, 0, targetWidth, targetHeight);
       
-      // OPTIMIZED: Quality 0.7 JPEG
       const dataUrl = canvas.toDataURL('image/jpeg', 0.7); 
       onCapture(dataUrl);
       onClose();
     }
     setIsProcessing(false);
   };
+
+  // Jika native, kita tidak render UI kamera web, return null atau loading
+  if (Capacitor.isNativePlatform()) return null;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Ambil Foto Produk">

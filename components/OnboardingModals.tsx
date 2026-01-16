@@ -22,33 +22,43 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
     useEffect(() => {
         if (!currentUser) return;
 
-        // Admin & Manager melihat Welcome Screen yang sama (sekali saja)
-        if (currentUser.role === 'admin' || currentUser.role === 'manager') {
-            const hasSeenWelcome = localStorage.getItem(`ARTEA_WELCOME_SEEN_${currentUser.id}`);
-            // Fallback for old admin key style
-            const legacySeen = localStorage.getItem('ARTEA_WELCOME_SEEN');
-            
-            if (!hasSeenWelcome && !legacySeen) {
-                setShowManagementWelcome(true);
+        try {
+            // Admin & Manager melihat Welcome Screen yang sama (sekali saja)
+            if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+                const hasSeenWelcome = localStorage.getItem(`ARTEA_WELCOME_SEEN_${currentUser.id}`);
+                // Fallback for old admin key style
+                const legacySeen = localStorage.getItem('ARTEA_WELCOME_SEEN');
+                
+                if (!hasSeenWelcome && !legacySeen) {
+                    setShowManagementWelcome(true);
+                }
+            } else if (currentUser.role === 'staff') {
+                // Cek konfigurasi cloud owner untuk menentukan pesan briefing - SECURE CHECK
+                if (dropboxService.isConfigured()) {
+                    setCloudMode('cloud');
+                } else {
+                    setCloudMode('local');
+                }
+                // Staff selalu melihat ini setiap kali app dimuat/login ulang (sesi baru)
+                setShowStaffBriefing(true);
             }
-        } else if (currentUser.role === 'staff') {
-            // Cek konfigurasi cloud owner untuk menentukan pesan briefing - SECURE CHECK
-            if (dropboxService.isConfigured()) {
-                setCloudMode('cloud');
-            } else {
-                setCloudMode('local');
-            }
-            // Staff selalu melihat ini setiap kali app dimuat/login ulang (sesi baru)
-            setShowStaffBriefing(true);
+        } catch (e) {
+            console.warn("LocalStorage access failed in Onboarding", e);
+            // If storage fails, assume first time or defaults to show necessary modals
+            if (currentUser.role === 'staff') setShowStaffBriefing(true);
         }
     }, [currentUser]);
 
     const handleDismissManagement = () => {
-        if (currentUser) {
-            localStorage.setItem(`ARTEA_WELCOME_SEEN_${currentUser.id}`, 'true');
+        try {
+            if (currentUser) {
+                localStorage.setItem(`ARTEA_WELCOME_SEEN_${currentUser.id}`, 'true');
+            }
+            // Also set legacy key to prevent double popup for single admin setups
+            localStorage.setItem('ARTEA_WELCOME_SEEN', 'true');
+        } catch (e) {
+            console.warn("LocalStorage set failed", e);
         }
-        // Also set legacy key to prevent double popup for single admin setups
-        localStorage.setItem('ARTEA_WELCOME_SEEN', 'true');
         setShowManagementWelcome(false);
     };
 

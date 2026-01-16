@@ -15,11 +15,25 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false, // Untuk kemudahan akses file lokal jika perlu nanti
+      enableWebSQL: false,
     },
   });
 
   // Hapus menu default (File, Edit, View, dll) agar terlihat seperti aplikasi Kasir Pro
   mainWindow.setMenuBarVisibility(false);
+
+  // FIX: Web Bluetooth Permission Handler
+  mainWindow.webContents.on('select-bluetooth-device', (event, deviceList, callback) => {
+    event.preventDefault();
+    // Otomatis pilih perangkat pertama atau biarkan kosong agar browser memunculkan dialog native jika memungkinkan.
+    // Namun di Electron, kita perlu logika custom atau mengambil device pertama yang ditemukan.
+    if (deviceList && deviceList.length > 0) {
+      callback(deviceList[0].deviceId);
+    } else {
+      // Jika tidak ada device, coba cari lagi (atau biarkan user mencoba lagi di UI)
+      // callback('');
+    }
+  });
 
   // Load file hasil build React (dist/index.html)
   // Dalam production, kita load file. Dalam development, bisa load localhost

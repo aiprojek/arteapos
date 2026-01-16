@@ -1,3 +1,4 @@
+
 import { Dropbox, DropboxAuth } from 'dropbox';
 import { dataService } from './dataService';
 import { db } from './db'; 
@@ -29,28 +30,54 @@ const retryOperation = async <T>(operation: () => Promise<T>, retries = 3, delay
     }
 };
 
+// Safe Local Storage Helper to prevent SecurityError in iframes/sandboxes
+const safeStorage = {
+    setItem: (key: string, value: string) => {
+        try {
+            window.localStorage.setItem(key, value);
+        } catch (e) {
+            console.warn('LocalStorage access denied/failed', e);
+        }
+    },
+    getItem: (key: string): string | null => {
+        try {
+            return window.localStorage.getItem(key);
+        } catch (e) {
+            console.warn('LocalStorage access denied/failed', e);
+            return null;
+        }
+    },
+    removeItem: (key: string) => {
+        try {
+            window.localStorage.removeItem(key);
+        } catch (e) {
+            console.warn('LocalStorage access denied/failed', e);
+        }
+    }
+};
+
 export const dropboxService = {
     // --- CREDENTIAL MANAGEMENT (NEW) ---
     
     saveCredentials: (key: string, secret: string, refreshToken: string) => {
-        if (key) localStorage.setItem(KEY_APP_KEY, encryptStorage(key));
-        if (secret) localStorage.setItem(KEY_APP_SECRET, encryptStorage(secret));
-        if (refreshToken) localStorage.setItem(KEY_REFRESH_TOKEN, encryptStorage(refreshToken));
+        if (key) safeStorage.setItem(KEY_APP_KEY, encryptStorage(key));
+        if (secret) safeStorage.setItem(KEY_APP_SECRET, encryptStorage(secret));
+        if (refreshToken) safeStorage.setItem(KEY_REFRESH_TOKEN, encryptStorage(refreshToken));
     },
 
     getCredentials: () => {
-        const key = decryptStorage(localStorage.getItem(KEY_APP_KEY));
-        const secret = decryptStorage(localStorage.getItem(KEY_APP_SECRET));
-        const refreshToken = decryptStorage(localStorage.getItem(KEY_REFRESH_TOKEN));
+        const key = decryptStorage(safeStorage.getItem(KEY_APP_KEY));
+        const secret = decryptStorage(safeStorage.getItem(KEY_APP_SECRET));
+        const refreshToken = decryptStorage(safeStorage.getItem(KEY_REFRESH_TOKEN));
         
         if (!key || !secret || !refreshToken) return null;
         return { clientId: key, clientSecret: secret, refreshToken };
     },
 
     clearCredentials: () => {
-        localStorage.removeItem(KEY_APP_KEY);
-        localStorage.removeItem(KEY_APP_SECRET);
-        localStorage.removeItem(KEY_REFRESH_TOKEN);
+        safeStorage.removeItem(KEY_APP_KEY);
+        safeStorage.removeItem(KEY_APP_SECRET);
+        safeStorage.removeItem(KEY_REFRESH_TOKEN);
     },
 
     isConfigured: (): boolean => {

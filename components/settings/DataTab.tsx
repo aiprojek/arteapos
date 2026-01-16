@@ -533,7 +533,22 @@ const DataTab: React.FC = () => {
         }
     };
 
-    const lastPullTime = localStorage.getItem('ARTEA_LAST_MASTER_PULL');
+    // Safe Local Storage Access for Last Pull Time
+    let lastPullTime = '';
+    try {
+        lastPullTime = localStorage.getItem('ARTEA_LAST_MASTER_PULL') || '';
+    } catch (e) {
+        // ignore
+    }
+
+    const copyToClipboard = async (text: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            showAlert({type:'alert', title:'Disalin', message:'Kode disalin ke clipboard.'});
+        } catch (err) {
+            showAlert({type:'alert', title:'Gagal Salin', message:'Gagal menyalin teks. Clipboard mungkin dibatasi.'});
+        }
+    };
 
     return (
         <div className="animate-fade-in">
@@ -856,7 +871,7 @@ const DataTab: React.FC = () => {
                                         onClick={(e) => e.currentTarget.select()}
                                     />
                                     <Button 
-                                        onClick={() => { navigator.clipboard.writeText(pairingTextCode); showAlert({type:'alert', title:'Disalin', message:'Kode disalin ke clipboard.'}); }}
+                                        onClick={() => copyToClipboard(pairingTextCode)}
                                         variant="secondary"
                                         className="w-full mt-2"
                                         size="sm"

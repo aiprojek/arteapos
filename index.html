@@ -43,6 +43,20 @@
             -ms-overflow-style: none;  /* IE and Edge */
             scrollbar-width: none;  /* Firefox */
         }
+
+        /* --- NATIVE CAMERA SCANNER TRANSPARENCY FIX --- */
+        /* Class ini ditambahkan otomatis oleh BarcodeScannerModal.tsx saat scan dimulai */
+        body.barcode-scanner-active {
+            background: transparent !important;
+        }
+        body.barcode-scanner-active #root {
+            background: transparent !important;
+        }
+        /* Pastikan elemen layout utama juga transparan saat scan aktif */
+        body.barcode-scanner-active .bg-slate-900,
+        body.barcode-scanner-active .bg-slate-800 {
+            background: transparent !important;
+        }
     </style>
   </head>
   <body>

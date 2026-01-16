@@ -19,7 +19,6 @@ jobs:
         with:
           node-version: 18
       
-      # FIX: Hapus package-lock.json agar npm install membaca package.json terbaru
       - name: Force Install Dependencies
         run: |
           rm -f package-lock.json
@@ -52,22 +51,18 @@ jobs:
           name: web-dist
           path: dist
           
-      # FIX: Install Dependencies Fresh
       - name: Install Dependencies
         run: |
           rm -f package-lock.json
           npm install
       
-      # FIX: Re-initialize Android platform safely
-      # 1. Backup custom Manifest
-      # 2. Clean android folder
-      # 3. Add platform (generates gradlew)
-      # 4. Prepare Source Icon (Copy from public/favicon.svg to assets/logo.svg)
-      # 5. Generate Icons
-      # 6. Restore Manifest
+      # Logic: 
+      # 1. Bersihkan folder android lama (jika ada cache)
+      # 2. Add platform android (ini akan membuat folder android baru)
+      # 3. Jalankan 'npx cap sync' untuk menyalin dependensi native dan file dist ke folder android
       - name: Setup Capacitor Android & Icons
         run: |
-          echo "Backing up custom Manifest..."
+          echo "Backing up custom Manifest if exists..."
           mkdir -p temp_backup
           if [ -f android/app/src/main/AndroidManifest.xml ]; then
             cp android/app/src/main/AndroidManifest.xml temp_backup/AndroidManifest.xml
@@ -79,8 +74,10 @@ jobs:
           echo "Adding Android platform..."
           npx cap add android
           
+          echo "Syncing plugins and web assets..."
+          npx cap sync
+          
           echo "Preparing Icon Source..."
-          # Capacitor Assets butuh folder 'assets' dengan file logo.svg/png
           mkdir -p assets
           cp public/favicon.svg assets/logo.svg
           cp public/favicon.svg assets/icon.svg
@@ -92,9 +89,6 @@ jobs:
           if [ -f temp_backup/AndroidManifest.xml ]; then
             cp temp_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           fi
-          
-          echo "Syncing web assets..."
-          npx cap sync
       
       - name: Build APK
         run: |
@@ -118,7 +112,6 @@ jobs:
         with:
           node-version: 18
       
-      # Restore web build
       - uses: actions/download-artifact@v4
         with:
           name: web-dist
@@ -129,8 +122,6 @@ jobs:
           rm -f package-lock.json
           npm install
       
-      # Build untuk Linux only
-      # FIX: Tambahkan GH_TOKEN dan -p never (publish never) agar tidak error saat mencoba upload release
       - name: Build Linux AppImage
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -152,7 +143,6 @@ jobs:
         with:
           node-version: 18
       
-      # Restore web build
       - uses: actions/download-artifact@v4
         with:
           name: web-dist
@@ -163,8 +153,6 @@ jobs:
           if (Test-Path package-lock.json) { Remove-Item package-lock.json }
           npm install
       
-      # Build untuk Windows only
-      # FIX: Tambahkan GH_TOKEN dan -p never (publish never) agar tidak error saat mencoba upload release
       - name: Build Windows Exe
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

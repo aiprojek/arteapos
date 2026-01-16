@@ -98,8 +98,11 @@ jobs:
           npm install
       
       # Build untuk Linux only
+      # FIX: Tambahkan GH_TOKEN dan -p never (publish never) agar tidak error saat mencoba upload release
       - name: Build Linux AppImage
-        run: npx electron-builder --linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --linux -p never
 
       - name: Upload Linux AppImage
         uses: actions/upload-artifact@v4
@@ -129,8 +132,11 @@ jobs:
           npm install
       
       # Build untuk Windows only
+      # FIX: Tambahkan GH_TOKEN dan -p never (publish never) agar tidak error saat mencoba upload release
       - name: Build Windows Exe
-        run: npx electron-builder --win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win -p never
 
       - name: Upload Windows Exe
         uses: actions/upload-artifact@v4

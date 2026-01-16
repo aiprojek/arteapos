@@ -62,8 +62,10 @@ jobs:
       # 1. Backup custom Manifest
       # 2. Clean android folder
       # 3. Add platform (generates gradlew)
-      # 4. Restore Manifest
-      - name: Setup Capacitor Android
+      # 4. Prepare Source Icon (Copy from public/favicon.svg to assets/logo.svg)
+      # 5. Generate Icons
+      # 6. Restore Manifest
+      - name: Setup Capacitor Android & Icons
         run: |
           echo "Backing up custom Manifest..."
           mkdir -p temp_backup
@@ -76,6 +78,15 @@ jobs:
           
           echo "Adding Android platform..."
           npx cap add android
+          
+          echo "Preparing Icon Source..."
+          # Capacitor Assets butuh folder 'assets' dengan file logo.svg/png
+          mkdir -p assets
+          cp public/favicon.svg assets/logo.svg
+          cp public/favicon.svg assets/icon.svg
+          
+          echo "Generating Android Icons..."
+          npx @capacitor/assets generate --android --iconBackgroundColor '#1a3c2d' --iconBackgroundColorDark '#1a3c2d' --splashBackgroundColor '#1a3c2d' --splashBackgroundColorDark '#1a3c2d'
           
           echo "Restoring custom Manifest..."
           if [ -f temp_backup/AndroidManifest.xml ]; then

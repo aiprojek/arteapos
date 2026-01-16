@@ -123,9 +123,10 @@ const AppContent = () => {
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-900 text-slate-100">
       <OnboardingModals setActiveView={setActiveView} />
-      {isSidebarOpen && <div onClick={() => setSidebarOpen(false)} className="fixed inset-0 bg-black/60 z-20 md:hidden" />}
+      {isSidebarOpen && <div onClick={() => setSidebarOpen(false)} className="fixed inset-0 bg-black/60 z-[90] md:hidden" />}
       
-      <nav className={`fixed md:relative h-full w-64 bg-slate-800 p-4 z-30 transition-transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 border-r border-slate-700 overflow-y-auto`}>
+      {/* FIXED: Z-INDEX 100 to ensure it is always on top of sticky headers (z-20) */}
+      <nav className={`fixed md:relative h-full w-64 bg-slate-800 p-4 z-[100] transition-transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 border-r border-slate-700 overflow-y-auto`}>
          <div className="flex items-center gap-2 mb-8 mt-2 px-2">
             <Icon name="logo" className="w-8 h-8 text-[#52a37c]" />
             <h1 className="text-xl font-bold tracking-tight">Artea POS</h1>
@@ -167,7 +168,7 @@ const AppContent = () => {
          </div>
       </nav>
 
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden relative z-0">
         <div className="flex-1 flex flex-col min-h-0">
             <Header activeView={activeView} setActiveView={setActiveView} onMenuClick={() => setSidebarOpen(true)} />
             

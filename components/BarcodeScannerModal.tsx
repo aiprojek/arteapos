@@ -30,33 +30,41 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
 
   const startNativeScan = async () => {
       try {
+          // Native Only: Permission Check
           const status = await BarcodeScanner.checkPermission({ force: true });
+          
           if (status.granted) {
               setIsNativeScanning(true);
+              // Hide WebView Background to see Camera
               await BarcodeScanner.hideBackground();
               document.body.classList.add('barcode-scanner-active');
               
               const result = await BarcodeScanner.startScan(); 
               
               if (result.hasContent) {
-                  stopNativeScan(); // Stop first to restore UI
+                  await stopNativeScan(); // Stop before processing
                   onScan(result.content);
               } else {
-                  stopNativeScan();
+                  await stopNativeScan();
                   onClose();
               }
           } else {
               setError("Izin kamera ditolak. Buka Pengaturan Aplikasi untuk mengizinkan.");
           }
       } catch (e: any) {
+          console.error("Native Scan Error", e);
           setError("Gagal membuka scanner: " + e.message);
-          stopNativeScan();
+          await stopNativeScan();
       }
   };
 
   const stopNativeScan = async () => {
-      await BarcodeScanner.showBackground();
-      await BarcodeScanner.stopScan();
+      try {
+        await BarcodeScanner.showBackground();
+        await BarcodeScanner.stopScan();
+      } catch(e) {
+          console.warn("Stop scan failed", e);
+      }
       document.body.classList.remove('barcode-scanner-active');
       setIsNativeScanning(false);
   };
@@ -68,15 +76,16 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
       // 1. CEK KODULAR
       if (startKodularScan()) return;
 
-      // 2. NATIVE CAPACITOR
+      // 2. NATIVE CAPACITOR (Android/iOS APK)
       if (Capacitor.isNativePlatform()) {
           startNativeScan();
           return;
       }
 
-      // 3. WEB MODE
+      // 3. WEB BROWSER MODE
+      // Pastikan library html5-qrcode sudah dimuat di index.html
       if (typeof Html5Qrcode === 'undefined') {
-        setError("Pustaka scanner tidak dimuat.");
+        setError("Library scanner web tidak dimuat. Refresh halaman.");
         return;
       }
       
@@ -85,9 +94,16 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
       const config = { fps: 10, qrbox: { width: 250, height: 150 } };
 
       scanner.start({ facingMode: "environment" }, config, 
-        (decodedText: string) => { onScan(decodedText); onClose(); }, 
+        (decodedText: string) => { 
+            if(scannerRef.current) scannerRef.current.stop().catch(() => {});
+            onScan(decodedText); 
+            onClose(); 
+        }, 
         () => {}
-      ).catch(() => setError("Gagal mengakses kamera."));
+      ).catch((err: any) => {
+          console.error(err);
+          setError("Gagal akses kamera web. Pastikan izin diberikan.");
+      });
       
       return () => {
         if (scannerRef.current && scannerRef.current.isScanning) {
@@ -160,6 +176,7 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
             <div className="text-center p-6">
                 <Icon name="warning" className="w-12 h-12 text-red-500 mx-auto mb-2" />
                 <p className="text-sm text-slate-300">{error}</p>
+                <p className="text-xs text-slate-500 mt-2">Mode: {Capacitor.isNativePlatform() ? 'App' : 'Web'}</p>
                 <button onClick={onClose} className="mt-4 text-sky-400 text-sm hover:underline">Tutup</button>
             </div>
         ) : (

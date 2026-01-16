@@ -14,6 +14,8 @@ import CustomerFormModal from '../CustomerFormModal';
 import ReceiptModal from '../ReceiptModal'; // Import ReceiptModal
 import type { Customer, BalanceLog, Transaction } from '../../types';
 import { useToImage } from '../../hooks/useToImage';
+import { Capacitor } from '@capacitor/core';
+import { shareFileNative, saveBinaryFileNative } from '../../utils/nativeHelper';
 
 // --- TRANSACTION HISTORY MODAL (NEW) ---
 const CustomerTransactionsModal: React.FC<{
@@ -232,32 +234,43 @@ const MemberCardModal: React.FC<{
     const handleDownload = async () => {
         try {
             const dataUrl = await getImage();
-            if (dataUrl) {
-                const link = document.createElement('a');
-                link.href = dataUrl;
-                link.download = `MemberCard-${customer.name.replace(/\s+/g, '_')}.png`;
-                link.click();
+            if (!dataUrl) return;
+
+            if (Capacitor.isNativePlatform()) {
+                await saveBinaryFileNative(`MemberCard-${customer.name}.png`, dataUrl.split(',')[1]);
+                showAlert({ type: 'alert', title: 'Berhasil', message: 'Gambar kartu tersimpan di Dokumen.' });
+                return;
             }
-        } catch (error) {
-            showAlert({ type: 'alert', title: 'Gagal', message: 'Gagal membuat gambar kartu.' });
+
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = `MemberCard-${customer.name.replace(/\s+/g, '_')}.png`;
+            link.click();
+        } catch (error: any) {
+            showAlert({ type: 'alert', title: 'Gagal', message: error.message || 'Gagal membuat gambar kartu.' });
         }
     };
 
     const handleShare = async () => {
         try {
             const dataUrl = await getImage();
-            if (dataUrl) {
-                const blob = await (await fetch(dataUrl)).blob();
-                const file = new File([blob], "card.png", { type: "image/png" });
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({
-                        title: `Kartu Member - ${customer.name}`,
-                        text: `Halo kak ${customer.name}, ini kartu member digital kakak. Simpan dan tunjukkan saat belanja untuk dapat poin ya! ID: ${customer.memberId}`,
-                        files: [file]
-                    });
-                } else {
-                    showAlert({ type: 'alert', title: 'Info', message: 'Browser tidak mendukung share langsung. Silakan unduh gambar manual.' });
-                }
+            if (!dataUrl) return;
+
+            if (Capacitor.isNativePlatform()) {
+                await shareFileNative(`MemberCard-${customer.name}.png`, dataUrl.split(',')[1], `Kartu Member ${customer.name}`);
+                return;
+            }
+
+            const blob = await (await fetch(dataUrl)).blob();
+            const file = new File([blob], "card.png", { type: "image/png" });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    title: `Kartu Member - ${customer.name}`,
+                    text: `Halo kak ${customer.name}, ini kartu member digital kakak. Simpan dan tunjukkan saat belanja untuk dapat poin ya! ID: ${customer.memberId}`,
+                    files: [file]
+                });
+            } else {
+                showAlert({ type: 'alert', title: 'Info', message: 'Browser tidak mendukung share langsung. Silakan unduh gambar manual.' });
             }
         } catch (error) {
             console.error(error);
@@ -557,11 +570,7 @@ const CustomersTab: React.FC = () => {
     // --- NEW: Handle Export CSV ---
     const handleExport = () => {
         dataService.exportCustomersCSV(customers);
-        showAlert({ 
-            type: 'alert', 
-            title: 'Export Berhasil', 
-            message: 'Data pelanggan (CSV) berhasil diunduh. Anda bisa menggunakannya untuk backup atau edit massal (re-import).' 
-        });
+        // Note: alert is handled inside exportCustomersCSV via downloadCSV wrapper if native, or simple download if web.
     };
 
     const handleEdit = (customer: Customer) => {

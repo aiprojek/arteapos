@@ -35,8 +35,8 @@ const HelpView: React.FC = () => {
                 </p>
             </div>
 
-            {/* Navigation Tabs */}
-            <div className="sticky top-0 z-30 py-3 mb-8 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/50 transition-all">
+            {/* Navigation Tabs - Lower Z-Index to 20 */}
+            <div className="sticky top-0 z-20 py-3 mb-8 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/50 transition-all">
                 <div className="overflow-x-auto hide-scrollbar flex md:justify-center">
                     <div className="bg-slate-800 p-1 rounded-xl flex gap-1 shadow-lg border border-slate-700 whitespace-nowrap min-w-max">
                         {tabs.map(tab => (

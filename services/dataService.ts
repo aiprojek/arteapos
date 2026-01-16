@@ -2,9 +2,11 @@
 import type { AppData, Product, RawMaterial, Transaction as TransactionType, Expense, Purchase, Customer, StockAdjustment, Addon, CartItem, ProductVariant, ReceiptSettings, BranchPrice, ModifierGroup } from '../types';
 import { db } from './db';
 import * as XLSX from 'xlsx';
+import { Capacitor } from '@capacitor/core';
+import { saveTextFileNative, saveBinaryFileNative } from '../utils/nativeHelper';
 
-const downloadCSV = (csvContent: string, filename: string) => {
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+// Helper to trigger browser download
+const browserDownload = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -13,6 +15,20 @@ const downloadCSV = (csvContent: string, filename: string) => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+};
+
+const downloadCSV = async (csvContent: string, filename: string) => {
+    if (Capacitor.isNativePlatform()) {
+        try {
+            const uri = await saveTextFileNative(filename, csvContent);
+            alert(`File berhasil disimpan di Dokumen: ${filename}`);
+        } catch (e: any) {
+            alert("Gagal simpan file: " + e.message);
+        }
+    } else {
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        browserDownload(blob, filename);
+    }
 };
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -470,16 +486,28 @@ export const dataService = {
   exportData: async () => {
     const data = await getExportData();
     const jsonString = JSON.stringify(data, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-    link.download = `artea-pos-backup-${timestamp}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    
+    if (Capacitor.isNativePlatform()) {
+        try {
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+            const fileName = `artea-pos-backup-${timestamp}.json`;
+            await saveTextFileNative(fileName, jsonString);
+            alert(`Backup berhasil disimpan di Dokumen: ${fileName}`);
+        } catch (e: any) {
+            alert(e.message);
+        }
+    } else {
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+        link.download = `artea-pos-backup-${timestamp}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
   },
 
   exportToSpreadsheet: (headers: string[], rows: (string | number)[][], fileName: string, format: 'xlsx' | 'ods' | 'csv') => {
@@ -487,7 +515,17 @@ export const dataService = {
       const ws = XLSX.utils.aoa_to_sheet(worksheetData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Data");
-      XLSX.writeFile(wb, `${fileName}.${format}`, { bookType: format, type: 'binary' });
+      
+      if (Capacitor.isNativePlatform()) {
+          const wopts: any = { bookType: format, type: 'base64' };
+          const wbout = XLSX.write(wb, wopts);
+          
+          saveBinaryFileNative(`${fileName}.${format}`, wbout)
+            .then(uri => alert(`File berhasil disimpan: ${uri}`))
+            .catch(err => alert(err.message));
+      } else {
+          XLSX.writeFile(wb, `${fileName}.${format}`, { bookType: format, type: 'binary' });
+      }
   },
 
   importData: (file: File): Promise<AppData> => {

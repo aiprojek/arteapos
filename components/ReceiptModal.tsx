@@ -10,6 +10,8 @@ import { useFinance } from '../context/FinanceContext';
 import type { Transaction as TransactionType } from '../types';
 import { useToImage } from '../hooks/useToImage';
 import { bluetoothPrinterService } from '../utils/bluetoothPrinter';
+import { Capacitor } from '@capacitor/core';
+import { shareFileNative } from '../utils/nativeHelper';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -38,15 +40,31 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
             return;
         }
 
+        // CAPACITOR NATIVE SHARE
+        if (Capacitor.isNativePlatform()) {
+            await shareFileNative(`struk-${transaction.id}.png`, dataUrl.split(',')[1], 'Struk Transaksi');
+            return;
+        }
+
+        // WEB SHARE
         const blob = await (await fetch(dataUrl)).blob();
         const file = new File([blob], `struk-${transaction.id}.png`, { type: 'image/png' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({ files: [file] });
         } else {
-            showAlert({ type: 'alert', title: 'Info', message: 'Fitur Share tidak didukung di browser ini. Gambar telah disalin ke clipboard.' });
+            // Fallback: Copy to clipboard
+            try {
+                // Clipboard API for images is limited, so we copy as blob
+                const item = new ClipboardItem({ "image/png": blob });
+                await navigator.clipboard.write([item]);
+                showAlert({ type: 'alert', title: 'Info', message: 'Gambar telah disalin ke clipboard.' });
+            } catch(e) {
+                showAlert({ type: 'alert', title: 'Info', message: 'Browser ini tidak mendukung share gambar.' });
+            }
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error(error);
+        showAlert({ type: 'alert', title: 'Error Share', message: error.message });
     }
   };
 

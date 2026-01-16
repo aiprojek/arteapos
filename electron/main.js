@@ -1,6 +1,11 @@
 
-const { app, BrowserWindow, Menu } = require('electron');
-const path = require('path');
+import { app, BrowserWindow, Menu } from 'electron';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Setup __dirname untuk ES Module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Nonaktifkan Hardware Acceleration jika di Linux (untuk stabilitas)
 if (process.platform === 'linux') {
@@ -11,7 +16,9 @@ function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    icon: path.join(__dirname, '../public/favicon.svg'), // Pastikan ada icon
+    // Di production (dist), icon ada di folder dist (hasil copy dari public)
+    // Di development, icon ada di folder public
+    icon: path.join(__dirname, app.isPackaged ? '../dist/favicon.svg' : '../public/favicon.svg'),
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false, // Untuk kemudahan akses file lokal jika perlu nanti

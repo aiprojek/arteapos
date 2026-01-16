@@ -58,11 +58,10 @@ jobs:
           rm -f package-lock.json
           npm install
       
-      # Inisialisasi Android project
+      # FIX: Hanya jalankan sync karena folder android sudah ada di repo
       - name: Setup Capacitor Android
         run: |
-          npx cap add android
-          npx cap sync
+          npx cap sync android
       
       - name: Build APK
         run: |

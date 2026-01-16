@@ -14,11 +14,11 @@
     "target": ["dmg"]
   },
   "win": {
-    "target": ["nsis", "portable"],
-    "icon": "public/favicon.svg"
+    "target": ["nsis", "portable"]
   },
   "linux": {
     "target": ["AppImage", "deb"],
-    "category": "Office"
+    "category": "Office",
+    "maintainer": "Artea POS Team <dev@arteapos.com>"
   }
 }

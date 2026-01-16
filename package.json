@@ -5,7 +5,10 @@
   "version": "2.4.0",
   "type": "module",
   "description": "Aplikasi Kasir Offline-First untuk UMKM",
-  "author": "Artea POS Team",
+  "author": {
+    "name": "Artea POS Team",
+    "email": "dev@arteapos.com"
+  },
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",

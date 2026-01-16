@@ -58,10 +58,11 @@ jobs:
           rm -f package-lock.json
           npm install
       
-      # FIX: Hanya jalankan sync karena folder android sudah ada di repo
+      # Inisialisasi Android project
       - name: Setup Capacitor Android
         run: |
-          npx cap sync android
+          npx cap add android
+          npx cap sync
       
       - name: Build APK
         run: |
@@ -73,7 +74,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ArteaPOS-Android
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/debug/arteapos-debug.apk
 
   build-desktop-linux:
     name: Build Desktop (Linux)

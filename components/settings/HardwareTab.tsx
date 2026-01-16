@@ -83,11 +83,12 @@ const HardwareTab: React.FC = () => {
                 const errorStr = e ? e.toString().toLowerCase() : "";
                 
                 // Handle Permission Errors specifically for Android 12+
+                // Pesan error biasanya berisi "permission" atau "denied"
                 if (errorStr.includes('permission') || errorStr.includes('denied')) {
                     showAlert({
                         type: 'alert', 
                         title: 'Izin Bluetooth Ditolak', 
-                        message: 'Untuk mencari printer, Aplikasi membutuhkan izin "Perangkat Sekitar" (Nearby Devices) dan "Bluetooth Connect". Mohon izinkan saat muncul pop-up, atau aktifkan manual di Pengaturan Aplikasi.'
+                        message: 'Aplikasi membutuhkan izin "Perangkat Sekitar" (Nearby Devices) dan "Bluetooth Connect" untuk mencari printer. Mohon izinkan saat muncul pop-up, atau aktifkan manual di Pengaturan Aplikasi Android.'
                     });
                 } else {
                     showAlert({type: 'alert', title: 'Gagal Memuat', message: 'Pastikan Bluetooth Aktif. Error: ' + e});

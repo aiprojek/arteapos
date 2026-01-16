@@ -1,4 +1,6 @@
 
+export type View = 'dashboard' | 'pos' | 'products' | 'raw-materials' | 'finance' | 'reports' | 'settings' | 'help';
+
 export interface Addon {
   id: string;
   name: string;
@@ -132,7 +134,7 @@ export interface User {
   id: string;
   name: string;
   pin: string; // 4-digit PIN
-  role: 'admin' | 'manager' | 'staff'; // Added 'manager'
+  role: 'admin' | 'manager' | 'staff' | 'viewer'; // Added 'viewer'
   assignedBranch?: string; // NEW: 'all' or specific Branch ID
 }
 
@@ -357,8 +359,43 @@ export interface MembershipSettings {
   rewards: Reward[];
 }
 
+// Global App Data State
+export interface AppData {
+  products: Product[];
+  categories: string[];
+  rawMaterials: RawMaterial[];
+  transactionRecords: Transaction[];
+  users: User[];
+  expenses: Expense[];
+  otherIncomes: OtherIncome[];
+  suppliers: Supplier[];
+  purchases: Purchase[];
+  stockAdjustments: StockAdjustment[];
+  customers: Customer[];
+  discountDefinitions: DiscountDefinition[];
+  heldCarts: HeldCart[];
+  sessionHistory: SessionHistory[];
+  auditLogs: AuditLog[];
+  balanceLogs: BalanceLog[]; // NEW
+  
+  receiptSettings: ReceiptSettings;
+  inventorySettings: InventorySettings;
+  authSettings: AuthSettings;
+  sessionSettings: SessionSettings;
+  membershipSettings: MembershipSettings;
+}
+
 // --- AUDIT LOG ---
-export type AuditAction = 'DELETE_PRODUCT' | 'UPDATE_PRICE' | 'STOCK_OPNAME' | 'REFUND_TRANSACTION' | 'LOGIN_ATTEMPT' | 'OTHER' | 'BALANCE_TOPUP';
+export type AuditAction = 
+    | 'LOGIN' 
+    | 'LOGOUT' 
+    | 'DELETE_PRODUCT' 
+    | 'UPDATE_PRICE' 
+    | 'REFUND_TRANSACTION' 
+    | 'DELETE_TRANSACTION' 
+    | 'STOCK_OPNAME'
+    | 'BALANCE_TOPUP'
+    | 'OTHER';
 
 export interface AuditLog {
     id: string;
@@ -366,32 +403,6 @@ export interface AuditLog {
     userId: string;
     userName: string;
     action: AuditAction;
-    targetId?: string; // ID produk atau transaksi terkait
-    details: string; // Deskripsi detail (misal: "Harga berubah dari 10k ke 12k")
+    details: string;
+    targetId?: string; // optional ID of the object affected
 }
-
-export interface AppData {
-  products: Product[];
-  categories: string[];
-  rawMaterials: RawMaterial[];
-  transactionRecords: Transaction[];
-  users: User[];
-  receiptSettings: ReceiptSettings;
-  inventorySettings: InventorySettings;
-  authSettings: AuthSettings;
-  sessionSettings: SessionSettings;
-  expenses: Expense[];
-  otherIncomes: OtherIncome[]; // New field
-  suppliers: Supplier[];
-  purchases: Purchase[];
-  stockAdjustments: StockAdjustment[];
-  customers: Customer[];
-  membershipSettings: MembershipSettings;
-  discountDefinitions: DiscountDefinition[];
-  heldCarts?: HeldCart[];
-  sessionHistory: SessionHistory[];
-  auditLogs?: AuditLog[]; // NEW: Audit Trail
-  balanceLogs?: BalanceLog[]; // NEW: Customer Balance History
-}
-
-export type View = 'dashboard' | 'pos' | 'products' | 'raw-materials' | 'reports' | 'settings' | 'finance' | 'help';

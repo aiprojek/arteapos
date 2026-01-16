@@ -23,8 +23,8 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
         if (!currentUser) return;
 
         try {
-            // Admin & Manager melihat Welcome Screen yang sama (sekali saja)
-            if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+            // Admin, Manager, & Viewer melihat Welcome Screen yang sama (sekali saja)
+            if (['admin', 'manager', 'viewer'].includes(currentUser.role)) {
                 const hasSeenWelcome = localStorage.getItem(`ARTEA_WELCOME_SEEN_${currentUser.id}`);
                 // Fallback for old admin key style
                 const legacySeen = localStorage.getItem('ARTEA_WELCOME_SEEN');
@@ -87,8 +87,13 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
         });
     };
 
-    // --- RENDER MANAGEMENT WELCOME (ADMIN & MANAGER) ---
+    // --- RENDER MANAGEMENT WELCOME (ADMIN & MANAGER & VIEWER) ---
     if (showManagementWelcome) {
+        const roleLabel = 
+            currentUser?.role === 'manager' ? 'Manager (Supervisor)' : 
+            currentUser?.role === 'viewer' ? 'Viewer (Pemerhati)' : 
+            'Administrator';
+
         return (
             <Modal isOpen={true} onClose={handleDismissManagement} title={`Halo, ${currentUser?.name}!`}>
                 <div className="text-center space-y-6">
@@ -100,12 +105,14 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
                             بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيم
                         </div>
                         <p className="text-white font-bold text-lg">Selamat Datang di Artea POS</p>
-                        <p className="text-slate-400 text-sm capitalize">Role: {currentUser?.role === 'manager' ? 'Manager (Supervisor)' : 'Administrator'}</p>
+                        <p className="text-slate-400 text-sm capitalize">Role: {roleLabel}</p>
                     </div>
                     
                     <div className="space-y-2 text-slate-300 text-sm">
                         <p>
-                            Anda memiliki akses ke fitur manajemen operasional. Gunakan dashboard untuk memantau penjualan, mengelola stok produk, dan melihat laporan keuangan.
+                            {currentUser?.role === 'viewer' 
+                                ? "Anda memiliki akses khusus untuk melihat laporan dan dashboard performa bisnis tanpa risiko mengubah data." 
+                                : "Anda memiliki akses ke fitur manajemen operasional. Gunakan dashboard untuk memantau penjualan, mengelola stok produk, dan melihat laporan keuangan."}
                         </p>
                         {currentUser?.role === 'manager' && (
                             <p className="bg-slate-900 p-2 rounded border border-slate-700 text-xs mt-2">
@@ -124,7 +131,7 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
                             <Icon name="book" className="w-5 h-5"/> Baca Panduan
                         </Button>
                         <Button onClick={handleDismissManagement} className="w-full justify-center">
-                            Mulai Bekerja
+                            Mulai {currentUser?.role === 'viewer' ? 'Memantau' : 'Bekerja'}
                         </Button>
                         
                         <div className="mt-2 text-center">

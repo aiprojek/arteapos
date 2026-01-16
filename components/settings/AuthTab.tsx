@@ -154,7 +154,7 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                                 <div>
                                     <div className="font-semibold text-white flex items-center gap-2">
                                         {user.name}
-                                        <span className={`text-[10px] px-2 py-0.5 rounded uppercase ${user.role === 'admin' ? 'bg-purple-500/20 text-purple-300' : user.role === 'manager' ? 'bg-yellow-500/20 text-yellow-300' : 'bg-sky-500/20 text-sky-300'}`}>
+                                        <span className={`text-[10px] px-2 py-0.5 rounded uppercase ${user.role === 'admin' ? 'bg-purple-500/20 text-purple-300' : user.role === 'manager' ? 'bg-yellow-500/20 text-yellow-300' : user.role === 'viewer' ? 'bg-green-500/20 text-green-300' : 'bg-sky-500/20 text-sky-300'}`}>
                                             {user.role}
                                         </span>
                                     </div>
@@ -202,10 +202,14 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                             onChange={e => setUserForm({...userForm, role: e.target.value as any})}
                             className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
                         >
-                            <option value="staff">Staf (Kasir)</option>
-                            <option value="manager">Manager (Laporan & Produk)</option>
+                            <option value="staff">Staf (Kasir & Stok)</option>
+                            <option value="viewer">Viewer (Laporan & Dashboard Saja)</option>
+                            <option value="manager">Manager (Menu & Laporan)</option>
                             <option value="admin">Admin (Akses Penuh)</option>
                         </select>
+                        <p className="text-[10px] text-slate-500 mt-1">
+                            {userForm.role === 'viewer' ? 'User ini HANYA bisa melihat Dashboard dan Laporan. Tidak bisa input penjualan.' : ''}
+                        </p>
                     </div>
                     
                     {/* Only show Branch Selection if branches exist */}

@@ -26,12 +26,25 @@ const AppContent = () => {
   const { findProductByBarcode, inventorySettings } = useProduct();
   const { addToCart } = useCart();
   const { showAlert } = useUI();
+  
+  // ROLE CHECK
+  const isViewer = currentUser?.role === 'viewer';
+  const isStaff = currentUser?.role === 'staff';
   const isManagement = currentUser?.role === 'admin' || currentUser?.role === 'manager';
-  const [activeView, setActiveView] = useState<View>(isManagement ? 'dashboard' : 'pos');
+  
+  // Initialize view based on role
+  const [activeView, setActiveView] = useState<View>(() => {
+      if (isStaff) return 'pos';
+      return 'dashboard'; // Admin, Manager, and Viewer default to dashboard
+  });
+  
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   
   // --- HARDWARE BARCODE SCANNER LOGIC (GLOBAL) ---
   useEffect(() => {
+    // Disable scanner for Viewers (they don't do POS)
+    if (isViewer) return;
+
     let buffer = "";
     let lastKeyTime = Date.now();
 
@@ -77,14 +90,19 @@ const AppContent = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [findProductByBarcode, addToCart, activeView, showAlert]);
+  }, [findProductByBarcode, addToCart, activeView, showAlert, isViewer]);
 
   const renderView = () => {
+    // Security check: If viewer tries to access restricted pages manually or via state persistence
+    if (isViewer && ['pos', 'products', 'raw-materials', 'finance', 'settings'].includes(activeView)) {
+        return <DashboardView />;
+    }
+
     const views = {
       dashboard: <DashboardView />, 
       pos: <POSView />, 
       products: <ProductsView />,
-      'raw-materials': <RawMaterialsView />, // Pastikan view ini terdaftar
+      'raw-materials': <RawMaterialsView />, 
       finance: <FinanceView />, 
       reports: <ReportsView />, 
       settings: <SettingsView />, 
@@ -114,17 +132,21 @@ const AppContent = () => {
          </div>
          
          <div className="space-y-1">
-             <NavButton view="pos" icon="cash" label="Kasir (POS)" />
+             {/* POS: Hidden for Viewer */}
+             {!isViewer && <NavButton view="pos" icon="cash" label="Kasir (POS)" />}
              
-             {isManagement && (
+             {/* Management Section: Visible for Admin, Manager, and Viewer */}
+             {(isManagement || isViewer) && (
                 <>
                     <div className="my-4 border-t border-slate-700/50 mx-2"></div>
                     <p className="px-3 text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Manajemen</p>
-                    <NavButton view="dashboard" icon="trending-up" label="Dashboard" />
-                    <NavButton view="products" icon="products" label="Produk" />
                     
-                    {/* HANYA MUNCUL JIKA SETTING INVENTORY & TRACK INGREDIENTS AKTIF */}
-                    {inventorySettings.enabled && inventorySettings.trackIngredients && (
+                    <NavButton view="dashboard" icon="trending-up" label="Dashboard" />
+                    
+                    {/* Operational Menus: Hidden for Viewer */}
+                    {!isViewer && <NavButton view="products" icon="products" label="Produk" />}
+                    
+                    {!isViewer && inventorySettings.enabled && inventorySettings.trackIngredients && (
                         <NavButton view="raw-materials" icon="boxes" label="Bahan Baku" />
                     )}
                     
@@ -134,14 +156,18 @@ const AppContent = () => {
 
              <div className="my-4 border-t border-slate-700/50 mx-2"></div>
              <p className="px-3 text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Sistem</p>
-             <NavButton view="finance" icon="finance" label="Keuangan" />
+             
+             {/* Finance: Hidden for Viewer */}
+             {!isViewer && <NavButton view="finance" icon="finance" label="Keuangan" />}
+             
+             {/* Settings: Hidden for Viewer */}
              {isManagement && <NavButton view="settings" icon="settings" label="Pengaturan" />}
+             
+             <NavButton view="help" icon="help" label="Bantuan" />
          </div>
       </nav>
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Header redundan telah dihapus dari sini */}
-        
         <div className="flex-1 flex flex-col min-h-0">
             <Header activeView={activeView} setActiveView={setActiveView} onMenuClick={() => setSidebarOpen(true)} />
             

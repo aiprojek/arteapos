@@ -58,11 +58,11 @@ jobs:
           rm -f package-lock.json
           npm install
       
-      # Inisialisasi Android project
+      # FIX: Hapus 'npx cap add android' karena folder sudah ada
+      # Cukup jalankan sync untuk update aset web
       - name: Setup Capacitor Android
         run: |
-          npx cap add android
-          npx cap sync
+          npx cap sync android
       
       - name: Build APK
         run: |
@@ -74,7 +74,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ArteaPOS-Android
-          path: android/app/build/outputs/apk/debug/arteapos-debug.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
 
   build-desktop-linux:
     name: Build Desktop (Linux)

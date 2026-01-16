@@ -8,7 +8,7 @@ import { useSettings } from '../../context/SettingsContext';
 import type { Transaction } from '../../types';
 import BarcodeScannerModal from '../BarcodeScannerModal';
 import { Capacitor } from '@capacitor/core';
-import { BarcodeScanner } from '@capacitor-community/barcode-scanner'; // We use this plugin to request Camera permissions as proxy
+import { BarcodeScanner } from '@capacitor-community/barcode-scanner'; // We use this plugin to open app settings
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode; icon?: any }> = ({ title, description, children, icon }) => (
     <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
@@ -34,6 +34,7 @@ const HardwareTab: React.FC = () => {
     const [isBleSupported, setIsBleSupported] = useState(false);
     const [isBleConnected, setIsBleConnected] = useState(false);
     const [isBleScanning, setIsBleScanning] = useState(false);
+    const [permissionStatus, setPermissionStatus] = useState<'unknown' | 'denied'>('unknown');
     
     // Native List State
     const [pairedDevices, setPairedDevices] = useState<any[]>([]);
@@ -65,9 +66,18 @@ const HardwareTab: React.FC = () => {
         );
     }
 
+    const openAppSettings = async () => {
+        try {
+            await BarcodeScanner.openAppSettings();
+        } catch (e) {
+            console.error("Failed to open settings", e);
+        }
+    };
+
     // --- BLUETOOTH HANDLERS ---
     const handleConnectBle = async () => {
         setIsBleScanning(true);
+        setPermissionStatus('unknown');
         
         if (isNative) {
             // NATIVE: List paired devices first
@@ -83,12 +93,12 @@ const HardwareTab: React.FC = () => {
                 const errorStr = e ? e.toString().toLowerCase() : "";
                 
                 // Handle Permission Errors specifically for Android 12+
-                // Pesan error biasanya berisi "permission" atau "denied"
                 if (errorStr.includes('permission') || errorStr.includes('denied')) {
+                    setPermissionStatus('denied');
                     showAlert({
                         type: 'alert', 
                         title: 'Izin Bluetooth Ditolak', 
-                        message: 'Aplikasi membutuhkan izin "Perangkat Sekitar" (Nearby Devices) dan "Bluetooth Connect" untuk mencari printer. Mohon izinkan saat muncul pop-up, atau aktifkan manual di Pengaturan Aplikasi Android.'
+                        message: 'Aplikasi membutuhkan izin "Perangkat Sekitar" (Nearby Devices) agar bisa mencetak. Silakan klik tombol "Buka Pengaturan" di bawah dan aktifkan izin tersebut.'
                     });
                 } else {
                     showAlert({type: 'alert', title: 'Gagal Memuat', message: 'Pastikan Bluetooth Aktif. Error: ' + e});
@@ -170,8 +180,13 @@ const HardwareTab: React.FC = () => {
             } else {
                 // If denied, sometimes we need to direct user to settings
                 if (status.denied) {
-                    showAlert({type:'alert', title:'Izin Ditolak', message:'Mohon buka Pengaturan > Aplikasi > Artea POS > Izin, lalu aktifkan Kamera.'});
-                    BarcodeScanner.openAppSettings();
+                    showAlert({
+                        type:'confirm', 
+                        title:'Izin Ditolak', 
+                        message:'Mohon buka Pengaturan Aplikasi untuk mengizinkan Kamera.',
+                        confirmText: 'Buka Pengaturan',
+                        onConfirm: openAppSettings
+                    });
                 }
             }
         } catch(e) {
@@ -249,6 +264,16 @@ const HardwareTab: React.FC = () => {
                                 </div>
                             )}
 
+                            {/* Permission Denied UI */}
+                            {permissionStatus === 'denied' && (
+                                <div className="bg-red-900/30 border border-red-800 p-3 rounded text-center">
+                                    <p className="text-xs text-red-300 mb-2">Izin akses perangkat Bluetooth ditolak. Anda perlu mengaktifkannya manual.</p>
+                                    <Button onClick={openAppSettings} size="sm" variant="secondary" className="w-full">
+                                        <Icon name="settings" className="w-4 h-4" /> Buka Pengaturan Aplikasi
+                                    </Button>
+                                </div>
+                            )}
+
                             <div className="flex gap-2 w-full mt-2">
                                 {!isBleConnected && (
                                     <Button 
@@ -258,7 +283,7 @@ const HardwareTab: React.FC = () => {
                                         className="flex-1"
                                         size="sm"
                                     >
-                                        {isBleScanning ? 'Memindai...' : (isNative ? 'Cari Printer & Izin' : 'Cari Printer')}
+                                        {isBleScanning ? 'Memindai...' : (isNative ? 'Cari Printer' : 'Cari Printer')}
                                     </Button>
                                 )}
                                 <Button 

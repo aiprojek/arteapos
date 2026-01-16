@@ -14,7 +14,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "resources": "npx capacitor-assets generate --iconBackgroundColor '#1a3c2d' --iconBackgroundColorDark '#1a3c2d' --splashBackgroundColor '#1a3c2d' --splashBackgroundColorDark '#1a3c2d' --assetPath public/favicon.svg",
+    "resources": "npx capacitor-assets generate --icon public/favicon.svg --splash public/favicon.svg --iconBackgroundColor '#1a3c2d' --splashBackgroundColor '#1a3c2d' --android --ios",
     "cap:sync": "npx cap sync",
     "cap:open": "npx cap open android",
     "electron:dev": "concurrently \"vite\" \"electron .\"",
@@ -43,7 +43,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@capacitor/assets": "^3.0.0",
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^6.0.0",
     "@types/crypto-js": "^4.2.2",
     "@types/react": "^18.3.3",

@@ -23,7 +23,7 @@
     "@capacitor/camera": "^6.0.0",
     "@capacitor/core": "^6.0.0",
     "@supabase/supabase-js": "^2.39.0",
-    "cordova-plugin-bluetooth-serial": "^4.1.5",
+    "cordova-plugin-bluetooth-serial": "^0.4.7",
     "crypto-js": "^4.2.0",
     "dexie": "^4.0.7",
     "dropbox": "^10.34.0",

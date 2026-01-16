@@ -2,24 +2,27 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.arteapos.app">
 
-    <!-- Izin Akses Internet & Jaringan (Wajib untuk Dropbox/Cloud) -->
+    <!-- Izin Akses Internet & Jaringan -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Izin Kamera (Untuk Barcode Scanner & Foto Produk) -->
+    <!-- Izin Kamera -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FLASHLIGHT"/>
 
-    <!-- Izin Penyimpanan (Untuk Save Laporan PDF/Excel/Backup JSON) -->
+    <!-- Izin Penyimpanan -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
     <!-- Izin Bluetooth Legacy (Android 11 ke bawah) -->
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <!-- maxSdkVersion="30" memastikan izin ini tidak diminta di Android 12, mencegah konflik -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
 
-    <!-- Izin Bluetooth Modern (Android 12 ke atas) -->
-    <!-- neverForLocation berarti kita tidak butuh GPS user untuk connect printer -->
+    <!-- Izin Bluetooth Modern (Android 12 / API 31+) -->
+    <!-- neverForLocation: Kita tidak butuh lokasi untuk print, hanya connect -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
@@ -57,7 +60,6 @@
         </provider>
     </application>
 
-    <!-- Fitur Hardware yang digunakan (Opsional tapi bagus untuk Play Store) -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 

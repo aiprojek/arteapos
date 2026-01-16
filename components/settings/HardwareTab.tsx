@@ -8,6 +8,7 @@ import { useSettings } from '../../context/SettingsContext';
 import type { Transaction } from '../../types';
 import BarcodeScannerModal from '../BarcodeScannerModal';
 import { Capacitor } from '@capacitor/core';
+import { BarcodeScanner } from '@capacitor-community/barcode-scanner'; // We use this plugin to request Camera permissions as proxy
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode; icon?: any }> = ({ title, description, children, icon }) => (
     <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
@@ -77,7 +78,16 @@ const HardwareTab: React.FC = () => {
                     showAlert({type: 'alert', title: 'Kosong', message: 'Tidak ada perangkat Bluetooth yang terpasang (Paired). Silakan pasangkan printer di Pengaturan Bluetooth Android terlebih dahulu.'});
                 }
             } catch (e: any) {
-                showAlert({type: 'alert', title: 'Error', message: 'Gagal memuat perangkat: ' + e});
+                // BUG FIX: Android 12 "Nearby Devices" permission error handling
+                if (e && e.toString().toLowerCase().includes('permission')) {
+                    showAlert({
+                        type: 'alert', 
+                        title: 'Izin Diperlukan', 
+                        message: 'Aplikasi membutuhkan izin "Perangkat Sekitar" (Nearby Devices) untuk menemukan printer. Mohon aktifkan di Pengaturan Aplikasi Android.'
+                    });
+                } else {
+                    showAlert({type: 'alert', title: 'Error', message: 'Gagal memuat perangkat: ' + e});
+                }
             } finally {
                 setIsBleScanning(false);
             }
@@ -143,6 +153,26 @@ const HardwareTab: React.FC = () => {
             }
         }
     };
+
+    // --- PERMISSION REQUEST HELPER ---
+    const requestCameraPermission = async () => {
+        if (!isNative) return;
+        try {
+            // We use BarcodeScanner plugin to ask for camera since we don't have a dedicated permission plugin installed.
+            const status = await BarcodeScanner.checkPermission({ force: true });
+            if (status.granted) {
+                showAlert({type:'alert', title:'Izin Diberikan', message:'Akses kamera telah diizinkan.'});
+            } else {
+                // If denied, sometimes we need to direct user to settings
+                if (status.denied) {
+                    showAlert({type:'alert', title:'Izin Ditolak', message:'Mohon buka Pengaturan > Aplikasi > Artea POS > Izin, lalu aktifkan Kamera.'});
+                    BarcodeScanner.openAppSettings();
+                }
+            }
+        } catch(e) {
+            console.error(e);
+        }
+    }
 
     const getDummyTransaction = (): Transaction => ({
         id: 'TEST-HARDWARE-001',
@@ -300,17 +330,24 @@ const HardwareTab: React.FC = () => {
 
             {/* 4. CAMERA SECTION */}
             <SettingsCard 
-                title="Kamera Perangkat" 
-                description="Menggunakan kamera HP sebagai scanner."
+                title="Kamera & Izin" 
+                description="Menggunakan kamera HP sebagai scanner dan izin aplikasi."
                 icon={<Icon name="camera" className="w-6 h-6"/>}
             >
-                <div className="flex justify-between items-center gap-4">
+                <div className="flex justify-between items-center gap-2 flex-wrap">
                     <div className="text-sm text-slate-300">
-                       Tes fungsi kamera.
+                       Tes fungsi kamera dan minta izin jika belum.
                     </div>
-                    <Button onClick={() => setCameraTestOpen(true)} variant="secondary" size="sm" className="shrink-0">
-                        <Icon name="camera" className="w-4 h-4"/> Tes Kamera
-                    </Button>
+                    <div className="flex gap-2">
+                        {isNative && (
+                            <Button onClick={requestCameraPermission} variant="secondary" size="sm" className="shrink-0">
+                                <Icon name="lock" className="w-4 h-4"/> Cek Izin
+                            </Button>
+                        )}
+                        <Button onClick={() => setCameraTestOpen(true)} variant="secondary" size="sm" className="shrink-0">
+                            <Icon name="camera" className="w-4 h-4"/> Tes Kamera
+                        </Button>
+                    </div>
                 </div>
             </SettingsCard>
 

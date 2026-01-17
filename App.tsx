@@ -39,8 +39,38 @@ const AppContent = () => {
   });
   
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+
+  // --- KODULAR / NATIVE BRIDGE LISTENER (PENTING UNTUK ANDROID) ---
+  // Kode ini menangkap hasil scan yang dikirim dari Kodular via EvaluateJS
+  useEffect(() => {
+      const handleNativeScan = (e: any) => {
+          // Event ini dipicu oleh blok Kodular: 
+          // call CustomWebView.EvaluateJS("window.dispatchEvent(new CustomEvent('native-scan-result', { detail: 'HASIL_SCAN' }));")
+          const barcode = e.detail;
+          if (!barcode) return;
+
+          console.log("Menerima Scan dari Native:", barcode);
+
+          const product = findProductByBarcode(barcode);
+          if (product) {
+              addToCart(product);
+              // Opsional: Bunyi beep atau feedback visual
+          } else {
+              showAlert({ 
+                  type: 'alert', 
+                  title: 'Produk Tidak Dikenal', 
+                  message: `Barcode "${barcode}" tidak ditemukan di database.` 
+              });
+          }
+      };
+
+      window.addEventListener('native-scan-result', handleNativeScan);
+      
+      // Cleanup listener saat komponen di-unmount
+      return () => window.removeEventListener('native-scan-result', handleNativeScan);
+  }, [findProductByBarcode, addToCart, showAlert]);
   
-  // --- HARDWARE BARCODE SCANNER LOGIC (GLOBAL) ---
+  // --- HARDWARE BARCODE SCANNER LOGIC (KEYBOARD EMULATION) ---
   useEffect(() => {
     // Disable scanner for Viewers (they don't do POS)
     if (isViewer) return;

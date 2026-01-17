@@ -59,8 +59,9 @@ jobs:
       # Logic: 
       # 1. Bersihkan folder android lama
       # 2. Add platform android
-      # 3. GENERATE ICONS (npm run resources) <-- PENTING: Dijalankan otomatis di sini
-      # 4. Sync
+      # 3. Siapkan folder assets (icon/splash)
+      # 4. GENERATE ICONS (npm run resources)
+      # 5. Sync
       - name: Setup Capacitor Android & Icons
         run: |
           echo "Backing up custom Manifest if exists..."
@@ -74,6 +75,11 @@ jobs:
           
           echo "Adding Android platform..."
           npx cap add android
+          
+          echo "Preparing Asset Source Files..."
+          mkdir -p assets
+          cp public/favicon.svg assets/icon.svg
+          cp public/favicon.svg assets/splash.svg
           
           echo "Generating App Icons & Splash..."
           npm run resources

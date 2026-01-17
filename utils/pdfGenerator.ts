@@ -60,7 +60,9 @@ export const generateSalesReportPDF = async (
     transactions.forEach(t => {
         const date = new Date(t.createdAt).toLocaleDateString('id-ID');
         const time = new Date(t.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-        const itemsSummary = t.items.map(i => `${i.name} (${i.quantity})`).join(', ');
+        
+        // FIX: Add safety check (t.items || []) to prevent crash if items is undefined
+        const itemsSummary = (t.items || []).map(i => `${i.name} (${i.quantity})`).join(', ');
         
         const rowData = [
             `${date} ${time}`,
@@ -106,7 +108,6 @@ export const generateSalesReportPDF = async (
             const base64PDF = doc.output('datauristring').split(',')[1];
             await saveBinaryFileNative(fileName, base64PDF);
             await shareFileNative(fileName, base64PDF, 'Laporan Penjualan');
-            alert(`File berhasil disimpan di Dokumen/ArteaPOS`);
         } catch (e: any) {
             alert(`Gagal menyimpan PDF: ${e.message}`);
         }
@@ -170,7 +171,6 @@ export const generateTablePDF = async (
             const base64PDF = doc.output('datauristring').split(',')[1];
             await saveBinaryFileNative(fileName, base64PDF);
             await shareFileNative(fileName, base64PDF, title);
-            alert(`File berhasil disimpan di Dokumen/ArteaPOS`);
         } catch (e: any) {
             alert(`Gagal menyimpan PDF: ${e.message}`);
         }

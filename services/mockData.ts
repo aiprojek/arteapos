@@ -41,8 +41,14 @@ export const mockDataService = {
 
         // Add some unpaid/partial transactions for debt demo
         transactions.push({
-            id: `MOCK-DEBT-1`, storeId: 'CABANG-JKT', createdAt: getDate(1), 
-            total: 150000, amountPaid: 50000, paymentStatus: 'partial', customerName: 'Pak Eko (Langganan)'
+            id: `MOCK-DEBT-1`, 
+            storeId: 'CABANG-JKT', 
+            createdAt: getDate(1), 
+            total: 150000, 
+            amountPaid: 50000, 
+            paymentStatus: 'partial', 
+            customerName: 'Pak Eko (Langganan)',
+            items: [] // FIX: Added empty items array to prevent crashes
         });
 
         // 2. Mock Inventory

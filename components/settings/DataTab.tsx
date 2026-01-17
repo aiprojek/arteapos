@@ -417,7 +417,7 @@ const DataTab: React.FC = () => {
                     <p className="text-red-400 font-bold">PERINGATAN: Tindakan ini permanen!</p>
                     <p>Folder "Laporan" di Dropbox akan dihapus untuk mengosongkan ruang.</p>
                     <p className="bg-slate-700 p-2 rounded border border-slate-600">
-                        Disarankan untuk menekan tombol <strong>"Download Arsip Cloud"</strong> terlebih dahulu agar Anda memiliki salinan data penjualan cabang.
+                        Disarankan untuk menekan tombol <strong>"Unduh Arsip"</strong> terlebih dahulu agar Anda memiliki salinan data penjualan cabang.
                     </p>
                 </div>
             ),
@@ -660,7 +660,7 @@ const DataTab: React.FC = () => {
                             variant="secondary" 
                             className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-900/30"
                         >
-                            {isArchivingCloud ? 'Mengunduh...' : <><Icon name="download" className="w-4 h-4"/> Download Arsip Cloud</>}
+                            {isArchivingCloud ? 'Mengunduh...' : <><Icon name="download" className="w-4 h-4"/> Unduh Arsip</>}
                             <Icon name="chevron-down" className="w-3 h-3 ml-1"/>
                         </Button>
                         {isCloudArchiveDropdownOpen && (
@@ -689,11 +689,11 @@ const DataTab: React.FC = () => {
                         variant="danger" 
                         className="flex-1"
                     >
-                        {isCleaning ? 'Memproses...' : <><Icon name="trash" className="w-4 h-4"/> Kosongkan Folder Laporan</>}
+                        {isCleaning ? 'Memproses...' : <><Icon name="trash" className="w-4 h-4"/> Hapus Laporan</>}
                     </Button>
                 </div>
                 <p className="text-[10px] text-slate-500 mt-2 text-center">
-                    Gunakan "Download Arsip Cloud" untuk menyimpan data cabang ke file sebelum Anda menghapusnya dari Dropbox.
+                    Gunakan "Unduh Arsip" untuk menyimpan data cabang ke file sebelum Anda menghapusnya dari Dropbox.
                 </p>
             </SettingsCard>
 
@@ -789,7 +789,7 @@ const DataTab: React.FC = () => {
                                         <button onClick={handleDisconnect} className="ml-auto text-xs text-red-400 underline">Putuskan</button>
                                     </div>
                                     <Button onClick={handleOpenPairingGenerator} className="w-full bg-blue-700 hover:bg-blue-600 text-white">
-                                        <Icon name="share" className="w-4 h-4" /> Bagikan Akses (Pairing)
+                                        <Icon name="share" className="w-4 h-4" /> Pairing
                                     </Button>
                                 </div>
                             ) : (

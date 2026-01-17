@@ -668,15 +668,18 @@ const CustomersTab: React.FC = () => {
                 </div>
                 <div className="flex gap-2">
                     {/* NEW EXPORT BUTTON */}
-                    <Button variant="secondary" onClick={handleExport}>
-                        <Icon name="download" className="w-4 h-4"/> Export
+                    <Button variant="secondary" onClick={handleExport} className="flex-shrink-0" title="Export CSV">
+                        <Icon name="download" className="w-5 h-5"/>
+                        <span className="hidden sm:inline">Export</span>
                     </Button>
 
-                    <Button variant="secondary" onClick={() => setBulkModalOpen(true)}>
-                        <Icon name="boxes" className="w-4 h-4"/> Tambah Massal
+                    <Button variant="secondary" onClick={() => setBulkModalOpen(true)} className="flex-shrink-0" title="Import / Tambah Massal">
+                        <Icon name="boxes" className="w-5 h-5"/>
+                        <span className="hidden sm:inline">Massal</span>
                     </Button>
-                    <Button onClick={() => { setEditingCustomer(null); setModalOpen(true); }}>
-                        <Icon name="plus" className="w-4 h-4" /> Tambah Manual
+                    <Button onClick={() => { setEditingCustomer(null); setModalOpen(true); }} className="flex-shrink-0" title="Tambah Pelanggan Baru">
+                        <Icon name="plus" className="w-5 h-5" />
+                        <span className="hidden sm:inline">Tambah</span>
                     </Button>
                 </div>
             </div>

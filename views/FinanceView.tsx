@@ -72,18 +72,18 @@ const FinanceView: React.FC = () => {
 
         // 1. Pre-check credentials - SECURE CHECK
         if (!dropboxService.isConfigured()) {
-            const mock = mockDataService.getMockDashboardData();
-            setCloudData({
-                transactions: mock.transactions,
-                expenses: mock.expenses,
-                otherIncomes: mock.otherIncomes,
-                purchases: [],
-                customers: [] // Mock customers usually empty in basic mock
-            });
-            setIsDemoMode(true);
-            setLastUpdated(new Date());
-            setIsCloudLoading(false);
-            return;
+             const mock = mockDataService.getMockDashboardData();
+             setCloudData({
+                 transactions: mock.transactions,
+                 expenses: mock.expenses,
+                 otherIncomes: mock.otherIncomes,
+                 purchases: [],
+                 customers: [] // Mock customers usually empty in basic mock
+             });
+             setIsDemoMode(true);
+             setLastUpdated(new Date());
+             setIsCloudLoading(false);
+             return;
         }
 
         try {
@@ -373,7 +373,8 @@ const FinanceView: React.FC = () => {
                                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
                                 title="Data Gabungan dari Dropbox"
                             >
-                                Cloud
+                                <span className="hidden sm:inline flex items-center gap-2"><Icon name="share" className="w-4 h-4" /> Data Cloud</span>
+                                <span className="sm:hidden flex items-center gap-2"><Icon name="share" className="w-4 h-4" /> Cloud</span>
                             </button>
                         </div>
 

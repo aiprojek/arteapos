@@ -235,17 +235,19 @@ export const dropboxService = {
             let cursor = '';
 
             try {
-                let response: any = await retryOperation<any>(() => dbx.filesListFolder({ 
+                // Fix: Cast result to any to avoid property access on unknown error
+                let response = (await retryOperation(() => dbx.filesListFolder({ 
                     path: BRANCH_FOLDER, 
                     recursive: true 
-                }));
+                }))) as any;
+                
                 allEntries = [...allEntries, ...response.result.entries];
                 hasMore = response.result.has_more;
                 cursor = response.result.cursor;
 
                 while (hasMore) {
                     // eslint-disable-next-line no-loop-func
-                    response = await retryOperation<any>(() => dbx.filesListFolderContinue({ cursor }));
+                    response = (await retryOperation(() => dbx.filesListFolderContinue({ cursor }))) as any;
                     allEntries = [...allEntries, ...response.result.entries];
                     hasMore = response.result.has_more;
                     cursor = response.result.cursor;
@@ -377,7 +379,7 @@ export const dropboxService = {
                 path: masterFileName,
                 contents: jsonString,
                 mode: mode
-            }));
+            })) as any;
 
             // Successfully uploaded? Update our local Rev to match server
             if (response.result.rev) {
@@ -401,7 +403,7 @@ export const dropboxService = {
             const dbx = dropboxService.getClient();
             const masterFileName = await dropboxService.getFileName();
             
-            const response = await retryOperation(() => dbx.filesDownload({ path: masterFileName }));
+            const response = await retryOperation(() => dbx.filesDownload({ path: masterFileName })) as any;
             
             // Important: Save the new Rev ID so next push is valid
             if (response.result.rev) {

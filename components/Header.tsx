@@ -263,7 +263,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                         <p className="font-bold text-yellow-400 text-sm mb-2">Solusi:</p>
                         <ol className="list-decimal pl-5 text-xs text-slate-400 space-y-1">
                             <li>Buka menu <strong>Pengaturan</strong> {'>'} <strong>Data & Cloud</strong>.</li>
-                            <li>Gunakan fitur <strong>"Kosongkan Riwayat Cloud"</strong>.</li>
+                            <li>Gunakan fitur <strong>"Hapus Laporan"</strong>.</li>
                             <li>Fitur ini akan mengarsipkan data ke lokal lalu membersihkan Dropbox agar sinkronisasi bisa berjalan kembali.</li>
                         </ol>
                     </div>
@@ -367,7 +367,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                         <div className="bg-slate-800/50 p-2 rounded border border-sky-900/30">
                             <p className="text-[10px] text-sky-200 mb-1 font-bold">OPERASIONAL CABANG (HARIAN)</p>
                             <Button onClick={handleCloudPull} disabled={isProcessing} className="w-full bg-sky-600 hover:bg-sky-500 text-white border-none text-xs h-9">
-                                {isProcessing ? 'Memproses...' : '⬇️ Cek Menu & Harga Baru'}
+                                {isProcessing ? 'Memproses...' : '⬇️ Cek Update (PULL)'}
                             </Button>
                             <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
                                 <span className="text-green-400 font-bold">Info:</span> Laporan penjualan Anda terkirim <strong>otomatis</strong> ke Admin. Tombol ini hanya untuk mengambil update Harga/Menu dari Pusat.
@@ -407,7 +407,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                         
                         <div>
                             <Button onClick={handleLocalBackup} variant="secondary" className="w-full mb-1 text-xs">
-                                📥 Unduh File Backup (.json)
+                                📥 Backup (.json)
                             </Button>
                             <p className="text-[10px] text-slate-400">
                                 Simpan salinan data lengkap ke penyimpanan perangkat ini (Download).
@@ -445,7 +445,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                                 Aplikasi melambat? Gunakan fitur ini untuk menghapus transaksi lama yang sudah tidak dibutuhkan agar aplikasi tetap ringan.
                             </p>
                             <Button onClick={() => { setDataModalOpen(false); setIsArchivingModalOpen(true); }} variant="secondary" className="w-full text-orange-300 border-orange-800/50 hover:bg-orange-900/30 text-xs">
-                                🧹 Buka Menu Arsip & Bersihkan
+                                🧹 Arsip & Bersihkan
                             </Button>
                         </div>
                     )}

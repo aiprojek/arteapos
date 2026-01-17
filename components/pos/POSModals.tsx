@@ -438,7 +438,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                 {/* Main Action Button - Hide for Member Balance because it has its own logic above */}
                 {paymentMethod !== 'member-balance' && (
                     <Button onClick={handleConfirm} disabled={!amountPaid} className="w-full py-3 text-lg">
-                        {change >= 0 ? 'Selesaikan Transaksi' : 'Simpan Sebagai Piutang (Kurang Bayar)'}
+                        {change >= 0 ? 'Selesaikan Transaksi' : 'Simpan Piutang'}
                     </Button>
                 )}
             </div>

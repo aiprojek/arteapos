@@ -56,41 +56,29 @@ jobs:
           rm -f package-lock.json
           npm install
       
-      # Logic: 
-      # 1. Bersihkan folder android lama
-      # 2. Add platform android
-      # 3. Siapkan folder assets (icon/splash)
-      # 4. GENERATE ICONS (npm run resources)
-      # 5. Sync
-      - name: Setup Capacitor Android & Icons
+      # STRATEGI OTOMATIS (OPTION B IN CI):
+      # 1. Buat folder 'assets' yang dibutuhkan capacitor-assets
+      # 2. Salin favicon.svg ke assets/icon.svg dan assets/splash.svg
+      # 3. Jalankan generate resources
+      - name: Setup Capacitor Assets & Android
         run: |
-          echo "Backing up custom Manifest if exists..."
-          mkdir -p temp_backup
-          if [ -f android/app/src/main/AndroidManifest.xml ]; then
-            cp android/app/src/main/AndroidManifest.xml temp_backup/AndroidManifest.xml
-          fi
-          
-          echo "Cleaning existing android directory..."
+          echo "Initializing Android platform..."
           rm -rf android
-          
-          echo "Adding Android platform..."
           npx cap add android
           
-          echo "Preparing Asset Source Files..."
+          echo "Setting up standard 'assets' folder structure..."
           mkdir -p assets
+          
+          # Copy source image to standard locations required by @capacitor/assets
           cp public/favicon.svg assets/icon.svg
           cp public/favicon.svg assets/splash.svg
           
-          echo "Generating App Icons & Splash..."
+          echo "Generating Native Resources..."
+          # This runs 'npx capacitor-assets generate --android' defined in package.json
           npm run resources
           
-          echo "Syncing plugins and web assets..."
+          echo "Syncing Capacitor..."
           npx cap sync
-          
-          echo "Restoring custom Manifest..."
-          if [ -f temp_backup/AndroidManifest.xml ]; then
-            cp temp_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
-          fi
       
       - name: Build APK
         run: |

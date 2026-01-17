@@ -18,7 +18,7 @@ import { useUI } from '../context/UIContext';
 import { dropboxService } from '../services/dropboxService';
 import { mockDataService } from '../services/mockData';
 import ReportCharts from '../components/reports/ReportCharts';
-import { generateSalesReportPDF } from '../utils/pdfGenerator';
+import { generateSalesReportPDF, generateTablePDF } from '../utils/pdfGenerator';
 import { db } from '../services/db'; // Direct DB Access for Lazy Loading
 
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
@@ -526,11 +526,43 @@ const ReportsView: React.FC = () => {
 
     const handleExportPDF = () => {
         const label = getPeriodLabel();
-        generateSalesReportPDF(filteredTransactions, receiptSettings, label, {
-            totalSales: reportData.totalSales,
-            totalProfit: reportData.totalProfit,
-            totalTransactions: reportData.totalTransactions
-        });
+        
+        // Export logic based on Active Tab
+        if (activeTab === 'sales') {
+            generateSalesReportPDF(filteredTransactions, receiptSettings, label, {
+                totalSales: reportData.totalSales,
+                totalProfit: reportData.totalProfit,
+                totalTransactions: reportData.totalTransactions
+            });
+        } else if (activeTab === 'stock_logs') {
+            const headers = ['Waktu', 'Produk', 'Perubahan', 'Stok Akhir', 'Catatan', 'Cabang'];
+            const rows = filteredStockLogs.map(s => [
+                new Date(s.createdAt).toLocaleString('id-ID'),
+                s.productName,
+                s.change,
+                s.newStock,
+                s.notes || '-',
+                (s as any).storeId || '-'
+            ]);
+            generateTablePDF(`Laporan Riwayat Stok (${label})`, headers, rows, receiptSettings);
+        } else if (activeTab === 'products') {
+            const headers = ['Nama Produk', 'Terjual (Qty)', 'Total Pendapatan'];
+            const rows = reportData.allProductSales.map(p => [
+                p.name, 
+                p.quantity, 
+                CURRENCY_FORMATTER.format(p.revenue)
+            ]);
+            generateTablePDF(`Rekap Penjualan Produk (${label})`, headers, rows, receiptSettings);
+        } else if (activeTab === 'hourly') {
+            const headers = ['Jam', 'Jumlah Transaksi', 'Total Omzet'];
+            const rows = reportData.hourlyBreakdown.map(h => [
+                h.timeRange, 
+                h.count, 
+                CURRENCY_FORMATTER.format(h.total)
+            ]);
+            generateTablePDF(`Analisa Per Jam (${label})`, headers, rows, receiptSettings);
+        }
+
         setIsExportDropdownOpen(false);
     }
 
@@ -768,11 +800,9 @@ const ReportsView: React.FC = () => {
                             </Button>
                             {isExportDropdownOpen && (
                                 <div className="absolute top-full right-0 mt-2 w-48 bg-slate-700 rounded-lg shadow-xl z-20 overflow-hidden border border-slate-600">
-                                    {activeTab === 'sales' && (
-                                        <button onClick={handleExportPDF} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2">
-                                            <Icon name="printer" className="w-4 h-4"/> PDF (Cetak)
-                                        </button>
-                                    )}
+                                    <button onClick={handleExportPDF} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2">
+                                        <Icon name="printer" className="w-4 h-4"/> PDF (Cetak)
+                                    </button>
                                     <button onClick={() => handleExportSpreadsheet('xlsx')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2 border-t border-slate-600">
                                         <Icon name="boxes" className="w-4 h-4"/> Excel (.xlsx)
                                     </button>

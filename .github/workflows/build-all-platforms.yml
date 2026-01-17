@@ -56,28 +56,19 @@ jobs:
           rm -f package-lock.json
           npm install
       
-      # PERBAIKAN LOGIKA ASSETS:
-      # 1. Kita hapus logika "fallback ke favicon".
-      # 2. Kita list isi folder assets untuk debugging di log GitHub Actions.
-      # 3. Jika user lupa commit assets/icon.png, build ini akan tetap jalan tapi pakai icon default Android, 
-      #    namun kita bisa lihat di log apakah file-nya ada.
+      # PERBAIKAN PENTING: 
+      # Kita menggunakan folder 'android' yang sudah di-commit di repo.
+      # Jangan jalankan 'rm -rf android' atau 'npx cap add android' di sini.
       - name: Setup Capacitor Assets & Android
         run: |
           echo "Listing assets directory (Debug):"
           ls -R assets || echo "Assets folder not found or empty"
 
-          echo "Initializing Android platform..."
-          rm -rf android
-          npx cap add android
-          
-          # Hapus logika copy favicon. Kita asumsikan user sudah upload assets/icon.png
-          # Jika folder assets tidak ada, buat folder kosong agar perintah resources tidak error fatal
-          mkdir -p assets
-          
-          echo "Generating Native Resources..."
-          # Pastikan package @capacitor/assets terinstall dan jalankan
+          # Generate Icon & Splash dari folder assets/ ke folder android/
+          # Ini memastikan ikon terbaru ter-generate ke folder res/
           npm run resources
           
+          # Sync kode web (dist) ke folder android/app/src/main/assets/public
           echo "Syncing Capacitor..."
           npx cap sync
       

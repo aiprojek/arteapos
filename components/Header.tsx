@@ -13,6 +13,7 @@ import { dropboxService } from '../services/dropboxService';
 import { db } from '../services/db'; 
 import Modal from './Modal';
 import DataArchivingModal from './DataArchivingModal'; 
+import ConflictResolveModal from './ConflictResolveModal'; // NEW IMPORT
 
 interface HeaderProps {
     activeView: View;
@@ -34,7 +35,7 @@ const viewTitles: Record<View, string> = {
 const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick }) => {
     const { currentUser, logout, authSettings } = useAuth();
     const { restoreData, dbUsageStatus } = useData(); 
-    const { syncStatus, syncErrorMessage, triggerMasterDataPush } = useCloudSync(); 
+    const { syncStatus, syncErrorMessage } = useCloudSync(); 
     const { updateReceiptSettings, receiptSettings } = useSettings();
     const { showAlert } = useUI();
     
@@ -47,6 +48,9 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
     
     // Archiving Modal State
     const [isArchivingModalOpen, setIsArchivingModalOpen] = useState(false);
+    
+    // Conflict Modal State
+    const [isConflictModalOpen, setConflictModalOpen] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -118,9 +122,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
             const branches = freshSettings?.branches || [];
             const currentStoreId = freshSettings?.storeId || 'CABANG-01';
 
-            // LOGIC FIX: Jangan tanya cabang jika ID sudah disetting valid (bukan default)
-            // Default biasanya 'CABANG-01' atau kosong
-            // Jika ID adalah 'PUSAT', kita anggap valid untuk admin
             const isConfigured = currentStoreId && currentStoreId !== 'CABANG-01' && currentStoreId !== 'MAIN';
 
             if (branches.length > 0 && !isConfigured) {
@@ -130,7 +131,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                 setDataModalOpen(false); 
                 setBranchModalOpen(true); 
             } else {
-                // Jika sudah config, langsung sukses
                 showAlert({ type: 'alert', title: 'Menu & Harga Terupdate', message: "Data produk berhasil diperbarui dari Pusat." });
                 setDataModalOpen(false);
                 setTimeout(() => window.location.reload(), 1500); 
@@ -148,17 +148,46 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
         }
     };
 
-    // PUSH: Upload Master Data (Admin Only)
-    const handleCloudPush = async () => {
+    // PUSH: Upload Master Data (Admin Only) - NEW LOGIC WITH CONFLICT HANDLER
+    const handleCloudPush = async (force: boolean = false) => {
         if (!checkCloudConfig()) return;
 
         setIsProcessing(true);
         try {
-            await dropboxService.uploadMasterData();
+            // Attempt standard push (will fail if conflict detected and force=false)
+            await dropboxService.uploadMasterData(force);
+            
             showAlert({ type: 'alert', title: 'Upload Sukses', message: 'Master Data (Produk, Harga, Setting) berhasil dikirim ke Cloud.' });
             setDataModalOpen(false);
+            setConflictModalOpen(false); // Close conflict modal if it was open
         } catch (e: any) {
-            showAlert({ type: 'alert', title: 'Gagal Upload', message: e.message });
+            if (e.message === 'CONFLICT_DETECTED') {
+                // Open Conflict Modal
+                setConflictModalOpen(true);
+                setDataModalOpen(false); // Close main menu
+            } else {
+                showAlert({ type: 'alert', title: 'Gagal Upload', message: e.message });
+            }
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    // CONFLICT RESOLUTION: Merge Strategy
+    const handleConflictMerge = async () => {
+        setIsProcessing(true);
+        try {
+            // 1. Pull Remote Data
+            await dropboxService.downloadAndMergeMasterData();
+            
+            // 2. Push back the merged result 
+            // After download, we have the LATEST rev locally. So standard push will succeed.
+            await dropboxService.uploadMasterData(false);
+
+            showAlert({ type: 'alert', title: 'Berhasil', message: 'Konflik teratasi. Data cloud dan lokal telah digabungkan.' });
+            setConflictModalOpen(false);
+        } catch (e: any) {
+            showAlert({ type: 'alert', title: 'Gagal Merge', message: e.message });
         } finally {
             setIsProcessing(false);
         }
@@ -168,10 +197,8 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
     const handleCloudRestoreFull = async () => {
         if (!checkCloudConfig()) return;
 
-        // Mendapatkan nama file target untuk konfirmasi
         const targetFile = await dropboxService.getFileName();
 
-        // Confirm first because this is destructive
         showAlert({
             type: 'confirm',
             title: 'Restore Total dari Cloud?',
@@ -198,7 +225,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
 
                     await restoreData(backupData);
                     setDataModalOpen(false);
-                    // restoreData handles reload
                 } catch (e: any) {
                     setIsProcessing(false);
                     let msg = e.message;
@@ -216,15 +242,14 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
         updateReceiptSettings({ ...receiptSettings, storeId: selectedBranchId });
         setBranchModalOpen(false);
         showAlert({ type: 'alert', title: 'Setup Selesai', message: `Identitas disimpan sebagai: ${selectedBranchId}. Aplikasi akan dimuat ulang.` });
-        setTimeout(() => window.location.reload(), 1500);
+        setTimeout(() => window.location.reload(), 1500); 
     };
 
-    // NEW: Handle Admin setting themselves as Central
     const handleSetAsCentral = () => {
         updateReceiptSettings({ ...receiptSettings, storeId: 'PUSAT' });
         setBranchModalOpen(false);
         showAlert({ type: 'alert', title: 'Mode Pusat Aktif', message: 'Perangkat ini diatur sebagai PUSAT (Admin). Aplikasi akan dimuat ulang.' });
-        setTimeout(() => window.location.reload(), 1500);
+        setTimeout(() => window.location.reload(), 1500); 
     };
 
     const handleSyncErrorClick = () => {
@@ -279,7 +304,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                         </button>
                     )}
                     
-                    {/* MEMORY WARNING INDICATOR */}
                     {showMemoryWarning && (
                         <button 
                             onClick={() => setIsArchivingModalOpen(true)}
@@ -340,7 +364,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                             <h4 className="font-bold text-white text-sm">Sinkronisasi Cloud (Dropbox)</h4>
                         </div>
                         
-                        {/* UPDATE / PULL (Primary Action for Staff & Admin) */}
                         <div className="bg-slate-800/50 p-2 rounded border border-sky-900/30">
                             <p className="text-[10px] text-sky-200 mb-1 font-bold">OPERASIONAL CABANG (HARIAN)</p>
                             <Button onClick={handleCloudPull} disabled={isProcessing} className="w-full bg-sky-600 hover:bg-sky-500 text-white border-none text-xs h-9">
@@ -351,22 +374,22 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                             </p>
                         </div>
 
-                        {/* ADMIN ONLY ACTIONS - HIDDEN FOR STAFF */}
+                        {/* ADMIN ONLY ACTIONS */}
                         {isAdmin && (
                             <div className="border-t border-sky-800/50 pt-2">
                                 <p className="text-[10px] text-yellow-500 font-bold mb-2 uppercase">Panel Admin Pusat (Hati-hati)</p>
                                 <div className="grid grid-cols-2 gap-2">
                                     <div>
-                                        <Button onClick={handleCloudPush} disabled={isProcessing} variant="secondary" className="w-full text-xs h-9 border-sky-700 text-sky-200 hover:bg-sky-900/50">
+                                        <Button onClick={() => handleCloudPush(false)} disabled={isProcessing} variant="secondary" className="w-full text-xs h-9 border-sky-700 text-sky-200 hover:bg-sky-900/50">
                                             ⬆️ Kirim Master
                                         </Button>
-                                        <p className="text-[9px] text-slate-500 mt-1 leading-tight">Timpa data cabang dengan data perangkat ini.</p>
+                                        <p className="text-[9px] text-slate-500 mt-1 leading-tight">Update data di cabang.</p>
                                     </div>
                                     <div>
                                         <Button onClick={handleCloudRestoreFull} disabled={isProcessing} variant="secondary" className="w-full text-xs h-9 border-red-800 text-red-300 hover:bg-red-900/30">
                                             ⚠️ Restore Total
                                         </Button>
-                                        <p className="text-[9px] text-slate-500 mt-1 leading-tight">Ganti data perangkat ini dengan backup Cloud.</p>
+                                        <p className="text-[9px] text-slate-500 mt-1 leading-tight">Ganti data lokal dengan Cloud.</p>
                                     </div>
                                 </div>
                             </div>
@@ -382,7 +405,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                             <h4 className="font-bold text-white text-sm">Backup & Restore Lokal</h4>
                         </div>
                         
-                        {/* Backup Action (Safe for All) */}
                         <div>
                             <Button onClick={handleLocalBackup} variant="secondary" className="w-full mb-1 text-xs">
                                 📥 Unduh File Backup (.json)
@@ -392,7 +414,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                             </p>
                         </div>
 
-                        {/* Restore Action (Admin Only - Dangerous) */}
                         {isAdmin && (
                             <div className="border-t border-slate-600/50 pt-2">
                                 <p className="text-[10px] text-red-300 font-bold mb-1 uppercase">Zona Bahaya (Admin)</p>
@@ -435,7 +456,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                 </div>
             </Modal>
 
-            {/* Modal Pilih Cabang (Setelah Sync) */}
+            {/* Modal Pilih Cabang */}
             <Modal isOpen={isBranchModalOpen} onClose={() => {}} title="Pilih Identitas Cabang">
                 <div className="space-y-4">
                     <div className="bg-green-900/20 p-3 rounded-lg border border-green-800">
@@ -445,7 +466,6 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                         </p>
                     </div>
                     
-                    {/* Admin Override Option */}
                     {isAdmin && (
                         <button 
                             onClick={handleSetAsCentral}
@@ -490,6 +510,15 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
 
             {/* Data Archiving Modal */}
             <DataArchivingModal isOpen={isArchivingModalOpen} onClose={() => setIsArchivingModalOpen(false)} />
+            
+            {/* Conflict Resolve Modal */}
+            <ConflictResolveModal 
+                isOpen={isConflictModalOpen} 
+                onClose={() => setConflictModalOpen(false)} 
+                onMerge={handleConflictMerge}
+                onForceOverwrite={() => handleCloudPush(true)}
+                isProcessing={isProcessing}
+            />
         </header>
     );
 };

@@ -12,6 +12,7 @@ const BRANCH_FOLDER = '/Cabang_Data';
 const KEY_APP_KEY = 'ARTEA_DBX_KEY';
 const KEY_APP_SECRET = 'ARTEA_DBX_SECRET';
 const KEY_REFRESH_TOKEN = 'ARTEA_DBX_REFRESH_TOKEN';
+const KEY_MASTER_REV = 'ARTEA_DBX_MASTER_REV'; // NEW: Store file revision ID
 
 // Retry Helper
 const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
@@ -57,7 +58,7 @@ const safeStorage = {
 };
 
 export const dropboxService = {
-    // --- CREDENTIAL MANAGEMENT (NEW) ---
+    // --- CREDENTIAL MANAGEMENT ---
     
     saveCredentials: (key: string, secret: string, refreshToken: string) => {
         if (key) safeStorage.setItem(KEY_APP_KEY, encryptStorage(key));
@@ -78,6 +79,7 @@ export const dropboxService = {
         safeStorage.removeItem(KEY_APP_KEY);
         safeStorage.removeItem(KEY_APP_SECRET);
         safeStorage.removeItem(KEY_REFRESH_TOKEN);
+        safeStorage.removeItem(KEY_MASTER_REV);
     },
 
     isConfigured: (): boolean => {
@@ -121,10 +123,11 @@ export const dropboxService = {
             const settings = await db.settings.get('receiptSettings');
             const receiptSettings = settings?.value as ReceiptSettings;
             const storeId = receiptSettings?.storeId ? receiptSettings.storeId.replace(/[^a-zA-Z0-9-_]/g, '') : 'MAIN';
-            return `/artea_pos_backup_${storeId}.json`;
+            // Note: We use a fixed filename for Master Data to ensure single source of truth for branches
+            return MASTER_DATA_FILENAME;
         } catch (e) {
             console.error("Failed to get store ID", e);
-            return '/artea_pos_backup_default.json';
+            return MASTER_DATA_FILENAME;
         }
     },
 
@@ -155,12 +158,14 @@ export const dropboxService = {
             const dbx = dropboxService.getClient();
             const data = await dataService.getExportData();
             const jsonString = JSON.stringify(data);
-            const fileName = await dropboxService.getFileName();
+            
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+            const fileName = `/artea_pos_backup_${timestamp}.json`;
             
             await retryOperation(() => dbx.filesUpload({
                 path: fileName,
                 contents: jsonString,
-                mode: { '.tag': 'overwrite' }
+                mode: { '.tag': 'add' }
             }));
             
         } catch (error: any) {
@@ -173,7 +178,6 @@ export const dropboxService = {
         }
     },
 
-    // MODIFIED: Unique File Upload Strategy to prevent Race Conditions
     uploadBranchData: async (staffName: string = 'Staff'): Promise<void> => {
         try {
             const dbx = dropboxService.getClient();
@@ -199,17 +203,14 @@ export const dropboxService = {
 
             const jsonString = JSON.stringify(branchPayload);
             
-            // Generate Unique Filename: log_[TIMESTAMP]_[STOREID]_[STAFF]_[UUID].json
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
             const safeStaffName = staffName.replace(/[^a-zA-Z0-9]/g, '');
             const uuid = Math.random().toString(36).substring(2, 8);
             
-            // Organize in folder per store to allow "List Folder" efficiently
             const folderPath = `${BRANCH_FOLDER}/${storeId}`;
             const fileName = `log_${timestamp}_${storeId}_${safeStaffName}_${uuid}.json`;
             const fullPath = `${folderPath}/${fileName}`;
 
-            // Use 'add' mode (default) so we never overwrite. 
             await retryOperation(() => dbx.filesUpload({
                 path: fullPath,
                 contents: jsonString,
@@ -219,34 +220,32 @@ export const dropboxService = {
         } catch (error: any) {
             console.error('Dropbox Branch Upload Error:', error);
             if (error.status === 409 && error.error?.error_summary?.includes('path/not_found')) {
-               // Do nothing/ignore if path logic fails rarely
+               // Ignore
             }
             throw error;
         }
     },
 
-    // MODIFIED: Recursive Fetch & Deduplication
     fetchAllBranchData: async (): Promise<any[]> => {
         try {
             const dbx = dropboxService.getClient();
             
-            // 1. List all files recursively in BRANCH_FOLDER
             let allEntries: any[] = [];
             let hasMore = true;
             let cursor = '';
 
             try {
-                let response = await retryOperation(() => dbx.filesListFolder({ 
+                let response: any = await retryOperation<any>(() => dbx.filesListFolder({ 
                     path: BRANCH_FOLDER, 
                     recursive: true 
-                })) as any;
+                }));
                 allEntries = [...allEntries, ...response.result.entries];
                 hasMore = response.result.has_more;
                 cursor = response.result.cursor;
 
                 while (hasMore) {
                     // eslint-disable-next-line no-loop-func
-                    response = await retryOperation(() => dbx.filesListFolderContinue({ cursor })) as any;
+                    response = await retryOperation<any>(() => dbx.filesListFolderContinue({ cursor }));
                     allEntries = [...allEntries, ...response.result.entries];
                     hasMore = response.result.has_more;
                     cursor = response.result.cursor;
@@ -256,17 +255,15 @@ export const dropboxService = {
                 throw e;
             }
 
-            // 2. Filter JSON files only
             const jsonFiles = allEntries.filter(entry => 
                 entry['.tag'] === 'file' && entry.name.endsWith('.json')
             );
 
             if (jsonFiles.length === 0) return [];
 
-            // 3. Download All Files (Parallel) with retry
             const downloads = await Promise.all(jsonFiles.map(async (file) => {
                 try {
-                    const dl = await retryOperation(() => dbx.filesDownload({ path: file.path_lower! }));
+                    const dl = await retryOperation<any>(() => dbx.filesDownload({ path: file.path_lower! }));
                     // @ts-ignore
                     const text = await dl.result.fileBlob.text();
                     return JSON.parse(text);
@@ -278,7 +275,6 @@ export const dropboxService = {
 
             const validData = downloads.filter(d => d !== null);
 
-            // 4. AGGREGATE & DEDUPLICATE LOGIC
             const branchMap = new Map<string, any>();
 
             validData.forEach(batch => {
@@ -317,7 +313,6 @@ export const dropboxService = {
                 if (batch.auditLogs) currentBranch.auditLogs.push(...batch.auditLogs);
             });
 
-            // 5. Deduplication Helper
             const deduplicateById = (items: any[]) => {
                 const map = new Map();
                 items.forEach(item => {
@@ -348,7 +343,10 @@ export const dropboxService = {
         await dropboxService.uploadBranchData('System');
     },
 
-    uploadMasterData: async (): Promise<void> => {
+    // --- MASTER DATA SYNC WITH CONFLICT RESOLUTION ---
+
+    // NEW: Accept force param. If !force, rely on 'update' mode with 'rev' to prevent overwrite.
+    uploadMasterData: async (forceOverwrite: boolean = false): Promise<void> => {
         try {
             const data = await dataService.getExportData();
             
@@ -364,16 +362,36 @@ export const dropboxService = {
 
             const jsonString = JSON.stringify(masterPayload);
             const dbx = dropboxService.getClient();
+            const masterFileName = await dropboxService.getFileName(); 
 
-            await retryOperation(() => dbx.filesUpload({
-                path: MASTER_DATA_FILENAME,
+            let mode: any = { '.tag': 'overwrite' };
+            const lastRev = safeStorage.getItem(KEY_MASTER_REV);
+
+            // If we have a previous revision and are NOT forcing, use 'update' mode
+            // This will fail if the server has a newer revision (Conflict)
+            if (!forceOverwrite && lastRev) {
+                mode = { '.tag': 'update', update: lastRev };
+            }
+
+            const response = await retryOperation(() => dbx.filesUpload({
+                path: masterFileName,
                 contents: jsonString,
-                mode: { '.tag': 'overwrite' }
+                mode: mode
             }));
+
+            // Successfully uploaded? Update our local Rev to match server
+            if (response.result.rev) {
+                safeStorage.setItem(KEY_MASTER_REV, response.result.rev);
+            }
 
         } catch (error: any) {
             console.error('Dropbox Master Upload Error:', error);
             if (error.status === 401) throw new Error('Otorisasi Dropbox kadaluarsa.');
+            
+            // Detect Conflict (409) specifically
+            if (error.status === 409 && error.error?.error_summary?.includes('path/conflict')) {
+                throw new Error('CONFLICT_DETECTED');
+            }
             throw new Error('Gagal push master data ke Dropbox.');
         }
     },
@@ -381,8 +399,15 @@ export const dropboxService = {
     downloadAndMergeMasterData: async (): Promise<void> => {
         try {
             const dbx = dropboxService.getClient();
-            const response = await retryOperation(() => dbx.filesDownload({ path: MASTER_DATA_FILENAME }));
+            const masterFileName = await dropboxService.getFileName();
             
+            const response = await retryOperation(() => dbx.filesDownload({ path: masterFileName }));
+            
+            // Important: Save the new Rev ID so next push is valid
+            if (response.result.rev) {
+                safeStorage.setItem(KEY_MASTER_REV, response.result.rev);
+            }
+
             // @ts-ignore
             const fileBlob = response.result.fileBlob;
             const text = await fileBlob.text();

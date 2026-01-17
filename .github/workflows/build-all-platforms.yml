@@ -56,22 +56,31 @@ jobs:
           rm -f package-lock.json
           npm install
       
-      # STRATEGI OTOMATIS (OPTION B IN CI):
-      # 1. Buat folder 'assets' yang dibutuhkan capacitor-assets
-      # 2. Salin favicon.svg ke assets/icon.svg dan assets/splash.svg
-      # 3. Jalankan generate resources
+      # STRATEGI OTOMATIS (SMART ASSETS):
+      # Cek apakah user sudah punya folder assets. Jika belum/kosong, gunakan favicon.
       - name: Setup Capacitor Assets & Android
         run: |
           echo "Initializing Android platform..."
           rm -rf android
           npx cap add android
           
-          echo "Setting up standard 'assets' folder structure..."
           mkdir -p assets
-          
-          # Copy source image to standard locations required by @capacitor/assets
-          cp public/favicon.svg assets/icon.svg
-          cp public/favicon.svg assets/splash.svg
+
+          # Cek Icon (PNG/SVG)
+          if [ ! -f "assets/icon.png" ] && [ ! -f "assets/icon.svg" ]; then
+            echo "No custom icon found. Using default favicon as fallback..."
+            cp public/favicon.svg assets/icon.svg
+          else
+            echo "Using custom icon from assets folder."
+          fi
+
+          # Cek Splash (PNG/SVG)
+          if [ ! -f "assets/splash.png" ] && [ ! -f "assets/splash.svg" ]; then
+            echo "No custom splash found. Using default favicon as fallback..."
+            cp public/favicon.svg assets/splash.svg
+          else
+             echo "Using custom splash from assets folder."
+          fi
           
           echo "Generating Native Resources..."
           # This runs 'npx capacitor-assets generate --android' defined in package.json

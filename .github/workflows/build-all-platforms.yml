@@ -44,6 +44,8 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
+      # Tambahkan setup-gradle agar kita bisa generate wrapper jika hilang
+      - uses: actions/setup-gradle@v3
       
       # Restore web build
       - uses: actions/download-artifact@v4
@@ -56,25 +58,46 @@ jobs:
           rm -f package-lock.json
           npm install
       
-      # PERBAIKAN PENTING: 
-      # Kita menggunakan folder 'android' yang sudah di-commit di repo.
-      # Jangan jalankan 'rm -rf android' atau 'npx cap add android' di sini.
       - name: Setup Capacitor Assets & Android
         run: |
-          echo "Listing assets directory (Debug):"
-          ls -R assets || echo "Assets folder not found or empty"
+          # Cek apakah folder android ada, jika tidak buat baru
+          if [ ! -d "android" ]; then
+            echo "Folder android tidak ditemukan. Membuat baru..."
+            npx cap add android
+          else
+            echo "Folder android ditemukan."
+          fi
 
-          # Generate Icon & Splash dari folder assets/ ke folder android/
-          # Ini memastikan ikon terbaru ter-generate ke folder res/
+          # Generate Icon & Splash
           npm run resources
           
-          # Sync kode web (dist) ke folder android/app/src/main/assets/public
-          echo "Syncing Capacitor..."
+          # Sync kode web
           npx cap sync
       
+      - name: Fix Android Manifest Permissions
+        # Langkah ini memastikan permission Bluetooth selalu ada
+        # (Jaga-jaga jika folder android ter-reset atau belum di-commit)
+        run: |
+          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST_PATH" ]; then
+            echo "Memastikan permission Bluetooth ada di AndroidManifest.xml..."
+            
+            # Cek apakah permission sudah ada, jika belum inject sebelum tag <application>
+            if ! grep -q "android.permission.BLUETOOTH_CONNECT" "$MANIFEST_PATH"; then
+              sed -i '/<application/i \
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" tools:targetApi="31" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" tools:targetApi="31" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" tools:targetApi="31" />\n    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "$MANIFEST_PATH"
+            fi
+          fi
+
       - name: Build APK
         run: |
           cd android
+          # SOLUSI ERROR: Jika gradlew tidak ada, generate pakai gradle sistem
+          if [ ! -f "gradlew" ]; then
+            echo "Gradlew tidak ditemukan. Mencoba generate wrapper..."
+            gradle wrapper
+          fi
+          
           chmod +x gradlew
           ./gradlew assembleDebug
           

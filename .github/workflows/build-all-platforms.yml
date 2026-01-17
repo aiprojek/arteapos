@@ -56,34 +56,26 @@ jobs:
           rm -f package-lock.json
           npm install
       
-      # STRATEGI OTOMATIS (SMART ASSETS):
-      # Cek apakah user sudah punya folder assets. Jika belum/kosong, gunakan favicon.
+      # PERBAIKAN LOGIKA ASSETS:
+      # 1. Kita hapus logika "fallback ke favicon".
+      # 2. Kita list isi folder assets untuk debugging di log GitHub Actions.
+      # 3. Jika user lupa commit assets/icon.png, build ini akan tetap jalan tapi pakai icon default Android, 
+      #    namun kita bisa lihat di log apakah file-nya ada.
       - name: Setup Capacitor Assets & Android
         run: |
+          echo "Listing assets directory (Debug):"
+          ls -R assets || echo "Assets folder not found or empty"
+
           echo "Initializing Android platform..."
           rm -rf android
           npx cap add android
           
+          # Hapus logika copy favicon. Kita asumsikan user sudah upload assets/icon.png
+          # Jika folder assets tidak ada, buat folder kosong agar perintah resources tidak error fatal
           mkdir -p assets
-
-          # Cek Icon (PNG/SVG)
-          if [ ! -f "assets/icon.png" ] && [ ! -f "assets/icon.svg" ]; then
-            echo "No custom icon found. Using default favicon as fallback..."
-            cp public/favicon.svg assets/icon.svg
-          else
-            echo "Using custom icon from assets folder."
-          fi
-
-          # Cek Splash (PNG/SVG)
-          if [ ! -f "assets/splash.png" ] && [ ! -f "assets/splash.svg" ]; then
-            echo "No custom splash found. Using default favicon as fallback..."
-            cp public/favicon.svg assets/splash.svg
-          else
-             echo "Using custom splash from assets folder."
-          fi
           
           echo "Generating Native Resources..."
-          # This runs 'npx capacitor-assets generate --android' defined in package.json
+          # Pastikan package @capacitor/assets terinstall dan jalankan
           npm run resources
           
           echo "Syncing Capacitor..."

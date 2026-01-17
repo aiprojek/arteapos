@@ -14,7 +14,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "resources": "npx capacitor-assets generate --icon public/favicon.svg --splash public/favicon.svg --iconBackgroundColor '#1a3c2d' --splashBackgroundColor '#1a3c2d' --android --ios",
+    "resources": "npx capacitor-assets generate --android",
     "cap:sync": "npx cap sync",
     "cap:open": "npx cap open android",
     "electron:dev": "concurrently \"vite\" \"electron .\"",

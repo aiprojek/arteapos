@@ -9,7 +9,7 @@
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-blue?logo=tailwindcss)
 
 <p align="center">
-  <img src="arteapos-jsx/public/favicon.svg" alt="Artea POS Logo" width="128"/>
+  <img src="public/favicon.svg" alt="Artea POS Logo" width="128"/>
 </p>
 
 <h1 align="center">Artea POS</h1>

@@ -9,7 +9,7 @@
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-blue?logo=tailwindcss)
 
 <p align="center">
-  <img src="assets/icon.png" alt="Artea POS Logo" width="128"/>
+  <img src="public/favicon.svg" alt="Artea POS Logo" width="128"/>
 </p>
 
 <h1 align="center">Artea POS</h1>
@@ -142,4 +142,5 @@ Anda bebas menggunakan, memodifikasi, dan mendistribusikan aplikasi ini, bahkan 
 ---
 
 **Dikembangkan oleh [AI Projek](https://aiprojek01.my.id)**
+
 *Kolaborasi Manusia & Kecerdasan Buatan*

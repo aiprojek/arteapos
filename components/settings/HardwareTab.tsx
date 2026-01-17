@@ -227,7 +227,7 @@ const HardwareTab: React.FC = () => {
                     <>
                         <div className="bg-blue-900/20 border-l-4 border-blue-500 p-3 rounded-r text-xs text-slate-300 space-y-1">
                             <p><strong>Cara Pakai:</strong> Nyalakan Bluetooth HP & Printer. Pasangkan (Pair) printer di menu Bluetooth HP Anda terlebih dahulu.</p>
-                            {isNative && <p className="text-green-400 font-bold">Mode Native Aktif: Mendukung semua printer Bluetooth Classic.</p>}
+                            {isNative && <p className="text-green-400 font-bold">Mode Native Aktif: Mendukung Android 12+ Nearby Devices.</p>}
                         </div>
                         
                         <div className="flex flex-col gap-4 bg-slate-900 p-4 rounded-lg border border-slate-600">
@@ -267,9 +267,10 @@ const HardwareTab: React.FC = () => {
                             {/* Permission Denied UI */}
                             {permissionStatus === 'denied' && (
                                 <div className="bg-red-900/30 border border-red-800 p-3 rounded text-center">
-                                    <p className="text-xs text-red-300 mb-2">Izin akses perangkat Bluetooth ditolak. Anda perlu mengaktifkannya manual.</p>
+                                    <p className="text-xs text-red-300 mb-2 font-bold">Izin Bluetooth Ditolak</p>
+                                    <p className="text-xs text-slate-300 mb-2">Android 12+ mewajibkan izin "Nearby Devices" (Perangkat Sekitar).</p>
                                     <Button onClick={openAppSettings} size="sm" variant="secondary" className="w-full">
-                                        <Icon name="settings" className="w-4 h-4" /> Buka Pengaturan Aplikasi
+                                        <Icon name="settings" className="w-4 h-4" /> Buka Pengaturan & Izinkan "Nearby Devices"
                                     </Button>
                                 </div>
                             )}
@@ -283,7 +284,7 @@ const HardwareTab: React.FC = () => {
                                         className="flex-1"
                                         size="sm"
                                     >
-                                        {isBleScanning ? 'Memindai...' : (isNative ? 'Cari Printer' : 'Cari Printer')}
+                                        {isBleScanning ? 'Memindai...' : (isNative ? 'Cari Printer (Native)' : 'Cari Printer')}
                                     </Button>
                                 )}
                                 <Button 
@@ -370,8 +371,8 @@ const HardwareTab: React.FC = () => {
                     </div>
                     <div className="flex gap-2">
                         {isNative && (
-                            <Button onClick={requestCameraPermission} variant="secondary" size="sm" className="shrink-0">
-                                <Icon name="lock" className="w-4 h-4"/> Cek Izin
+                            <Button onClick={openAppSettings} variant="secondary" size="sm" className="shrink-0">
+                                <Icon name="settings" className="w-4 h-4"/> Buka Setting
                             </Button>
                         )}
                         <Button onClick={() => setCameraTestOpen(true)} variant="secondary" size="sm" className="shrink-0">

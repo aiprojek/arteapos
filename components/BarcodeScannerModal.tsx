@@ -1,5 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom'; // Import ReactDOM for Portals
 import Modal from './Modal';
 import Icon from './Icon';
 import { Capacitor } from '@capacitor/core';
@@ -28,30 +29,42 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
     return false;
   };
 
+  // --- NATIVE SCANNER LOGIC ---
   const startNativeScan = async () => {
       try {
-          // 1. Check Permission
-          const status = await BarcodeScanner.checkPermission({ force: false });
+          // Force Stop First (Membersihkan sesi kamera yang mungkin nyangkut)
+          await BarcodeScanner.stopScan(); 
           
+          const status = await BarcodeScanner.checkPermission({ force: false });
           if (!status.granted) {
-              // 2. Request if not granted
               const request = await BarcodeScanner.checkPermission({ force: true });
               if (!request.granted) {
-                  setError("Izin kamera ditolak. Mohon izinkan akses kamera di Pengaturan.");
-                  // Optional: BarcodeScanner.openAppSettings();
+                  if (request.denied) {
+                      const confirmSettings = window.confirm("Izin kamera ditolak. Buka pengaturan?");
+                      if (confirmSettings) BarcodeScanner.openAppSettings();
+                  }
+                  setError("Izin kamera diperlukan.");
                   return;
               }
           }
 
+          await BarcodeScanner.prepare();
           setIsNativeScanning(true);
-          // Hide WebView Background to see Camera
-          await BarcodeScanner.hideBackground();
+          
+          // HIDE MAIN APP CONTENT
+          const mainApp = document.getElementById('main-app-layout');
+          if (mainApp) mainApp.style.display = 'none';
+
+          // MAKE BODY TRANSPARENT
           document.body.classList.add('barcode-scanner-active');
+          document.documentElement.classList.add('barcode-scanner-active');
+          
+          await BarcodeScanner.hideBackground();
           
           const result = await BarcodeScanner.startScan(); 
           
           if (result.hasContent) {
-              await stopNativeScan(); // Stop before processing
+              await stopNativeScan(); 
               onScan(result.content);
           } else {
               await stopNativeScan();
@@ -59,7 +72,7 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
           }
       } catch (e: any) {
           console.error("Native Scan Error", e);
-          setError("Gagal membuka scanner: " + e.message);
+          setError("Gagal: " + e.message);
           await stopNativeScan();
       }
   };
@@ -71,7 +84,14 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
       } catch(e) {
           console.warn("Stop scan failed", e);
       }
+      
+      // RESTORE UI
       document.body.classList.remove('barcode-scanner-active');
+      document.documentElement.classList.remove('barcode-scanner-active');
+      
+      const mainApp = document.getElementById('main-app-layout');
+      if (mainApp) mainApp.style.display = 'flex'; // Restore layout
+
       setIsNativeScanning(false);
   };
 
@@ -82,24 +102,21 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
       // 1. CEK KODULAR
       if (startKodularScan()) return;
 
-      // 2. NATIVE CAPACITOR (Android/iOS APK)
+      // 2. NATIVE CAPACITOR
       if (Capacitor.isNativePlatform()) {
           startNativeScan();
           return;
       }
 
-      // 3. WEB BROWSER MODE
-      // Pastikan library html5-qrcode sudah dimuat di index.html
+      // 3. WEB BROWSER
       if (typeof Html5Qrcode === 'undefined') {
-        setError("Library scanner web tidak dimuat. Refresh halaman.");
+        setError("Library scanner web tidak dimuat.");
         return;
       }
       
       const scanner = new Html5Qrcode('barcode-scanner-container');
       scannerRef.current = scanner;
-      const config = { fps: 10, qrbox: { width: 250, height: 150 } };
-
-      scanner.start({ facingMode: "environment" }, config, 
+      scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, 
         (decodedText: string) => { 
             if(scannerRef.current) scannerRef.current.stop().catch(() => {});
             onScan(decodedText); 
@@ -108,7 +125,7 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
         () => {}
       ).catch((err: any) => {
           console.error(err);
-          setError("Gagal akses kamera web. Pastikan izin diberikan.");
+          setError("Gagal akses kamera web.");
       });
       
       return () => {
@@ -117,63 +134,63 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
         }
       };
     } else {
-        // Cleanup if closed externally
-        if (isNativeScanning) {
-            stopNativeScan();
-        }
+        if (isNativeScanning) stopNativeScan();
     }
   }, [isOpen]);
 
-  // UI OVERLAY KHUSUS NATIVE (Agar tidak terlihat transparan kosong)
+  // --- RENDER NATIVE OVERLAY (USING PORTAL) ---
+  // Kita render langsung ke document.body agar terpisah dari hirarki App yang disembunyikan
   if (isNativeScanning) {
-      return (
+      return ReactDOM.createPortal(
           <div className="fixed inset-0 z-[9999] flex flex-col bg-transparent">
-              {/* Top Mask */}
-              <div className="flex-1 bg-black/60 flex items-center justify-center">
-                  <p className="text-white font-bold text-sm bg-black/40 px-3 py-1 rounded-full">
-                      Arahkan kamera ke barcode
+              
+              {/* Back Button */}
+              <button 
+                onClick={() => { stopNativeScan(); onClose(); }} 
+                className="absolute top-10 left-4 z-50 bg-black/40 text-white p-3 rounded-full backdrop-blur-md border border-white/20"
+              >
+                  <Icon name="close" className="w-6 h-6"/>
+              </button>
+
+              {/* Guide Overlay */}
+              <div className="flex-1 bg-black/50 flex items-center justify-center">
+                  <p className="text-white font-bold text-sm bg-black/60 px-4 py-2 rounded-full border border-white/20">
+                      Pindai Barcode
                   </p>
               </div>
               
-              {/* Center Area (Transparent Hole) */}
               <div className="flex h-64 shrink-0">
-                  <div className="flex-1 bg-black/60"></div>
-                  {/* The Scanner Hole */}
-                  <div className="w-80 h-64 border-2 border-[#52a37c] relative bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]">
-                      {/* Scanning Animation Line */}
-                      <div className="absolute top-0 left-0 w-full h-1 bg-red-500 animate-[scan_2s_infinite]"></div>
-                      {/* Corner Markers */}
-                      <div className="absolute top-0 left-0 w-4 h-4 border-l-4 border-t-4 border-[#52a37c]"></div>
-                      <div className="absolute top-0 right-0 w-4 h-4 border-r-4 border-t-4 border-[#52a37c]"></div>
-                      <div className="absolute bottom-0 left-0 w-4 h-4 border-l-4 border-b-4 border-[#52a37c]"></div>
-                      <div className="absolute bottom-0 right-0 w-4 h-4 border-r-4 border-b-4 border-[#52a37c]"></div>
+                  <div className="flex-1 bg-black/50"></div>
+                  <div className="w-80 h-64 border-2 border-[#52a37c] relative bg-transparent box-content rounded-lg">
+                      <div className="absolute top-0 left-0 w-full h-1 bg-red-500 shadow-[0_0_10px_rgba(255,0,0,0.8)] animate-[scan_2s_infinite]"></div>
+                      {/* Corners */}
+                      <div className="absolute -top-1 -left-1 w-6 h-6 border-l-4 border-t-4 border-[#52a37c] rounded-tl-lg"></div>
+                      <div className="absolute -top-1 -right-1 w-6 h-6 border-r-4 border-t-4 border-[#52a37c] rounded-tr-lg"></div>
+                      <div className="absolute -bottom-1 -left-1 w-6 h-6 border-l-4 border-b-4 border-[#52a37c] rounded-bl-lg"></div>
+                      <div className="absolute -bottom-1 -right-1 w-6 h-6 border-r-4 border-b-4 border-[#52a37c] rounded-br-lg"></div>
                   </div>
-                  <div className="flex-1 bg-black/60"></div>
+                  <div className="flex-1 bg-black/50"></div>
               </div>
 
-              {/* Bottom Mask & Controls */}
-              <div className="flex-1 bg-black/60 flex flex-col items-center justify-center gap-4 pb-10">
-                  <p className="text-slate-300 text-xs text-center max-w-xs">
-                      Pastikan pencahayaan cukup dan barcode ada di dalam kotak.
-                  </p>
-                  <button 
-                    onClick={() => { stopNativeScan(); onClose(); }} 
-                    className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-full font-bold shadow-lg flex items-center gap-2"
-                  >
-                      <Icon name="close" className="w-5 h-5"/> Batalkan
-                  </button>
+              <div className="flex-1 bg-black/50 flex flex-col items-center justify-center pb-10">
+                  <div className="flex gap-4">
+                      <button 
+                        onClick={() => BarcodeScanner.toggleTorch()} 
+                        className="bg-slate-800/80 text-white p-4 rounded-full border border-slate-600 active:bg-slate-700"
+                      >
+                          <Icon name="play" className="w-6 h-6 -rotate-90"/>
+                      </button>
+                  </div>
               </div>
               
-              <style>{`
-                @keyframes scan {
-                    0% { top: 0; opacity: 0; }
-                    50% { opacity: 1; }
-                    100% { top: 100%; opacity: 0; }
-                }
-              `}</style>
-          </div>
+              <style>{`@keyframes scan { 0% { top: 0; opacity: 0; } 50% { opacity: 1; } 100% { top: 100%; opacity: 0; } }`}</style>
+          </div>,
+          document.body // Portal target
       );
   }
+
+  // --- RENDER WEB MODAL ---
+  if (Capacitor.isNativePlatform()) return null; // Don't render modal structure on Native waiting phase
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Pindai Barcode">
@@ -182,7 +199,6 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
             <div className="text-center p-6">
                 <Icon name="warning" className="w-12 h-12 text-red-500 mx-auto mb-2" />
                 <p className="text-sm text-slate-300">{error}</p>
-                <p className="text-xs text-slate-500 mt-2">Mode: {Capacitor.isNativePlatform() ? 'App' : 'Web'}</p>
                 <button onClick={onClose} className="mt-4 text-sky-400 text-sm hover:underline">Tutup</button>
             </div>
         ) : (

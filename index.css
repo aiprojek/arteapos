@@ -45,3 +45,21 @@
 .animate-shake {
     animation: shake 0.2s ease-in-out 0s 2;
 }
+
+/* --- BARCODE SCANNER NATIVE FIX --- */
+/* Saat class ini ditambahkan ke body, paksa semua background jadi transparan */
+body.barcode-scanner-active {
+    background-color: transparent !important;
+    background: transparent !important;
+}
+
+body.barcode-scanner-active #root {
+    background-color: transparent !important;
+    background: transparent !important;
+    display: none; /* Opsional: Sembunyikan UI React sepenuhnya agar lebih ringan */
+}
+
+/* Pastikan elemen html juga transparan */
+html.barcode-scanner-active {
+    background-color: transparent !important;
+}

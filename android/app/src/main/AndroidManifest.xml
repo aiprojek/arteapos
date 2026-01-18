@@ -7,18 +7,22 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    
+    <!-- Batasi Write Storage hanya untuk Android 9 (API 28) ke bawah. 
+         Android 10+ sudah pakai Scoped Storage otomatis via Capacitor Filesystem -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FLASHLIGHT"/>
 
     <!-- 
         PENGATURAN BLUETOOTH HYBRID 
         tools:replace="android:maxSdkVersion" SANGAT PENTING!
-        Ini memaksa manifest merger untuk menggunakan setting kita (maxSdk=30)
-        daripada setting default plugin capacitor yang mungkin tanpa batas.
+        Ini memaksa manifest merger untuk membuang izin Lokasi dari plugin lain
+        pada Android 12+ (API 31 ke atas).
     -->
 
-    <!-- ANDROID 12+ (API 31 ke atas): Gunakan Nearby Devices -->
+    <!-- ANDROID 12+ (API 31 ke atas): Murni Nearby Devices -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" 
                      android:usesPermissionFlags="neverForLocation" 
                      tools:targetApi="31" />
@@ -27,13 +31,17 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" 
                      tools:targetApi="31" />
 
-    <!-- ANDROID 11 KE BAWAH: Gunakan Legacy Bluetooth + Lokasi -->
+    <!-- ANDROID 11 KE BAWAH: Legacy Bluetooth + Lokasi -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     
-    <!-- Paksa Lokasi hilang di Android 12+ -->
+    <!-- Paksa Lokasi hilang di Android 12+ dengan override -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="30" tools:replace="android:maxSdkVersion" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" tools:replace="android:maxSdkVersion" />
+
+    <!-- POSISI USES-FEATURE DI LUAR APPLICATION -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -68,8 +76,5 @@
                 android:resource="@xml/file_paths" />
         </provider>
     </application>
-
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
 </manifest>

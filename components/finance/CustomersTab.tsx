@@ -331,10 +331,11 @@ const MemberCardModal: React.FC<{
                             border: '1px solid #334155'
                         }}
                     >
-                        {/* Decorative Blob - CSS Only (No SVG/Filter) */}
-                        <div className="absolute top-[-50px] right-[-50px] w-48 h-48 bg-[#347758] rounded-full blur-3xl opacity-30 pointer-events-none"></div>
-                        <div className="absolute bottom-[-30px] left-[-30px] w-32 h-32 bg-blue-600 rounded-full blur-3xl opacity-20 pointer-events-none"></div>
+                        {/* Decorative Blob - CSS Only (No SVG/Filter) - Z-INDEX 0 */}
+                        <div className="absolute top-[-50px] right-[-50px] w-48 h-48 bg-[#347758] rounded-full blur-3xl opacity-30 pointer-events-none z-0"></div>
+                        <div className="absolute bottom-[-30px] left-[-30px] w-32 h-32 bg-blue-600 rounded-full blur-3xl opacity-20 pointer-events-none z-0"></div>
 
+                        {/* Top Bar - Z-INDEX 10 */}
                         <div className="relative z-10 flex justify-between items-start">
                             <div className="flex items-center gap-2">
                                 <div className="text-yellow-500">
@@ -353,12 +354,14 @@ const MemberCardModal: React.FC<{
                             </div>
                         </div>
 
-                        <div className="relative z-10 mt-2 mb-auto pt-4">
-                            <p className="font-bold text-xl text-white tracking-wide truncate max-w-[280px]">
+                        {/* NAME SECTION - Z-INDEX 20 (HIGHER) */}
+                        <div className="relative z-20 mt-2 mb-auto pt-4">
+                            {/* break-words instead of truncate to show full name, allow wrapping */}
+                            <p className="font-bold text-xl text-white tracking-wide break-words leading-tight max-w-[280px]">
                                 {customer.name}
                             </p>
                             {customer.contact ? (
-                                <p className="text-[10px] text-slate-400 mt-0.5 font-mono tracking-wide">
+                                <p className="text-[10px] text-slate-400 mt-0.5 font-mono tracking-wide relative z-20">
                                     {customer.contact}
                                 </p>
                             ) : (
@@ -366,6 +369,7 @@ const MemberCardModal: React.FC<{
                             )}
                         </div>
 
+                        {/* Bottom Bar - Z-INDEX 10 */}
                         <div className="relative z-10 flex justify-between items-end">
                             <div className="space-y-2">
                                 <div>

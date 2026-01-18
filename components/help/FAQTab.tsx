@@ -39,10 +39,21 @@ const FAQTab: React.FC = () => {
                     <div className="bg-slate-900/50 p-4 rounded-lg">
                         <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah uang Top Up Saldo dihitung sebagai Omzet Penjualan?</h4>
                         <p className="text-slate-300 text-sm">
-                            A: <strong>Tidak.</strong> Dalam akuntansi, uang Top Up dianggap sebagai <strong>Deposit (Titipan)</strong> atau Uang Muka. 
-                            Di Artea POS, saat Anda melakukan Top Up member, uang tersebut masuk ke laporan <strong>Arus Kas (Kas Masuk)</strong> sehingga jumlah uang di laci kasir tetap balance saat tutup shift.
+                            A: <strong>Tidak.</strong> Dalam akuntansi, uang Top Up dianggap sebagai <strong>Utang/Deposit</strong> (Uang Titipan). 
+                            Di Artea POS, saat Top Up terjadi, uang masuk ke laporan <strong>Arus Kas (Kas Masuk)</strong> agar laci kasir tetap balance, tapi TIDAK menambah angka "Total Penjualan" hari itu.
                             <br/><br/>
-                            Omzet Penjualan baru akan bertambah ketika member tersebut <strong>membelanjakan</strong> saldonya untuk membeli produk.
+                            Omzet Penjualan baru akan bertambah secara sah ketika member tersebut <strong>membelanjakan</strong> saldonya untuk membeli produk.
+                        </p>
+                    </div>
+
+                    <div className="bg-slate-900/50 p-4 rounded-lg border-l-4 border-red-500">
+                        <h4 className="font-bold text-red-400 mb-1">Q: Apakah aman Staff bisa Top Up saldo member? Nanti disalahgunakan?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: <strong>Aman, asalkan Anda mengaktifkan fitur Sesi (Shift).</strong> 
+                            Sistem Artea POS mencatat setiap Top Up sebagai "Uang Masuk". 
+                            <br/><br/>
+                            <em>Contoh Kasus:</em> Jika Staff nakal melakukan Top Up palsu ke akunnya sendiri sebesar Rp 100.000 tanpa memasukkan uang ke laci, maka saat Tutup Toko (End Session), sistem akan menagih uang tersebut. Laporan kasir akan menunjukkan <strong>Selisih (Kurang) Rp 100.000</strong> yang harus diganti oleh Staff.
+                            <br/>Selain itu, semua aktivitas Top Up tercatat di menu <strong>Pengaturan &rarr; Audit Log</strong>.
                         </p>
                     </div>
 
@@ -51,19 +62,6 @@ const FAQTab: React.FC = () => {
                         <p className="text-slate-300 text-sm">
                             A: <strong>Tidak otomatis.</strong> Aplikasi ini didesain agar perangkat Admin tetap ringan ("Mode Intip"). Data cabang tersimpan di Dropbox. Saat Anda menekan tombol "Refresh" di Dashboard, aplikasi hanya mengunduh data tersebut ke memori sementara untuk ditampilkan (View Only).
                             <br/>Data tidak akan memenuhi penyimpanan lokal HP Anda kecuali Anda menekan tombol "Simpan ke Lokal".
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Dropbox penuh! Apa yang harus saya lakukan?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Anda tidak perlu upgrade Dropbox berbayar. Lakukan prosedur <strong>Arsip & Bersihkan</strong>:
-                            <ol className="list-decimal pl-5 mt-1">
-                                <li>Masuk menu <strong>Pengaturan &rarr; Data & Cloud</strong>.</li>
-                                <li>Klik <strong>"Download Arsip Cloud"</strong>. Simpan file backup (Excel/JSON) ke tempat aman (Laptop/Google Drive).</li>
-                                <li>Setelah file terunduh, klik tombol merah <strong>"Kosongkan Folder Laporan"</strong>.</li>
-                            </ol>
-                            Ini akan membersihkan Dropbox sehingga cabang bisa mengirim data baru lagi, tanpa membebani memori HP Admin.
                         </p>
                     </div>
 
@@ -85,25 +83,10 @@ const FAQTab: React.FC = () => {
                     </div>
 
                     <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Bagaimana cara input banyak bahan baku sekaligus?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Gunakan fitur <strong>Tambah Massal (Bulk Add)</strong>. Anda bisa mengetik langsung di tabel (seperti Excel) atau mengunggah file CSV. 
-                            Jangan lupa unduh template CSV terlebih dahulu agar formatnya sesuai.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
                         <h4 className="font-bold text-[#52a37c] mb-1">Q: Bisakah banyak kasir/cabang input data bersamaan?</h4>
                         <p className="text-slate-300 text-sm">
                             A: <strong>YA, Sangat Aman!</strong> Sistem Artea POS telah diperbarui dengan teknologi <em>Smart Unique ID</em>.
                             Setiap transaksi kini memiliki sidik jari unik. Jadi meskipun banyak kasir menekan tombol "Bayar" bersamaan, semua data akan tersimpan rapi di Cloud tanpa ada yang tertimpa.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Mengapa data cabang tidak muncul otomatis di Admin?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Sistem Dropbox berbasis file, bukan database real-time. Data cabang sudah terkirim secara otomatis, namun Admin perlu menekan tombol <strong>"Refresh Data"</strong> (ikon panah melingkar) di Dashboard untuk menarik/mengunduh update terbaru tersebut ke layar Anda (Mode Intip).
                         </p>
                     </div>
 

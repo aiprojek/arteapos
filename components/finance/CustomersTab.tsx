@@ -16,6 +16,7 @@ import type { Customer, BalanceLog, Transaction } from '../../types';
 import { useToImage } from '../../hooks/useToImage';
 import { Capacitor } from '@capacitor/core';
 import { shareFileNative, saveBinaryFileNative } from '../../utils/nativeHelper';
+import { jsPDF } from "jspdf"; // Added for PDF Export
 
 // --- TRANSACTION HISTORY MODAL (NEW) ---
 const CustomerTransactionsModal: React.FC<{
@@ -223,8 +224,9 @@ const MemberCardModal: React.FC<{
 }> = ({ isOpen, onClose, customer }) => {
     const { receiptSettings } = useSettings(); 
     const [cardRef, { isLoading, getImage }] = useToImage<HTMLDivElement>({
-        quality: 0.95,
-        backgroundColor: null 
+        quality: 1.0, // Max quality
+        backgroundColor: null,
+        scale: 4 // SCALE INCREASED TO 4X FOR SHARPNESS
     });
     
     const { showAlert } = useUI();
@@ -248,6 +250,33 @@ const MemberCardModal: React.FC<{
             link.click();
         } catch (error: any) {
             showAlert({ type: 'alert', title: 'Gagal', message: error.message || 'Gagal membuat gambar kartu.' });
+        }
+    };
+
+    const handleDownloadPDF = async () => {
+        try {
+            const dataUrl = await getImage();
+            if (!dataUrl) return;
+
+            // ID-1 Standard Card Size: 85.60 × 53.98 mm
+            const doc = new jsPDF({
+                orientation: 'landscape',
+                unit: 'mm',
+                format: [85.6, 53.98]
+            });
+
+            doc.addImage(dataUrl, 'PNG', 0, 0, 85.6, 53.98);
+            const fileName = `MemberCard_${customer.name.replace(/\s+/g, '_')}.pdf`;
+
+            if (Capacitor.isNativePlatform()) {
+                const base64PDF = doc.output('datauristring').split(',')[1];
+                await saveBinaryFileNative(fileName, base64PDF);
+                showAlert({ type: 'alert', title: 'Berhasil', message: 'File PDF tersimpan di Dokumen.' });
+            } else {
+                doc.save(fileName);
+            }
+        } catch (error: any) {
+            showAlert({ type: 'alert', title: 'Gagal', message: 'Gagal membuat PDF: ' + error.message });
         }
     };
 
@@ -360,12 +389,15 @@ const MemberCardModal: React.FC<{
                     Unduh kartu ini dan kirimkan ke pelanggan via WhatsApp.
                 </p>
 
-                <div className="flex gap-3 w-full">
-                    <Button variant="secondary" onClick={handleDownload} disabled={isLoading} className="flex-1">
-                        <Icon name="download" className="w-4 h-4"/> Simpan (PNG)
+                <div className="grid grid-cols-3 gap-2 w-full">
+                    <Button variant="secondary" onClick={handleDownload} disabled={isLoading} className="text-xs px-2">
+                        <Icon name="download" className="w-4 h-4"/> PNG
                     </Button>
-                    <Button onClick={handleShare} disabled={isLoading} className="flex-1">
-                        <Icon name="share" className="w-4 h-4"/> Share WA
+                    <Button variant="secondary" onClick={handleDownloadPDF} disabled={isLoading} className="text-xs px-2">
+                        <Icon name="printer" className="w-4 h-4"/> PDF
+                    </Button>
+                    <Button onClick={handleShare} disabled={isLoading} className="text-xs px-2 bg-green-600 hover:bg-green-500 border-none">
+                        <Icon name="whatsapp" className="w-4 h-4"/> Share
                     </Button>
                 </div>
             </div>

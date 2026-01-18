@@ -142,8 +142,8 @@ const ManualTab: React.FC = () => {
                     <AccordionItem title="Arus Kas (Cash Flow)" isOpen={openAccordion === 'fin_1'} onToggle={() => toggleAccordion('fin_1')} icon="trending-up" colorClass="text-green-400">
                         <p>Tab ini adalah rangkuman dari semua aktivitas uang:</p>
                         <ul className="list-disc pl-5 mt-2 space-y-1">
-                            <li><strong>Masuk:</strong> Penjualan Tunai + Pemasukan Lain.</li>
-                            <li><strong>Keluar:</strong> Pengeluaran Operasional + Pembelian Stok.</li>
+                            <li><strong>Masuk:</strong> Penjualan Tunai + Pemasukan Lain + Top Up Member.</li>
+                            <li><strong>Keluar:</strong> Pengeluaran Operasional + Pembelian Stok + Refund.</li>
                             <li><strong>Saldo Bersih:</strong> Uang yang seharusnya ada di tangan saat ini (diluar modal kasir).</li>
                         </ul>
                     </AccordionItem>
@@ -181,7 +181,7 @@ const ManualTab: React.FC = () => {
                     <AccordionItem title="Kartu Member Digital & QR Code" isOpen={openAccordion === 'cust_card'} onToggle={() => toggleAccordion('cust_card')} icon="award" colorClass="text-yellow-400" badge="Baru">
                         <p>Berikan pengalaman profesional kepada pelanggan setia Anda tanpa biaya cetak kartu fisik.</p>
                         <ul className="list-disc pl-5 space-y-1 mt-2">
-                            <li>Masuk ke menu <strong>Keuangan &rarr; Tab Pelanggan</strong>.</li>
+                            <li>Masuk ke menu <strong>Keuangan &rarr; Tab Pelanggan &rarr; Ikon Kartu</strong>.</li>
                             <li>Klik ikon <strong>"Kartu"</strong> pada nama pelanggan.</li>
                             <li>Akan muncul Kartu Member Digital dengan Nama, ID Unik, dan QR Code.</li>
                             <li>Klik <strong>"Share WA"</strong> untuk mengirim gambar kartu langsung ke WhatsApp pelanggan.</li>
@@ -240,11 +240,12 @@ const ManualTab: React.FC = () => {
                         </ul>
                     </AccordionItem>
                     
-                    <AccordionItem title="Keamanan, User & Audit" isOpen={openAccordion === 'set_2'} onToggle={() => toggleAccordion('set_2')} icon="lock" colorClass="text-red-400" badge="Update">
-                        <ul className="list-disc pl-5 space-y-1">
-                            <li><strong>Audit Log:</strong> Semua aktivitas Top Up Saldo, Refund, dan Hapus Produk kini tercatat di tab Audit Log (Pengaturan).</li>
-                            <li><strong>PIN:</strong> Setiap user wajib punya PIN 4 digit untuk mencatat siapa yang melakukan transaksi.</li>
-                            <li><strong>Security Question:</strong> Jawaban rahasia untuk mereset PIN Admin jika lupa.</li>
+                    <AccordionItem title="Keamanan, User & Audit (PENTING)" isOpen={openAccordion === 'set_2'} onToggle={() => toggleAccordion('set_2')} icon="lock" colorClass="text-red-400" badge="Anti-Fraud">
+                        <p>Cara mencegah Staff nakal melakukan Top Up palsu atau kecurangan:</p>
+                        <ul className="list-disc pl-5 space-y-1 mt-2">
+                            <li><strong>Wajibkan Sesi (Shift):</strong> Aktifkan di Pengaturan. Saat Top Up saldo member, sistem mencatatnya sebagai "Uang Masuk". Jika staff Top Up palsu tanpa memasukkan uang, laci kasir akan minus/selisih saat tutup toko. Staff harus mengganti selisih tersebut.</li>
+                            <li><strong>Audit Log:</strong> Semua aktivitas Top Up Saldo, Refund, dan Hapus Produk tercatat di tab Audit Log lengkap dengan nama User dan Jam.</li>
+                            <li><strong>PIN:</strong> Setiap user wajib punya PIN untuk identifikasi.</li>
                         </ul>
                     </AccordionItem>
                 </div>
@@ -269,10 +270,7 @@ const ManualTab: React.FC = () => {
                             2. *Jalan Offline*, jadi gak ketergantungan sinyal internet.<br/>
                             3. *Bisa Multi-Cabang* pakai sinkronisasi Dropbox (Hemat banget!).<br/>
                             4. Fiturnya lengkap: Stok bahan baku, Laporan Laba Rugi, sampai ada AI consultant-nya.<br/><br/>
-                            Buat teman-teman yang lagi cari sistem kasir buat usahanya tapi mau hemat budget, ini *recommended* banget.<br/><br/>
-                            Bisa dicoba langsung di sini:<br/>
-                            👉 https://arteapos.pages.dev<br/><br/>
-                            Semoga bermanfaat dan usahanya makin laris! 🙏😊
+                            Buat teman-teman yang lagi cari sistem kasir buat usahanya tapi mau hemat budget, ini *recommended* banget.
                         </div>
                         <p className="text-[10px] text-slate-500 mt-1 italic">*Klik teks di atas untuk menyorot semua, lalu salin (Copy).</p>
                     </AccordionItem>

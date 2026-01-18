@@ -61,12 +61,19 @@ jobs:
       
       - name: Setup Capacitor Assets & Android
         run: |
-          # Cek apakah folder android ada, jika tidak buat baru
+          # CEK KEUTUHAN FOLDER ANDROID
+          # Jika folder ada tapi tidak ada build.gradle, berarti rusak/kosong -> Hapus biar digenerate ulang
+          if [ -d "android" ] && [ ! -f "android/build.gradle" ]; then
+            echo "Folder android terdeteksi rusak (missing build.gradle). Menghapus..."
+            rm -rf android
+          fi
+
+          # Buat baru jika tidak ada
           if [ ! -d "android" ]; then
             echo "Folder android tidak ditemukan. Membuat baru..."
             npx cap add android
           else
-            echo "Folder android ditemukan."
+            echo "Folder android ditemukan dan valid."
           fi
 
           # Generate Icon & Splash
@@ -109,12 +116,7 @@ jobs:
       - name: Build APK
         run: |
           cd android
-          # Jika gradlew tidak ada, generate pakai gradle sistem
-          if [ ! -f "gradlew" ]; then
-            echo "Gradlew tidak ditemukan. Mencoba generate wrapper..."
-            gradle wrapper
-          fi
-          
+          # Pastikan gradlew executable
           chmod +x gradlew
           ./gradlew assembleDebug
           

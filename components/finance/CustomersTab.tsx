@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { useCustomer } from '../../context/CustomerContext';
-import { useFinance } from '../../context/FinanceContext'; // Import Finance untuk ambil data transaksi
+import { useFinance } from '../../context/FinanceContext';
 import { useUI } from '../../context/UIContext';
 import { useSettings } from '../../context/SettingsContext';
 import { CURRENCY_FORMATTER } from '../../constants';
@@ -11,12 +11,12 @@ import Icon from '../Icon';
 import Modal from '../Modal';
 import VirtualizedTable from '../VirtualizedTable';
 import CustomerFormModal from '../CustomerFormModal';
-import ReceiptModal from '../ReceiptModal'; // Import ReceiptModal
+import ReceiptModal from '../ReceiptModal';
 import type { Customer, BalanceLog, Transaction } from '../../types';
 import { useToImage } from '../../hooks/useToImage';
 import { Capacitor } from '@capacitor/core';
 import { shareFileNative, saveBinaryFileNative } from '../../utils/nativeHelper';
-import { jsPDF } from "jspdf"; // Added for PDF Export
+import { jsPDF } from "jspdf";
 
 // --- TRANSACTION HISTORY MODAL (NEW) ---
 const CustomerTransactionsModal: React.FC<{
@@ -223,10 +223,12 @@ const MemberCardModal: React.FC<{
     customer: Customer | null;
 }> = ({ isOpen, onClose, customer }) => {
     const { receiptSettings } = useSettings(); 
+    // SCALE 6x for Ultra HD
+    // Background explicitly set to prevent alpha blending issues on Android
     const [cardRef, { isLoading, getImage }] = useToImage<HTMLDivElement>({
-        quality: 1.0, // Max quality
-        backgroundColor: null,
-        scale: 4 // SCALE INCREASED TO 4X FOR SHARPNESS
+        quality: 1.0, 
+        backgroundColor: '#0f172a', 
+        scale: 6 
     });
     
     const { showAlert } = useUI();
@@ -239,8 +241,8 @@ const MemberCardModal: React.FC<{
             if (!dataUrl) return;
 
             if (Capacitor.isNativePlatform()) {
-                await saveBinaryFileNative(`MemberCard-${customer.name}.png`, dataUrl.split(',')[1]);
-                showAlert({ type: 'alert', title: 'Berhasil', message: 'Gambar kartu tersimpan di Dokumen.' });
+                // Gunakan nativeHelper yang sudah diperbarui dengan fallback
+                await saveBinaryFileNative(`MemberCard-${customer.name.replace(/\s+/g, '_')}.png`, dataUrl.split(',')[1]);
                 return;
             }
 
@@ -249,7 +251,7 @@ const MemberCardModal: React.FC<{
             link.download = `MemberCard-${customer.name.replace(/\s+/g, '_')}.png`;
             link.click();
         } catch (error: any) {
-            showAlert({ type: 'alert', title: 'Gagal', message: error.message || 'Gagal membuat gambar kartu.' });
+            showAlert({ type: 'alert', title: 'Info', message: error.message || 'Gagal menyimpan gambar.' });
         }
     };
 
@@ -259,24 +261,26 @@ const MemberCardModal: React.FC<{
             if (!dataUrl) return;
 
             // ID-1 Standard Card Size: 85.60 × 53.98 mm
+            // High DPI PDF Generation
             const doc = new jsPDF({
                 orientation: 'landscape',
                 unit: 'mm',
-                format: [85.6, 53.98]
+                format: [85.6, 53.98],
+                compress: true
             });
 
-            doc.addImage(dataUrl, 'PNG', 0, 0, 85.6, 53.98);
+            // Add image with exact dimensions
+            doc.addImage(dataUrl, 'PNG', 0, 0, 85.6, 53.98, undefined, 'FAST');
             const fileName = `MemberCard_${customer.name.replace(/\s+/g, '_')}.pdf`;
 
             if (Capacitor.isNativePlatform()) {
                 const base64PDF = doc.output('datauristring').split(',')[1];
                 await saveBinaryFileNative(fileName, base64PDF);
-                showAlert({ type: 'alert', title: 'Berhasil', message: 'File PDF tersimpan di Dokumen.' });
             } else {
                 doc.save(fileName);
             }
         } catch (error: any) {
-            showAlert({ type: 'alert', title: 'Gagal', message: 'Gagal membuat PDF: ' + error.message });
+            showAlert({ type: 'alert', title: 'Info', message: error.message });
         }
     };
 
@@ -286,7 +290,7 @@ const MemberCardModal: React.FC<{
             if (!dataUrl) return;
 
             if (Capacitor.isNativePlatform()) {
-                await shareFileNative(`MemberCard-${customer.name}.png`, dataUrl.split(',')[1], `Kartu Member ${customer.name}`);
+                await shareFileNative(`MemberCard-${customer.name.replace(/\s+/g, '_')}.png`, dataUrl.split(',')[1], `Kartu Member ${customer.name}`);
                 return;
             }
 
@@ -299,7 +303,7 @@ const MemberCardModal: React.FC<{
                     files: [file]
                 });
             } else {
-                showAlert({ type: 'alert', title: 'Info', message: 'Browser tidak mendukung share langsung. Silakan unduh gambar manual.' });
+                showAlert({ type: 'alert', title: 'Info', message: 'Browser tidak mendukung share langsung.' });
             }
         } catch (error) {
             console.error(error);
@@ -311,17 +315,21 @@ const MemberCardModal: React.FC<{
             <div className="space-y-6 flex flex-col items-center">
                 
                 {/* --- CARD DESIGN START --- */}
-                <div className="p-2 bg-transparent">
+                {/* transform: translateZ(0) forces GPU rendering to prevent glitches */}
+                <div className="p-2 bg-transparent" style={{ transform: 'translateZ(0)' }}>
                     <div 
                         ref={cardRef}
                         className="w-[340px] h-[210px] rounded-xl relative overflow-hidden shadow-2xl text-white flex flex-col justify-between p-6 select-none font-sans"
                         style={{
                             background: 'linear-gradient(110deg, #0f172a 0%, #1e293b 100%)',
-                            boxShadow: '0 10px 30px -10px rgba(0,0,0,0.5)'
+                            boxShadow: '0 10px 30px -10px rgba(0,0,0,0.5)',
+                            transform: 'translate3d(0,0,0)', // Force Hardware Acceleration
+                            backfaceVisibility: 'hidden'
                         }}
                     >
-                        <div className="absolute top-[-50px] right-[-50px] w-40 h-40 bg-[#347758] rounded-full blur-[60px] opacity-20"></div>
-                        <div className="absolute inset-0 opacity-[0.03]" style={{backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`}}></div>
+                        {/* Background Noise & Blob */}
+                        <div className="absolute top-[-50px] right-[-50px] w-40 h-40 bg-[#347758] rounded-full blur-[60px] opacity-20 pointer-events-none"></div>
+                        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`}}></div>
 
                         <div className="relative z-10 flex justify-between items-start">
                             <div className="flex items-center gap-2">
@@ -385,10 +393,6 @@ const MemberCardModal: React.FC<{
                 </div>
                 {/* --- CARD DESIGN END --- */}
 
-                <p className="text-center text-sm text-slate-400 max-w-xs">
-                    Unduh kartu ini dan kirimkan ke pelanggan via WhatsApp.
-                </p>
-
                 <div className="grid grid-cols-3 gap-2 w-full">
                     <Button variant="secondary" onClick={handleDownload} disabled={isLoading} className="text-xs px-2">
                         <Icon name="download" className="w-4 h-4"/> PNG
@@ -400,6 +404,10 @@ const MemberCardModal: React.FC<{
                         <Icon name="whatsapp" className="w-4 h-4"/> Share
                     </Button>
                 </div>
+                
+                <p className="text-center text-[10px] text-slate-500 max-w-xs italic">
+                    Jika tombol PNG gagal/tidak muncul di galeri, gunakan tombol <strong>Share</strong> lalu pilih "Simpan ke Galeri" atau kirim ke WhatsApp.
+                </p>
             </div>
         </Modal>
     );

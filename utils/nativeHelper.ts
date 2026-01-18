@@ -79,6 +79,10 @@ export async function saveTextFileNative(fileName: string, content: string) {
                 directory: Directory.Cache,
                 encoding: Encoding.UTF8,
             });
+            await Share.share({
+                title: 'Simpan File',
+                files: [result.uri]
+            });
             return result.uri;
         } catch (e2) {
             throw new Error("Gagal menyimpan file. Izin penyimpanan diperlukan.");
@@ -87,11 +91,13 @@ export async function saveTextFileNative(fileName: string, content: string) {
 }
 
 /**
- * Menyimpan file Binary (Excel/PDF) ke perangkat
- * Android: Menyimpan ke folder Documents/ArteaPOS
+ * Menyimpan file Binary (Excel/PDF/PNG) ke perangkat
+ * Android: Menyimpan ke folder Documents/ArteaPOS.
+ * Jika GAGAL (karena izin Android 11+), otomatis Fallback ke Cache lalu buka Share Sheet (Save to Device).
  */
 export async function saveBinaryFileNative(fileName: string, base64Data: string) {
     try {
+        // Coba simpan ke Documents
         await ensureDirectoryExists();
         const result = await Filesystem.writeFile({
             path: `ArteaPOS/${fileName}`,
@@ -100,7 +106,25 @@ export async function saveBinaryFileNative(fileName: string, base64Data: string)
         });
         return result.uri;
     } catch (e: any) {
-        console.error("Native binary save failed", e);
-        throw new Error("Gagal menyimpan file: " + e.message);
+        console.warn("Native binary save to Documents failed, using Fallback Share", e);
+        
+        // FALLBACK: Simpan ke Cache lalu Share
+        try {
+            const result = await Filesystem.writeFile({
+                path: fileName,
+                data: base64Data,
+                directory: Directory.Cache,
+            });
+            
+            // Trigger Share Sheet (User bisa pilih 'Save to Gallery' atau 'Save to Files')
+            await Share.share({
+                title: 'Simpan File',
+                files: [result.uri]
+            });
+            
+            return result.uri;
+        } catch (e2: any) {
+            throw new Error("Gagal menyimpan file: " + e2.message);
+        }
     }
 }

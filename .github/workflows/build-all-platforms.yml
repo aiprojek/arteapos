@@ -82,36 +82,8 @@ jobs:
           # Sync kode web
           npx cap sync
       
-      - name: Fix Android Manifest Permissions
-        run: |
-          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST_PATH" ]; then
-            echo "Memastikan permission Bluetooth ada di AndroidManifest.xml..."
-            
-            # Cek apakah permission sudah ada
-            if ! grep -q "android.permission.BLUETOOTH_CONNECT" "$MANIFEST_PATH"; then
-              # Definisikan permission dalam variabel satu baris untuk menghindari error YAML
-              P1='<uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" tools:targetApi="31" />'
-              P2='<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" tools:targetApi="31" />'
-              P3='<uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" tools:targetApi="31" />'
-              P4='<uses-permission android:name="android.permission.BLUETOOTH" />'
-              P5='<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />'
-              P6='<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />'
-              P7='<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />'
-              
-              # Gabungkan semua permission
-              ALL_PERMS="$P1\n    $P2\n    $P3\n    $P4\n    $P5\n    $P6\n    $P7"
-              
-              # Insert sebelum tag <application>
-              sed -i "/<application/i $ALL_PERMS" "$MANIFEST_PATH"
-              echo "Permissions berhasil disuntikkan."
-            else
-              echo "Permissions sudah ada."
-            fi
-          else
-            echo "File AndroidManifest.xml tidak ditemukan!"
-            ls -R android/app/src/main || echo "Directory listing failed"
-          fi
+      # STEP "Fix Android Manifest Permissions" DIHAPUS
+      # AndroidManifest.xml di repo sudah benar. Injeksi manual via sed merusak format XML.
 
       - name: Build APK
         run: |

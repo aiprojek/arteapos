@@ -26,7 +26,17 @@ const FAQTab: React.FC = () => {
                     </div>
                     {/* ------------------------------- */}
 
-                    {/* --- NEW FAQ FOR MEMBER CARD --- */}
+                    {/* --- NEW FAQ FOR BLUETOOTH & DEVICE --- */}
+                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Printer Bluetooth tidak terdeteksi di Android 12+?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: Android 12/13/14/15 membutuhkan izin <strong>"Nearby Devices" (Perangkat Sekitar)</strong>.
+                            Pastikan Anda mengklik "Izinkan" saat pertama kali membuka menu Printer. 
+                            Jika terlewat, buka <em>Settings HP &rarr; Apps &rarr; Artea POS &rarr; Permissions &rarr; Nearby Devices &rarr; Allow</em>.
+                        </p>
+                    </div>
+                    {/* ------------------------------- */}
+
                     <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
                         <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah barcode scanner bisa untuk kartu member?</h4>
                         <p className="text-slate-300 text-sm">
@@ -52,7 +62,6 @@ const FAQTab: React.FC = () => {
                             Ini akan otomatis mengunduh gambar kartu (PNG) dan membuka WhatsApp. Anda tinggal melampirkan gambar tersebut ke chat pelanggan.
                         </p>
                     </div>
-                    {/* ------------------------------- */}
 
                     <div className="bg-slate-900/50 p-4 rounded-lg">
                         <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah uang Top Up Saldo dihitung sebagai Omzet Penjualan?</h4>

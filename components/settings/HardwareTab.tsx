@@ -98,21 +98,17 @@ const HardwareTab: React.FC = () => {
         return new Promise((resolve) => {
             const permissions = window.cordova?.plugins?.permissions;
             if (!permissions) {
-                // Plugin belum siap atau tidak ada
-                resolve(true); // Asumsi boleh/legacy
+                // Plugin belum siap atau tidak ada (misal: di web atau iOS), kita anggap true agar lanjut
+                // atau false jika strict. Untuk hybrid, true biasanya aman karena plugin bluetooth handle sendiri jika legacy.
+                resolve(true); 
                 return;
             }
 
             // List izin Android 12+
-            // Kita gunakan string literal karena konstanta mungkin belum tersedia di runtime lama
             const scanPerm = permissions.BLUETOOTH_SCAN || 'android.permission.BLUETOOTH_SCAN';
             const connectPerm = permissions.BLUETOOTH_CONNECT || 'android.permission.BLUETOOTH_CONNECT';
             
-            // Untuk Android 11 ke bawah, plugin bluetooth-serial biasanya handle sendiri, 
-            // tapi kita bisa minta Coarse Location untuk jaga-jaga.
-            const locationPerm = permissions.ACCESS_COARSE_LOCATION || 'android.permission.ACCESS_COARSE_LOCATION';
-
-            permissions.requestPermissions([scanPerm, connectPerm, locationPerm], 
+            permissions.requestPermissions([scanPerm, connectPerm], 
                 (status: any) => {
                     if (!status.hasPermission) {
                         console.warn("Permission denied via plugin");

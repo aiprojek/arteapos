@@ -18,17 +18,21 @@
         PENGATURAN BLUETOOTH HYBRID (CRITICAL FIX)
         1. neverForLocation: Agar tidak butuh GPS nyala.
         2. tools:remove: Mencegah plugin lain menambahkan maxSdkVersion yang salah.
+        3. tools:node="replace": MEMAKSA Android menggunakan setting ini jika ada konflik dengan plugin Cordova.
     -->
 
     <!-- ANDROID 12+ (API 31 ke atas): Nearby Devices Only -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" 
                      android:usesPermissionFlags="neverForLocation" 
+                     tools:node="replace"
                      tools:targetApi="31" />
                      
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" 
+                     tools:node="replace"
                      tools:targetApi="31" />
                      
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" 
+                     tools:node="replace"
                      tools:targetApi="31" />
 
     <!-- ANDROID 11 KE BAWAH: Legacy Bluetooth -->
@@ -36,8 +40,9 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     
     <!-- Izin Lokasi Legacy (Hanya untuk Android 11 ke bawah agar scan jalan) -->
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+    <!-- tools:node="replace" penting agar plugin tidak menghapus maxSdkVersion -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="30" tools:node="replace" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" tools:node="replace" />
 
     <!-- Pastikan fitur Bluetooth tidak wajib agar app bisa diinstall di device non-bluetooth -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />

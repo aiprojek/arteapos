@@ -92,10 +92,27 @@ const ManualTab: React.FC = () => {
                 </div>
             </div>
 
-            {/* MENU 3: PRODUK */}
+            {/* MENU 3: PRODUK & LOGISTIK (NEW UPDATE) */}
             <div>
-                <SectionHeader title="Menu: Produk & Bahan" icon="boxes" desc="Mengelola inventaris, harga, dan resep." />
+                <SectionHeader title="Menu: Produk & Logistik" icon="boxes" desc="Mengelola inventaris, transfer stok, dan resep." />
                 <div className="space-y-2">
+                    <AccordionItem title="Transfer Stok vs Stok Manual" isOpen={openAccordion === 'prod_logistik'} onToggle={() => toggleAccordion('prod_logistik')} icon="share" colorClass="text-blue-400" badge="Penting">
+                        <p>Dua cara berbeda untuk menambah stok:</p>
+                        <ul className="list-disc pl-5 mt-2 space-y-2">
+                            <li>
+                                <strong>Transfer Stok (Gudang -> Cabang):</strong><br/>
+                                Digunakan saat Pusat mengirim barang ke Cabang.
+                                <br/><em>Cara Pakai:</em> Gudang buka menu Produk &rarr; Klik "Transfer Stok" &rarr; Pilih Cabang & Barang.
+                                <br/><em>Di Cabang:</em> Kasir cukup klik tombol <strong>"Cek Update"</strong> di Header untuk menerima stok otomatis.
+                            </li>
+                            <li>
+                                <strong>Stok Manual (Lokal):</strong><br/>
+                                Digunakan saat toko membeli barang sendiri dari pasar/supplier luar (bukan dari Gudang Pusat).
+                                <br/><em>Cara Pakai:</em> Buka menu Produk &rarr; Klik "Stok Manual" &rarr; Pilih "Barang Masuk" &rarr; Isi Jumlah.
+                            </li>
+                        </ul>
+                    </AccordionItem>
+
                     <AccordionItem title="Input Massal (Bulk Add)" isOpen={openAccordion === 'prod_bulk'} onToggle={() => toggleAccordion('prod_bulk')} icon="boxes" colorClass="text-purple-400" badge="Baru">
                         <p>Cara cepat memasukkan banyak data sekaligus tanpa input satu per satu.</p>
                         <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -112,16 +129,6 @@ const ManualTab: React.FC = () => {
                             <li><strong>Konversi Satuan Beli:</strong> Atur jika Anda belanja dalam satuan besar (Dus/Karton) tapi pakai satuan kecil (Pcs/Ml).</li>
                             <li><em>Contoh:</em> 1 Karton = 12 Pcs. Saat belanja (Restock), staff pilih input "1 Karton", sistem otomatis menambah stok "12 Pcs".</li>
                         </ul>
-                    </AccordionItem>
-                    <AccordionItem title="Resep & Tracking Bahan" isOpen={openAccordion === 'prod_2'} onToggle={() => toggleAccordion('prod_2')} icon="ingredients" colorClass="text-red-400">
-                        <p>Hubungkan produk dengan bahan baku untuk otomatisasi stok.</p>
-                        <ol className="list-decimal pl-5 mt-2 space-y-1">
-                            <li>Masuk ke menu <strong>Bahan Baku</strong>, input stok mentah (misal: Kopi Bubuk, Susu).</li>
-                            <li>Di menu Produk, edit produk (misal: Kopi Susu). Aktifkan "Lacak Stok".</li>
-                            <li>Di bagian Resep, tambahkan komponen: 15gr Kopi + 100ml Susu.</li>
-                            <li><strong>HPP Otomatis:</strong> Sistem akan menghitung modal per cup berdasarkan harga bahan baku.</li>
-                            <li>Saat Kopi Susu terjual, stok Kopi Bubuk & Susu berkurang otomatis.</li>
-                        </ol>
                     </AccordionItem>
                     <AccordionItem title="Stock Opname (Audit)" isOpen={openAccordion === 'prod_3'} onToggle={() => toggleAccordion('prod_3')} icon="file-lock" colorClass="text-blue-400">
                         <p>Fitur untuk mencocokkan stok di aplikasi dengan fisik di gudang.</p>

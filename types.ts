@@ -359,6 +359,21 @@ export interface MembershipSettings {
   rewards: Reward[];
 }
 
+// --- CLOUD TRANSFER TYPES ---
+export interface StockTransferPayload {
+    id: string; // Transfer ID
+    fromStoreId: string;
+    toStoreId: string;
+    timestamp: string;
+    items: {
+        id: string; // Product/Material ID
+        type: 'product' | 'raw_material';
+        name: string;
+        qty: number;
+    }[];
+    notes?: string;
+}
+
 // Global App Data State
 export interface AppData {
   products: Product[];
@@ -394,6 +409,8 @@ export type AuditAction =
     | 'REFUND_TRANSACTION' 
     | 'DELETE_TRANSACTION' 
     | 'STOCK_OPNAME'
+    | 'STOCK_TRANSFER_IN' 
+    | 'STOCK_TRANSFER_OUT'
     | 'BALANCE_TOPUP'
     | 'OTHER';
 

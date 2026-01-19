@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useSettings } from '../context/SettingsContext';
 import { useCloudSync } from '../context/CloudSyncContext'; 
+import { useProduct } from '../context/ProductContext'; // NEW
 import Button from './Button';
 import { dataService } from '../services/dataService';
 import { useUI } from '../context/UIContext';
@@ -13,7 +14,7 @@ import { dropboxService } from '../services/dropboxService';
 import { db } from '../services/db'; 
 import Modal from './Modal';
 import DataArchivingModal from './DataArchivingModal'; 
-import ConflictResolveModal from './ConflictResolveModal'; // NEW IMPORT
+import ConflictResolveModal from './ConflictResolveModal'; 
 
 interface HeaderProps {
     activeView: View;
@@ -37,6 +38,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
     const { restoreData, dbUsageStatus } = useData(); 
     const { syncStatus, syncErrorMessage } = useCloudSync(); 
     const { updateReceiptSettings, receiptSettings } = useSettings();
+    const { processIncomingTransfers } = useProduct(); // NEW
     const { showAlert } = useUI();
     
     const [isDataModalOpen, setDataModalOpen] = useState(false);
@@ -108,63 +110,78 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
         }
     };
 
-    // PULL: Update Master Data (Cabang/Admin)
+    // PULL: Update Master Data (Cabang/Admin) + CHECK STOCK TRANSFERS
     const handleCloudPull = async () => {
         if (!checkCloudConfig()) return;
 
         setIsProcessing(true);
+        let msg = "Data produk berhasil diperbarui dari Pusat.";
+        
         try {
+            // 1. Download Master Data (Prices, Products)
             await dropboxService.downloadAndMergeMasterData();
+            
+            // 2. Check for Pending Stock Transfers (From Warehouse)
+            const currentStoreId = receiptSettings.storeId;
+            if (currentStoreId && currentStoreId !== 'PUSAT') {
+                try {
+                    const transfers = await dropboxService.fetchPendingTransfers(currentStoreId);
+                    if (transfers.length > 0) {
+                        processIncomingTransfers(transfers);
+                        msg += `\n\n📦 DITERIMA: ${transfers.length} paket stok dari Gudang telah ditambahkan ke inventaris.`;
+                    }
+                } catch (err: any) {
+                    console.warn("Stock Transfer Check Failed", err);
+                    // Don't block master data update success, just warn
+                }
+            }
             
             // Ambil settings terbaru langsung dari DB (karena context mungkin belum refresh)
             const settingsDoc = await db.settings.get('receiptSettings');
             const freshSettings = settingsDoc?.value;
             const branches = freshSettings?.branches || [];
-            const currentStoreId = freshSettings?.storeId || 'CABANG-01';
+            const freshStoreId = freshSettings?.storeId || 'CABANG-01';
 
-            const isConfigured = currentStoreId && currentStoreId !== 'CABANG-01' && currentStoreId !== 'MAIN';
+            const isConfigured = freshStoreId && freshStoreId !== 'CABANG-01' && freshStoreId !== 'MAIN';
 
             if (branches.length > 0 && !isConfigured) {
                 // Jika belum dikonfigurasi, paksa pilih cabang
                 setAvailableBranches(branches);
-                setSelectedBranchId(currentStoreId);
+                setSelectedBranchId(freshStoreId);
                 setDataModalOpen(false); 
                 setBranchModalOpen(true); 
             } else {
-                showAlert({ type: 'alert', title: 'Menu & Harga Terupdate', message: "Data produk berhasil diperbarui dari Pusat." });
+                showAlert({ type: 'alert', title: 'Update Berhasil', message: msg });
                 setDataModalOpen(false);
-                setTimeout(() => window.location.reload(), 1500); 
+                setTimeout(() => window.location.reload(), 2000); 
             }
 
         } catch (e: any) {
             console.error(e);
-            let msg = `Terjadi kesalahan: ${e.message}`;
+            let errMsg = `Terjadi kesalahan: ${e.message}`;
             if (e.message.includes('not_found') || e.message.includes('belum ada')) {
-                msg = "Data Pusat belum tersedia. Minta Admin untuk menekan tombol 'Kirim Master' (Push) terlebih dahulu.";
+                errMsg = "Data Pusat belum tersedia. Minta Admin untuk menekan tombol 'Kirim Master' (Push) terlebih dahulu.";
             }
-            showAlert({ type: 'alert', title: 'Gagal Update', message: msg });
+            showAlert({ type: 'alert', title: 'Gagal Update', message: errMsg });
         } finally {
             setIsProcessing(false);
         }
     };
 
-    // PUSH: Upload Master Data (Admin Only) - NEW LOGIC WITH CONFLICT HANDLER
+    // PUSH: Upload Master Data (Admin Only)
     const handleCloudPush = async (force: boolean = false) => {
         if (!checkCloudConfig()) return;
 
         setIsProcessing(true);
         try {
-            // Attempt standard push (will fail if conflict detected and force=false)
             await dropboxService.uploadMasterData(force);
-            
             showAlert({ type: 'alert', title: 'Upload Sukses', message: 'Master Data (Produk, Harga, Setting) berhasil dikirim ke Cloud.' });
             setDataModalOpen(false);
-            setConflictModalOpen(false); // Close conflict modal if it was open
+            setConflictModalOpen(false); 
         } catch (e: any) {
             if (e.message === 'CONFLICT_DETECTED') {
-                // Open Conflict Modal
                 setConflictModalOpen(true);
-                setDataModalOpen(false); // Close main menu
+                setDataModalOpen(false); 
             } else {
                 showAlert({ type: 'alert', title: 'Gagal Upload', message: e.message });
             }
@@ -177,13 +194,8 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
     const handleConflictMerge = async () => {
         setIsProcessing(true);
         try {
-            // 1. Pull Remote Data
             await dropboxService.downloadAndMergeMasterData();
-            
-            // 2. Push back the merged result 
-            // After download, we have the LATEST rev locally. So standard push will succeed.
             await dropboxService.uploadMasterData(false);
-
             showAlert({ type: 'alert', title: 'Berhasil', message: 'Konflik teratasi. Data cloud dan lokal telah digabungkan.' });
             setConflictModalOpen(false);
         } catch (e: any) {
@@ -367,10 +379,12 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                         <div className="bg-slate-800/50 p-2 rounded border border-sky-900/30">
                             <p className="text-[10px] text-sky-200 mb-1 font-bold">OPERASIONAL CABANG (HARIAN)</p>
                             <Button onClick={handleCloudPull} disabled={isProcessing} className="w-full bg-sky-600 hover:bg-sky-500 text-white border-none text-xs h-9">
-                                {isProcessing ? 'Memproses...' : '⬇️ Cek Update (PULL)'}
+                                {isProcessing ? 'Memproses...' : '⬇️ Cek Update (Menu & Stok)'}
                             </Button>
                             <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
-                                <span className="text-green-400 font-bold">Info:</span> Laporan penjualan Anda terkirim <strong>otomatis</strong> ke Admin. Tombol ini hanya untuk mengambil update Harga/Menu dari Pusat.
+                                <span className="text-green-400 font-bold">Info:</span> Tombol ini untuk:
+                                <br/>1. Mengambil Harga/Menu terbaru.
+                                <br/>2. Menerima stok kiriman dari Gudang.
                             </p>
                         </div>
 

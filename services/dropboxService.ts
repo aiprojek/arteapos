@@ -2,11 +2,12 @@
 import { Dropbox, DropboxAuth } from 'dropbox';
 import { dataService } from './dataService';
 import { db } from './db'; 
-import type { AppData, ReceiptSettings } from '../types';
+import type { AppData, ReceiptSettings, StockTransferPayload } from '../types';
 import { encryptStorage, decryptStorage } from '../utils/crypto'; // Import crypto
 
 const MASTER_DATA_FILENAME = '/artea_pos_master_config.json';
 const BRANCH_FOLDER = '/Cabang_Data'; 
+const TRANSFER_FOLDER = '/Transfer_Stok'; // NEW FOLDER
 
 // Key Constants
 const KEY_APP_KEY = 'ARTEA_DBX_KEY';
@@ -345,9 +346,8 @@ export const dropboxService = {
         await dropboxService.uploadBranchData('System');
     },
 
-    // --- MASTER DATA SYNC WITH CONFLICT RESOLUTION ---
+    // --- MASTER DATA SYNC ---
 
-    // NEW: Accept force param. If !force, rely on 'update' mode with 'rev' to prevent overwrite.
     uploadMasterData: async (forceOverwrite: boolean = false): Promise<void> => {
         try {
             const data = await dataService.getExportData();
@@ -369,8 +369,6 @@ export const dropboxService = {
             let mode: any = { '.tag': 'overwrite' };
             const lastRev = safeStorage.getItem(KEY_MASTER_REV);
 
-            // If we have a previous revision and are NOT forcing, use 'update' mode
-            // This will fail if the server has a newer revision (Conflict)
             if (!forceOverwrite && lastRev) {
                 mode = { '.tag': 'update', update: lastRev };
             }
@@ -381,7 +379,6 @@ export const dropboxService = {
                 mode: mode
             })) as any;
 
-            // Successfully uploaded? Update our local Rev to match server
             if (response.result.rev) {
                 safeStorage.setItem(KEY_MASTER_REV, response.result.rev);
             }
@@ -389,8 +386,6 @@ export const dropboxService = {
         } catch (error: any) {
             console.error('Dropbox Master Upload Error:', error);
             if (error.status === 401) throw new Error('Otorisasi Dropbox kadaluarsa.');
-            
-            // Detect Conflict (409) specifically
             if (error.status === 409 && error.error?.error_summary?.includes('path/conflict')) {
                 throw new Error('CONFLICT_DETECTED');
             }
@@ -405,7 +400,6 @@ export const dropboxService = {
             
             const response = await retryOperation(() => dbx.filesDownload({ path: masterFileName })) as any;
             
-            // Important: Save the new Rev ID so next push is valid
             if (response.result.rev) {
                 safeStorage.setItem(KEY_MASTER_REV, response.result.rev);
             }
@@ -445,6 +439,92 @@ export const dropboxService = {
             return { success: true, message: 'Data historis Cloud (Folder Laporan & Cabang) berhasil dikosongkan.' };
         } catch (error: any) {
             return { success: false, message: `Gagal menghapus: ${error.message}` };
+        }
+    },
+
+    // --- STOCK TRANSFER FEATURES (NEW) ---
+
+    // GUDANG (Sender): Upload file transfer
+    uploadStockTransfer: async (targetStoreId: string, items: StockTransferPayload['items'], notes: string = ''): Promise<void> => {
+        try {
+            const dbx = dropboxService.getClient();
+            const settings = await db.settings.get('receiptSettings');
+            const myStoreId = (settings?.value as ReceiptSettings)?.storeId || 'PUSAT';
+            const timestamp = new Date().toISOString();
+            
+            const payload: StockTransferPayload = {
+                id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                fromStoreId: myStoreId,
+                toStoreId: targetStoreId,
+                timestamp: timestamp,
+                items: items,
+                notes: notes
+            };
+
+            const jsonString = JSON.stringify(payload);
+            const cleanTargetId = targetStoreId.replace(/[^a-zA-Z0-9-_]/g, '');
+            const folderPath = `${TRANSFER_FOLDER}/${cleanTargetId}`;
+            const fileName = `transfer_${timestamp.replace(/[:.]/g, '-')}_from_${myStoreId}.json`;
+            const fullPath = `${folderPath}/${fileName}`;
+
+            await retryOperation(() => dbx.filesUpload({
+                path: fullPath,
+                contents: jsonString,
+                mode: { '.tag': 'add' }
+            }));
+
+        } catch (error: any) {
+            console.error('Stock Transfer Upload Error:', error);
+            throw new Error('Gagal mengirim stok ke Dropbox.');
+        }
+    },
+
+    // CABANG (Receiver): Check, Download, and Delete
+    fetchPendingTransfers: async (myStoreId: string): Promise<StockTransferPayload[]> => {
+        try {
+            const dbx = dropboxService.getClient();
+            const cleanId = myStoreId.replace(/[^a-zA-Z0-9-_]/g, '');
+            const folderPath = `${TRANSFER_FOLDER}/${cleanId}`;
+            
+            let files: any[] = [];
+            try {
+                const response = (await retryOperation(() => dbx.filesListFolder({ path: folderPath }))) as any;
+                files = response.result.entries.filter((e: any) => e['.tag'] === 'file' && e.name.endsWith('.json'));
+            } catch (e: any) {
+                // If folder doesn't exist, no transfers yet
+                if (e.error?.path?.['.tag'] === 'not_found') return [];
+                throw e;
+            }
+
+            if (files.length === 0) return [];
+
+            const transfers: StockTransferPayload[] = [];
+
+            // Process each file
+            for (const file of files) {
+                try {
+                    // 1. Download
+                    const dl = await retryOperation<any>(() => dbx.filesDownload({ path: file.path_lower! }));
+                    // @ts-ignore
+                    const text = await dl.result.fileBlob.text();
+                    const data = JSON.parse(text) as StockTransferPayload;
+                    
+                    // Basic validation
+                    if (data.items && Array.isArray(data.items)) {
+                        transfers.push(data);
+                        // 2. Delete from Dropbox (so it's not processed again)
+                        await retryOperation(() => dbx.filesDeleteV2({ path: file.path_lower! }));
+                    }
+                } catch (err) {
+                    console.error(`Failed to process transfer file ${file.name}`, err);
+                }
+            }
+
+            return transfers;
+
+        } catch (error: any) {
+            console.error('Fetch Transfers Error:', error);
+            throw new Error('Gagal mengecek transfer stok dari Dropbox.');
         }
     }
 };

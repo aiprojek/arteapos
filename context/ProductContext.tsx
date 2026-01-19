@@ -3,9 +3,9 @@ import React, { createContext, useContext, ReactNode, useCallback } from 'react'
 import { useData } from './DataContext';
 import { useUI } from './UIContext';
 import { useAuth } from './AuthContext';
-import { useAudit } from './AuditContext'; // NEW
-import { useCloudSync } from './CloudSyncContext'; // NEW
-import type { Product, RawMaterial, InventorySettings, StockAdjustment } from '../types';
+import { useAudit } from './AuditContext'; 
+import { useCloudSync } from './CloudSyncContext'; 
+import type { Product, RawMaterial, InventorySettings, StockAdjustment, StockTransferPayload } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 
 interface OpnameItem {
@@ -38,6 +38,7 @@ interface ProductContextType {
   bulkAddRawMaterials: (newRawMaterials: RawMaterial[]) => void;
   isProductAvailable: (product: Product) => { available: boolean, reason: string };
   importStockAdjustments: (adjustments: StockAdjustment[]) => void;
+  processIncomingTransfers: (transfers: StockTransferPayload[]) => void;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -59,14 +60,15 @@ function base64ToBlob(base64: string): Blob {
 
 export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const { data, setData } = useData();
-  const { logAudit } = useAudit(); // Use new hook
-  const { triggerAutoSync } = useCloudSync(); // Use new hook
+  const { logAudit } = useAudit(); 
+  const { triggerAutoSync } = useCloudSync(); 
   const { products, categories, rawMaterials, inventorySettings, stockAdjustments, receiptSettings } = data;
   const { showAlert } = useUI();
   const { currentUser } = useAuth();
 
   const getStaffName = () => currentUser?.name || 'Staff';
 
+  // ... (Other functions unchanged: addProduct, updateProduct, etc.)
   const addProduct = useCallback((product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: Date.now().toString() };
     setData(prev => ({ ...prev, products: [...prev.products, newProduct] }));
@@ -216,6 +218,7 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
   }, [setData, triggerAutoSync, currentUser]);
 
   const performStockOpname = useCallback((items: OpnameItem[], notes: string = '') => {
+      // ... (unchanged)
       const count = items.filter(i => i.systemStock !== i.actualStock).length;
       if (count > 0) {
           logAudit(currentUser, 'STOCK_OPNAME', `Melakukan stock opname massal. ${count} item disesuaikan. ${notes}`, 'BATCH-OPNAME');
@@ -291,8 +294,6 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
 
   const isProductAvailable = useCallback((product: Product): { available: boolean, reason: string } => {
     if (!inventorySettings.enabled) return { available: true, reason: '' };
-
-    // If Strict Mode (Prevent Negative Stock) is OFF, allow everything (legacy behavior)
     if (!inventorySettings.preventNegativeStock) return { available: true, reason: '' };
 
     if (inventorySettings.trackIngredients && product.recipe && product.recipe.length > 0) {
@@ -300,22 +301,16 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
         if (recipeItem.itemType === 'product' && recipeItem.productId) {
             const bundledProduct = products.find(p => p.id === recipeItem.productId);
             if (!bundledProduct) return { available: false, reason: 'Produk Komponen Hilang' };
-            
-            // Check bundled product stock
             if (bundledProduct.trackStock && (bundledProduct.stock ?? 0) < recipeItem.quantity) {
                  return { available: false, reason: `Stok ${bundledProduct.name} Kurang` };
             }
-            
-            // Recursive check if bundled product also has recipe
             if (!bundledProduct.trackStock && bundledProduct.recipe?.length) {
                  const result = isProductAvailable(bundledProduct);
                  if(!result.available) return { available: false, reason: `Komponen ${bundledProduct.name} Habis` };
             }
-
         } else {
             const materialId = recipeItem.rawMaterialId;
             const material = rawMaterials.find(m => m.id === materialId);
-            // Check raw material stock
             if (!material || material.stock < recipeItem.quantity) {
               return { available: false, reason: `Bahan ${material?.name || 'Baku'} Habis` };
             }
@@ -346,6 +341,76 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       });
   }, [setData]);
 
+  // NEW: Process Incoming Transfers from Cloud
+  const processIncomingTransfers = useCallback((transfers: StockTransferPayload[]) => {
+      if (transfers.length === 0) return;
+
+      let totalAdded = 0;
+      
+      setData(prev => {
+          let updatedProducts = [...prev.products];
+          let updatedMaterials = [...prev.rawMaterials];
+          let newAdjustments: StockAdjustment[] = [];
+          const now = new Date().toISOString();
+
+          transfers.forEach(transfer => {
+              const transferNote = `Transfer dari ${transfer.fromStoreId} (${new Date(transfer.timestamp).toLocaleDateString()})`;
+              
+              transfer.items.forEach((item, idx) => {
+                  if (item.type === 'product') {
+                      const pIdx = updatedProducts.findIndex(p => p.id === item.id);
+                      if (pIdx > -1 && updatedProducts[pIdx].trackStock) {
+                          const oldStock = updatedProducts[pIdx].stock || 0;
+                          const newStock = oldStock + item.qty;
+                          updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: newStock };
+                          
+                          newAdjustments.push({
+                              id: `TRANS-IN-${transfer.id}-${idx}`,
+                              productId: item.id,
+                              productName: item.name,
+                              change: item.qty,
+                              newStock: newStock,
+                              notes: `${transferNote} - ${transfer.notes || ''}`,
+                              createdAt: now
+                          });
+                          totalAdded++;
+                      }
+                  } else {
+                      const mIdx = updatedMaterials.findIndex(m => m.id === item.id);
+                      if (mIdx > -1) {
+                          const oldStock = updatedMaterials[mIdx].stock || 0;
+                          const newStock = oldStock + item.qty;
+                          updatedMaterials[mIdx] = { ...updatedMaterials[mIdx], stock: newStock };
+
+                          newAdjustments.push({
+                              id: `TRANS-IN-${transfer.id}-${idx}`,
+                              productId: item.id,
+                              productName: item.name,
+                              change: item.qty,
+                              newStock: newStock,
+                              notes: `${transferNote} - ${transfer.notes || ''}`,
+                              createdAt: now
+                          });
+                          totalAdded++;
+                      }
+                  }
+              });
+          });
+
+          return {
+              ...prev,
+              products: updatedProducts,
+              rawMaterials: updatedMaterials,
+              stockAdjustments: [...newAdjustments, ...(prev.stockAdjustments || [])]
+          }
+      });
+
+      if (totalAdded > 0) {
+          logAudit(currentUser, 'STOCK_TRANSFER_IN', `Menerima ${totalAdded} item stok transfer dari Pusat/Gudang.`, 'BATCH-TRANSFER');
+          setTimeout(() => triggerAutoSync(getStaffName()), 1000);
+      }
+  }, [setData, logAudit, currentUser, triggerAutoSync]);
+
   return (
     <ProductContext.Provider value={{
       products,
@@ -368,7 +433,8 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       bulkAddProducts,
       bulkAddRawMaterials,
       isProductAvailable,
-      importStockAdjustments
+      importStockAdjustments,
+      processIncomingTransfers
     }}>
       {children}
     </ProductContext.Provider>

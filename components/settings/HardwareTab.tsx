@@ -8,7 +8,26 @@ import { useSettings } from '../../context/SettingsContext';
 import type { Transaction } from '../../types';
 import BarcodeScannerModal from '../BarcodeScannerModal';
 import { Capacitor } from '@capacitor/core';
-import { BarcodeScanner } from '@capacitor-community/barcode-scanner'; // We use this plugin to open app settings
+import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
+
+// Interface untuk plugin Permissions
+declare global {
+    interface Window {
+        cordova?: {
+            plugins?: {
+                permissions?: {
+                    checkPermission: (permission: any, success: (status: any) => void, error: (err: any) => void) => void;
+                    requestPermission: (permission: any, success: (status: any) => void, error: (err: any) => void) => void;
+                    requestPermissions: (permissions: any[], success: (status: any) => void, error: (err: any) => void) => void;
+                    BLUETOOTH_SCAN?: string;
+                    BLUETOOTH_CONNECT?: string;
+                    BLUETOOTH_ADVERTISE?: string;
+                    ACCESS_COARSE_LOCATION?: string;
+                }
+            }
+        }
+    }
+}
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode; icon?: any }> = ({ title, description, children, icon }) => (
     <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
@@ -74,34 +93,78 @@ const HardwareTab: React.FC = () => {
         }
     };
 
+    // --- PERMISSION REQUEST HANDLER ---
+    const requestAndroid12Permissions = (): Promise<boolean> => {
+        return new Promise((resolve) => {
+            const permissions = window.cordova?.plugins?.permissions;
+            if (!permissions) {
+                // Plugin belum siap atau tidak ada
+                resolve(true); // Asumsi boleh/legacy
+                return;
+            }
+
+            // List izin Android 12+
+            // Kita gunakan string literal karena konstanta mungkin belum tersedia di runtime lama
+            const scanPerm = permissions.BLUETOOTH_SCAN || 'android.permission.BLUETOOTH_SCAN';
+            const connectPerm = permissions.BLUETOOTH_CONNECT || 'android.permission.BLUETOOTH_CONNECT';
+            
+            // Untuk Android 11 ke bawah, plugin bluetooth-serial biasanya handle sendiri, 
+            // tapi kita bisa minta Coarse Location untuk jaga-jaga.
+            const locationPerm = permissions.ACCESS_COARSE_LOCATION || 'android.permission.ACCESS_COARSE_LOCATION';
+
+            permissions.requestPermissions([scanPerm, connectPerm, locationPerm], 
+                (status: any) => {
+                    if (!status.hasPermission) {
+                        console.warn("Permission denied via plugin");
+                        resolve(false);
+                    } else {
+                        resolve(true);
+                    }
+                }, 
+                () => {
+                    console.error("Permission error via plugin");
+                    resolve(false);
+                }
+            );
+        });
+    };
+
     // --- BLUETOOTH HANDLERS ---
     const handleConnectBle = async () => {
         setIsBleScanning(true);
         setPermissionStatus('unknown');
         
         if (isNative) {
-            // NATIVE: List paired devices first
+            // STEP 1: Explicitly Ask for Android 12 Permissions
+            const granted = await requestAndroid12Permissions();
+            if (!granted) {
+                setPermissionStatus('denied');
+                setIsBleScanning(false);
+                showAlert({
+                    type: 'confirm', 
+                    title: 'Izin Dibutuhkan', 
+                    message: 'Aplikasi memerlukan izin "Perangkat Sekitar" (Nearby Devices) untuk menemukan printer. Mohon izinkan di Pengaturan.',
+                    confirmText: 'Buka Pengaturan',
+                    onConfirm: openAppSettings
+                });
+                return;
+            }
+
+            // STEP 2: List Devices
             try {
-                // This call triggers permission prompt on Android 12+ if not granted
                 const devices = await bluetoothPrinterService.listNativeDevices();
                 setPairedDevices(devices);
                 if (devices.length === 0) {
-                    showAlert({type: 'alert', title: 'Kosong', message: 'Tidak ada perangkat Bluetooth yang terpasang (Paired). Silakan pasangkan printer di Pengaturan Bluetooth Android terlebih dahulu.'});
+                    showAlert({type: 'alert', title: 'Kosong', message: 'Tidak ada perangkat Bluetooth yang terpasang (Paired). Silakan pasangkan printer di Pengaturan Bluetooth Android HP Anda terlebih dahulu, lalu kembali ke sini.'});
                 }
             } catch (e: any) {
                 console.error("Bluetooth Error:", e);
                 const errorStr = e ? e.toString().toLowerCase() : "";
                 
-                // Handle Permission Errors specifically for Android 12+
                 if (errorStr.includes('permission') || errorStr.includes('denied')) {
                     setPermissionStatus('denied');
-                    showAlert({
-                        type: 'alert', 
-                        title: 'Izin Bluetooth Ditolak', 
-                        message: 'Aplikasi membutuhkan izin "Perangkat Sekitar" (Nearby Devices) agar bisa mencetak. Silakan klik tombol "Buka Pengaturan" di bawah dan aktifkan izin tersebut.'
-                    });
                 } else {
-                    showAlert({type: 'alert', title: 'Gagal Memuat', message: 'Pastikan Bluetooth Aktif. Error: ' + e});
+                    showAlert({type: 'alert', title: 'Gagal Memuat', message: 'Pastikan Bluetooth Aktif. ' + e});
                 }
             } finally {
                 setIsBleScanning(false);
@@ -124,6 +187,9 @@ const HardwareTab: React.FC = () => {
 
     const handleNativePairSelection = async (macAddress: string) => {
         setSelectedDeviceId(macAddress);
+        // Ask permission again just in case 'Connect' needs it specifically
+        await requestAndroid12Permissions();
+        
         try {
             await bluetoothPrinterService.connectNative(macAddress);
             setIsBleConnected(true);
@@ -169,31 +235,6 @@ const HardwareTab: React.FC = () => {
         }
     };
 
-    // --- PERMISSION REQUEST HELPER ---
-    const requestCameraPermission = async () => {
-        if (!isNative) return;
-        try {
-            // We use BarcodeScanner plugin to ask for camera since we don't have a dedicated permission plugin installed.
-            const status = await BarcodeScanner.checkPermission({ force: true });
-            if (status.granted) {
-                showAlert({type:'alert', title:'Izin Diberikan', message:'Akses kamera telah diizinkan.'});
-            } else {
-                // If denied, sometimes we need to direct user to settings
-                if (status.denied) {
-                    showAlert({
-                        type:'confirm', 
-                        title:'Izin Ditolak', 
-                        message:'Mohon buka Pengaturan Aplikasi untuk mengizinkan Kamera.',
-                        confirmText: 'Buka Pengaturan',
-                        onConfirm: openAppSettings
-                    });
-                }
-            }
-        } catch(e) {
-            console.error(e);
-        }
-    }
-
     const getDummyTransaction = (): Transaction => ({
         id: 'TEST-HARDWARE-001',
         storeId: receiptSettings.storeId || 'TEST',
@@ -227,7 +268,7 @@ const HardwareTab: React.FC = () => {
                     <>
                         <div className="bg-blue-900/20 border-l-4 border-blue-500 p-3 rounded-r text-xs text-slate-300 space-y-1">
                             <p><strong>Cara Pakai:</strong> Nyalakan Bluetooth HP & Printer. Pasangkan (Pair) printer di menu Bluetooth HP Anda terlebih dahulu.</p>
-                            {isNative && <p className="text-green-400 font-bold">Mode Native Aktif: Mendukung Android 12+ Nearby Devices.</p>}
+                            {isNative && <p className="text-green-400 font-bold">Mode Native: Support Android 12+ (Nearby Devices).</p>}
                         </div>
                         
                         <div className="flex flex-col gap-4 bg-slate-900 p-4 rounded-lg border border-slate-600">
@@ -250,15 +291,18 @@ const HardwareTab: React.FC = () => {
                             {/* Native Device List */}
                             {isNative && pairedDevices.length > 0 && !isBleConnected && (
                                 <div className="space-y-2 mt-2">
-                                    <p className="text-xs text-slate-400">Pilih perangkat yang sudah dipairing:</p>
+                                    <p className="text-xs text-slate-400">Pilih printer yang sudah dipairing:</p>
                                     {pairedDevices.map((dev: any) => (
                                         <button 
                                             key={dev.address} 
                                             onClick={() => handleNativePairSelection(dev.address)}
                                             className="w-full text-left p-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded flex justify-between items-center"
                                         >
-                                            <span className="font-bold text-white">{dev.name || 'Unknown Device'}</span>
-                                            <span className="text-xs text-slate-500 font-mono">{dev.address}</span>
+                                            <div>
+                                                <span className="font-bold text-white block">{dev.name || 'Unknown Device'}</span>
+                                                <span className="text-xs text-slate-500 font-mono">{dev.address}</span>
+                                            </div>
+                                            <Icon name="bluetooth" className="w-4 h-4 text-sky-500" />
                                         </button>
                                     ))}
                                 </div>
@@ -268,9 +312,9 @@ const HardwareTab: React.FC = () => {
                             {permissionStatus === 'denied' && (
                                 <div className="bg-red-900/30 border border-red-800 p-3 rounded text-center">
                                     <p className="text-xs text-red-300 mb-2 font-bold">Izin Bluetooth Ditolak</p>
-                                    <p className="text-xs text-slate-300 mb-2">Android 12+ mewajibkan izin "Nearby Devices" (Perangkat Sekitar).</p>
+                                    <p className="text-xs text-slate-300 mb-2">Android 12+ mewajibkan izin "Nearby Devices" agar aplikasi bisa mendeteksi printer.</p>
                                     <Button onClick={openAppSettings} size="sm" variant="secondary" className="w-full">
-                                        <Icon name="settings" className="w-4 h-4" /> Buka Pengaturan & Izinkan "Nearby Devices"
+                                        <Icon name="settings" className="w-4 h-4" /> Buka Pengaturan & Izinkan
                                     </Button>
                                 </div>
                             )}
@@ -284,7 +328,7 @@ const HardwareTab: React.FC = () => {
                                         className="flex-1"
                                         size="sm"
                                     >
-                                        {isBleScanning ? 'Memindai...' : (isNative ? 'Cari Printer (Native)' : 'Cari Printer')}
+                                        {isBleScanning ? 'Memindai...' : (isNative ? 'Cari Printer (Pair)' : 'Cari Printer')}
                                     </Button>
                                 )}
                                 <Button 
@@ -312,18 +356,18 @@ const HardwareTab: React.FC = () => {
                 )}
             </SettingsCard>
 
-            {/* 2. SYSTEM PRINTER SECTION */}
+            {/* 2. USB / SYSTEM PRINTER */}
             <SettingsCard 
-                title="Printer Kabel / Sistem (USB/WiFi)" 
-                description="Printer desktop yang terinstal di komputer/laptop."
+                title="Printer Kabel (USB OTG / Windows)" 
+                description="Untuk printer USB di Android, gunakan kabel OTG dan pastikan printer terdeteksi sistem."
                 icon={<Icon name="printer" className="w-6 h-6"/>}
             >
-                <div className="flex justify-between items-center gap-4">
-                    <div className="text-sm text-slate-300">
-                        <p>Menggunakan dialog cetak bawaan (Ctrl+P).</p>
+                <div className="flex flex-col gap-3">
+                    <div className="text-xs text-slate-300 bg-slate-900 p-3 rounded">
+                        <p><strong>Android USB (OTG):</strong> Aplikasi ini belum mendukung <em>Direct USB</em>. Gunakan tombol di bawah untuk membuka dialog cetak sistem Android (via RawBT atau Print Service bawaan).</p>
                     </div>
-                    <Button onClick={handleTestPrintSystem} variant="secondary" size="sm" className="shrink-0">
-                        <Icon name="printer" className="w-4 h-4"/> Buka Dialog Print
+                    <Button onClick={handleTestPrintSystem} variant="secondary" size="sm" className="w-full">
+                        <Icon name="printer" className="w-4 h-4"/> Buka Dialog Print Sistem
                     </Button>
                 </div>
             </SettingsCard>

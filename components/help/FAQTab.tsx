@@ -8,6 +8,24 @@ const FAQTab: React.FC = () => {
                 <h3 className="font-bold text-white mb-2 text-lg">Tanya Jawab & Masalah Umum</h3>
                 <div className="space-y-4">
                     
+                    {/* --- FAQ STOK (NEW) --- */}
+                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apa bedanya "Transfer Stok" dan "Stok Manual"?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: <strong>Transfer Stok</strong> digunakan oleh Gudang Pusat untuk mengirim barang ke Cabang secara digital (membutuhkan internet). Cabang akan menerima stok saat Sync.<br/><br/>
+                            <strong>Stok Manual</strong> digunakan untuk input barang yang dibeli sendiri oleh toko dari supplier lokal/pasar (bisa offline).
+                        </p>
+                    </div>
+
+                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Gudang sudah kirim barang, kenapa stok di kasir belum bertambah?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: Karena aplikasi ini <em>Offline-First</em>, data tidak masuk otomatis detik itu juga. <br/>
+                            Kasir/Staf Toko harus menekan tombol <strong>"Cek Update" (ikon panah bawah)</strong> di bagian atas layar (Header) untuk mengunduh data kiriman dari Gudang. Pastikan ada internet saat menekan tombol tersebut.
+                        </p>
+                    </div>
+                    {/* ------------------------------- */}
+
                     {/* --- NEW FAQ FOR MEMBER CARD --- */}
                     <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
                         <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah barcode scanner bisa untuk kartu member?</h4>

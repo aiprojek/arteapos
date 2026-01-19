@@ -100,7 +100,7 @@ const ManualTab: React.FC = () => {
                         <p>Dua cara berbeda untuk menambah stok:</p>
                         <ul className="list-disc pl-5 mt-2 space-y-2">
                             <li>
-                                <strong>Transfer Stok (Gudang -> Cabang):</strong><br/>
+                                <strong>Transfer Stok (Gudang &rarr; Cabang):</strong><br/>
                                 Digunakan saat Pusat mengirim barang ke Cabang.
                                 <br/><em>Cara Pakai:</em> Gudang buka menu Produk &rarr; Klik "Transfer Stok" &rarr; Pilih Cabang & Barang.
                                 <br/><em>Di Cabang:</em> Kasir cukup klik tombol <strong>"Cek Update"</strong> di Header untuk menerima stok otomatis.

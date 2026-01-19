@@ -13,7 +13,7 @@ const FAQTab: React.FC = () => {
                         <h4 className="font-bold text-[#52a37c] mb-1">Q: Apa bedanya "Transfer Stok" dan "Stok Manual"?</h4>
                         <p className="text-slate-300 text-sm">
                             A: <strong>Transfer Stok</strong> digunakan oleh Gudang Pusat untuk mengirim barang ke Cabang secara digital (membutuhkan internet). Cabang akan menerima stok saat Sync.<br/><br/>
-                            <strong>Stok Manual</strong> digunakan untuk input barang yang dibeli sendiri oleh toko dari supplier lokal/pasar (bisa offline).
+                            <strong>Stok Manual</strong> digunakan untuk input barang yang dibeli sendiri oleh toko dari supplier lokal/pasar (bisa offline) atau untuk mencatat barang rusak/waste.
                         </p>
                     </div>
 

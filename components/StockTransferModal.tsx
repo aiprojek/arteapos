@@ -14,7 +14,7 @@ interface StockTransferModalProps {
 }
 
 const StockTransferModal: React.FC<StockTransferModalProps> = ({ isOpen, onClose }) => {
-    const { products, rawMaterials } = useProduct();
+    const { products, rawMaterials, processOutgoingTransfer } = useProduct(); // IMPORT FUNCTION
     const { receiptSettings } = useSettings();
     const { showAlert } = useUI();
     
@@ -62,6 +62,22 @@ const StockTransferModal: React.FC<StockTransferModalProps> = ({ isOpen, onClose
             return;
         }
 
+        // VALIDASI STOK CUKUP
+        const insufficientItems = selectedItems.filter(i => {
+            const qty = parseFloat(i.qty) || 0;
+            return qty > i.currentStock;
+        });
+
+        if (insufficientItems.length > 0) {
+            const names = insufficientItems.map(i => i.name).join(', ');
+            showAlert({ 
+                type: 'alert', 
+                title: 'Stok Tidak Cukup', 
+                message: `Stok barang berikut kurang di gudang: ${names}` 
+            });
+            return;
+        }
+
         setIsSending(true);
         try {
             const payloadItems = selectedItems.map(i => ({
@@ -73,11 +89,16 @@ const StockTransferModal: React.FC<StockTransferModalProps> = ({ isOpen, onClose
 
             if (payloadItems.length === 0) throw new Error("Jumlah barang tidak valid.");
 
+            // 1. Upload ke Dropbox (Kirim File ke Cabang)
             await dropboxService.uploadStockTransfer(targetStoreId, payloadItems, notes);
             
-            showAlert({ type: 'alert', title: 'Terkirim', message: 'Paket stok berhasil dikirim ke Cloud. Cabang akan menerima stok saat melakukan Sync.' });
+            // 2. Potong Stok Lokal & Catat di Laporan (Gudang) - NEW
+            processOutgoingTransfer(targetStoreId, payloadItems, notes);
+
+            showAlert({ type: 'alert', title: 'Terkirim', message: 'Stok Gudang telah dikurangi dan paket berhasil dikirim ke Cloud untuk Cabang.' });
             onClose();
-            // Reset
+            
+            // Reset Form
             setSelectedItems([]);
             setTargetStoreId('');
             setNotes('');
@@ -156,7 +177,9 @@ const StockTransferModal: React.FC<StockTransferModalProps> = ({ isOpen, onClose
                             <div key={item.id} className="bg-slate-800 p-2 rounded flex justify-between items-center border border-slate-700">
                                 <div className="flex-1">
                                     <p className="font-bold text-white text-sm">{item.name}</p>
-                                    <p className="text-[10px] text-slate-400">{item.type === 'product' ? 'Produk' : 'Bahan'}</p>
+                                    <p className="text-[10px] text-slate-400">
+                                        Stok Gudang: <span className={parseFloat(item.qty) > item.currentStock ? "text-red-400 font-bold" : ""}>{item.currentStock}</span>
+                                    </p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <input 
@@ -188,7 +211,7 @@ const StockTransferModal: React.FC<StockTransferModalProps> = ({ isOpen, onClose
                 </div>
 
                 <Button onClick={handleSend} disabled={isSending} className="w-full py-3 bg-blue-600 hover:bg-blue-500 border-none">
-                    {isSending ? 'Mengirim...' : <><Icon name="share" className="w-4 h-4"/> Kirim Stok ke Cabang</>}
+                    {isSending ? 'Mengirim...' : <><Icon name="share" className="w-4 h-4"/> Kirim & Potong Stok</>}
                 </Button>
             </div>
         </Modal>

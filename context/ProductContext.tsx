@@ -39,6 +39,7 @@ interface ProductContextType {
   isProductAvailable: (product: Product) => { available: boolean, reason: string };
   importStockAdjustments: (adjustments: StockAdjustment[]) => void;
   processIncomingTransfers: (transfers: StockTransferPayload[]) => void;
+  processOutgoingTransfer: (targetStoreId: string, items: StockTransferPayload['items'], notes: string) => void; // NEW FUNCTION
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -341,7 +342,7 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       });
   }, [setData]);
 
-  // NEW: Process Incoming Transfers from Cloud
+  // Process Incoming Transfers (Cabang)
   const processIncomingTransfers = useCallback((transfers: StockTransferPayload[]) => {
       if (transfers.length === 0) return;
 
@@ -411,6 +412,66 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       }
   }, [setData, logAudit, currentUser, triggerAutoSync]);
 
+  // NEW: Process Outgoing Transfer (Gudang) - Deduct Stock & Log
+  const processOutgoingTransfer = useCallback((targetStoreId: string, items: StockTransferPayload['items'], notes: string) => {
+      setData(prev => {
+          let updatedProducts = [...prev.products];
+          let updatedMaterials = [...prev.rawMaterials];
+          let newAdjustments: StockAdjustment[] = [];
+          const now = new Date().toISOString();
+          const notePrefix = `Transfer Keluar ke ${targetStoreId}`;
+
+          items.forEach((item, idx) => {
+              if (item.type === 'product') {
+                  const pIdx = updatedProducts.findIndex(p => p.id === item.id);
+                  if (pIdx > -1 && updatedProducts[pIdx].trackStock) {
+                      const oldStock = updatedProducts[pIdx].stock || 0;
+                      const newStock = oldStock - item.qty; // DEDUCT
+                      updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: newStock };
+                      
+                      newAdjustments.push({
+                          id: `TRANS-OUT-${Date.now()}-${idx}`,
+                          productId: item.id,
+                          productName: item.name,
+                          change: -item.qty, // NEGATIVE
+                          newStock: newStock,
+                          notes: `${notePrefix} - ${notes}`,
+                          createdAt: now
+                      });
+                  }
+              } else {
+                  const mIdx = updatedMaterials.findIndex(m => m.id === item.id);
+                  if (mIdx > -1) {
+                      const oldStock = updatedMaterials[mIdx].stock || 0;
+                      const newStock = oldStock - item.qty; // DEDUCT
+                      updatedMaterials[mIdx] = { ...updatedMaterials[mIdx], stock: newStock };
+
+                      newAdjustments.push({
+                          id: `TRANS-OUT-${Date.now()}-${idx}`,
+                          productId: item.id,
+                          productName: item.name,
+                          change: -item.qty, // NEGATIVE
+                          newStock: newStock,
+                          notes: `${notePrefix} - ${notes}`,
+                          createdAt: now
+                      });
+                  }
+              }
+          });
+
+          return {
+              ...prev,
+              products: updatedProducts,
+              rawMaterials: updatedMaterials,
+              stockAdjustments: [...newAdjustments, ...(prev.stockAdjustments || [])]
+          }
+      });
+
+      logAudit(currentUser, 'STOCK_TRANSFER_OUT', `Mengirim ${items.length} jenis barang ke cabang ${targetStoreId}.`, 'BATCH-TRANSFER');
+      setTimeout(() => triggerAutoSync(getStaffName()), 1000);
+
+  }, [setData, logAudit, currentUser, triggerAutoSync]);
+
   return (
     <ProductContext.Provider value={{
       products,
@@ -434,7 +495,8 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       bulkAddRawMaterials,
       isProductAvailable,
       importStockAdjustments,
-      processIncomingTransfers
+      processIncomingTransfers,
+      processOutgoingTransfer // EXPORT
     }}>
       {children}
     </ProductContext.Provider>

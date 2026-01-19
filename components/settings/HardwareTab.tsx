@@ -23,8 +23,14 @@ declare global {
                     BLUETOOTH_CONNECT?: string;
                     BLUETOOTH_ADVERTISE?: string;
                     ACCESS_COARSE_LOCATION?: string;
+                    ACCESS_FINE_LOCATION?: string;
                 }
             }
+        }
+        device?: {
+            platform: string;
+            version: string;
+            sdkVersion?: string; 
         }
     }
 }
@@ -93,22 +99,51 @@ const HardwareTab: React.FC = () => {
         }
     };
 
-    // --- PERMISSION REQUEST HANDLER ---
-    const requestAndroid12Permissions = (): Promise<boolean> => {
+    // --- SMART PERMISSION HANDLER (ROBUST VERSION) ---
+    const requestBluetoothPermissions = (): Promise<boolean> => {
         return new Promise((resolve) => {
             const permissions = window.cordova?.plugins?.permissions;
             if (!permissions) {
-                // Plugin belum siap atau tidak ada (misal: di web atau iOS), kita anggap true agar lanjut
-                // atau false jika strict. Untuk hybrid, true biasanya aman karena plugin bluetooth handle sendiri jika legacy.
                 resolve(true); 
                 return;
             }
 
-            // List izin Android 12+
+            // DETEKSI VERSI ANDROID (LEBIH AMAN)
+            // 1. Coba dari plugin device (jika ada)
+            let androidVersion = parseInt(window.device?.version || "0", 10);
+            
+            // 2. Fallback: Parse User Agent (cth: "Android 12;")
+            if (androidVersion === 0) {
+                const match = navigator.userAgent.match(/Android\s+([0-9.]+)/);
+                if (match && match[1]) {
+                    androidVersion = parseInt(match[1], 10);
+                }
+            }
+
+            console.log("Detected Android Version:", androidVersion);
+
+            // Tentukan: Apakah ini Android 12 ke atas?
+            // Jika deteksi gagal (0), kita asumsikan versi baru (12+) agar aman (better request Nearby than Location)
+            // Atau jika Native Platform, request keduanya.
+            const isAndroid12Plus = androidVersion === 0 || androidVersion >= 12;
+
             const scanPerm = permissions.BLUETOOTH_SCAN || 'android.permission.BLUETOOTH_SCAN';
             const connectPerm = permissions.BLUETOOTH_CONNECT || 'android.permission.BLUETOOTH_CONNECT';
-            
-            permissions.requestPermissions([scanPerm, connectPerm], 
+            const locationPerm = permissions.ACCESS_FINE_LOCATION || 'android.permission.ACCESS_FINE_LOCATION';
+
+            let permsToRequest: any[] = [];
+
+            if (isAndroid12Plus) {
+                // Android 12+ (API 31+): Minta izin SCAN & CONNECT (Tanpa Lokasi)
+                permsToRequest = [scanPerm, connectPerm];
+            } else {
+                // Android 11- (Legacy): Minta izin LOKASI
+                permsToRequest = [locationPerm];
+            }
+
+            console.log("Requesting permissions:", permsToRequest);
+
+            permissions.requestPermissions(permsToRequest, 
                 (status: any) => {
                     if (!status.hasPermission) {
                         console.warn("Permission denied via plugin");
@@ -131,15 +166,24 @@ const HardwareTab: React.FC = () => {
         setPermissionStatus('unknown');
         
         if (isNative) {
-            // STEP 1: Explicitly Ask for Android 12 Permissions
-            const granted = await requestAndroid12Permissions();
+            // STEP 1: Ask Permissions Smartly
+            const granted = await requestBluetoothPermissions();
             if (!granted) {
                 setPermissionStatus('denied');
                 setIsBleScanning(false);
+                
+                // Cek ulang versi untuk pesan error yang tepat
+                const match = navigator.userAgent.match(/Android\s+([0-9.]+)/);
+                const ver = match ? parseInt(match[1]) : 0;
+                
+                const msg = ver >= 12 || ver === 0
+                    ? 'Aplikasi memerlukan izin "Perangkat Sekitar" (Nearby Devices) untuk menemukan printer.'
+                    : 'Aplikasi memerlukan izin "Lokasi" untuk memindai Bluetooth (Syarat Android Lama).';
+
                 showAlert({
                     type: 'confirm', 
                     title: 'Izin Dibutuhkan', 
-                    message: 'Aplikasi memerlukan izin "Perangkat Sekitar" (Nearby Devices) untuk menemukan printer. Mohon izinkan di Pengaturan.',
+                    message: msg + ' Mohon izinkan di Pengaturan.',
                     confirmText: 'Buka Pengaturan',
                     onConfirm: openAppSettings
                 });
@@ -184,7 +228,7 @@ const HardwareTab: React.FC = () => {
     const handleNativePairSelection = async (macAddress: string) => {
         setSelectedDeviceId(macAddress);
         // Ask permission again just in case 'Connect' needs it specifically
-        await requestAndroid12Permissions();
+        await requestBluetoothPermissions();
         
         try {
             await bluetoothPrinterService.connectNative(macAddress);

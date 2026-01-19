@@ -6,45 +6,40 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     
-    <!-- Batasi Write Storage hanya untuk Android 9 (API 28) ke bawah. -->
+    <!-- Storage & Camera -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
-    
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FLASHLIGHT"/>
 
-    <!-- 
-        PENGATURAN BLUETOOTH HYBRID (CRITICAL FIX)
-        1. neverForLocation: Agar tidak butuh GPS nyala.
-        2. tools:remove: Mencegah plugin lain menambahkan maxSdkVersion yang salah.
-        3. tools:node="replace": MEMAKSA Android menggunakan setting ini jika ada konflik dengan plugin Cordova.
-    -->
-
-    <!-- ANDROID 12+ (API 31 ke atas): Nearby Devices Only -->
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" 
-                     android:usesPermissionFlags="neverForLocation" 
-                     tools:node="replace"
-                     tools:targetApi="31" />
+    <!-- 1. BLUETOOTH UNTUK ANDROID 12+ (API 31+) -->
+    <!-- Tambahkan tools:node="replace" untuk memastikan pengaturan Anda yang menang -->
+    <uses-permission 
+        android:name="android.permission.BLUETOOTH_SCAN" 
+        android:usesPermissionFlags="neverForLocation" 
+        tools:targetApi="31" 
+        tools:node="replace" />
                      
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" 
-                     tools:node="replace"
-                     tools:targetApi="31" />
+    <uses-permission 
+        android:name="android.permission.BLUETOOTH_CONNECT" 
+        tools:targetApi="31" 
+        tools:node="replace" />
                      
-    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" 
-                     tools:node="replace"
-                     tools:targetApi="31" />
+    <uses-permission 
+        android:name="android.permission.BLUETOOTH_ADVERTISE" 
+        tools:targetApi="31" 
+        tools:node="replace" />
 
-    <!-- ANDROID 11 KE BAWAH: Legacy Bluetooth -->
+    <!-- 2. BLUETOOTH LEGACY (ANDROID 11 KE BAWAH) -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     
-    <!-- Izin Lokasi Legacy (Hanya untuk Android 11 ke bawah agar scan jalan) -->
-    <!-- tools:node="replace" penting agar plugin tidak menghapus maxSdkVersion -->
+    <!-- 3. LOKASI (HANYA UNTUK ANDROID 11 KE BAWAH) -->
+    <!-- Paksa sistem untuk mengabaikan permintaan lokasi dari plugin di Android 12+ -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="30" tools:node="replace" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" tools:node="replace" />
 
-    <!-- Pastikan fitur Bluetooth tidak wajib agar app bisa diinstall di device non-bluetooth -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
@@ -63,12 +58,10 @@
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
         </activity>
 
         <provider
@@ -81,5 +74,4 @@
                 android:resource="@xml/file_paths" />
         </provider>
     </application>
-
 </manifest>

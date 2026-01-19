@@ -7,31 +7,20 @@ import { useUI } from '../../context/UIContext';
 import { useSettings } from '../../context/SettingsContext';
 import type { Transaction } from '../../types';
 import BarcodeScannerModal from '../BarcodeScannerModal';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
 
-// Interface untuk plugin Permissions
+// --- DEFINISI CUSTOM PLUGIN ---
+interface BluetoothPermissionPlugin {
+    request(): Promise<void>;
+}
+const BluetoothPermission = registerPlugin<BluetoothPermissionPlugin>('BluetoothPermission');
+
+// Interface untuk plugin Cordova (Legacy fallback)
 declare global {
     interface Window {
-        cordova?: {
-            plugins?: {
-                permissions?: {
-                    checkPermission: (permission: any, success: (status: any) => void, error: (err: any) => void) => void;
-                    requestPermission: (permission: any, success: (status: any) => void, error: (err: any) => void) => void;
-                    requestPermissions: (permissions: any[], success: (status: any) => void, error: (err: any) => void) => void;
-                    BLUETOOTH_SCAN?: string;
-                    BLUETOOTH_CONNECT?: string;
-                    BLUETOOTH_ADVERTISE?: string;
-                    ACCESS_COARSE_LOCATION?: string;
-                    ACCESS_FINE_LOCATION?: string;
-                }
-            }
-        }
-        device?: {
-            platform: string;
-            version: string;
-            sdkVersion?: string; 
-        }
+        cordova?: any;
+        // bluetoothSerial definitions are handled in utils/bluetoothPrinter.ts to avoid conflicts
     }
 }
 
@@ -99,65 +88,17 @@ const HardwareTab: React.FC = () => {
         }
     };
 
-    // --- SMART PERMISSION HANDLER (ROBUST VERSION) ---
-    const requestBluetoothPermissions = (): Promise<boolean> => {
-        return new Promise((resolve) => {
-            const permissions = window.cordova?.plugins?.permissions;
-            if (!permissions) {
-                resolve(true); 
-                return;
-            }
-
-            // DETEKSI VERSI ANDROID (LEBIH AMAN)
-            // 1. Coba dari plugin device (jika ada)
-            let androidVersion = parseInt(window.device?.version || "0", 10);
-            
-            // 2. Fallback: Parse User Agent (cth: "Android 12;")
-            if (androidVersion === 0) {
-                const match = navigator.userAgent.match(/Android\s+([0-9.]+)/);
-                if (match && match[1]) {
-                    androidVersion = parseInt(match[1], 10);
-                }
-            }
-
-            console.log("Detected Android Version:", androidVersion);
-
-            // Tentukan: Apakah ini Android 12 ke atas?
-            // Jika deteksi gagal (0), kita asumsikan versi baru (12+) agar aman (better request Nearby than Location)
-            // Atau jika Native Platform, request keduanya.
-            const isAndroid12Plus = androidVersion === 0 || androidVersion >= 12;
-
-            const scanPerm = permissions.BLUETOOTH_SCAN || 'android.permission.BLUETOOTH_SCAN';
-            const connectPerm = permissions.BLUETOOTH_CONNECT || 'android.permission.BLUETOOTH_CONNECT';
-            const locationPerm = permissions.ACCESS_FINE_LOCATION || 'android.permission.ACCESS_FINE_LOCATION';
-
-            let permsToRequest: any[] = [];
-
-            if (isAndroid12Plus) {
-                // Android 12+ (API 31+): Minta izin SCAN & CONNECT (Tanpa Lokasi)
-                permsToRequest = [scanPerm, connectPerm];
-            } else {
-                // Android 11- (Legacy): Minta izin LOKASI
-                permsToRequest = [locationPerm];
-            }
-
-            console.log("Requesting permissions:", permsToRequest);
-
-            permissions.requestPermissions(permsToRequest, 
-                (status: any) => {
-                    if (!status.hasPermission) {
-                        console.warn("Permission denied via plugin");
-                        resolve(false);
-                    } else {
-                        resolve(true);
-                    }
-                }, 
-                () => {
-                    console.error("Permission error via plugin");
-                    resolve(false);
-                }
-            );
-        });
+    // --- NEW: NATIVE PERMISSION HANDLER (CUSTOM PLUGIN) ---
+    const requestNativePermissions = async (): Promise<boolean> => {
+        try {
+            // Panggil plugin Java yang baru kita buat
+            await BluetoothPermission.request();
+            console.log("Custom Plugin Permission: GRANTED");
+            return true;
+        } catch (e) {
+            console.error("Custom Plugin Permission: DENIED", e);
+            return false;
+        }
     };
 
     // --- BLUETOOTH HANDLERS ---
@@ -166,42 +107,34 @@ const HardwareTab: React.FC = () => {
         setPermissionStatus('unknown');
         
         if (isNative) {
-            // STEP 1: Ask Permissions Smartly
-            const granted = await requestBluetoothPermissions();
+            // STEP 1: Ask Permissions via Custom Plugin
+            const granted = await requestNativePermissions();
+            
             if (!granted) {
                 setPermissionStatus('denied');
                 setIsBleScanning(false);
-                
-                // Cek ulang versi untuk pesan error yang tepat
-                const match = navigator.userAgent.match(/Android\s+([0-9.]+)/);
-                const ver = match ? parseInt(match[1]) : 0;
-                
-                const msg = ver >= 12 || ver === 0
-                    ? 'Aplikasi memerlukan izin "Perangkat Sekitar" (Nearby Devices) untuk menemukan printer.'
-                    : 'Aplikasi memerlukan izin "Lokasi" untuk memindai Bluetooth (Syarat Android Lama).';
-
                 showAlert({
                     type: 'confirm', 
-                    title: 'Izin Dibutuhkan', 
-                    message: msg + ' Mohon izinkan di Pengaturan.',
+                    title: 'Izin Ditolak', 
+                    message: 'Aplikasi memerlukan izin "Perangkat Sekitar" (Android 12+) atau "Lokasi" (Android Lama) untuk menemukan printer. Mohon izinkan di Pengaturan.',
                     confirmText: 'Buka Pengaturan',
                     onConfirm: openAppSettings
                 });
                 return;
             }
 
-            // STEP 2: List Devices
+            // STEP 2: List Devices using existing Bluetooth Serial Plugin
+            // Karena izin sudah dihandle oleh plugin custom kita, plugin ini tinggal jalan saja.
             try {
                 const devices = await bluetoothPrinterService.listNativeDevices();
                 setPairedDevices(devices);
                 if (devices.length === 0) {
-                    showAlert({type: 'alert', title: 'Kosong', message: 'Tidak ada perangkat Bluetooth yang terpasang (Paired). Silakan pasangkan printer di Pengaturan Bluetooth Android HP Anda terlebih dahulu, lalu kembali ke sini.'});
+                    showAlert({type: 'alert', title: 'Kosong', message: 'Tidak ada perangkat Bluetooth yang terpasang (Paired). Silakan pasangkan printer di Pengaturan Bluetooth Android HP Anda terlebih dahulu.'});
                 }
             } catch (e: any) {
                 console.error("Bluetooth Error:", e);
-                const errorStr = e ? e.toString().toLowerCase() : "";
-                
-                if (errorStr.includes('permission') || errorStr.includes('denied')) {
+                // Fallback catch
+                if (e.toString().toLowerCase().includes('permission')) {
                     setPermissionStatus('denied');
                 } else {
                     showAlert({type: 'alert', title: 'Gagal Memuat', message: 'Pastikan Bluetooth Aktif. ' + e});
@@ -227,14 +160,14 @@ const HardwareTab: React.FC = () => {
 
     const handleNativePairSelection = async (macAddress: string) => {
         setSelectedDeviceId(macAddress);
-        // Ask permission again just in case 'Connect' needs it specifically
-        await requestBluetoothPermissions();
+        // Ensure permission one last time
+        await requestNativePermissions();
         
         try {
             await bluetoothPrinterService.connectNative(macAddress);
             setIsBleConnected(true);
             showAlert({ type: 'alert', title: 'Terhubung', message: 'Printer berhasil terhubung!' });
-            setPairedDevices([]); // Clear list to show connected status
+            setPairedDevices([]); 
         } catch (e: any) {
             showAlert({ type: 'alert', title: 'Gagal', message: 'Gagal terhubung: ' + e });
         }
@@ -250,7 +183,6 @@ const HardwareTab: React.FC = () => {
 
     const handleTestPrintBle = async () => {
         if (!isBleConnected && !isNative) {
-            // Web check only, native might be connected in background
             showAlert({ type: 'alert', title: 'Belum Terhubung', message: 'Silakan hubungkan printer terlebih dahulu.' });
             return;
         }

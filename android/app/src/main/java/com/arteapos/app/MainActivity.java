@@ -9,7 +9,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // Mendaftarkan Plugin Custom kita
+        // Mendaftarkan Plugin Custom kita dengan nama class yang BENAR
         registerPlugin(BluetoothPrinterPlugin.class);
     }
 }

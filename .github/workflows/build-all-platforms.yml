@@ -18,11 +18,10 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
+          cache: 'npm'
       
-      - name: Force Install Dependencies
-        run: |
-          rm -f package-lock.json
-          npm install
+      - name: Install Dependencies
+        run: npm install
           
       - run: npm run build
       - name: Upload Dist
@@ -44,6 +43,7 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
+          cache: 'npm'
       
       # FIX: Menggunakan action resmi dari organisasi gradle
       - uses: gradle/actions/setup-gradle@v3
@@ -55,9 +55,7 @@ jobs:
           path: dist
           
       - name: Install Dependencies
-        run: |
-          rm -f package-lock.json
-          npm install
+        run: npm install
       
       - name: Setup Capacitor Assets & Android
         run: |
@@ -107,6 +105,7 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
+          cache: 'npm'
       
       - uses: actions/download-artifact@v4
         with:
@@ -114,9 +113,7 @@ jobs:
           path: dist
 
       - name: Install Dependencies
-        run: |
-          rm -f package-lock.json
-          npm install
+        run: npm install
       
       - name: Build Linux AppImage
         env:
@@ -138,6 +135,7 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
+          cache: 'npm'
       
       - uses: actions/download-artifact@v4
         with:
@@ -145,9 +143,7 @@ jobs:
           path: dist
 
       - name: Install Dependencies
-        run: |
-          if (Test-Path package-lock.json) { Remove-Item package-lock.json }
-          npm install
+        run: npm install
       
       - name: Build Windows Exe
         env:

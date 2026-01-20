@@ -33,6 +33,10 @@ const DataTab: React.FC = () => {
     const { importTransactions } = useFinance();
     const { showAlert } = useUI();
     
+    // Offline Status State
+    const [isOfflineReady, setIsOfflineReady] = useState(false);
+    const [isRetryingSW, setIsRetryingSW] = useState(false);
+
     // Cloud Settings State
     const [dbxKey, setDbxKey] = useState('');
     const [dbxSecret, setDbxSecret] = useState('');
@@ -48,7 +52,6 @@ const DataTab: React.FC = () => {
     const [pairingTextCode, setPairingTextCode] = useState(''); 
     const [inputPairingCode, setInputPairingCode] = useState(''); 
     const [pairingMode, setPairingMode] = useState<'generate' | 'input'>('generate');
-    // SECURITY UPDATE: PIN for Pairing
     const [pairingPin, setPairingPin] = useState(''); 
     const [pairingStep, setPairingStep] = useState<'pin_input' | 'show_code' | 'scan_success'>('pin_input');
 
@@ -79,6 +82,13 @@ const DataTab: React.FC = () => {
     });
 
     useEffect(() => {
+        // Check Service Worker Status
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            setIsOfflineReady(true);
+        } else {
+            setIsOfflineReady(false);
+        }
+
         // Load credentials safely
         const creds = dropboxService.getCredentials();
         if (creds) {
@@ -99,6 +109,42 @@ const DataTab: React.FC = () => {
             console.error("Failed to calc size", e);
         }
     }, [data]);
+
+    const handleRetrySW = async () => {
+        setIsRetryingSW(true);
+        try {
+            if ('serviceWorker' in navigator) {
+                // Unregister first to force clean slate
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (const registration of registrations) {
+                    await registration.unregister();
+                }
+                
+                // Re-register
+                const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+                
+                // Force update logic (opsional, tapi bagus untuk memastikan)
+                if (reg.installing) {
+                    const sw = reg.installing;
+                    sw.addEventListener('statechange', () => {
+                        if (sw.state === 'installed') {
+                            setIsOfflineReady(true);
+                            showAlert({ type: 'alert', title: 'Berhasil', message: 'Aset offline sedang diunduh di latar belakang. Aplikasi siap digunakan tanpa internet.' });
+                        }
+                    });
+                } else {
+                     setIsOfflineReady(true);
+                     showAlert({ type: 'alert', title: 'Berhasil', message: 'Service Worker aktif.' });
+                }
+            } else {
+                alert("Browser ini tidak mendukung Mode Offline.");
+            }
+        } catch (e: any) {
+            showAlert({ type: 'alert', title: 'Gagal', message: 'Gagal mengaktifkan mode offline: ' + e.message });
+        } finally {
+            setIsRetryingSW(false);
+        }
+    };
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -153,7 +199,6 @@ const DataTab: React.FC = () => {
     };
 
     // --- Pairing Logic (QR & Text) ---
-    
     const handleOpenPairingGenerator = () => {
         const creds = dropboxService.getCredentials();
         if (!creds) {
@@ -176,7 +221,6 @@ const DataTab: React.FC = () => {
         const creds = dropboxService.getCredentials();
         if (!creds) return;
 
-        // Encrypt using the PIN provided by user
         const textCode = encryptCredentials({
             k: creds.clientId,
             s: creds.clientSecret,
@@ -190,23 +234,15 @@ const DataTab: React.FC = () => {
     const handleInputCodeInit = () => {
         setPairingMode('input');
         setPairingPin('');
-        setPairingStep('pin_input'); // Ask for code first? No, standard is input code then PIN.
-        // Let's modify: Input Code screen first, then if valid format, ask PIN.
-        // For simplicity: We use the modal to capture code, then ask PIN if needed inside 'processPairingCode'.
+        setPairingStep('pin_input'); 
         setShowPairingModal(true);
     };
 
     const processPairingCode = async (code: string) => {
-        // We need to ask for PIN to decrypt
-        // Use Prompt logic or simple flow
-        // Since `window.prompt` is ugly, let's assume we use the state `pairingPin` if available
-        // OR we enforce the flow: Scan -> Enter PIN -> Decrypt.
-        
-        // Let's use the modal flow for PIN entry
         setInputPairingCode(code);
-        setIsScanningPairing(false); // Close scanner if open
+        setIsScanningPairing(false); 
         setPairingMode('input');
-        setPairingStep('pin_input'); // Re-use pin input step for decryption
+        setPairingStep('pin_input'); 
         setShowPairingModal(true);
     };
 
@@ -330,14 +366,12 @@ const DataTab: React.FC = () => {
         }
     };
 
-    // NEW: Handle Cloud Archive with Multiple Formats
     const handleCloudArchive = async (format: 'json' | 'xlsx' | 'csv' | 'ods' | 'pdf' = 'json') => {
         if (!isConfigured) return;
         setIsArchivingCloud(true);
         setCloudArchiveDropdownOpen(false);
         
         try {
-            // 1. Fetch ALL data from Dropbox (Aggregate)
             const aggregatedData = await dropboxService.fetchAllBranchData();
             
             if (aggregatedData.length === 0) {
@@ -349,7 +383,6 @@ const DataTab: React.FC = () => {
             const timestamp = new Date().toISOString().slice(0, 10);
             
             if (format === 'json') {
-                // Original JSON Backup Logic (Raw Data for Restore)
                 const fileName = `Artea_Cloud_Archive_${timestamp}.json`;
                 const jsonString = JSON.stringify(aggregatedData, null, 2);
                 const blob = new Blob([jsonString], { type: 'application/json' });
@@ -363,7 +396,6 @@ const DataTab: React.FC = () => {
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
             } else {
-                // Readable Formats (Flattened Transactions from all branches)
                 const allTxns = aggregatedData.flatMap((branch: any) => {
                     const storeId = branch.storeId || 'Unknown';
                     return (branch.transactionRecords || []).map((t: any) => ({
@@ -378,7 +410,7 @@ const DataTab: React.FC = () => {
                     t.storeId,
                     t.id.slice(-6),
                     t.customerName || '-',
-                    t.total, // Keep number for excel/csv
+                    t.total, 
                     t.paymentStatus,
                     (t.items || []).map((i: any) => `${i.name} (x${i.quantity})`).join('; ')
                 ]);
@@ -386,7 +418,6 @@ const DataTab: React.FC = () => {
                 const fileNameBase = `Artea_Cloud_Report_${timestamp}`;
 
                 if (format === 'pdf') {
-                    // Format currency string specifically for PDF visual
                     const pdfRows = rows.map(r => r.map((c, i) => i === 4 ? CURRENCY_FORMATTER.format(c as number) : c));
                     generateTablePDF('Arsip Transaksi Cloud (Semua Cabang)', headers, pdfRows, data.receiptSettings);
                 } else {
@@ -428,7 +459,7 @@ const DataTab: React.FC = () => {
                 try {
                     if (isConfigured) {
                         const res = await dropboxService.clearOldBackups();
-                        checkDropboxQuota(); // Refresh quota
+                        checkDropboxQuota(); 
                         showAlert({
                             type: 'alert',
                             title: 'Pembersihan Selesai',
@@ -533,7 +564,6 @@ const DataTab: React.FC = () => {
         }
     };
 
-    // Safe Local Storage Access for Last Pull Time
     let lastPullTime = '';
     try {
         lastPullTime = localStorage.getItem('ARTEA_LAST_MASTER_PULL') || '';
@@ -552,8 +582,34 @@ const DataTab: React.FC = () => {
 
     return (
         <div className="animate-fade-in">
-            {/* --- System Health Check Section --- */}
+            {/* --- NEW: STATUS APLIKASI (OFFLINE CHECK) --- */}
+            <SettingsCard title="Status Aplikasi" description="Cek apakah aplikasi siap berjalan tanpa internet.">
+                <div className={`p-4 rounded-lg border flex items-center justify-between ${isOfflineReady ? 'bg-green-900/20 border-green-800' : 'bg-red-900/20 border-red-800'}`}>
+                    <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-full ${isOfflineReady ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                            <Icon name={isOfflineReady ? "check-circle-fill" : "warning"} className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h4 className={`font-bold ${isOfflineReady ? 'text-green-300' : 'text-red-300'}`}>
+                                {isOfflineReady ? 'Siap Offline' : 'Mode Online Saja'}
+                            </h4>
+                            <p className="text-xs text-slate-400">
+                                {isOfflineReady 
+                                    ? 'Aset aplikasi sudah tersimpan. Bisa dibuka tanpa internet.' 
+                                    : 'Aset belum terunduh sempurna. Perlu internet untuk membuka aplikasi.'}
+                            </p>
+                        </div>
+                    </div>
+                    {!isOfflineReady && (
+                        <Button size="sm" onClick={handleRetrySW} disabled={isRetryingSW}>
+                            {isRetryingSW ? 'Mengunduh...' : 'Download Aset Offline'}
+                        </Button>
+                    )}
+                </div>
+            </SettingsCard>
+
             <SettingsCard title="Diagnosa Sistem" description="Cek kesehatan database lokal dan penyimpanan browser.">
+                {/* ... existing diagnostics content ... */}
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
                         <p className="text-sm text-slate-300">
@@ -563,7 +619,7 @@ const DataTab: React.FC = () => {
                             {isChecking ? 'Mengecek...' : 'Cek Kesehatan Data'}
                         </Button>
                     </div>
-                    
+                    {/* ... health status render ... */}
                     {healthStatus && (
                         <div className="bg-slate-900 border border-slate-600 p-4 rounded-lg mt-2 text-xs font-mono animate-fade-in">
                             {healthStatus.error ? (
@@ -740,6 +796,7 @@ const DataTab: React.FC = () => {
             </SettingsCard>
 
             <SettingsCard title="Koneksi Cloud (Dropbox)" description="Hubungkan akun Dropbox untuk backup otomatis dan sinkronisasi antar cabang.">
+                {/* ... existing Dropbox Card content ... */}
                 <div className="bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded-r mb-4">
                     <div className="flex items-start gap-3">
                         <Icon name="info-circle" className="w-5 h-5 text-blue-400 mt-0.5" />
@@ -816,7 +873,6 @@ const DataTab: React.FC = () => {
                 </div>
             </SettingsCard>
 
-            {/* Unified Pairing Modal (Generate/Input) */}
             <Modal isOpen={showPairingModal} onClose={() => setShowPairingModal(false)} title={pairingMode === 'generate' ? "Bagikan Akses Dropbox" : "Hubungkan ke Pusat"}>
                 {pairingMode === 'generate' ? (
                     <div className="flex flex-col items-center justify-center space-y-4 p-2 text-center">
@@ -917,14 +973,12 @@ const DataTab: React.FC = () => {
                 )}
             </Modal>
 
-            {/* Scan Pairing Modal (Camera) */}
             <BarcodeScannerModal 
                 isOpen={isScanningPairing} 
                 onClose={() => setIsScanningPairing(false)} 
                 onScan={(code) => processPairingCode(code)}
             />
 
-            {/* Dropbox Help & Connect Modal */}
             <Modal isOpen={showDbxHelpModal} onClose={() => setShowDbxHelpModal(false)} title="Hubungkan Dropbox">
                 <div className="space-y-5">
                     <div className="space-y-2">

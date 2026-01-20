@@ -15,14 +15,18 @@ import com.getcapacitor.annotation.PermissionCallback;
     name = "BluetoothPermission",
     permissions = {
         @Permission(
-            alias = "nearby",
+            alias = "combined", 
             strings = {
+                // Di Android 12+ (SDK 31), kita minta SEMUANYA.
+                // SCAN & CONNECT untuk akses OS baru.
+                // LOCATION untuk memuaskan plugin lama yang punya hardcode check lokasi.
                 Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.BLUETOOTH_CONNECT
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.ACCESS_FINE_LOCATION
             }
         ),
         @Permission(
-            alias = "location",
+            alias = "location_only",
             strings = {
                 Manifest.permission.ACCESS_FINE_LOCATION
             }
@@ -34,16 +38,16 @@ public class BluetoothPermissionPlugin extends Plugin {
     @PluginMethod
     public void request(PluginCall call) {
         if (Build.VERSION.SDK_INT >= 31) {
-            // Android 12 ke atas: Minta izin Nearby Devices (Scan & Connect)
-            if (getPermissionState("nearby") != com.getcapacitor.PermissionState.GRANTED) {
-                requestPermissionForAlias("nearby", call, "permissionCallback");
+            // Android 12+: Minta paket lengkap (Bluetooth + Lokasi)
+            if (getPermissionState("combined") != com.getcapacitor.PermissionState.GRANTED) {
+                requestPermissionForAlias("combined", call, "permissionCallback");
             } else {
                 call.resolve();
             }
         } else {
-            // Android 11 ke bawah: Minta izin Lokasi
-            if (getPermissionState("location") != com.getcapacitor.PermissionState.GRANTED) {
-                requestPermissionForAlias("location", call, "permissionCallback");
+            // Android 11-: Cukup Lokasi
+            if (getPermissionState("location_only") != com.getcapacitor.PermissionState.GRANTED) {
+                requestPermissionForAlias("location_only", call, "permissionCallback");
             } else {
                 call.resolve();
             }
@@ -53,16 +57,20 @@ public class BluetoothPermissionPlugin extends Plugin {
     @PermissionCallback
     private void permissionCallback(PluginCall call) {
         if (Build.VERSION.SDK_INT >= 31) {
-            if (getPermissionState("nearby") == com.getcapacitor.PermissionState.GRANTED) {
+            // Cek apakah 'combined' permissions disetujui
+            if (getPermissionState("combined") == com.getcapacitor.PermissionState.GRANTED) {
                 call.resolve();
             } else {
-                call.reject("Permission denied: Nearby Devices required for Android 12+");
+                // Jangan reject dulu, karena kadang user menolak lokasi tapi menerima bluetooth (atau sebaliknya).
+                // Kita biarkan resolve agar plugin printer mencoba scan (best effort).
+                // Jika gagal, error asli plugin printer akan muncul di UI.
+                call.resolve(); 
             }
         } else {
-            if (getPermissionState("location") == com.getcapacitor.PermissionState.GRANTED) {
+            if (getPermissionState("location_only") == com.getcapacitor.PermissionState.GRANTED) {
                 call.resolve();
             } else {
-                call.reject("Permission denied: Location required for Bluetooth scanning");
+                call.reject("Izin Lokasi (Wajib untuk Bluetooth Android Lama) ditolak.");
             }
         }
     }

@@ -92,12 +92,15 @@ const HardwareTab: React.FC = () => {
     const requestNativePermissions = async (): Promise<boolean> => {
         try {
             // Panggil plugin Java yang baru kita buat
+            // Plugin ini sekarang meminta Bluetooth + Lokasi sekaligus untuk kompatibilitas penuh
             await BluetoothPermission.request();
-            console.log("Custom Plugin Permission: GRANTED");
+            console.log("Custom Plugin Permission: REQUESTED");
             return true;
         } catch (e) {
-            console.error("Custom Plugin Permission: DENIED", e);
-            return false;
+            console.error("Custom Plugin Permission: ERROR", e);
+            // Kita return true (proceed) karena di Java kita sudah set untuk resolve meski ditolak sebagian,
+            // biar plugin printer mencoba sendiri dan melempar error spesifik jika gagal.
+            return true;
         }
     };
 
@@ -108,23 +111,9 @@ const HardwareTab: React.FC = () => {
         
         if (isNative) {
             // STEP 1: Ask Permissions via Custom Plugin
-            const granted = await requestNativePermissions();
+            await requestNativePermissions();
             
-            if (!granted) {
-                setPermissionStatus('denied');
-                setIsBleScanning(false);
-                showAlert({
-                    type: 'confirm', 
-                    title: 'Izin Ditolak', 
-                    message: 'Aplikasi memerlukan izin "Perangkat Sekitar" (Android 12+) atau "Lokasi" (Android Lama) untuk menemukan printer. Mohon izinkan di Pengaturan.',
-                    confirmText: 'Buka Pengaturan',
-                    onConfirm: openAppSettings
-                });
-                return;
-            }
-
             // STEP 2: List Devices using existing Bluetooth Serial Plugin
-            // Karena izin sudah dihandle oleh plugin custom kita, plugin ini tinggal jalan saja.
             try {
                 const devices = await bluetoothPrinterService.listNativeDevices();
                 setPairedDevices(devices);
@@ -134,10 +123,19 @@ const HardwareTab: React.FC = () => {
             } catch (e: any) {
                 console.error("Bluetooth Error:", e);
                 // Fallback catch
-                if (e.toString().toLowerCase().includes('permission')) {
+                if (e.toString().toLowerCase().includes('permission') || e.toString().toLowerCase().includes('denied')) {
                     setPermissionStatus('denied');
+                    
+                    showAlert({
+                        type: 'confirm', 
+                        title: 'Izin Ditolak', 
+                        message: 'Aplikasi butuh izin "Lokasi" & "Perangkat Sekitar" untuk menemukan printer. Mohon izinkan di Pengaturan.',
+                        confirmText: 'Buka Pengaturan',
+                        onConfirm: openAppSettings
+                    });
+
                 } else {
-                    showAlert({type: 'alert', title: 'Gagal Memuat', message: 'Pastikan Bluetooth Aktif. ' + e});
+                    showAlert({type: 'alert', title: 'Gagal Memuat', message: 'Pastikan Bluetooth & Lokasi (GPS) Aktif. ' + e});
                 }
             } finally {
                 setIsBleScanning(false);
@@ -240,7 +238,11 @@ const HardwareTab: React.FC = () => {
                     <>
                         <div className="bg-blue-900/20 border-l-4 border-blue-500 p-3 rounded-r text-xs text-slate-300 space-y-1">
                             <p><strong>Cara Pakai:</strong> Nyalakan Bluetooth HP & Printer. Pasangkan (Pair) printer di menu Bluetooth HP Anda terlebih dahulu.</p>
-                            {isNative && <p className="text-green-400 font-bold">Mode Native: Support Android 12+ (Nearby Devices).</p>}
+                            {isNative && (
+                                <p className="text-yellow-400 font-bold mt-1">
+                                    Penting: Jika diminta, mohon izinkan akses Lokasi ("Saat aplikasi digunakan") dan Perangkat Sekitar agar printer terdeteksi.
+                                </p>
+                            )}
                         </div>
                         
                         <div className="flex flex-col gap-4 bg-slate-900 p-4 rounded-lg border border-slate-600">
@@ -283,10 +285,10 @@ const HardwareTab: React.FC = () => {
                             {/* Permission Denied UI */}
                             {permissionStatus === 'denied' && (
                                 <div className="bg-red-900/30 border border-red-800 p-3 rounded text-center">
-                                    <p className="text-xs text-red-300 mb-2 font-bold">Izin Bluetooth Ditolak</p>
-                                    <p className="text-xs text-slate-300 mb-2">Android 12+ mewajibkan izin "Nearby Devices" agar aplikasi bisa mendeteksi printer.</p>
+                                    <p className="text-xs text-red-300 mb-2 font-bold">Izin Bluetooth/Lokasi Ditolak</p>
+                                    <p className="text-xs text-slate-300 mb-2">Mohon buka pengaturan dan izinkan Lokasi & Perangkat Sekitar.</p>
                                     <Button onClick={openAppSettings} size="sm" variant="secondary" className="w-full">
-                                        <Icon name="settings" className="w-4 h-4" /> Buka Pengaturan & Izinkan
+                                        <Icon name="settings" className="w-4 h-4" /> Buka Pengaturan
                                     </Button>
                                 </div>
                             )}

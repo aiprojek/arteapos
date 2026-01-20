@@ -14,10 +14,10 @@
     <uses-permission android:name="android.permission.FLASHLIGHT"/>
 
     <!-- 1. BLUETOOTH UNTUK ANDROID 12+ (API 31+) -->
-    <!-- Tambahkan tools:node="replace" untuk memastikan pengaturan Anda yang menang -->
+    <!-- PERBAIKAN: Menghapus 'neverForLocation' karena plugin bluetooth-serial lama mewajibkan lokasi -->
+    <!-- Kita biarkan sistem tahu bahwa scan ini mungkin menggunakan lokasi (Legacy Mode) -->
     <uses-permission 
         android:name="android.permission.BLUETOOTH_SCAN" 
-        android:usesPermissionFlags="neverForLocation" 
         tools:targetApi="31" 
         tools:node="replace" />
                      
@@ -35,10 +35,10 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     
-    <!-- 3. LOKASI (HANYA UNTUK ANDROID 11 KE BAWAH) -->
-    <!-- Paksa sistem untuk mengabaikan permintaan lokasi dari plugin di Android 12+ -->
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="30" tools:node="replace" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" tools:node="replace" />
+    <!-- 3. LOKASI (WAJIB UNTUK PLUGIN LAMA DI SEMUA VERSI ANDROID) -->
+    <!-- Kita hapus maxSdkVersion agar Lokasi tetap diminta di Android 12+ sebagai syarat plugin lama -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" tools:node="replace" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="replace" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />

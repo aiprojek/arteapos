@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-          cache: 'npm'
+          # cache: 'npm' <-- Dihapus sementara karena package-lock.json tidak ada di repo
       
       - name: Install Dependencies
         run: npm install
@@ -43,9 +43,9 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-          cache: 'npm'
+          # cache: 'npm' <-- Dihapus sementara
       
-      # FIX: Menggunakan action resmi dari organisasi gradle
+      # Setup Gradle dengan Action Resmi
       - uses: gradle/actions/setup-gradle@v3
       
       # Restore web build
@@ -60,7 +60,6 @@ jobs:
       - name: Setup Capacitor Assets & Android
         run: |
           # CEK KEUTUHAN FOLDER ANDROID
-          # Jika folder ada tapi tidak ada build.gradle, berarti rusak/kosong -> Hapus biar digenerate ulang
           if [ -d "android" ] && [ ! -f "android/build.gradle" ]; then
             echo "Folder android terdeteksi rusak (missing build.gradle). Menghapus..."
             rm -rf android
@@ -80,9 +79,6 @@ jobs:
           # Sync kode web
           npx cap sync
       
-      # STEP "Fix Android Manifest Permissions" DIHAPUS
-      # AndroidManifest.xml di repo sudah benar. Injeksi manual via sed merusak format XML.
-
       - name: Build APK
         run: |
           cd android
@@ -105,7 +101,7 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-          cache: 'npm'
+          # cache: 'npm' <-- Dihapus sementara
       
       - uses: actions/download-artifact@v4
         with:
@@ -135,7 +131,7 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-          cache: 'npm'
+          # cache: 'npm' <-- Dihapus sementara
       
       - uses: actions/download-artifact@v4
         with:

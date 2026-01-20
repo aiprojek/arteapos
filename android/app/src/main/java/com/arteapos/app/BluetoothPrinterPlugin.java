@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.os.Build;
 import android.util.Base64;
+import android.util.Log;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -20,7 +21,6 @@ import java.io.OutputStream;
 import java.util.Set;
 import java.util.UUID;
 
-// PENTING: Nama File 'BluetoothPrinterPlugin.java' HARUS sama dengan nama class 'BluetoothPrinterPlugin'
 @CapacitorPlugin(
     name = "BluetoothPrinter",
     permissions = {
@@ -35,6 +35,7 @@ import java.util.UUID;
 )
 public class BluetoothPrinterPlugin extends Plugin {
 
+    private static final String TAG = "BluetoothPrinter";
     // UUID standar untuk SPP (Serial Port Profile) printer bluetooth
     private static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb");
     
@@ -44,7 +45,13 @@ public class BluetoothPrinterPlugin extends Plugin {
 
     @Override
     public void load() {
-        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        try {
+            bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+            Log.d(TAG, "BluetoothPrinterPlugin loaded. Adapter found: " + (bluetoothAdapter != null));
+        } catch (Exception e) {
+            Log.e(TAG, "Error initializing Bluetooth adapter", e);
+            // Jangan throw exception di sini agar plugin tetap terdaftar di Capacitor
+        }
     }
 
     @PluginMethod
@@ -60,7 +67,6 @@ public class BluetoothPrinterPlugin extends Plugin {
         doListDevices(call);
     }
 
-    // Callback setelah user klik "Allow"
     @PluginMethod
     public void listPairedDevicesCallback(PluginCall call) {
         if (getPermissionState("bluetooth") == com.getcapacitor.PermissionState.GRANTED) {
@@ -72,7 +78,7 @@ public class BluetoothPrinterPlugin extends Plugin {
 
     private void doListDevices(PluginCall call) {
         if (bluetoothAdapter == null) {
-            call.reject("Bluetooth tidak tersedia di perangkat ini.");
+            call.reject("Bluetooth tidak tersedia di perangkat ini atau gagal dimuat.");
             return;
         }
 
@@ -109,6 +115,11 @@ public class BluetoothPrinterPlugin extends Plugin {
         String address = call.getString("address");
         if (address == null) {
             call.reject("Alamat MAC address kosong.");
+            return;
+        }
+
+        if (bluetoothAdapter == null) {
+            call.reject("Bluetooth Adapter error.");
             return;
         }
 

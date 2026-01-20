@@ -1,7 +1,8 @@
-import type { Transaction, ReceiptSettings } from '../types';
-import { Capacitor, registerPlugin } from '@capacitor/core';
 
-// --- DEFINISI INTERFACE PLUGIN NATIVE BARU KITA ---
+import type { Transaction, ReceiptSettings } from '../types';
+import { Capacitor, registerPlugin, WebPlugin } from '@capacitor/core';
+
+// --- DEFINISI INTERFACE PLUGIN ---
 interface BluetoothPrinterPlugin {
     listPairedDevices(): Promise<{ devices: { name: string; address: string }[] }>;
     connect(options: { address: string }): Promise<void>;
@@ -9,8 +10,28 @@ interface BluetoothPrinterPlugin {
     disconnect(): Promise<void>;
 }
 
-// Inisialisasi Plugin
-const BluetoothPrinter = registerPlugin<BluetoothPrinterPlugin>('BluetoothPrinter');
+// --- IMPLEMENTASI WEB (FALLBACK) ---
+// Ini penting agar jika Native gagal, aplikasi tidak crash dengan error "Not Implemented"
+class BluetoothPrinterWeb extends WebPlugin implements BluetoothPrinterPlugin {
+    async listPairedDevices() {
+        console.warn('BluetoothPrinter: Native plugin not detected. Using Web Fallback.');
+        return { devices: [] };
+    }
+    async connect(options: { address: string }) {
+        console.log('BluetoothPrinter (Web): Connected to', options.address);
+    }
+    async print(options: { data: string; type: 'text' | 'base64' }) {
+        console.log('BluetoothPrinter (Web): Printing...', options.data.substring(0, 50));
+    }
+    async disconnect() {
+        console.log('BluetoothPrinter (Web): Disconnected');
+    }
+}
+
+// Inisialisasi Plugin dengan Fallback Web
+const BluetoothPrinter = registerPlugin<BluetoothPrinterPlugin>('BluetoothPrinter', {
+    web: () => new BluetoothPrinterWeb()
+});
 
 // ----------------------------------------
 
@@ -157,7 +178,6 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
     data += '--------------------------------' + LF;
     data += 'Powered by Artea POS' + LF;
     data += 'aiprojek01.my.id' + LF; 
-    data += COMMANDS.FONT_A; 
     
     data += LF + LF + LF; // Feed
 
@@ -173,10 +193,16 @@ export const bluetoothPrinterService = {
     
     listNativeDevices: async (): Promise<any[]> => {
         try {
+            // Capacitor.isNativePlatform() bisa true walaupun plugin belum terload.
+            // Kita try-catch call ini.
             const result = await BluetoothPrinter.listPairedDevices();
             return result.devices;
-        } catch (e) {
-            console.error("List Devices Failed", e);
+        } catch (e: any) {
+            console.error("List Native Devices Failed:", e);
+            // Jika errornya "not implemented", berarti plugin Native belum ter-bridge
+            if (e.message && e.message.includes('not implemented')) {
+                throw new Error("Plugin Bluetooth belum terinstall di APK ini. Pastikan Anda sudah build ulang APK.");
+            }
             throw e;
         }
     },
@@ -248,7 +274,6 @@ export const bluetoothPrinterService = {
         if (Capacitor.isNativePlatform()) {
             try {
                 // Konversi string ke Base64 agar aman dikirim ke Java
-                // Kita gunakan btoa (built-in JS), tapi perlu handle UTF-8 jika ada karakter aneh
                 const encoder = new TextEncoder();
                 const bytes = encoder.encode(rawData);
                 
@@ -262,7 +287,13 @@ export const bluetoothPrinterService = {
 
                 await BluetoothPrinter.print({ data: base64, type: 'base64' });
             } catch (e: any) {
-                alert("Gagal mencetak: " + e.message + ". Pastikan printer terhubung.");
+                console.error("Native Print Error:", e);
+                // Fallback message if plugin not found
+                if (e.message && e.message.includes('not implemented')) {
+                    alert("Gagal: Plugin Bluetooth belum terdeteksi. Silakan build ulang APK.");
+                } else {
+                    alert("Gagal mencetak: " + e.message);
+                }
             }
             return;
         }

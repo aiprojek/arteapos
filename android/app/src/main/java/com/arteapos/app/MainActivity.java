@@ -7,10 +7,8 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        // PENTING: Daftarkan plugin SEBELUM memanggil super.onCreate
-        // Ini memastikan plugin tersedia saat Capacitor Bridge dibangun.
+        // PENTING: Daftarkan plugin custom di sini
         registerPlugin(BluetoothPrinterPlugin.class);
-        
         super.onCreate(savedInstanceState);
     }
 }

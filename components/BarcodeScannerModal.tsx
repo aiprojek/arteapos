@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom'; // Import ReactDOM for Portals
 import Modal from './Modal';
@@ -7,6 +6,12 @@ import { Capacitor } from '@capacitor/core';
 import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
 
 declare const Html5Qrcode: any;
+
+declare global {
+    interface Window {
+        AppInventor?: any;
+    }
+}
 
 interface BarcodeScannerModalProps {
   isOpen: boolean;

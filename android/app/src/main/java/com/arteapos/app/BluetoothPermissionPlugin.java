@@ -2,76 +2,181 @@
 package com.arteapos.app;
 
 import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
+import android.content.pm.PackageManager;
 import android.os.Build;
+import android.util.Base64;
+import androidx.core.app.ActivityCompat;
+
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
-import com.getcapacitor.annotation.PermissionCallback;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.Set;
+import java.util.UUID;
+
+// Plugin ini menangani Permissions DAN Koneksi Printer sekaligus
 @CapacitorPlugin(
-    name = "BluetoothPermission",
+    name = "BluetoothPrinter",
     permissions = {
         @Permission(
-            alias = "combined", 
+            alias = "bluetooth",
             strings = {
-                // Di Android 12+ (SDK 31), kita minta SEMUANYA.
-                // SCAN & CONNECT untuk akses OS baru.
-                // LOCATION untuk memuaskan plugin lama yang punya hardcode check lokasi.
-                Manifest.permission.BLUETOOTH_SCAN,
                 Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            }
-        ),
-        @Permission(
-            alias = "location_only",
-            strings = {
-                Manifest.permission.ACCESS_FINE_LOCATION
+                Manifest.permission.BLUETOOTH_SCAN
             }
         )
     }
 )
-public class BluetoothPermissionPlugin extends Plugin {
+public class BluetoothPrinterPlugin extends Plugin {
+
+    // UUID standar untuk SPP (Serial Port Profile) printer bluetooth
+    private static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb");
+    
+    private BluetoothAdapter bluetoothAdapter;
+    private BluetoothSocket socket;
+    private OutputStream outputStream;
+
+    @Override
+    public void load() {
+        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+    }
 
     @PluginMethod
-    public void request(PluginCall call) {
+    public void listPairedDevices(PluginCall call) {
+        // Cek Izin Android 12+
         if (Build.VERSION.SDK_INT >= 31) {
-            // Android 12+: Minta paket lengkap (Bluetooth + Lokasi)
-            if (getPermissionState("combined") != com.getcapacitor.PermissionState.GRANTED) {
-                requestPermissionForAlias("combined", call, "permissionCallback");
-            } else {
-                call.resolve();
+            if (getPermissionState("bluetooth") != com.getcapacitor.PermissionState.GRANTED) {
+                requestPermissionForAlias("bluetooth", call, "listPairedDevicesCallback");
+                return;
             }
+        }
+
+        doListDevices(call);
+    }
+
+    // Callback setelah user klik "Allow"
+    @PluginMethod
+    public void listPairedDevicesCallback(PluginCall call) {
+        if (getPermissionState("bluetooth") == com.getcapacitor.PermissionState.GRANTED) {
+            doListDevices(call);
         } else {
-            // Android 11-: Cukup Lokasi
-            if (getPermissionState("location_only") != com.getcapacitor.PermissionState.GRANTED) {
-                requestPermissionForAlias("location_only", call, "permissionCallback");
-            } else {
-                call.resolve();
-            }
+            call.reject("Izin Bluetooth ditolak.");
         }
     }
 
-    @PermissionCallback
-    private void permissionCallback(PluginCall call) {
-        if (Build.VERSION.SDK_INT >= 31) {
-            // Cek apakah 'combined' permissions disetujui
-            if (getPermissionState("combined") == com.getcapacitor.PermissionState.GRANTED) {
-                call.resolve();
-            } else {
-                // Jangan reject dulu, karena kadang user menolak lokasi tapi menerima bluetooth (atau sebaliknya).
-                // Kita biarkan resolve agar plugin printer mencoba scan (best effort).
-                // Jika gagal, error asli plugin printer akan muncul di UI.
-                call.resolve(); 
-            }
-        } else {
-            if (getPermissionState("location_only") == com.getcapacitor.PermissionState.GRANTED) {
-                call.resolve();
-            } else {
-                call.reject("Izin Lokasi (Wajib untuk Bluetooth Android Lama) ditolak.");
-            }
+    private void doListDevices(PluginCall call) {
+        if (bluetoothAdapter == null) {
+            call.reject("Bluetooth tidak tersedia di perangkat ini.");
+            return;
         }
+
+        if (!bluetoothAdapter.isEnabled()) {
+            call.reject("Bluetooth mati. Mohon nyalakan Bluetooth.");
+            return;
+        }
+
+        try {
+            Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+            com.getcapacitor.JSArray devicesArray = new com.getcapacitor.JSArray();
+
+            if (pairedDevices.size() > 0) {
+                for (BluetoothDevice device : pairedDevices) {
+                    JSObject deviceObj = new JSObject();
+                    deviceObj.put("name", device.getName());
+                    deviceObj.put("address", device.getAddress());
+                    devicesArray.put(deviceObj);
+                }
+            }
+            
+            JSObject ret = new JSObject();
+            ret.put("devices", devicesArray);
+            call.resolve(ret);
+        } catch (SecurityException e) {
+            call.reject("Security Exception: " + e.getMessage());
+        } catch (Exception e) {
+            call.reject("Error: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void connect(PluginCall call) {
+        String address = call.getString("address");
+        if (address == null) {
+            call.reject("Alamat MAC address kosong.");
+            return;
+        }
+
+        // Close previous connection if any
+        disconnectInternal();
+
+        try {
+            BluetoothDevice device = bluetoothAdapter.getRemoteDevice(address);
+            
+            // Create Socket
+            socket = device.createRfcommSocketToServiceRecord(SPP_UUID);
+            socket.connect();
+            outputStream = socket.getOutputStream();
+
+            call.resolve();
+        } catch (IOException e) {
+            disconnectInternal(); // Cleanup
+            call.reject("Gagal terhubung ke printer. Pastikan printer nyala dan dekat.");
+        } catch (SecurityException e) {
+            call.reject("Izin Bluetooth ditolak saat koneksi.");
+        } catch (Exception e) {
+            call.reject("Error koneksi: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void print(PluginCall call) {
+        if (socket == null || outputStream == null || !socket.isConnected()) {
+            call.reject("Printer belum terhubung.");
+            return;
+        }
+
+        String data = call.getString("data"); // Expecting plain text or base64? Let's use Base64 for binary safety
+        String type = call.getString("type", "text"); // 'text' or 'base64'
+
+        try {
+            byte[] bytes;
+            if ("base64".equals(type)) {
+                bytes = Base64.decode(data, Base64.DEFAULT);
+            } else {
+                bytes = data.getBytes("UTF-8"); // Default string raw
+            }
+            
+            outputStream.write(bytes);
+            outputStream.flush();
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Gagal mengirim data cetak: " + e.getMessage());
+            disconnectInternal();
+        }
+    }
+
+    @PluginMethod
+    public void disconnect(PluginCall call) {
+        disconnectInternal();
+        call.resolve();
+    }
+
+    private void disconnectInternal() {
+        try {
+            if (outputStream != null) outputStream.close();
+            if (socket != null) socket.close();
+        } catch (Exception e) {
+            // Ignore close errors
+        }
+        outputStream = null;
+        socket = null;
     }
 }

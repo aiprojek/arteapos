@@ -1,58 +1,36 @@
-
 import type { Transaction, ReceiptSettings } from '../types';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 
-// --- Native Bluetooth Serial Interface (from Cordova Plugin) ---
-interface BluetoothSerialPlugin {
-    isEnabled: (success: () => void, failure: (err: any) => void) => void;
-    list: (success: (devices: any[]) => void, failure: (err: any) => void) => void;
-    connect: (macAddress: string, success: () => void, failure: (err: any) => void) => void;
-    disconnect: (success: () => void, failure: (err: any) => void) => void;
-    write: (data: any, success: () => void, failure: (err: any) => void) => void;
-    isConnected: (success: () => void, failure: () => void) => void;
+// --- DEFINISI INTERFACE PLUGIN NATIVE BARU KITA ---
+interface BluetoothPrinterPlugin {
+    listPairedDevices(): Promise<{ devices: { name: string; address: string }[] }>;
+    connect(options: { address: string }): Promise<void>;
+    print(options: { data: string; type: 'text' | 'base64' }): Promise<void>;
+    disconnect(): Promise<void>;
 }
 
-declare global {
-    interface Window {
-        bluetoothSerial?: BluetoothSerialPlugin;
-        // Jembatan untuk Kodular / App Inventor
-        AppInventor?: {
-            setWebViewString: (value: string) => void;
-        };
-    }
-    interface Navigator {
-        bluetooth?: any;
-    }
-}
+// Inisialisasi Plugin
+const BluetoothPrinter = registerPlugin<BluetoothPrinterPlugin>('BluetoothPrinter');
 
-// --- Web Bluetooth API Types Polyfill ---
+// ----------------------------------------
+
+// Define Web Bluetooth types for TS
 interface BluetoothRemoteGATTCharacteristic {
     writeValue(value: BufferSource): Promise<void>;
     properties: {
         write: boolean;
         writeWithoutResponse: boolean;
-        notify: boolean;
-        indicate: boolean;
-        read: boolean;
     };
 }
 
-interface BluetoothRemoteGATTService {
-    getCharacteristics(characteristic?: string | number): Promise<BluetoothRemoteGATTCharacteristic[]>;
+declare global {
+    interface Navigator {
+        bluetooth: any;
+    }
+    interface Window {
+        AppInventor?: any;
+    }
 }
-
-interface BluetoothRemoteGATTServer {
-    connect(): Promise<BluetoothRemoteGATTServer>;
-    getPrimaryService(service: string | number): Promise<BluetoothRemoteGATTService>;
-}
-
-interface BluetoothDevice {
-    gatt?: BluetoothRemoteGATTServer;
-    id: string;
-    name?: string;
-}
-
-// ----------------------------------------
 
 const ESC = '\x1B';
 const GS = '\x1D';
@@ -187,44 +165,36 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
     return data.replace(/[^\x00-\x7F]/g, "");
 };
 
-// State untuk Web Bluetooth
+// State untuk Web Bluetooth (Browser only fallback)
 let webPrinterCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
 
 export const bluetoothPrinterService = {
-    // --- NATIVE ANDROID METHODS ---
+    // --- NATIVE ANDROID METHODS (CUSTOM PLUGIN) ---
     
-    listNativeDevices: (): Promise<any[]> => {
-        return new Promise((resolve, reject) => {
-            if (!window.bluetoothSerial) {
-                reject("Bluetooth plugin not loaded");
-                return;
-            }
-            window.bluetoothSerial.list(resolve, reject);
-        });
+    listNativeDevices: async (): Promise<any[]> => {
+        try {
+            const result = await BluetoothPrinter.listPairedDevices();
+            return result.devices;
+        } catch (e) {
+            console.error("List Devices Failed", e);
+            throw e;
+        }
     },
 
-    connectNative: (macAddress: string): Promise<boolean> => {
-        return new Promise((resolve, reject) => {
-            if (!window.bluetoothSerial) {
-                reject("Bluetooth plugin not loaded");
-                return;
-            }
-            window.bluetoothSerial.connect(macAddress, () => {
-                resolve(true);
-            }, reject);
-        });
+    connectNative: async (macAddress: string): Promise<boolean> => {
+        try {
+            await BluetoothPrinter.connect({ address: macAddress });
+            return true;
+        } catch (e) {
+            console.error("Connect Failed", e);
+            throw e;
+        }
     },
 
-    disconnectNative: (): Promise<void> => {
-        return new Promise((resolve) => {
-            if (window.bluetoothSerial) {
-                window.bluetoothSerial.disconnect(() => {
-                    resolve();
-                }, () => resolve());
-            } else {
-                resolve();
-            }
-        });
+    disconnectNative: async (): Promise<void> => {
+        try {
+            await BluetoothPrinter.disconnect();
+        } catch (e) {}
     },
 
     // --- WEB METHODS ---
@@ -247,7 +217,7 @@ export const bluetoothPrinterService = {
             const server = await device.gatt.connect();
             const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
             const characteristics = await service.getCharacteristics();
-            const writeChar = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
+            const writeChar = characteristics.find((c: BluetoothRemoteGATTCharacteristic) => c.properties.write || c.properties.writeWithoutResponse);
 
             if (writeChar) {
                 webPrinterCharacteristic = writeChar;
@@ -263,30 +233,37 @@ export const bluetoothPrinterService = {
         }
     },
 
-    // --- MAIN PRINT FUNCTION ---
+    // --- MAIN PRINT FUNCTION (DIRECT) ---
 
     printReceipt: async (transaction: Transaction, settings: ReceiptSettings) => {
         const rawData = generateReceiptData(transaction, settings);
 
-        // 0. KODULAR / APP INVENTOR BRIDGE (NEW)
-        // Kita kirim string perintah ke Kodular lewat WebViewString
+        // 0. KODULAR / APP INVENTOR BRIDGE
         if (window.AppInventor) {
             window.AppInventor.setWebViewString(rawData);
             return;
         }
 
-        // 1. ANDROID NATIVE CAPACITOR
+        // 1. ANDROID NATIVE CAPACITOR (Custom Plugin)
         if (Capacitor.isNativePlatform()) {
-            if (!window.bluetoothSerial) {
-                alert("Plugin Bluetooth belum dimuat.");
-                return;
+            try {
+                // Konversi string ke Base64 agar aman dikirim ke Java
+                // Kita gunakan btoa (built-in JS), tapi perlu handle UTF-8 jika ada karakter aneh
+                const encoder = new TextEncoder();
+                const bytes = encoder.encode(rawData);
+                
+                // Manual byte to base64 conversion
+                let binary = '';
+                const len = bytes.byteLength;
+                for (let i = 0; i < len; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                const base64 = btoa(binary);
+
+                await BluetoothPrinter.print({ data: base64, type: 'base64' });
+            } catch (e: any) {
+                alert("Gagal mencetak: " + e.message + ". Pastikan printer terhubung.");
             }
-            window.bluetoothSerial.isConnected(
-                () => {
-                    window.bluetoothSerial!.write(rawData, () => {}, (err) => alert(err));
-                },
-                () => alert("Printer belum terhubung.")
-            );
             return;
         }
 
@@ -309,5 +286,12 @@ export const bluetoothPrinterService = {
             console.error('Failed to print', e);
             webPrinterCharacteristic = null; 
         }
+    },
+
+    // --- OPTIONAL: RAWBT FALLBACK (Jika user tetap mau pakai) ---
+    printViaExternalApp: (base64Image: string) => {
+        const cleanBase64 = base64Image.replace(/^data:image\/(png|jpg|jpeg);base64,/, "");
+        const scheme = `rawbt:base64,${cleanBase64}`;
+        window.location.href = scheme;
     }
 };

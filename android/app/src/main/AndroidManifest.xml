@@ -7,39 +7,22 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     
-    <!-- Storage & Camera -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FLASHLIGHT"/>
 
-    <!-- 1. BLUETOOTH UNTUK ANDROID 12+ (API 31+) -->
-    <!-- PERBAIKAN: Menghapus 'neverForLocation' karena plugin bluetooth-serial lama mewajibkan lokasi -->
-    <!-- Kita biarkan sistem tahu bahwa scan ini mungkin menggunakan lokasi (Legacy Mode) -->
-    <uses-permission 
-        android:name="android.permission.BLUETOOTH_SCAN" 
-        tools:targetApi="31" 
-        tools:node="replace" />
-                     
-    <uses-permission 
-        android:name="android.permission.BLUETOOTH_CONNECT" 
-        tools:targetApi="31" 
-        tools:node="replace" />
-                     
-    <uses-permission 
-        android:name="android.permission.BLUETOOTH_ADVERTISE" 
-        tools:targetApi="31" 
-        tools:node="replace" />
+    <!-- PERMISSION KHUSUS BLUETOOTH -->
+    <!-- Android 12+ (API 31+) -->
+    <!-- Kita HANYA butuh CONNECT karena kita akan melist Paired Devices, bukan Scanning baru -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Scan opsional, tapi beberapa HP butuh ini walau cuma connect -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" tools:targetApi="31" />
 
-    <!-- 2. BLUETOOTH LEGACY (ANDROID 11 KE BAWAH) -->
+    <!-- Android 11 ke bawah (Legacy) -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     
-    <!-- 3. LOKASI (WAJIB UNTUK PLUGIN LAMA DI SEMUA VERSI ANDROID) -->
-    <!-- Kita hapus maxSdkVersion agar Lokasi tetap diminta di Android 12+ sebagai syarat plugin lama -->
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" tools:node="replace" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="replace" />
-
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 

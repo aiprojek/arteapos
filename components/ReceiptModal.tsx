@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import Receipt from './Receipt';
@@ -12,6 +11,12 @@ import { useToImage } from '../hooks/useToImage';
 import { bluetoothPrinterService } from '../utils/bluetoothPrinter';
 import { Capacitor } from '@capacitor/core';
 import { shareFileNative } from '../utils/nativeHelper';
+
+declare global {
+    interface Window {
+        AppInventor?: any;
+    }
+}
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -72,6 +77,14 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
       await bluetoothPrinterService.printReceipt(transaction, receiptSettings);
   };
 
+  const handleRawBTPrint = async () => {
+      if (isProcessing) return;
+      const dataUrl = await getImage();
+      if (dataUrl) {
+          bluetoothPrinterService.printViaExternalApp(dataUrl);
+      }
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Struk Transaksi">
       <div className="bg-slate-700 p-2 sm:p-4 rounded-lg overflow-y-auto max-h-[50vh]">
@@ -81,17 +94,25 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
       </div>
       
       <div className="flex flex-col gap-3 pt-6">
-        <Button variant="primary" onClick={handleBluetoothPrint} className="w-full bg-blue-600 border-none">
-            <Icon name="bluetooth" className="w-5 h-5"/> Cetak Struk Bluetooth
+        {/* NEW: Opsi Cetak Stabil */}
+        <Button variant="secondary" onClick={handleRawBTPrint} className="w-full bg-green-600 border-none text-white hover:bg-green-500">
+            <Icon name="printer" className="w-5 h-5"/> Cetak via RawBT (Paling Stabil)
         </Button>
+
+        {/* Legacy Direct Print (Opsional, jika user sudah terlanjur setting permission) */}
+        <Button variant="primary" onClick={handleBluetoothPrint} className="w-full bg-blue-600 border-none">
+            <Icon name="bluetooth" className="w-5 h-5"/> Cetak Langsung (Perlu Setup)
+        </Button>
+
         <div className="grid grid-cols-2 gap-3">
             <Button variant="secondary" onClick={handleShare} disabled={isProcessing}>
-                <Icon name="share" className="w-5 h-5"/> Bagikan Struk
+                <Icon name="share" className="w-5 h-5"/> Bagikan
             </Button>
             <Button variant="secondary" onClick={() => window.print()}>
-                <Icon name="printer" className="w-5 h-5"/> PDF / Cetak
+                <Icon name="printer" className="w-5 h-5"/> PDF
             </Button>
         </div>
+        
         {transaction.paymentStatus !== 'refunded' && (
             <Button variant="danger" onClick={() => refundTransaction(transaction.id)} className="w-full mt-2">
                 Refund Transaksi

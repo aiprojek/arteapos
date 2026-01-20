@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import Button from '../Button';
 import Icon from '../Icon';
@@ -7,22 +6,8 @@ import { useUI } from '../../context/UIContext';
 import { useSettings } from '../../context/SettingsContext';
 import type { Transaction } from '../../types';
 import BarcodeScannerModal from '../BarcodeScannerModal';
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor } from '@capacitor/core';
 import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
-
-// --- DEFINISI CUSTOM PLUGIN ---
-interface BluetoothPermissionPlugin {
-    request(): Promise<void>;
-}
-const BluetoothPermission = registerPlugin<BluetoothPermissionPlugin>('BluetoothPermission');
-
-// Interface untuk plugin Cordova (Legacy fallback)
-declare global {
-    interface Window {
-        cordova?: any;
-        // bluetoothSerial definitions are handled in utils/bluetoothPrinter.ts to avoid conflicts
-    }
-}
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode; icon?: any }> = ({ title, description, children, icon }) => (
     <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
@@ -48,9 +33,6 @@ const HardwareTab: React.FC = () => {
     const [isBleSupported, setIsBleSupported] = useState(false);
     const [isBleConnected, setIsBleConnected] = useState(false);
     const [isBleScanning, setIsBleScanning] = useState(false);
-    const [permissionStatus, setPermissionStatus] = useState<'unknown' | 'denied'>('unknown');
-    
-    // Native List State
     const [pairedDevices, setPairedDevices] = useState<any[]>([]);
     const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
 
@@ -63,22 +45,12 @@ const HardwareTab: React.FC = () => {
     const [isCameraTestOpen, setCameraTestOpen] = useState(false);
 
     useEffect(() => {
-        // Feature Detection
         if (isNative) {
             setIsBleSupported(true);
-            checkNativeConnection();
-        } else if (navigator.bluetooth) {
+        } else if ((navigator as any).bluetooth) {
             setIsBleSupported(true);
         }
     }, [isNative]);
-
-    const checkNativeConnection = () => {
-        if (!window.bluetoothSerial) return;
-        window.bluetoothSerial.isConnected(
-            () => setIsBleConnected(true),
-            () => setIsBleConnected(false)
-        );
-    }
 
     const openAppSettings = async () => {
         try {
@@ -88,55 +60,22 @@ const HardwareTab: React.FC = () => {
         }
     };
 
-    // --- NEW: NATIVE PERMISSION HANDLER (CUSTOM PLUGIN) ---
-    const requestNativePermissions = async (): Promise<boolean> => {
-        try {
-            // Panggil plugin Java yang baru kita buat
-            // Plugin ini sekarang meminta Bluetooth + Lokasi sekaligus untuk kompatibilitas penuh
-            await BluetoothPermission.request();
-            console.log("Custom Plugin Permission: REQUESTED");
-            return true;
-        } catch (e) {
-            console.error("Custom Plugin Permission: ERROR", e);
-            // Kita return true (proceed) karena di Java kita sudah set untuk resolve meski ditolak sebagian,
-            // biar plugin printer mencoba sendiri dan melempar error spesifik jika gagal.
-            return true;
-        }
-    };
-
     // --- BLUETOOTH HANDLERS ---
-    const handleConnectBle = async () => {
+    const handleListDevices = async () => {
         setIsBleScanning(true);
-        setPermissionStatus('unknown');
         
         if (isNative) {
-            // STEP 1: Ask Permissions via Custom Plugin
-            await requestNativePermissions();
-            
-            // STEP 2: List Devices using existing Bluetooth Serial Plugin
             try {
+                // Menggunakan Plugin Custom "BluetoothPrinter"
+                // Fungsi ini akan otomatis meminta izin CONNECT jika belum ada
                 const devices = await bluetoothPrinterService.listNativeDevices();
                 setPairedDevices(devices);
                 if (devices.length === 0) {
-                    showAlert({type: 'alert', title: 'Kosong', message: 'Tidak ada perangkat Bluetooth yang terpasang (Paired). Silakan pasangkan printer di Pengaturan Bluetooth Android HP Anda terlebih dahulu.'});
+                    showAlert({type: 'alert', title: 'Kosong', message: 'Tidak ada perangkat Bluetooth yang terpasang (Paired). Silakan pasangkan printer di Pengaturan Bluetooth HP Android Anda terlebih dahulu.'});
                 }
             } catch (e: any) {
                 console.error("Bluetooth Error:", e);
-                // Fallback catch
-                if (e.toString().toLowerCase().includes('permission') || e.toString().toLowerCase().includes('denied')) {
-                    setPermissionStatus('denied');
-                    
-                    showAlert({
-                        type: 'confirm', 
-                        title: 'Izin Ditolak', 
-                        message: 'Aplikasi butuh izin "Lokasi" & "Perangkat Sekitar" untuk menemukan printer. Mohon izinkan di Pengaturan.',
-                        confirmText: 'Buka Pengaturan',
-                        onConfirm: openAppSettings
-                    });
-
-                } else {
-                    showAlert({type: 'alert', title: 'Gagal Memuat', message: 'Pastikan Bluetooth & Lokasi (GPS) Aktif. ' + e});
-                }
+                showAlert({type: 'alert', title: 'Gagal Memuat', message: e.message || 'Pastikan Bluetooth Aktif & Izin Diberikan.'});
             } finally {
                 setIsBleScanning(false);
             }
@@ -158,16 +97,14 @@ const HardwareTab: React.FC = () => {
 
     const handleNativePairSelection = async (macAddress: string) => {
         setSelectedDeviceId(macAddress);
-        // Ensure permission one last time
-        await requestNativePermissions();
-        
         try {
             await bluetoothPrinterService.connectNative(macAddress);
             setIsBleConnected(true);
             showAlert({ type: 'alert', title: 'Terhubung', message: 'Printer berhasil terhubung!' });
-            setPairedDevices([]); 
+            // Jangan kosongkan list device, biarkan user bisa ganti jika mau
         } catch (e: any) {
-            showAlert({ type: 'alert', title: 'Gagal', message: 'Gagal terhubung: ' + e });
+            setIsBleConnected(false);
+            showAlert({ type: 'alert', title: 'Gagal', message: 'Gagal terhubung: ' + e.message });
         }
     };
 
@@ -237,12 +174,13 @@ const HardwareTab: React.FC = () => {
                 {isBleSupported ? (
                     <>
                         <div className="bg-blue-900/20 border-l-4 border-blue-500 p-3 rounded-r text-xs text-slate-300 space-y-1">
-                            <p><strong>Cara Pakai:</strong> Nyalakan Bluetooth HP & Printer. Pasangkan (Pair) printer di menu Bluetooth HP Anda terlebih dahulu.</p>
-                            {isNative && (
-                                <p className="text-yellow-400 font-bold mt-1">
-                                    Penting: Jika diminta, mohon izinkan akses Lokasi ("Saat aplikasi digunakan") dan Perangkat Sekitar agar printer terdeteksi.
-                                </p>
-                            )}
+                            <p><strong>Cara Pakai:</strong></p>
+                            <ol className="list-decimal pl-4 space-y-1">
+                                <li>Nyalakan Printer & Bluetooth HP.</li>
+                                <li>Buka <strong>Pengaturan Bluetooth HP</strong> Anda, lalu Pairing (Pasangkan) dengan printer.</li>
+                                <li>Kembali ke sini, klik "Cari Perangkat" dan pilih printer Anda.</li>
+                            </ol>
+                            {isNative && <p className="text-green-400 font-bold mt-2">✅ Support Android 12/13/14+ (Tanpa Izin Lokasi).</p>}
                         </div>
                         
                         <div className="flex flex-col gap-4 bg-slate-900 p-4 rounded-lg border border-slate-600">
@@ -263,50 +201,41 @@ const HardwareTab: React.FC = () => {
                             </div>
 
                             {/* Native Device List */}
-                            {isNative && pairedDevices.length > 0 && !isBleConnected && (
+                            {isNative && pairedDevices.length > 0 && (
                                 <div className="space-y-2 mt-2">
-                                    <p className="text-xs text-slate-400">Pilih printer yang sudah dipairing:</p>
+                                    <p className="text-xs text-slate-400">Pilih printer:</p>
                                     {pairedDevices.map((dev: any) => (
                                         <button 
                                             key={dev.address} 
                                             onClick={() => handleNativePairSelection(dev.address)}
-                                            className="w-full text-left p-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded flex justify-between items-center"
+                                            className={`w-full text-left p-3 border rounded flex justify-between items-center transition-colors
+                                                ${selectedDeviceId === dev.address 
+                                                    ? 'bg-[#347758]/20 border-[#347758] ring-1 ring-[#347758]' 
+                                                    : 'bg-slate-800 hover:bg-slate-700 border-slate-600'}`
+                                            }
                                         >
                                             <div>
                                                 <span className="font-bold text-white block">{dev.name || 'Unknown Device'}</span>
                                                 <span className="text-xs text-slate-500 font-mono">{dev.address}</span>
                                             </div>
-                                            <Icon name="bluetooth" className="w-4 h-4 text-sky-500" />
+                                            {selectedDeviceId === dev.address && <Icon name="check-circle-fill" className="w-4 h-4 text-green-400" />}
                                         </button>
                                     ))}
                                 </div>
                             )}
 
-                            {/* Permission Denied UI */}
-                            {permissionStatus === 'denied' && (
-                                <div className="bg-red-900/30 border border-red-800 p-3 rounded text-center">
-                                    <p className="text-xs text-red-300 mb-2 font-bold">Izin Bluetooth/Lokasi Ditolak</p>
-                                    <p className="text-xs text-slate-300 mb-2">Mohon buka pengaturan dan izinkan Lokasi & Perangkat Sekitar.</p>
-                                    <Button onClick={openAppSettings} size="sm" variant="secondary" className="w-full">
-                                        <Icon name="settings" className="w-4 h-4" /> Buka Pengaturan
-                                    </Button>
-                                </div>
-                            )}
-
                             <div className="flex gap-2 w-full mt-2">
-                                {!isBleConnected && (
-                                    <Button 
-                                        variant="primary" 
-                                        onClick={handleConnectBle} 
-                                        disabled={isBleScanning}
-                                        className="flex-1"
-                                        size="sm"
-                                    >
-                                        {isBleScanning ? 'Memindai...' : (isNative ? 'Cari Printer (Pair)' : 'Cari Printer')}
-                                    </Button>
-                                )}
                                 <Button 
                                     variant="secondary" 
+                                    onClick={handleListDevices} 
+                                    disabled={isBleScanning}
+                                    className="flex-1"
+                                    size="sm"
+                                >
+                                    {isBleScanning ? 'Memuat...' : (isNative ? 'Cari Perangkat (Paired)' : 'Cari Printer')}
+                                </Button>
+                                <Button 
+                                    variant="primary" 
                                     onClick={handleTestPrintBle} 
                                     className="flex-1"
                                     size="sm"

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import Receipt from './Receipt';
@@ -77,14 +78,6 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
       await bluetoothPrinterService.printReceipt(transaction, receiptSettings);
   };
 
-  const handleRawBTPrint = async () => {
-      if (isProcessing) return;
-      const dataUrl = await getImage();
-      if (dataUrl) {
-          bluetoothPrinterService.printViaExternalApp(dataUrl);
-      }
-  };
-
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Struk Transaksi">
       <div className="bg-slate-700 p-2 sm:p-4 rounded-lg overflow-y-auto max-h-[50vh]">
@@ -94,14 +87,9 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
       </div>
       
       <div className="flex flex-col gap-3 pt-6">
-        {/* NEW: Opsi Cetak Stabil */}
-        <Button variant="secondary" onClick={handleRawBTPrint} className="w-full bg-green-600 border-none text-white hover:bg-green-500">
-            <Icon name="printer" className="w-5 h-5"/> Cetak via RawBT (Paling Stabil)
-        </Button>
-
-        {/* Legacy Direct Print (Opsional, jika user sudah terlanjur setting permission) */}
+        
         <Button variant="primary" onClick={handleBluetoothPrint} className="w-full bg-blue-600 border-none">
-            <Icon name="bluetooth" className="w-5 h-5"/> Cetak Langsung (Perlu Setup)
+            <Icon name="bluetooth" className="w-5 h-5"/> Cetak Bluetooth
         </Button>
 
         <div className="grid grid-cols-2 gap-3">

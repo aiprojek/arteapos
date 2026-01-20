@@ -1,5 +1,5 @@
 
-export type View = 'dashboard' | 'pos' | 'products' | 'raw-materials' | 'finance' | 'reports' | 'settings' | 'help';
+export type View = 'dashboard' | 'pos' | 'products' | 'raw-materials' | 'finance' | 'reports' | 'settings' | 'help' | 'customer-display';
 
 export interface Addon {
   id: string;
@@ -422,4 +422,16 @@ export interface AuditLog {
     action: AuditAction;
     details: string;
     targetId?: string; // optional ID of the object affected
+}
+
+// --- CUSTOMER DISPLAY PAYLOAD (P2P) ---
+export interface CustomerDisplayPayload {
+    type: 'CART_UPDATE' | 'PAYMENT_SUCCESS' | 'WELCOME';
+    cartItems: CartItem[];
+    subtotal: number;
+    discount: number;
+    tax: number;
+    total: number;
+    change?: number; // Only for Payment Success
+    shopName?: string;
 }

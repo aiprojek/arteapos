@@ -15,6 +15,7 @@ import SettingsView from './views/SettingsView';
 import LoginView from './views/LoginView';
 import FinanceView from './views/FinanceView';
 import HelpView from './views/HelpView';
+import CustomerDisplayView from './views/CustomerDisplayView'; // NEW
 import Header from './components/Header';
 import Icon from './components/Icon';
 import AlertModal from './components/AlertModal';
@@ -34,6 +35,10 @@ const AppContent = () => {
   
   // Initialize view based on role
   const [activeView, setActiveView] = useState<View>(() => {
+      // Check URL search params for direct linking (e.g. ?view=customer-display)
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('view') === 'customer-display') return 'customer-display';
+
       if (isStaff) return 'pos';
       return 'dashboard'; // Admin, Manager, and Viewer default to dashboard
   });
@@ -63,7 +68,7 @@ const AppContent = () => {
   
   // --- HARDWARE BARCODE SCANNER LOGIC ---
   useEffect(() => {
-    if (isViewer) return;
+    if (isViewer || activeView === 'customer-display') return;
     let buffer = "";
     let lastKeyTime = Date.now();
 
@@ -99,6 +104,11 @@ const AppContent = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [findProductByBarcode, addToCart, activeView, showAlert, isViewer]);
 
+  // SPECIAL RENDER FOR CUSTOMER DISPLAY (No Layout)
+  if (activeView === 'customer-display') {
+      return <CustomerDisplayView />;
+  }
+
   const renderView = () => {
     if (isViewer && ['pos', 'products', 'raw-materials', 'finance', 'settings'].includes(activeView)) {
         return <DashboardView />;
@@ -111,7 +121,8 @@ const AppContent = () => {
       finance: <FinanceView />, 
       reports: <ReportsView />, 
       settings: <SettingsView />, 
-      help: <HelpView />
+      help: <HelpView />,
+      'customer-display': <CustomerDisplayView /> // Fallback if reached via nav
     };
     return views[activeView] || <POSView />;
   };
@@ -174,6 +185,18 @@ const AppContent = () => {
 const RootNavigator = () => {
   const { currentUser, authSettings } = useAuth();
   const { alertState, hideAlert } = useUI();
+  const [urlView, setUrlView] = useState<string | null>(null);
+
+  useEffect(() => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('view') === 'customer-display') {
+          setUrlView('customer-display');
+      }
+  }, []);
+
+  if (urlView === 'customer-display') {
+      return <CustomerDisplayView />;
+  }
 
   return (
     <>

@@ -30,7 +30,8 @@ const viewTitles: Record<View, string> = {
     finance: 'Manajemen Keuangan',
     reports: 'Laporan Penjualan',
     settings: 'Pengaturan Aplikasi',
-    help: 'Info & Bantuan'
+    help: 'Info & Bantuan',
+    'customer-display': 'Layar Pelanggan'
 };
 
 const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick }) => {

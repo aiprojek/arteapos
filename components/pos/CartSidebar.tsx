@@ -4,12 +4,13 @@ import { useCart } from '../../context/CartContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useCustomer } from '../../context/CustomerContext';
 import { useSession } from '../../context/SessionContext';
+import { useCustomerDisplay } from '../../context/CustomerDisplayContext'; // NEW
 import { CURRENCY_FORMATTER } from '../../constants';
 import Icon from '../Icon';
 import Button from '../Button';
 import ActiveOrderList from './ActiveOrderList';
 import Modal from '../Modal';
-import { MemberSearchModal } from './POSModals'; // Import new modal
+import { MemberSearchModal, DualScreenModal } from './POSModals'; // Import new DualScreenModal
 import type { Customer, OrderType } from '../../types';
 
 // Sub-components moved here for cleaner file structure
@@ -177,6 +178,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const { sessionSettings } = useSession();
     const { membershipSettings, addBalance } = useCustomer();
     const { receiptSettings } = useSettings();
+    const { isDisplayConnected } = useCustomerDisplay(); // NEW
 
     const { subtotal, itemDiscountAmount, cartDiscountAmount, taxAmount, serviceChargeAmount, finalTotal } = getCartTotals();
     const quickPayAmounts = [20000, 50000, 100000];
@@ -187,6 +189,9 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     
     // --- Member Search State ---
     const [isMemberSearchOpen, setIsMemberSearchOpen] = useState(false);
+    
+    // --- Dual Screen State ---
+    const [isDualScreenModalOpen, setDualScreenModalOpen] = useState(false);
 
     // Actions Logic
     const handleSwitchCart = (cartId: string | null) => {
@@ -209,32 +214,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         }
     };
 
-    // Helper to open main scanner in product browser mode (handled by parent props ideally, 
-    // but here we might need to signal parent to open scanner specifically for member?)
-    // Actually, checking `usePOSLogic`, the scanner is global. 
-    // We can emit a custom event or use a prop if provided.
-    // For now, let's assume we dispatch an event that `ProductBrowser` or `POSView` listens to, 
-    // OR better, we need `onOpenScanner` prop passed down if not already.
-    // Wait, `CartSidebar` props don't have `onOpenScanner`. 
-    // I will simulate a click on the main scanner button via DOM or just dispatch event?
-    // Better: Add the logic to open scanner directly here? 
-    // NO, `POSView` controls the scanner state.
-    // Let's dispatch a custom event 'open-scanner' as a workaround if prop isn't available, 
-    // OR assume the user will use the main scanner button.
-    // To solve this properly, I should have updated `POSView` to pass `onOpenScanner` to `CartSidebar`.
-    // BUT I can't edit POSView in this change block easily without bloating response.
-    // WORKAROUND: I will dispatch a window event `open-barcode-scanner` which POSView *should* listen to?
-    // No, standard way: Add `onOpenScanner` to props? 
-    // Let's check `POSView.tsx` content... it does NOT pass `onOpenScanner` to `CartSidebar`.
-    // So I will trigger it by dispatching the 'F4' key event (search) or just rely on the search modal's scan button which I can implement?
-    
-    // Actually, `usePOSLogic` has `setBarcodeScannerOpen`. I can't access it here.
-    // I will trigger the scanner via a CustomEvent `trigger-scan-member` which `POSView` will listen.
-    // OR simpler: `MemberSearchModal` has `onScan`. 
-    
     const triggerScanner = () => {
-        // Dispatch custom event that POSView listens to (I'll add listener in POSView or just reuse F9 hotkey if exists?)
-        // Let's create a custom event.
         window.dispatchEvent(new CustomEvent('open-pos-scanner'));
     };
 
@@ -277,7 +257,16 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             
             {sessionSettings.enabled && sessionSettings.enableCartHolding && <HeldCartsTabs onSwitch={handleSwitchCart} />}
             
-            <h2 className="text-xl font-bold mb-2 text-white hidden md:block">Keranjang</h2>
+            <div className="flex justify-between items-center mb-2">
+                <h2 className="text-xl font-bold text-white hidden md:block">Keranjang</h2>
+                <button 
+                    onClick={() => setDualScreenModalOpen(true)}
+                    className={`p-1.5 rounded transition-colors ${isDisplayConnected ? 'bg-[#347758] text-white animate-pulse' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
+                    title="Layar Kedua (Pelanggan)"
+                >
+                    <Icon name="shop" className="w-5 h-5"/>
+                </button>
+            </div>
             
             {cart.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center text-slate-500">
@@ -447,6 +436,12 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 onSelect={(c) => setSelectedCustomer(c)}
                 onAddNew={onOpenCustomerForm}
                 onScan={triggerScanner}
+            />
+
+            {/* Dual Screen Modal */}
+            <DualScreenModal
+                isOpen={isDualScreenModalOpen}
+                onClose={() => setDualScreenModalOpen(false)}
             />
         </div>
     );

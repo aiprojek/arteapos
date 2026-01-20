@@ -10,8 +10,9 @@ import { FinanceProvider } from './FinanceContext';
 import { DiscountProvider } from './DiscountContext';
 import { CustomerProvider } from './CustomerContext';
 import { CartProvider } from './CartContext';
-import { AuditProvider } from './AuditContext'; // NEW
-import { CloudSyncProvider } from './CloudSyncContext'; // NEW
+import { AuditProvider } from './AuditContext'; 
+import { CloudSyncProvider } from './CloudSyncContext';
+import { CustomerDisplayProvider } from './CustomerDisplayContext'; // NEW
 
 const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
@@ -19,23 +20,25 @@ const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       <CloudSyncProvider>
         <AuditProvider>
           <UIProvider>
-            <AuthProvider>
-              <ProductProvider>
-                <SettingsProvider>
-                  <SessionProvider>
-                    <FinanceProvider>
-                      <DiscountProvider>
-                        <CustomerProvider>
-                          <CartProvider>
-                            {children}
-                          </CartProvider>
-                        </CustomerProvider>
-                      </DiscountProvider>
-                    </FinanceProvider>
-                  </SessionProvider>
-                </SettingsProvider>
-              </ProductProvider>
-            </AuthProvider>
+            <CustomerDisplayProvider>
+              <AuthProvider>
+                <ProductProvider>
+                  <SettingsProvider>
+                    <SessionProvider>
+                      <FinanceProvider>
+                        <DiscountProvider>
+                          <CustomerProvider>
+                            <CartProvider>
+                              {children}
+                            </CartProvider>
+                          </CustomerProvider>
+                        </DiscountProvider>
+                      </FinanceProvider>
+                    </SessionProvider>
+                  </SettingsProvider>
+                </ProductProvider>
+              </AuthProvider>
+            </CustomerDisplayProvider>
           </UIProvider>
         </AuditProvider>
       </CloudSyncProvider>

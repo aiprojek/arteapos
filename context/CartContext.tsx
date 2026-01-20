@@ -1,13 +1,14 @@
 
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { useData } from './DataContext';
 import { useUI } from './UIContext';
 import { useAuth } from './AuthContext';
 import { useProduct } from './ProductContext';
 import { useSettings } from './SettingsContext';
-import { useCloudSync } from './CloudSyncContext'; // NEW
-import { useAudit } from './AuditContext'; // IMPORT AUDIT
-import { calculateCartTotals } from '../utils/cartCalculations'; // NEW
+import { useCloudSync } from './CloudSyncContext';
+import { useAudit } from './AuditContext';
+import { useCustomerDisplay } from './CustomerDisplayContext'; // NEW
+import { calculateCartTotals } from '../utils/cartCalculations';
 import type { CartItem, Discount, Product, HeldCart, Transaction as TransactionType, Payment, PaymentMethod, PaymentStatus, Addon, Reward, Customer, OrderType, ProductVariant, SelectedModifier } from '../types';
 
 interface CartContextType {
@@ -54,8 +55,9 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children }) => {
     const { data, setData } = useData();
-    const { triggerAutoSync } = useCloudSync(); // Use new hook
-    const { logAudit } = useAudit(); // Hook Audit
+    const { triggerAutoSync } = useCloudSync(); 
+    const { logAudit } = useAudit(); 
+    const { sendDataToDisplay, isDisplayConnected } = useCustomerDisplay(); // NEW
     const { showAlert } = useUI();
     const { currentUser } = useAuth();
     const { receiptSettings } = useSettings();
@@ -68,6 +70,22 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
     const [activeHeldCartId, setActiveHeldCartId] = useState<string | null>(null);
     const [appliedReward, setAppliedReward] = useState<{ reward: Reward, cartItem: CartItem } | null>(null);
     const [orderType, setOrderType] = useState<OrderType>(defaultOrderType);
+
+    // --- EFFECT: SYNC TO CUSTOMER DISPLAY ---
+    useEffect(() => {
+        if (isDisplayConnected) {
+            const totals = calculateCartTotals(cart, cartDiscount, receiptSettings);
+            sendDataToDisplay({
+                type: 'CART_UPDATE',
+                cartItems: cart,
+                subtotal: totals.subtotal,
+                discount: totals.itemDiscountAmount + totals.cartDiscountAmount,
+                tax: totals.taxAmount + totals.serviceChargeAmount,
+                total: totals.finalTotal,
+                shopName: receiptSettings.shopName
+            });
+        }
+    }, [cart, cartDiscount, receiptSettings, isDisplayConnected, sendDataToDisplay]);
 
     const removeRewardFromCart = useCallback(() => {
         setCart(prev => prev.filter(item => !item.isReward));
@@ -203,9 +221,6 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                 const otherItemsQty = prevCart.filter(i => i.id === itemToUpdate.id && i.cartItemId !== cartItemId).reduce((sum, i) => sum + i.quantity, 0);
                 const totalRequested = otherItemsQty + quantity; // New total if update allowed
                 
-                // We use checkStockAvailability with current=otherItemsQty and added=quantity because logic sums them
-                // Actually easier: checkStockAvailability expects current (before add) and added (delta). 
-                // Let's pass 0 as current and Total Requested as Added to reuse logic for total check.
                 if (!checkStockAvailability(itemToUpdate.id, 0, totalRequested)) {
                     return prevCart;
                 }
@@ -224,7 +239,20 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         setAppliedReward(null);
         setCartDiscount(null);
         setOrderType(defaultOrderType);
-    }, [setAppliedReward, defaultOrderType]);
+        
+        // Reset Display
+        if (isDisplayConnected) {
+            sendDataToDisplay({
+                type: 'CART_UPDATE',
+                cartItems: [],
+                subtotal: 0,
+                discount: 0,
+                tax: 0,
+                total: 0,
+                shopName: receiptSettings.shopName
+            });
+        }
+    }, [setAppliedReward, defaultOrderType, isDisplayConnected, sendDataToDisplay, receiptSettings]);
 
     // REFACTORED: Use utility function
     const getCartTotals = useCallback(() => {
@@ -359,6 +387,21 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         
         const now = new Date();
         const fullPayments: Payment[] = payments.map((p, index) => ({ ...p, id: `${now.getTime()}-${index}`, createdAt: now.toISOString() }));
+
+        // --- SEND SUCCESS TO DISPLAY ---
+        if (isDisplayConnected && paymentStatus === 'paid') {
+            const change = amountPaid - finalTotal;
+            sendDataToDisplay({
+                type: 'PAYMENT_SUCCESS',
+                cartItems: [],
+                subtotal: 0,
+                discount: 0,
+                tax: 0,
+                total: finalTotal,
+                change: change > 0 ? change : 0,
+                shopName: receiptSettings.shopName
+            });
+        }
 
         const cartWithCost = cart.map(item => {
             const product = products.find(p => p.id === item.id);
@@ -554,7 +597,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         setTimeout(() => triggerAutoSync(currentUser.name), 500);
 
         return newTransaction;
-    }, [cart, getCartTotals, setData, currentUser, appliedReward, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, rawMaterials, products, orderType, receiptSettings.storeId, triggerAutoSync, logAudit, data.customers, data.membershipSettings]); // Added data.customers dependency
+    }, [cart, getCartTotals, setData, currentUser, appliedReward, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, rawMaterials, products, orderType, receiptSettings.storeId, triggerAutoSync, logAudit, data.customers, data.membershipSettings, isDisplayConnected, sendDataToDisplay, receiptSettings.shopName]);
     
     return (
         <CartContext.Provider value={{

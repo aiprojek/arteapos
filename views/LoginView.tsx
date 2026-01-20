@@ -216,6 +216,11 @@ const LoginView: React.FC = () => {
         }
     };
 
+    const handleEnterDisplayMode = () => {
+        // Redirect to Display View without logging in
+        window.location.search = '?view=customer-display';
+    };
+
     const KeypadButton: React.FC<{ value: string, onClick: () => void, children?: React.ReactNode }> = ({ value, onClick, children }) => (
         <button
             onClick={onClick}
@@ -233,7 +238,7 @@ const LoginView: React.FC = () => {
             <h1 className="text-2xl font-bold text-white mb-2 mt-4">Pilih Profil Anda</h1>
             <p className="text-slate-400 mb-8">Siapa yang akan menggunakan kasir?</p>
             
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto mb-8">
                 {users.map(user => (
                     <button key={user.id} onClick={() => setSelectedUser(user)} className="bg-slate-800 rounded-lg p-4 flex flex-col items-center justify-center gap-2 group hover:bg-[#347758] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-[#347758]">
                         <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center group-hover:bg-[#52a37c]">
@@ -243,6 +248,16 @@ const LoginView: React.FC = () => {
                         <p className="text-xs text-slate-400 capitalize group-hover:text-green-100">{user.role}</p>
                     </button>
                 ))}
+            </div>
+
+            {/* CUSTOMER DISPLAY SHORTCUT */}
+            <div className="border-t border-slate-800 pt-6">
+                <button 
+                    onClick={handleEnterDisplayMode}
+                    className="flex items-center justify-center gap-2 text-slate-500 hover:text-white transition-colors text-sm mx-auto"
+                >
+                    <Icon name="shop" className="w-4 h-4"/> Mode Layar Pelanggan
+                </button>
             </div>
         </div>
     );

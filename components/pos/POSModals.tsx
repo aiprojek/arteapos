@@ -3,14 +3,107 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Modal from '../Modal';
 import Button from '../Button';
 import Icon from '../Icon';
+import BarcodeScannerModal from '../BarcodeScannerModal';
 import { CURRENCY_FORMATTER } from '../../constants';
 import { useCart } from '../../context/CartContext';
 import { useSession } from '../../context/SessionContext';
 import { useFinance } from '../../context/FinanceContext';
 import { useCustomer } from '../../context/CustomerContext';
-import { useAudit } from '../../context/AuditContext'; // IMPORT AUDIT
-import { useAuth } from '../../context/AuthContext'; // IMPORT AUTH
+import { useAudit } from '../../context/AuditContext'; 
+import { useAuth } from '../../context/AuthContext';
+import { useCustomerDisplay } from '../../context/CustomerDisplayContext'; // NEW
 import type { Customer, Transaction, PaymentMethod, Discount, Reward } from '../../types';
+
+// --- NEW: DUAL SCREEN MODAL ---
+interface DualScreenModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+}
+
+export const DualScreenModal: React.FC<DualScreenModalProps> = ({ isOpen, onClose }) => {
+    const { isDisplayConnected, connectToDisplay, disconnectDisplay } = useCustomerDisplay();
+    const [isScanning, setIsScanning] = useState(false);
+    const [displayIdInput, setDisplayIdInput] = useState('');
+    const [isConnecting, setIsConnecting] = useState(false);
+
+    const handleConnect = async (id: string) => {
+        setIsConnecting(true);
+        try {
+            await connectToDisplay(id);
+            onClose();
+        } catch (error) {
+            alert('Gagal menghubungkan. Pastikan ID benar dan perangkat pelanggan sudah membuka halaman Display.');
+        } finally {
+            setIsConnecting(false);
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Layar Pelanggan (Dual Screen)">
+            <div className="space-y-6">
+                {isDisplayConnected ? (
+                    <div className="bg-green-900/20 border border-green-800 p-4 rounded-lg text-center">
+                        <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <Icon name="check-circle-fill" className="w-8 h-8 text-green-400" />
+                        </div>
+                        <h3 className="text-xl font-bold text-green-300">Terhubung</h3>
+                        <p className="text-sm text-slate-400 mt-2">
+                            Keranjang belanja sedang ditampilkan ke pelanggan secara real-time.
+                        </p>
+                        <Button onClick={disconnectDisplay} variant="danger" className="w-full mt-4">
+                            Putuskan Koneksi
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="bg-slate-800 p-3 rounded text-sm text-slate-300">
+                            <p className="mb-2"><strong>Cara Penggunaan:</strong></p>
+                            <ol className="list-decimal pl-5 space-y-1">
+                                <li>Siapkan Tablet/HP kedua untuk pelanggan.</li>
+                                <li>Buka aplikasi Artea POS di perangkat tersebut.</li>
+                                <li>Di halaman Login, klik tombol <strong>"Mode Layar Pelanggan"</strong>.</li>
+                                <li>Scan QR Code yang muncul menggunakan tombol di bawah.</li>
+                            </ol>
+                        </div>
+
+                        <div className="flex flex-col gap-3">
+                            <Button onClick={() => setIsScanning(true)} className="w-full py-3 text-lg">
+                                <Icon name="camera" className="w-5 h-5" /> Scan QR Code
+                            </Button>
+                            
+                            <div className="relative flex py-1 items-center">
+                                <div className="flex-grow border-t border-slate-700"></div>
+                                <span className="flex-shrink-0 mx-4 text-slate-500 text-xs">Atau Input ID</span>
+                                <div className="flex-grow border-t border-slate-700"></div>
+                            </div>
+
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    value={displayIdInput}
+                                    onChange={(e) => setDisplayIdInput(e.target.value)}
+                                    placeholder="Masukkan ID Perangkat..."
+                                    className="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                                />
+                                <Button onClick={() => handleConnect(displayIdInput)} disabled={!displayIdInput || isConnecting}>
+                                    {isConnecting ? '...' : 'Hubungkan'}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+            
+            <BarcodeScannerModal 
+                isOpen={isScanning}
+                onClose={() => setIsScanning(false)}
+                onScan={(code) => { setIsScanning(false); handleConnect(code); }}
+            />
+        </Modal>
+    );
+};
 
 // --- NEW: MEMBER SEARCH MODAL ---
 interface MemberSearchModalProps {

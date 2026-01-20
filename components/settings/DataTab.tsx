@@ -121,9 +121,10 @@ const DataTab: React.FC = () => {
                 }
                 
                 // Re-register
+                // Catatan: './sw.js' harus benar-benar ada di root saat di-serve.
                 const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
                 
-                // Force update logic (opsional, tapi bagus untuk memastikan)
+                // Force update logic
                 if (reg.installing) {
                     const sw = reg.installing;
                     sw.addEventListener('statechange', () => {
@@ -140,7 +141,27 @@ const DataTab: React.FC = () => {
                 alert("Browser ini tidak mendukung Mode Offline.");
             }
         } catch (e: any) {
-            showAlert({ type: 'alert', title: 'Gagal', message: 'Gagal mengaktifkan mode offline: ' + e.message });
+            let title = 'Gagal';
+            let message = e.message;
+
+            // Handle Specific MIME Type Error (Common in Preview Environments)
+            if (message.includes('MIME type') || message.includes('text/html')) {
+                title = 'Mode Preview Terbatas';
+                message = (
+                    <div className="text-left text-sm">
+                        <p className="mb-2">Gagal mengunduh <code>sw.js</code>. Browser menerima file HTML, bukan Script.</p>
+                        <div className="bg-yellow-900/30 border border-yellow-700 p-2 rounded text-yellow-200">
+                            <strong>Solusi:</strong> Error ini wajar jika Anda menjalankan aplikasi di lingkungan Preview/Dev (seperti Google IDX/Stackblitz).
+                            <br/><br/>
+                            Fitur Offline akan <strong>berjalan normal</strong> setelah aplikasi ini di-Build & Deploy ke hosting (Vercel/Netlify) atau dijalankan di HP Android.
+                        </div>
+                    </div>
+                );
+            } else {
+                message = 'Gagal mengaktifkan mode offline: ' + e.message;
+            }
+
+            showAlert({ type: 'alert', title: title, message: message });
         } finally {
             setIsRetryingSW(false);
         }

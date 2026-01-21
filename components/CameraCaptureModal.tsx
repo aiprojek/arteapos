@@ -10,9 +10,10 @@ interface CameraCaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCapture: (imageBase64: string) => void;
+  title?: string; // Optional title prop
 }
 
-const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose, onCapture }) => {
+const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose, onCapture, title = "Ambil Foto" }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -146,7 +147,7 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
   if (Capacitor.isNativePlatform()) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Ambil Foto Produk">
+    <Modal isOpen={isOpen} onClose={onClose} title={title}>
       <div className="relative aspect-video bg-slate-900 rounded-lg overflow-hidden flex flex-col items-center justify-center">
         {error ? (
           <div className="text-center p-6 max-w-xs text-slate-300">

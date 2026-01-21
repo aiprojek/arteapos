@@ -145,6 +145,7 @@ export interface Payment {
   method: PaymentMethod;
   amount: number;
   createdAt: string; // ISO string
+  evidenceImageUrl?: string; // NEW: Bukti Pembayaran untuk Piutang/Cicilan
 }
 
 export type PaymentStatus = 'paid' | 'unpaid' | 'partial' | 'refunded';
@@ -254,6 +255,8 @@ export interface Expense {
   status: ExpenseStatus;
   category: string;
   date: string; // ISO string
+  evidenceImageUrl?: string; // NEW: Bukti Foto (Base64)
+  paymentMethod?: PaymentMethod; // NEW: Cara Bayar
 }
 
 // New Type for Non-Sales Income
@@ -263,6 +266,8 @@ export interface OtherIncome {
   amount: number;
   category: string;
   date: string; // ISO string
+  evidenceImageUrl?: string; // NEW
+  paymentMethod?: PaymentMethod; // NEW
 }
 
 export interface Supplier {
@@ -291,6 +296,8 @@ export interface Purchase {
     amountPaid: number;
     status: PurchaseStatus;
     date: string; // ISO string
+    evidenceImageUrl?: string; // NEW
+    paymentMethod?: PaymentMethod; // NEW
 }
 
 // --- New Inventory Management Types ---
@@ -426,7 +433,7 @@ export interface AuditLog {
 
 // --- CUSTOMER DISPLAY PAYLOAD (P2P) ---
 export interface CustomerDisplayPayload {
-    type: 'CART_UPDATE' | 'PAYMENT_SUCCESS' | 'WELCOME';
+    type: 'CART_UPDATE' | 'PAYMENT_SUCCESS' | 'WELCOME' | 'REFUND_ALERT';
     cartItems: CartItem[];
     subtotal: number;
     discount: number;
@@ -434,4 +441,5 @@ export interface CustomerDisplayPayload {
     total: number;
     change?: number; // Only for Payment Success
     shopName?: string;
+    refundReason?: string; // Only for REFUND_ALERT
 }

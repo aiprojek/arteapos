@@ -48,6 +48,29 @@ const CustomerDisplayView: React.FC = () => {
 
     if (!receivedData) return <WaitingScreen />;
 
+    // --- REFUND ALERT SCREEN (ANTI-FRAUD) ---
+    if (receivedData.type === 'REFUND_ALERT') {
+        return (
+            <div className="h-screen bg-red-600 flex flex-col items-center justify-center text-white p-8 text-center relative overflow-hidden animate-pulse">
+                <div className="bg-white text-red-600 p-6 rounded-full shadow-xl mb-6">
+                    <Icon name="warning" className="w-24 h-24" />
+                </div>
+                <h1 className="text-5xl font-black mb-4 uppercase tracking-wider">TRANSAKSI DIBATALKAN</h1>
+                <div className="bg-black/30 p-6 rounded-xl border border-white/20 max-w-2xl w-full">
+                    <p className="text-xl font-bold mb-2 opacity-80">ALASAN PEMBATALAN / REFUND:</p>
+                    <p className="text-3xl font-bold text-yellow-300">"{receivedData.refundReason || 'Kesalahan Kasir'}"</p>
+                    <div className="border-t border-white/30 my-4 pt-4">
+                        <p className="text-lg">Total Dikembalikan:</p>
+                        <p className="text-4xl font-mono font-bold">{CURRENCY_FORMATTER.format(receivedData.total)}</p>
+                    </div>
+                </div>
+                <p className="mt-8 text-lg font-medium opacity-90 max-w-lg">
+                    Jika Anda sudah membayar dan tidak menerima uang kembali, harap segera lapor ke Manajemen/Owner.
+                </p>
+            </div>
+        );
+    }
+
     // --- SUCCESS SCREEN ---
     if (receivedData.type === 'PAYMENT_SUCCESS') {
         return (
@@ -103,8 +126,9 @@ const CustomerDisplayView: React.FC = () => {
                 </header>
                 
                 <main className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-6">
+                    {/* CHANGED ICON HERE */}
                     <div className="w-64 h-64 bg-slate-800 rounded-full flex items-center justify-center animate-pulse">
-                        <Icon name="shop" className="w-32 h-32 text-slate-700" />
+                        <Icon name="logo" className="w-32 h-32 text-[#52a37c]" />
                     </div>
                     <h2 className="text-3xl font-bold text-white">Selamat Datang!</h2>
                     <p className="text-xl text-slate-400 max-w-lg">
@@ -128,6 +152,11 @@ const CustomerDisplayView: React.FC = () => {
                     <span className="block text-2xl font-bold">{currentTime.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}</span>
                 </div>
             </header>
+
+            {/* SECURITY BANNER */}
+            <div className="bg-yellow-600 text-black font-bold text-center py-2 px-4 text-sm sm:text-base animate-pulse shadow-md z-20">
+                ⚠️ MOHON JANGAN MEMBAYAR SEBELUM MENERIMA STRUK/BUKTI TRANSAKSI
+            </div>
 
             <div className="flex-1 flex overflow-hidden">
                 {/* Left: Item List */}

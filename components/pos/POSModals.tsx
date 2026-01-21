@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Modal from '../Modal';
 import Button from '../Button';
 import Icon from '../Icon';
@@ -11,8 +11,9 @@ import { useFinance } from '../../context/FinanceContext';
 import { useCustomer } from '../../context/CustomerContext';
 import { useAudit } from '../../context/AuditContext'; 
 import { useAuth } from '../../context/AuthContext';
-import { useCustomerDisplay } from '../../context/CustomerDisplayContext'; // NEW
+import { useCustomerDisplay } from '../../context/CustomerDisplayContext';
 import type { Customer, Transaction, PaymentMethod, Discount, Reward } from '../../types';
+import { compressImage } from '../../utils/imageCompression'; // Import compression
 
 // --- NEW: DUAL SCREEN MODAL ---
 interface DualScreenModalProps {
@@ -79,7 +80,8 @@ export const DualScreenModal: React.FC<DualScreenModalProps> = ({ isOpen, onClos
                                 <div className="flex-grow border-t border-slate-700"></div>
                             </div>
 
-                            <div className="flex gap-2">
+                            {/* RESPONSIVE FIX: flex-col on mobile, flex-row on sm */}
+                            <div className="flex flex-col sm:flex-row gap-2">
                                 <input 
                                     type="text" 
                                     value={displayIdInput}
@@ -105,7 +107,7 @@ export const DualScreenModal: React.FC<DualScreenModalProps> = ({ isOpen, onClos
     );
 };
 
-// --- NEW: MEMBER SEARCH MODAL ---
+// --- MEMBER SEARCH MODAL ---
 interface MemberSearchModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -205,6 +207,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
     const [customerName, setCustomerName] = useState(''); 
     const [depositChange, setDepositChange] = useState(false); 
     
+    // Evidence State
+    const [evidenceImage, setEvidenceImage] = useState<string>('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
     // Instant Top Up State
     const [instantTopUpAmount, setInstantTopUpAmount] = useState('');
     
@@ -219,6 +225,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
             setDepositChange(false);
             setInstantTopUpAmount('');
             setSplitCashInput('');
+            setEvidenceImage(''); // Reset image
         }
     }, [isOpen, selectedCustomer]);
 
@@ -230,10 +237,24 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
         setPaymentMethod(method);
         setInstantTopUpAmount(''); 
         setSplitCashInput('');
+        setEvidenceImage(''); // Clear image on method switch
+        
         if (method === 'member-balance' || method === 'non-cash') {
             setAmountPaid(total.toString());
         } else {
             setAmountPaid(''); 
+        }
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            try {
+                const compressed = await compressImage(file);
+                setEvidenceImage(compressed);
+            } catch (err) {
+                alert('Gagal memproses gambar.');
+            }
         }
     };
 
@@ -271,7 +292,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
         );
 
         // 3. Catat Pembayaran
-        // Kita mencatat 'amount' tunai sesuai yang diberikan (tendered) agar kembalian tercatat di struk
         const payments = [
             { method: 'member-balance' as PaymentMethod, amount: balanceAvailable },
             { method: 'cash' as PaymentMethod, amount: cashTendered } 
@@ -289,7 +309,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
     const handleConfirm = () => {
         const payAmountInput = parseFloat(amountPaid) || 0;
         
-        let payments: any[] = [];
         let finalPayAmount = payAmountInput;
 
         // Logic Saldo Full
@@ -309,7 +328,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
             logAudit(currentUser, 'OTHER', `Simpan Kembalian ke Saldo: ${CURRENCY_FORMATTER.format(change)}`, selectedCustomer.id);
         }
 
-        payments = [{ method: paymentMethod, amount: finalPayAmount }];
+        // Attach Evidence if Non-Cash
+        const paymentObj: any = { method: paymentMethod, amount: finalPayAmount };
+        if (paymentMethod === 'non-cash' && evidenceImage) {
+            paymentObj.evidenceImageUrl = evidenceImage;
+        }
+
+        const payments = [paymentObj];
         
         const details = selectedCustomer 
             ? { customerId: selectedCustomer.id, customerName: selectedCustomer.name, customerContact: selectedCustomer.contact }
@@ -377,7 +402,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                 {/* --- LOGIC: MEMBER BALANCE PAYMENT --- */}
                 {paymentMethod === 'member-balance' && selectedCustomer && (
                     <div className={`p-3 border rounded-lg text-sm ${canPayWithBalance ? 'bg-purple-900/30 border-purple-700' : 'bg-slate-800 border-slate-700'}`}>
-                        <div className="flex justify-between items-center mb-2">
+                         {/* ... existing balance content ... */}
+                         {/* Keeping brevity */}
+                         <div className="flex justify-between items-center mb-2">
                             <span className="text-slate-300">Saldo Member:</span>
                             <span className={`font-bold ${canPayWithBalance ? 'text-white' : 'text-red-400'}`}>{CURRENCY_FORMATTER.format(memberBalance)}</span>
                         </div>
@@ -390,8 +417,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                                 </div>
                                 
                                 <div className="border-t border-slate-700/50 my-1"></div>
-
-                                {/* MENU SPLIT BILL YANG DISEMPURNAKAN */}
+                                {/* ... split content ... */}
                                 <div>
                                     <div className="flex justify-between items-center mb-2">
                                         <p className="text-xs text-slate-400 font-bold uppercase">Split Bill: Bayar Sisa Tunai</p>
@@ -425,7 +451,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                                         Konfirmasi Bayar Split
                                     </Button>
                                 </div>
-
                                 <div className="border-t border-slate-700/50 my-2 pt-2">
                                     <p className="text-xs text-slate-500 text-center mb-1">Atau Top Up dulu:</p>
                                     <div className="flex gap-2 justify-center">
@@ -487,6 +512,50 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                         )}
                     </div>
                 )}
+                
+                {/* --- NON-CASH PROOF SECTION --- */}
+                {paymentMethod === 'non-cash' && (
+                    <div className="bg-slate-700/50 p-3 rounded-lg border border-slate-600 animate-fade-in">
+                        <label className="block text-xs font-bold text-slate-300 mb-2 flex items-center gap-1">
+                            <Icon name="camera" className="w-3 h-3"/> Bukti Pembayaran (Opsional)
+                        </label>
+                        
+                        <div className="flex items-center gap-3">
+                            <div 
+                                className="w-16 h-16 bg-slate-800 border border-dashed border-slate-500 rounded flex items-center justify-center cursor-pointer hover:bg-slate-700 transition-colors relative overflow-hidden"
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                {evidenceImage ? (
+                                    <img src={evidenceImage} alt="Bukti" className="w-full h-full object-cover" />
+                                ) : (
+                                    <Icon name="plus" className="w-6 h-6 text-slate-500" />
+                                )}
+                            </div>
+                            
+                            <div className="flex-1 space-y-2">
+                                <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    ref={fileInputRef} 
+                                    className="hidden" 
+                                    onChange={handleFileChange} 
+                                />
+                                {evidenceImage ? (
+                                    <button 
+                                        onClick={() => setEvidenceImage('')} 
+                                        className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
+                                    >
+                                        <Icon name="trash" className="w-3 h-3"/> Hapus Foto
+                                    </button>
+                                ) : (
+                                    <p className="text-[10px] text-slate-400">
+                                        Upload foto struk EDC atau bukti transfer QRIS.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {!selectedCustomer && (
                     <div>
@@ -538,6 +607,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
         </Modal>
     );
 };
+
+// ... Rest of the file (RewardsModal, DiscountModal, CashManagementModal, SessionHistoryModal) remains unchanged ...
+// To save space, assuming they are kept as is.
 
 // --- REWARDS MODAL ---
 export const RewardsModal: React.FC<{ isOpen: boolean, onClose: () => void, customer: Customer }> = ({ isOpen, onClose, customer }) => {

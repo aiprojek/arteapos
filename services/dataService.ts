@@ -56,20 +56,22 @@ const base64ToBlob = (base64: string): Blob => {
 };
 
 // Exported for external use (Dropbox/Supabase logging)
-// UPDATED: Now includes Store ID in CSV
+// UPDATED: Now includes Store ID and Evidence indicator
 export const generateTransactionsCSVString = (transactions: TransactionType[]) => {
-    const headers = 'id,createdAt,customerName,userName,total,amountPaid,paymentStatus,storeId,items';
+    const headers = 'id,createdAt,customerName,userName,total,amountPaid,paymentStatus,storeId,hasEvidence,items';
     const rows = transactions.map(t => {
         const items = (t.items || []).map(i => {
             const variantStr = i.selectedVariant ? ` [${i.selectedVariant.name}]` : '';
             return `${i.name}${variantStr} (qty: ${i.quantity}, price: ${i.price})`
         }).join('; ');
-        // Escape quotes in items string and others
+        
+        // Escape quotes
         const escapedItems = items.replace(/"/g, '""');
         const escapedCustomer = (t.customerName || '').replace(/"/g, '""');
         const storeId = t.storeId || '';
+        const hasEvidence = (t.payments || []).some(p => !!p.evidenceImageUrl) ? 'Ya' : 'Tidak';
         
-        return `${t.id},"${new Date(t.createdAt).toLocaleString('id-ID')}","${escapedCustomer}","${t.userName}",${t.total},${t.amountPaid},${t.paymentStatus},"${storeId}","${escapedItems}"`;
+        return `${t.id},"${new Date(t.createdAt).toLocaleString('id-ID')}","${escapedCustomer}","${t.userName}",${t.total},${t.amountPaid},${t.paymentStatus},"${storeId}","${hasEvidence}","${escapedItems}"`;
     });
     return [headers, ...rows].join('\n');
 };
@@ -111,15 +113,15 @@ const parseTransactionsCSV = (csvText: string): TransactionType[] => {
     const headers = lines[0].split(',').map(h => h.trim());
     const transactions: TransactionType[] = [];
 
-    // Mapping index based on standard header: id,createdAt,customerName,userName,total,amountPaid,paymentStatus,storeId,items
+    // Mapping index based on standard header
     const idIdx = headers.findIndex(h => h.includes('id'));
-    const dateIdx = headers.findIndex(h => h.includes('createdAt') || h.includes('Date')); // flexible check
+    const dateIdx = headers.findIndex(h => h.includes('createdAt') || h.includes('Date')); 
     const custIdx = headers.findIndex(h => h.includes('customerName'));
     const userIdx = headers.findIndex(h => h.includes('userName') || h.includes('Cashier'));
     const totalIdx = headers.findIndex(h => h.includes('total'));
     const paidIdx = headers.findIndex(h => h.includes('amountPaid'));
     const statusIdx = headers.findIndex(h => h.includes('paymentStatus'));
-    const storeIdx = headers.findIndex(h => h.includes('storeId')); // New
+    const storeIdx = headers.findIndex(h => h.includes('storeId')); 
     const itemsIdx = headers.findIndex(h => h.includes('items'));
 
     if (idIdx === -1 || totalIdx === -1) {
@@ -137,7 +139,6 @@ const parseTransactionsCSV = (csvText: string): TransactionType[] => {
             // Reconstruct Items
             const itemsStr = vals[itemsIdx] || '';
             const items: CartItem[] = itemsStr.split(';').filter(Boolean).map((s, idx) => {
-                // Regex to match "Name [Variant] (qty: 1, price: 1000)" or "Name (qty: 1, price: 1000)"
                 const match = s.trim().match(/(.+?) (?:\[(.+?)\] )?\(qty: (\d+), price: (\d+)\)/);
                 if (match) {
                     return {
@@ -147,18 +148,15 @@ const parseTransactionsCSV = (csvText: string): TransactionType[] => {
                         quantity: parseInt(match[3]),
                         price: parseFloat(match[4]),
                         category: ['Imported'],
-                        // Note: Variant details beyond name are lost in simple CSV, but structure is kept
                         selectedVariant: match[2] ? { id: 'imp', name: match[2], price: parseFloat(match[4]) } : undefined 
                     } as CartItem;
                 }
                 return null;
             }).filter((item): item is CartItem => item !== null);
 
-            const createdAtStr = vals[dateIdx]?.replace(/"/g, ''); // Remove quotes if any
-            // Try to parse date, fallback to now if fail
+            const createdAtStr = vals[dateIdx]?.replace(/"/g, ''); 
             let createdAt = new Date().toISOString();
             if (createdAtStr) {
-                 // Try parsing standard locale string or ISO
                  const parsed = Date.parse(createdAtStr);
                  if (!isNaN(parsed)) {
                      createdAt = new Date(parsed).toISOString();
@@ -167,9 +165,6 @@ const parseTransactionsCSV = (csvText: string): TransactionType[] => {
 
             const rawId = vals[idIdx] || `imported-${Date.now()}-${i}`;
             const importedStoreId = (storeIdx > -1 ? vals[storeIdx] : '') || 'EXTERNAL';
-            
-            // KEY CHANGE: Prefix ID with StoreID to avoid collisions
-            // If ID already contains storeID (re-import), keep it.
             const finalId = rawId.startsWith(importedStoreId) ? rawId : `${importedStoreId}-${rawId}`;
 
             const transaction: TransactionType = {
@@ -182,12 +177,12 @@ const parseTransactionsCSV = (csvText: string): TransactionType[] => {
                 amountPaid: parseFloat(vals[paidIdx]) || 0,
                 paymentStatus: (vals[statusIdx] as any) || 'paid',
                 items: items,
-                subtotal: parseFloat(vals[totalIdx]) || 0, // Assume no discount for simplicity in import
-                payments: [], // Cannot reconstruct exact payment history easily
+                subtotal: parseFloat(vals[totalIdx]) || 0,
+                payments: [], 
                 tax: 0,
                 serviceCharge: 0,
                 orderType: 'dine-in',
-                storeId: importedStoreId // Store the ID for filtering later
+                storeId: importedStoreId 
             };
             
             transactions.push(transaction);
@@ -249,14 +244,14 @@ const importCustomersCSV = (file: File): Promise<Customer[]> => {
                     if (!lines[i].trim()) continue;
                     const values = parseCSVLine(lines[i]);
                     
-                    const idIdx = headers.findIndex(h => h === 'id'); // Exact match preferred
+                    const idIdx = headers.findIndex(h => h === 'id'); 
                     const memberIdIdx = headers.findIndex(h => h.includes('memberid') || h.includes('id member'));
                     const nameIdx = headers.findIndex(h => h.includes('name') || h.includes('nama'));
                     const contactIdx = headers.findIndex(h => h.includes('contact') || h.includes('kontak') || h.includes('hp'));
                     const pointsIdx = headers.findIndex(h => h.includes('point') || h.includes('poin'));
                     const balanceIdx = headers.findIndex(h => h.includes('balance') || h.includes('saldo'));
 
-                    if (nameIdx === -1) continue; // Name is mandatory
+                    if (nameIdx === -1) continue; 
 
                     const cust: any = {
                         name: values[nameIdx]?.replace(/"/g, '').trim(),
@@ -266,7 +261,6 @@ const importCustomersCSV = (file: File): Promise<Customer[]> => {
                         createdAt: new Date().toISOString()
                     };
 
-                    // Capture ID if exists (for Update/Edit Ulang)
                     if (idIdx > -1 && values[idIdx]) {
                         cust.id = values[idIdx].replace(/"/g, '').trim();
                     }
@@ -287,7 +281,6 @@ const importCustomersCSV = (file: File): Promise<Customer[]> => {
     });
 };
 
-// Exported for external use
 export const generateStockAdjustmentsCSVString = (stockAdjustments: StockAdjustment[]) => {
     const headers = 'id,createdAt,productName,change,newStock,notes';
     const rows = stockAdjustments.map(sa => `${sa.id},"${new Date(sa.createdAt).toLocaleString('id-ID')}","${sa.productName}",${sa.change},${sa.newStock},"${sa.notes || ''}"`);
@@ -299,7 +292,6 @@ const exportStockAdjustmentsCSV = (stockAdjustments: StockAdjustment[]) => {
     downloadCSV(csvContent, 'stock_adjustments_report.csv');
 };
 
-// Extracted internal function to get data object without downloading
 const getExportData = async (): Promise<Partial<AppData>> => {
     const data: Partial<AppData> = {};
     
@@ -364,13 +356,11 @@ const getExportData = async (): Promise<Partial<AppData>> => {
 };
 
 const mergeMasterData = async (masterData: AppData) => {
-    // 1. Get current Store ID
     const settings = await db.settings.get('receiptSettings');
     const receiptSettings = settings?.value as ReceiptSettings;
     const myStoreId = receiptSettings?.storeId || 'UNKNOWN';
 
     await db.transaction('rw', db.products, db.customers, db.discountDefinitions, db.settings, db.appState, db.suppliers, async () => {
-        // A. Products: Smart Merge with Price Override
         if (masterData.products && masterData.products.length > 0) {
             const masterProducts = await Promise.all(masterData.products.map(async (mp) => {
                 const prod: any = { ...mp };
@@ -379,7 +369,6 @@ const mergeMasterData = async (masterData: AppData) => {
                     delete prod.imageUrl;
                 }
 
-                // --- Check for Branch Specific Price ---
                 if (prod.branchPrices && Array.isArray(prod.branchPrices)) {
                     const branchPrice = prod.branchPrices.find((bp: any) => bp.storeId === myStoreId);
                     if (branchPrice) {
@@ -387,7 +376,6 @@ const mergeMasterData = async (masterData: AppData) => {
                     }
                 }
                 
-                // Keep local stock
                 const localProd = await db.products.get(mp.id);
                 if (localProd && localProd.trackStock) {
                     prod.stock = localProd.stock;
@@ -550,7 +538,6 @@ export const dataService = {
   },
 
   exportProductsCSV: async (products: Product[]) => {
-    // Columns: ID, Name, Price, Category, Barcode, CostPrice, Stock, TrackStock, IsFavorite, ImageUrl, BranchPrices, ModifierGroups (JSON)
     const headers = 'id,name,price,category,barcode,costPrice,stock,trackStock,isFavorite,imageUrl,branchPrices,modifierGroups';
     const rows = await Promise.all(products.map(async p => {
         const category = Array.isArray(p.category) ? p.category.join(';') : '';
@@ -559,9 +546,8 @@ export const dataService = {
             imageUrl = await blobToBase64(p.image);
         }
         
-        // Serialize Complex Fields
         const branchPricesStr = (p.branchPrices || []).map(bp => `${bp.storeId}:${bp.price}`).join('|');
-        const modifierGroupsStr = p.modifierGroups ? JSON.stringify(p.modifierGroups).replace(/"/g, '""') : ''; // Escape for CSV
+        const modifierGroupsStr = p.modifierGroups ? JSON.stringify(p.modifierGroups).replace(/"/g, '""') : ''; 
 
         return `${p.id},"${p.name}",${p.price},"${category}",${p.barcode || ''},${p.costPrice || 0},${p.stock || 0},${p.trackStock || false},${p.isFavorite || false},"${imageUrl}","${branchPricesStr}","${modifierGroupsStr}"`;
     }));
@@ -606,7 +592,6 @@ export const dataService = {
                         value = typeof value === 'string' ? value.split(';').filter(Boolean) : [];
                         break;
                     case 'branchPrices':
-                        // Format: Store:Price|Store:Price
                         value = (value || '').split('|').filter(Boolean).map((bpStr: string) => {
                             const parts = bpStr.split(':');
                             if(parts.length === 2) {
@@ -616,12 +601,10 @@ export const dataService = {
                         }).filter(Boolean);
                         break;
                     case 'modifierGroups':
-                        // JSON String
                         if(value && value.startsWith('[')) {
                             try {
                                 value = JSON.parse(value.replace(/""/g, '"'));
                             } catch(e) {
-                                console.warn('Failed to parse modifier JSON', e);
                                 value = [];
                             }
                         } else {
@@ -642,7 +625,6 @@ export const dataService = {
             }
 
             if(productData.name && productData.price !== undefined) {
-                // Ensure array fields are initialized
                 if(!productData.branchPrices) productData.branchPrices = [];
                 if(!productData.modifierGroups) productData.modifierGroups = [];
                 if(!productData.variants) productData.variants = [];
@@ -679,7 +661,6 @@ export const dataService = {
   },
 
   exportRawMaterialsCSV: (rawMaterials: RawMaterial[]) => {
-    // Include all new fields
     const headers = 'id,name,stock,unit,costPerUnit,purchaseUnit,conversionRate,validStoreIds';
     const rows = rawMaterials.map(rm => {
         const storeIds = (rm.validStoreIds || []).join(';');
@@ -745,7 +726,7 @@ export const dataService = {
   },
   
   importCustomersCSV,
-  exportCustomersCSV, // ADDED HERE
+  exportCustomersCSV, 
 
   exportAllReportsCSV: (data: AppData) => {
     if (data.transactionRecords.length > 0) exportTransactionsCSV(data.transactionRecords);

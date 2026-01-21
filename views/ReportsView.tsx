@@ -11,12 +11,16 @@ import Button from '../components/Button';
 import Icon from '../components/Icon';
 import VirtualizedTable from '../components/VirtualizedTable';
 import ReportCharts from '../components/reports/ReportCharts';
+import Modal from '../components/Modal';
+import ReceiptModal from '../components/ReceiptModal';
 import { generateSalesReportPDF } from '../utils/pdfGenerator';
 import { dataService } from '../services/dataService';
 import type { Transaction, StockAdjustment } from '../types';
+import { Capacitor } from '@capacitor/core';
+import { saveBinaryFileNative } from '../utils/nativeHelper';
 
 const ReportsView: React.FC = () => {
-    const { transactions: localTransactions } = useFinance();
+    const { transactions: localTransactions, refundTransaction } = useFinance();
     const { stockAdjustments: localStockAdjustments } = useProduct();
     const { receiptSettings } = useSettings();
     const { showAlert } = useUI();
@@ -25,7 +29,17 @@ const ReportsView: React.FC = () => {
     const [filter, setFilter] = useState<'today' | 'week' | 'month' | 'all'>('today');
     const [cloudData, setCloudData] = useState<{ transactions: Transaction[], stockAdjustments: StockAdjustment[] }>({ transactions: [], stockAdjustments: [] });
     const [isLoading, setIsLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<'sales' | 'stock'>('sales');
+    const [activeTab, setActiveTab] = useState<'transactions' | 'products' | 'stock'>('transactions');
+    
+    // Receipt & Evidence State
+    const [receiptTransaction, setReceiptTransaction] = useState<Transaction | null>(null);
+    // UPDATED: Evidence State now holds URL and Filename
+    const [evidenceData, setEvidenceData] = useState<{ url: string; filename: string } | null>(null);
+
+    // Refund State
+    const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
+    const [refundTarget, setRefundTarget] = useState<Transaction | null>(null);
+    const [refundReason, setRefundReason] = useState('');
 
     const loadCloudData = async () => {
         setIsLoading(true);
@@ -80,17 +94,60 @@ const ReportsView: React.FC = () => {
             return true;
         };
 
-        const txns = activeTransactions.filter(t => filterFn(t.createdAt) && t.paymentStatus !== 'refunded').sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const txns = activeTransactions.filter(t => filterFn(t.createdAt)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         const stock = activeStockAdjustments.filter(s => filterFn(s.createdAt)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         return { txns, stock };
     }, [filter, activeTransactions, activeStockAdjustments]);
 
+    // --- AGGREGATION LOGIC ---
+
+    const summary = useMemo(() => {
+        const validTxns = filteredData.txns.filter(t => t.paymentStatus !== 'refunded');
+        const totalSales = validTxns.reduce((sum, t) => sum + t.total, 0);
+        
+        // Estimate Profit (Simplified: Total - Cost of Items)
+        const totalCost = validTxns.reduce((sum, t) => {
+            return sum + (t.items || []).reduce((is, i) => is + ((i.costPrice || 0) * i.quantity), 0);
+        }, 0);
+        
+        return {
+            totalSales,
+            totalProfit: totalSales - totalCost,
+            transactionCount: validTxns.length
+        };
+    }, [filteredData]);
+
+    const productRecap = useMemo(() => {
+        const map = new Map<string, {name: string, quantity: number, total: number}>();
+        
+        filteredData.txns.forEach(t => {
+            if (t.paymentStatus === 'refunded') return;
+            (t.items || []).forEach(item => {
+                if (item.isReward) return; // Skip rewards from recap
+                const key = item.id;
+                const existing = map.get(key);
+                const itemTotal = item.price * item.quantity; // Not accounting for item discounts in detail here for simplicity
+                
+                if (existing) {
+                    existing.quantity += item.quantity;
+                    existing.total += itemTotal;
+                } else {
+                    map.set(key, { name: item.name, quantity: item.quantity, total: itemTotal });
+                }
+            });
+        });
+
+        return Array.from(map.values()).sort((a, b) => b.quantity - a.quantity);
+    }, [filteredData]);
+
     // --- CHART DATA PREPARATION ---
     const chartData = useMemo(() => {
+        const validTxns = filteredData.txns.filter(t => t.paymentStatus !== 'refunded');
+        
         // Hourly Sales (Today/Average)
         const hourlyMap = new Array(24).fill(0).map((_, i) => ({ name: `${i}:00`, total: 0, count: 0 }));
-        filteredData.txns.forEach(t => {
+        validTxns.forEach(t => {
             const h = new Date(t.createdAt).getHours();
             hourlyMap[h].total += t.total;
             hourlyMap[h].count += 1;
@@ -98,7 +155,7 @@ const ReportsView: React.FC = () => {
 
         // Sales Over Time
         const salesMap = new Map<string, number>();
-        filteredData.txns.forEach(t => {
+        validTxns.forEach(t => {
             const date = new Date(t.createdAt).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' });
             salesMap.set(date, (salesMap.get(date) || 0) + t.total);
         });
@@ -106,41 +163,25 @@ const ReportsView: React.FC = () => {
 
         // Category Sales
         const categoryMap = new Map<string, number>();
-        const productMap = new Map<string, number>();
-        
-        filteredData.txns.forEach(t => {
-            t.items.forEach(item => {
+        validTxns.forEach(t => {
+            (t.items || []).forEach(item => {
                 if(!item.isReward) {
                     const cats = item.category || ['Umum'];
                     cats.forEach(c => categoryMap.set(c, (categoryMap.get(c) || 0) + (item.price * item.quantity)));
-                    productMap.set(item.name, (productMap.get(item.name) || 0) + item.quantity);
                 }
             });
         });
 
         const categorySales = Array.from(categoryMap.entries()).map(([name, value]) => ({ name, value }));
-        const topProducts = Array.from(productMap.entries()).map(([name, quantity]) => ({ name, quantity })).sort((a,b) => b.quantity - a.quantity).slice(0, 10);
 
-        return { hourly: hourlyMap, trend: salesOverTime, category: categorySales, products: topProducts };
-    }, [filteredData]);
-
-    const summary = useMemo(() => {
-        const totalSales = filteredData.txns.reduce((sum, t) => sum + t.total, 0);
-        // Estimate Profit (Simplified: Total - Cost of Items)
-        const totalCost = filteredData.txns.reduce((sum, t) => {
-            return sum + t.items.reduce((is, i) => is + ((i.costPrice || 0) * i.quantity), 0);
-        }, 0);
-        
-        return {
-            totalSales,
-            totalProfit: totalSales - totalCost,
-            transactionCount: filteredData.txns.length
-        };
-    }, [filteredData]);
+        return { hourly: hourlyMap, trend: salesOverTime, category: categorySales, products: productRecap.slice(0, 10) };
+    }, [filteredData, productRecap]);
 
     const handleExport = () => {
         const periodLabel = filter === 'today' ? 'Hari Ini' : filter === 'week' ? 'Minggu Ini' : filter === 'month' ? 'Bulan Ini' : 'Semua Waktu';
-        generateSalesReportPDF(filteredData.txns, receiptSettings, periodLabel, { 
+        // Only export valid transactions
+        const validTxns = filteredData.txns.filter(t => t.paymentStatus !== 'refunded');
+        generateSalesReportPDF(validTxns, receiptSettings, periodLabel, { 
             totalSales: summary.totalSales, 
             totalProfit: summary.totalProfit,
             totalTransactions: summary.transactionCount 
@@ -156,25 +197,117 @@ const ReportsView: React.FC = () => {
         });
     };
 
-    // --- COLUMNS ---
-    const transactionColumns = useMemo(() => [
-        { label: 'Waktu', width: '1.2fr', render: (t: Transaction) => <span className="text-slate-400 text-xs">{new Date(t.createdAt).toLocaleString('id-ID')}</span> },
-        { label: 'ID', width: '1fr', render: (t: Transaction) => <span className="font-mono text-xs text-slate-500">#{t.id.slice(-4)}</span> },
+    const initiateRefund = (t: Transaction) => {
+        if (dataSource !== 'local') return;
+        setRefundTarget(t);
+        setRefundReason('');
+        setIsRefundModalOpen(true);
+    };
+
+    const processRefund = () => {
+        if (!refundTarget) return;
+        
+        refundTransaction(refundTarget.id, refundReason); // Pass reason to context
+        setIsRefundModalOpen(false);
+        setRefundTarget(null);
+        showAlert({ type: 'alert', title: 'Berhasil', message: 'Transaksi telah direfund.' });
+    };
+
+    const handleDownloadEvidence = async () => {
+        if (!evidenceData) return;
+        try {
+            // Gunakan filename yang sudah disiapkan dari data transaksi
+            const fileName = evidenceData.filename;
+            
+            if (Capacitor.isNativePlatform()) {
+                await saveBinaryFileNative(fileName, evidenceData.url.split(',')[1]);
+                showAlert({ type: 'alert', title: 'Berhasil', message: `Gambar disimpan: ${fileName}` });
+            } else {
+                const link = document.createElement('a');
+                link.href = evidenceData.url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        } catch (e: any) {
+            showAlert({ type: 'alert', title: 'Gagal', message: e.message });
+        }
+    };
+
+    // --- COLUMNS FOR TRANSACTION TABLE ---
+    const transactionColumns = [
+        { label: 'Waktu', width: '120px', render: (t: Transaction) => <span className="text-slate-400 text-xs">{new Date(t.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</span> },
+        { label: 'ID', width: '80px', render: (t: Transaction) => <span className="font-mono text-xs text-slate-500">#{t.id.slice(-4)}</span> },
         ...(dataSource !== 'local' ? [{ 
-            label: 'Cabang', 
-            width: '0.8fr', 
+            label: 'Cabang', width: '100px', 
             render: (t: any) => <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{t.storeId || '-'}</span> 
         }] : []),
-        { label: 'Total', width: '1fr', render: (t: Transaction) => <span className="font-bold text-white text-sm">{CURRENCY_FORMATTER.format(t.total)}</span> },
-        { label: 'Metode', width: '1fr', render: (t: Transaction) => {
-            const methods = t.payments.map(p => p.method === 'cash' ? 'Tunai' : p.method === 'member-balance' ? 'Saldo' : 'Non-Tunai').join(', ');
-            return <span className="text-xs bg-slate-700 px-2 py-1 rounded text-slate-300">{methods}</span>
+        { label: 'Pelanggan', width: '120px', render: (t: Transaction) => <span className="text-xs text-white">{t.customerName || 'Umum'}</span> },
+        { label: 'Kasir', width: '80px', render: (t: Transaction) => <span className="text-xs text-slate-400">{t.userName}</span> },
+        { label: 'Item', width: '2fr', render: (t: Transaction) => (
+            <span className="text-xs text-slate-300 block truncate" title={(t.items || []).map(i => i.name).join(', ')}>
+                {(t.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ')}
+            </span>
+        )},
+        { label: 'Total', width: '100px', render: (t: Transaction) => <span className="font-bold text-white text-sm">{CURRENCY_FORMATTER.format(t.total)}</span> },
+        { label: 'Status', width: '100px', render: (t: Transaction) => {
+             const color = t.paymentStatus === 'paid' ? 'text-green-400' : t.paymentStatus === 'refunded' ? 'text-red-400' : 'text-yellow-400';
+             return <span className={`text-xs font-bold uppercase ${color}`}>{t.paymentStatus}</span>
         }},
-    ], [dataSource]);
+        { label: 'Bukti', width: '60px', render: (t: Transaction) => {
+             // Safe access for payments array
+             const payments = t.payments || [];
+             const hasEvidence = payments.some(p => p.evidenceImageUrl);
+             if (hasEvidence) {
+                 return (
+                    <button 
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            const img = payments.find(p => p.evidenceImageUrl)?.evidenceImageUrl;
+                            if (img) {
+                                // Sanitasi ID untuk nama file
+                                const safeId = t.id.replace(/[^a-z0-9]/gi, '-');
+                                const dateStr = new Date(t.createdAt).toISOString().slice(0, 10);
+                                setEvidenceData({
+                                    url: img,
+                                    filename: `Bukti_Trx_${safeId}_${dateStr}.jpg`
+                                });
+                            }
+                        }}
+                        className="text-blue-400 hover:text-blue-300 p-1"
+                        title="Lihat Bukti Pembayaran"
+                    >
+                        <Icon name="camera" className="w-4 h-4"/>
+                    </button>
+                 )
+             }
+             return null;
+        }},
+        { label: 'Aksi', width: '140px', render: (t: Transaction) => (
+            <div className="flex gap-2">
+                <button onClick={() => setReceiptTransaction(t)} className="text-sky-400 hover:text-white bg-slate-700/50 p-1.5 rounded" title="Lihat Struk">
+                    <Icon name="printer" className="w-4 h-4"/>
+                </button>
+                {dataSource === 'local' && t.paymentStatus !== 'refunded' && (
+                    <button onClick={() => initiateRefund(t)} className="text-red-400 hover:text-white bg-slate-700/50 p-1.5 rounded" title="Refund">
+                        <Icon name="reset" className="w-4 h-4"/>
+                    </button>
+                )}
+            </div>
+        )}
+    ];
 
+    // --- COLUMNS FOR PRODUCT RECAP TABLE ---
+    const productColumns = [
+        { label: 'Nama Produk', width: '3fr', render: (p: any) => <span className="font-bold text-white">{p.name}</span> },
+        { label: 'Terjual (Qty)', width: '1fr', render: (p: any) => <span className="text-slate-300">{p.quantity}</span> },
+        { label: 'Total Omzet', width: '1.5fr', render: (p: any) => <span className="text-green-400 font-bold">{CURRENCY_FORMATTER.format(p.total)}</span> }
+    ];
+
+    // --- COLUMNS FOR STOCK TABLE (UNCHANGED) ---
     const stockColumns = useMemo(() => [
         { label: 'Waktu', width: '1.2fr', render: (s: StockAdjustment) => <span className="text-slate-400 whitespace-nowrap text-xs">{new Date(s.createdAt).toLocaleString('id-ID')}</span> },
-        // Kolom Cabang Khusus Mode Cloud
         ...(dataSource !== 'local' ? [{ 
             label: 'Cabang', 
             width: '0.8fr', 
@@ -182,7 +315,6 @@ const ReportsView: React.FC = () => {
         }] : []),
         { label: 'Produk', width: '2fr', render: (s: StockAdjustment) => <span className="font-semibold text-white text-sm">{s.productName}</span> },
         { label: 'Tipe', width: '1fr', render: (s: StockAdjustment) => {
-            // Deteksi Tipe dari Notes atau Change
             const isOpname = s.notes?.toLowerCase().includes('opname');
             const isTransfer = s.notes?.toLowerCase().includes('transfer');
             const isWaste = s.change < 0 && !isTransfer;
@@ -262,7 +394,7 @@ const ReportsView: React.FC = () => {
                 </div>
             </div>
 
-            {/* Charts */}
+            {/* Charts - Visible Always */}
             <ReportCharts 
                 hourlyChartData={chartData.hourly}
                 salesOverTimeData={chartData.trend}
@@ -272,27 +404,117 @@ const ReportsView: React.FC = () => {
                 showSessionView={false}
             />
 
-            {/* Tables Tab */}
+            {/* Main Tabs */}
             <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 flex flex-col h-[600px]">
-                <div className="flex border-b border-slate-700">
-                    <button onClick={() => setActiveTab('sales')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'sales' ? 'border-[#347758] text-[#52a37c]' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                <div className="flex border-b border-slate-700 overflow-x-auto">
+                    <button onClick={() => setActiveTab('transactions')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'transactions' ? 'border-[#347758] text-[#52a37c]' : 'border-transparent text-slate-400 hover:text-white'}`}>
                         Riwayat Penjualan
                     </button>
-                    <button onClick={() => setActiveTab('stock')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'stock' ? 'border-[#347758] text-[#52a37c]' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                    <button onClick={() => setActiveTab('products')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'products' ? 'border-[#347758] text-[#52a37c]' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                        Rekap Produk
+                    </button>
+                    <button onClick={() => setActiveTab('stock')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'stock' ? 'border-[#347758] text-[#52a37c]' : 'border-transparent text-slate-400 hover:text-white'}`}>
                         Mutasi Stok & Log
                     </button>
                 </div>
                 
-                <div className="flex-1 p-4 overflow-hidden">
+                <div className="flex-1 p-4 overflow-hidden relative">
                     {isLoading ? (
                         <div className="h-full flex items-center justify-center text-slate-500 animate-pulse">Memuat data...</div>
-                    ) : activeTab === 'sales' ? (
-                        <VirtualizedTable data={filteredData.txns} columns={transactionColumns} rowHeight={50} minWidth={dataSource === 'dropbox' ? 900 : 700} />
                     ) : (
-                        <VirtualizedTable data={filteredData.stock} columns={stockColumns} rowHeight={50} minWidth={dataSource === 'dropbox' ? 1000 : 800} />
+                        <>
+                            {activeTab === 'transactions' && (
+                                <VirtualizedTable 
+                                    data={filteredData.txns} 
+                                    columns={transactionColumns} 
+                                    rowHeight={50} 
+                                    minWidth={dataSource === 'dropbox' ? 1000 : 900} 
+                                />
+                            )}
+                            {activeTab === 'products' && (
+                                <VirtualizedTable 
+                                    data={productRecap} 
+                                    columns={productColumns} 
+                                    rowHeight={50} 
+                                    minWidth={500} 
+                                />
+                            )}
+                            {activeTab === 'stock' && (
+                                <VirtualizedTable 
+                                    data={filteredData.stock} 
+                                    columns={stockColumns} 
+                                    rowHeight={50} 
+                                    minWidth={dataSource === 'dropbox' ? 1000 : 800} 
+                                />
+                            )}
+                        </>
                     )}
                 </div>
             </div>
+
+            {/* Modals */}
+            {receiptTransaction && (
+                <ReceiptModal 
+                    isOpen={!!receiptTransaction} 
+                    onClose={() => setReceiptTransaction(null)} 
+                    transaction={receiptTransaction} 
+                />
+            )}
+
+            {evidenceData && (
+                <Modal isOpen={!!evidenceData} onClose={() => setEvidenceData(null)} title="Bukti Pembayaran">
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="flex justify-center bg-black/20 p-2 rounded w-full">
+                            <img src={evidenceData.url} alt="Bukti" className="max-h-[60vh] max-w-full object-contain rounded" />
+                        </div>
+                        <div className="flex justify-end gap-3 w-full">
+                            <Button onClick={handleDownloadEvidence} className="bg-blue-600 hover:bg-blue-500 border-none">
+                                <Icon name="download" className="w-4 h-4"/> Unduh
+                            </Button>
+                            <Button variant="secondary" onClick={() => setEvidenceData(null)}>Tutup</Button>
+                        </div>
+                        <div className="w-full text-center">
+                            <span className="text-[10px] text-slate-500 font-mono break-all">{evidenceData.filename}</span>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {/* REFUND MODAL */}
+            <Modal isOpen={isRefundModalOpen} onClose={() => setIsRefundModalOpen(false)} title="Konfirmasi Refund">
+                <div className="space-y-4">
+                    <div className="bg-red-900/20 border border-red-700 p-4 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Icon name="warning" className="w-5 h-5 text-red-400" />
+                            <h4 className="font-bold text-red-300">Peringatan</h4>
+                        </div>
+                        <p className="text-xs text-slate-300">
+                            Tindakan ini akan membatalkan transaksi dan mengembalikan stok barang. Uang penjualan (omzet) akan dikurangi.
+                        </p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">
+                            Alasan Refund <span className="text-red-400">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            value={refundReason}
+                            onChange={(e) => setRefundReason(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                            placeholder="Contoh: Salah input menu, pelanggan complain..."
+                            autoFocus
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-2">
+                        <Button variant="secondary" onClick={() => setIsRefundModalOpen(false)}>Batal</Button>
+                        <Button variant="danger" onClick={processRefund} disabled={!refundReason.trim()}>
+                            Proses Refund
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useFinance } from '../../context/FinanceContext';
 import { useProduct } from '../../context/ProductContext';
 import { CURRENCY_FORMATTER } from '../../constants';
@@ -7,7 +7,12 @@ import Button from '../Button';
 import Icon from '../Icon';
 import Modal from '../Modal';
 import VirtualizedTable from '../VirtualizedTable';
-import type { Purchase, Supplier, PurchaseItem } from '../../types';
+import type { Purchase, Supplier, PurchaseItem, PaymentMethod } from '../../types';
+import { compressImage } from '../../utils/imageCompression';
+import { ocrService } from '../../services/ocrService';
+import { useUI } from '../../context/UIContext';
+import { Capacitor } from '@capacitor/core';
+import { saveBinaryFileNative } from '../../utils/nativeHelper';
 
 interface PurchasingTabProps {
     dataSource?: 'local' | 'cloud' | 'dropbox';
@@ -16,7 +21,8 @@ interface PurchasingTabProps {
 
 const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', cloudData = [] }) => {
     const { purchases: localPurchases, suppliers, addSupplier, deleteSupplier, addPurchase } = useFinance();
-    const { products, rawMaterials } = useProduct(); // Access items for dropdown
+    const { products, rawMaterials } = useProduct(); 
+    const { showAlert } = useUI();
     const [view, setView] = useState<'purchases' | 'suppliers'>('purchases');
     
     const activePurchases = dataSource === 'local' ? localPurchases : cloudData;
@@ -31,15 +37,23 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
         supplierId: '',
         date: new Date().toISOString().slice(0, 10),
         amountPaid: '',
-        items: [] as PurchaseItem[]
+        items: [] as PurchaseItem[],
+        evidenceImageUrl: '',
+        paymentMethod: 'cash' as PaymentMethod
     });
-    // Temp Item State for Purchase Form
+    
+    // Temp Item State
     const [tempItem, setTempItem] = useState<{
         type: 'product' | 'raw_material', 
         id: string, 
         qty: string, 
-        price: string // Price per unit input
+        price: string 
     }>({ type: 'product', id: '', qty: '', price: '' });
+
+    const [isScanning, setIsScanning] = useState(false);
+    // UPDATED: Use Object for evidence
+    const [viewEvidence, setViewEvidence] = useState<{ url: string; filename: string } | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // --- Handlers ---
 
@@ -66,15 +80,12 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
         let finalPrice = inputPrice;
         let conversionApplied = false;
 
-        // CHECK FOR CONVERSION (Raw Material Only)
-        // If conversion exists, User inputs "Purchase Unit" (e.g. 1 Box) with "Price per Box" (e.g. 100.000)
-        // System must save: Quantity = 12 (Base Unit), Price = 8333 (Base Price)
         if (tempItem.type === 'raw_material' && selectedItemDetails && 'conversionRate' in selectedItemDetails) {
-            const mat = selectedItemDetails as any; // Cast for TS check
+            const mat = selectedItemDetails as any;
             if (mat.conversionRate && mat.conversionRate > 1 && mat.purchaseUnit) {
-                const totalCost = quantity * inputPrice; // 1 Box * 100.000 = 100.000
-                quantity = quantity * mat.conversionRate; // 1 * 12 = 12 Pcs
-                finalPrice = totalCost / quantity; // 100.000 / 12 = 8333.33
+                const totalCost = quantity * inputPrice; 
+                quantity = quantity * mat.conversionRate; 
+                finalPrice = totalCost / quantity; 
                 conversionApplied = true;
             }
         }
@@ -93,7 +104,6 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
             items: [...prev.items, newItem]
         }));
 
-        // Reset temp item but keep type for convenience
         setTempItem(prev => ({ ...prev, id: '', qty: '', price: '' }));
     };
 
@@ -113,22 +123,100 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
             supplierId: purchaseForm.supplierId,
             date: new Date(purchaseForm.date).toISOString(),
             amountPaid: amountPaid,
-            items: purchaseForm.items
+            items: purchaseForm.items,
+            evidenceImageUrl: purchaseForm.evidenceImageUrl,
+            paymentMethod: purchaseForm.paymentMethod
         });
 
         setPurchaseModalOpen(false);
-        setPurchaseForm({ supplierId: '', date: new Date().toISOString().slice(0, 10), amountPaid: '', items: [] });
+        setPurchaseForm({ 
+            supplierId: '', date: new Date().toISOString().slice(0, 10), 
+            amountPaid: '', items: [], evidenceImageUrl: '', paymentMethod: 'cash' 
+        });
     };
 
     const calculateTotal = () => {
         return purchaseForm.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
     };
 
+    // --- Image & OCR ---
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            try {
+                const compressed = await compressImage(file);
+                setPurchaseForm(prev => ({ ...prev, evidenceImageUrl: compressed }));
+            } catch (err) {
+                showAlert({ type: 'alert', title: 'Error', message: 'Gagal memproses gambar.' });
+            }
+        }
+    };
+
+    const handleScanOCR = async () => {
+        if (!purchaseForm.evidenceImageUrl) return;
+        setIsScanning(true);
+        try {
+            const result = await ocrService.scanReceipt(purchaseForm.evidenceImageUrl);
+            // Purchase logic: OCR date applies to purchase date. Amount might be total paid/bill.
+            // We set amountPaid if it's currently empty, assuming user pays full.
+            setPurchaseForm(prev => ({
+                ...prev,
+                date: result.date ? result.date : prev.date,
+                amountPaid: (result.amount && !prev.amountPaid) ? result.amount.toString() : prev.amountPaid
+            }));
+            showAlert({ type: 'alert', title: 'Scan Selesai', message: 'Tanggal & perkiraan total dideteksi.' });
+        } catch (err: any) {
+            showAlert({ type: 'alert', title: 'Gagal Scan', message: err.message });
+        } finally {
+            setIsScanning(false);
+        }
+    };
+
+    const handleDownloadEvidence = async () => {
+        if (!viewEvidence) return;
+        try {
+            const fileName = viewEvidence.filename;
+            if (Capacitor.isNativePlatform()) {
+                await saveBinaryFileNative(fileName, viewEvidence.url.split(',')[1]);
+                showAlert({ type: 'alert', title: 'Berhasil', message: `Gambar disimpan: ${fileName}` });
+            } else {
+                const link = document.createElement('a');
+                link.href = viewEvidence.url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        } catch (e: any) {
+            showAlert({ type: 'alert', title: 'Gagal', message: e.message });
+        }
+    };
+
     // --- Columns ---
 
     const purchaseColumns = [
         { label: 'Tanggal', width: '1fr', render: (p: Purchase) => new Date(p.date).toLocaleDateString('id-ID') },
-        { label: 'Supplier', width: '1.5fr', render: (p: Purchase) => p.supplierName },
+        { label: 'Supplier', width: '1.5fr', render: (p: Purchase) => (
+            <div className="flex items-center gap-2">
+                {p.evidenceImageUrl && (
+                    <button 
+                        onClick={(evt) => { 
+                            evt.stopPropagation(); 
+                            const safeSupp = p.supplierName.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
+                            setViewEvidence({
+                                url: p.evidenceImageUrl!,
+                                filename: `Bukti_Beli_${safeSupp}_${p.date.slice(0,10)}.jpg`
+                            }); 
+                        }}
+                        className="text-blue-400 hover:text-blue-300"
+                        title="Lihat Nota"
+                    >
+                        <Icon name="camera" className="w-4 h-4"/>
+                    </button>
+                )}
+                <span>{p.supplierName}</span>
+            </div>
+        ) },
         { label: 'Total', width: '1fr', render: (p: Purchase) => CURRENCY_FORMATTER.format(p.totalAmount) },
         { label: 'Status', width: '1fr', render: (p: Purchase) => (
             <span className={`px-2 py-1 text-xs rounded font-bold ${p.status === 'lunas' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
@@ -157,7 +245,6 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
         )}
     ];
 
-    // Helper to get name for display in modal
     const getItemName = (item: PurchaseItem) => {
         if (item.itemType === 'product') return products.find(p => p.id === item.productId)?.name || 'Unknown Product';
         return rawMaterials.find(m => m.id === item.rawMaterialId)?.name || 'Unknown Material';
@@ -202,28 +289,61 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
             {/* Purchase Form Modal */}
             <Modal isOpen={isPurchaseModalOpen} onClose={() => setPurchaseModalOpen(false)} title="Catat Pembelian & Restock">
                 <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    {/* ENHANCED Evidence & Date */}
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Foto Nota / Surat Jalan (Opsional)</label>
+                        <div className="flex flex-col items-center gap-3 p-4 border-2 border-dashed border-slate-600 rounded-lg bg-slate-900/50 hover:bg-slate-900 transition-colors">
+                            {purchaseForm.evidenceImageUrl ? (
+                                <div className="relative w-full h-32">
+                                    <img src={purchaseForm.evidenceImageUrl} alt="Nota" className="w-full h-full object-contain rounded" />
+                                    <button 
+                                        onClick={() => setPurchaseForm(prev => ({...prev, evidenceImageUrl: ''}))}
+                                        className="absolute top-0 right-0 bg-red-600 text-white p-1 rounded-full m-1"
+                                    >
+                                        <Icon name="close" className="w-3 h-3"/>
+                                    </button>
+                                </div>
+                            ) : (
+                                <div onClick={() => fileInputRef.current?.click()} className="text-center cursor-pointer w-full py-2">
+                                    <Icon name="camera" className="w-6 h-6 mx-auto mb-1 text-slate-500"/>
+                                    <span className="text-[10px] text-slate-400">Klik untuk upload foto</span>
+                                </div>
+                            )}
+                            <div className="flex gap-2 w-full mt-1">
+                                <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                                <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} className="flex-1">
+                                    {purchaseForm.evidenceImageUrl ? 'Ganti Foto' : 'Ambil Foto'}
+                                </Button>
+                                {purchaseForm.evidenceImageUrl && (
+                                    <Button size="sm" variant="secondary" onClick={handleScanOCR} disabled={isScanning} className="flex-1 bg-blue-900/30 text-blue-300 border-blue-800">
+                                        {isScanning ? 'Scanning...' : <><Icon name="eye" className="w-4 h-4" /> Scan Tgl/Total</>}
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-medium text-slate-400 mb-1">Tanggal</label>
                             <input type="date" value={purchaseForm.date} onChange={e => setPurchaseForm({...purchaseForm, date: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-white" />
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Supplier</label>
+                             <label className="block text-xs font-medium text-slate-400 mb-1">Supplier</label>
                             <select 
                                 value={purchaseForm.supplierId} 
                                 onChange={e => setPurchaseForm({...purchaseForm, supplierId: e.target.value})}
                                 className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-white"
                             >
-                                <option value="">-- Pilih Supplier --</option>
+                                <option value="">-- Pilih --</option>
                                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
-                            {suppliers.length === 0 && <p className="text-[10px] text-red-400 mt-1">Belum ada supplier. Tambah di tab Supplier.</p>}
                         </div>
                     </div>
 
                     <div className="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-3">
-                        <h4 className="text-sm font-bold text-white">Input Barang Belanja</h4>
-                        
+                        <h4 className="text-sm font-bold text-white">Input Barang</h4>
                         <div className="flex gap-2">
                             <select 
                                 value={tempItem.type} 
@@ -247,14 +367,12 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                             </select>
                         </div>
 
-                        {/* INFO UNIT & CONVERSION LOGIC */}
                         {selectedItemDetails && (
                             <div className="text-xs text-slate-400 bg-slate-900/50 p-2 rounded">
                                 <p>Satuan Pakai (Base): <strong>{(selectedItemDetails as any).unit || 'Unit'}</strong></p>
                                 {(selectedItemDetails as any).purchaseUnit && (selectedItemDetails as any).conversionRate > 1 && (
                                     <p className="text-green-400 mt-1">
-                                        💡 Item ini memiliki konversi:<br/>
-                                        1 {(selectedItemDetails as any).purchaseUnit} = {(selectedItemDetails as any).conversionRate} {(selectedItemDetails as any).unit}
+                                        💡 1 {(selectedItemDetails as any).purchaseUnit} = {(selectedItemDetails as any).conversionRate} {(selectedItemDetails as any).unit}
                                     </p>
                                 )}
                             </div>
@@ -263,7 +381,6 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                         <div className="flex gap-2">
                             <div className="flex-1">
                                 <label className="text-[10px] text-slate-500 mb-1">
-                                    {/* DYNAMIC LABEL based on Purchase Unit */}
                                     Qty ({(selectedItemDetails as any)?.purchaseUnit && (selectedItemDetails as any)?.conversionRate > 1 
                                         ? (selectedItemDetails as any).purchaseUnit 
                                         : ((selectedItemDetails as any)?.unit || 'Unit')})
@@ -277,13 +394,10 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                             </div>
                             <div className="flex-1">
                                 <label className="text-[10px] text-slate-500 mb-1">
-                                    {/* DYNAMIC LABEL based on Purchase Unit */}
-                                    Harga Satuan (per {(selectedItemDetails as any)?.purchaseUnit && (selectedItemDetails as any)?.conversionRate > 1 
-                                        ? (selectedItemDetails as any).purchaseUnit 
-                                        : 'Unit'})
+                                    Harga Satuan
                                 </label>
                                 <input 
-                                    type="number" placeholder="Harga (Rp)" min="0"
+                                    type="number" placeholder="Rp" min="0"
                                     value={tempItem.price} 
                                     onChange={e => setTempItem({...tempItem, price: e.target.value})}
                                     className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white"
@@ -298,9 +412,9 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                     </div>
 
                     {/* Item List */}
-                    <div className="bg-slate-900 rounded-lg p-2 max-h-40 overflow-y-auto">
+                    <div className="bg-slate-900 rounded-lg p-2 max-h-32 overflow-y-auto">
                         {purchaseForm.items.length === 0 ? (
-                            <p className="text-center text-xs text-slate-500 py-2">Belum ada barang di daftar pembelian.</p>
+                            <p className="text-center text-xs text-slate-500 py-2">Belum ada barang.</p>
                         ) : (
                             purchaseForm.items.map((item, idx) => (
                                 <div key={idx} className="flex justify-between items-center text-xs text-slate-300 py-1 border-b border-slate-800 last:border-0">
@@ -308,7 +422,7 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                                         <span className="text-white block">{getItemName(item)}</span>
                                         <span>
                                             {item.quantity} x {CURRENCY_FORMATTER.format(item.price)}
-                                            {item.conversionApplied && <span className="text-[9px] text-green-400 ml-1 block">(Telah dikonversi ke satuan pakai)</span>}
+                                            {item.conversionApplied && <span className="text-[9px] text-green-400 ml-1">(Konversi)</span>}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -328,25 +442,52 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                             <span>{CURRENCY_FORMATTER.format(calculateTotal())}</span>
                         </div>
                         
-                        <div>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Jumlah Dibayar (DP/Lunas)</label>
-                            <input 
-                                type="number" 
-                                placeholder="0" 
-                                value={purchaseForm.amountPaid} 
-                                onChange={e => setPurchaseForm({...purchaseForm, amountPaid: e.target.value})}
-                                className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white font-bold"
-                            />
-                            <p className="text-[10px] text-slate-500 mt-1">
-                                Jika dibayar penuh, stok akan bertambah dan status 'LUNAS'. 
-                                Jika sebagian, status 'BELUM LUNAS'.
-                            </p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Bayar (Rp)</label>
+                                <input 
+                                    type="number" 
+                                    placeholder="0" 
+                                    value={purchaseForm.amountPaid} 
+                                    onChange={e => setPurchaseForm({...purchaseForm, amountPaid: e.target.value})}
+                                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-white font-bold"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Metode</label>
+                                <select 
+                                    value={purchaseForm.paymentMethod} 
+                                    onChange={e => setPurchaseForm({...purchaseForm, paymentMethod: e.target.value as PaymentMethod})}
+                                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-2 text-white text-sm"
+                                >
+                                    <option value="cash">Tunai</option>
+                                    <option value="non-cash">Transfer</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
                     <Button onClick={handleSavePurchase} disabled={purchaseForm.items.length === 0 || !purchaseForm.supplierId} className="w-full mt-2">
                         Simpan Pembelian
                     </Button>
+                </div>
+            </Modal>
+
+            {/* View Image Modal */}
+             <Modal isOpen={!!viewEvidence} onClose={() => setViewEvidence(null)} title="Bukti Pembelian">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="flex justify-center bg-black/20 p-2 rounded w-full">
+                        {viewEvidence && (
+                            <img src={viewEvidence.url} alt="Bukti" className="max-h-[60vh] max-w-full object-contain rounded" />
+                        )}
+                    </div>
+                    <div className="flex justify-end gap-3 w-full">
+                        <Button onClick={handleDownloadEvidence} className="bg-blue-600 hover:bg-blue-500 border-none">
+                            <Icon name="download" className="w-4 h-4"/> Unduh
+                        </Button>
+                        <Button variant="secondary" onClick={() => setViewEvidence(null)}>Tutup</Button>
+                    </div>
+                    {viewEvidence && <div className="text-[10px] text-slate-500 font-mono text-center w-full">{viewEvidence.filename}</div>}
                 </div>
             </Modal>
         </div>

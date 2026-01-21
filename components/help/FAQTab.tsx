@@ -1,169 +1,130 @@
 
-import React from 'react';
+import React, { useState } from 'react';
+import { AccordionItem, TableOfContents } from './SharedHelpComponents';
 
 const FAQTab: React.FC = () => {
+    const [openId, setOpenId] = useState<string | null>(null);
+
+    const toggle = (id: string) => setOpenId(prev => prev === id ? null : id);
+
+    const faqs = [
+        {
+            id: 'faq_evid',
+            category: 'Transaksi',
+            title: 'Bagaimana cara simpan dan unduh bukti transfer?',
+            content: 'Saat pembayaran Non-Tunai, klik ikon kamera di kolom <strong>"Bukti Pembayaran (Opsional)"</strong> untuk memfoto struk/HP pelanggan.<br/><br/>Foto ini tersimpan di <strong>Laporan</strong>. Admin dapat mengklik ikon kamera biru di tabel laporan, lalu menekan tombol <strong>"Unduh"</strong>. File akan otomatis diberi nama sesuai <strong>ID Transaksi</strong> (cth: <code>Bukti_Trx_LOC-123...</code>) sehingga mudah dicocokkan dengan data Excel/CSV saat audit.'
+        },
+        {
+            id: 'faq_ocr',
+            category: 'Keuangan',
+            title: 'Apa fungsi tombol "Scan Data (AI)" saat catat pengeluaran?',
+            content: 'Ini adalah fitur cerdas untuk mempercepat kerja Anda. Cukup foto nota belanja pasar/supplier, lalu klik tombol Scan AI. Sistem akan otomatis membaca <strong>Tanggal</strong> dan <strong>Total Harga</strong> dari foto tersebut, jadi Anda tidak perlu mengetik manual.'
+        },
+        {
+            id: 'faq_dual',
+            category: 'Layar Pelanggan',
+            title: 'Apakah fitur Layar Pelanggan (Dual Screen) butuh internet?',
+            content: '<strong>Ya, butuh.</strong> Fitur ini menggunakan teknologi WebRTC (PeerJS) untuk menghubungkan dua browser berbeda (Kasir & Pelanggan). Koneksi internet diperlukan untuk proses awal (handshake/pairing). Setelah terhubung, data akan mengalir lebih stabil jika kedua perangkat dalam jaringan WiFi yang sama, tapi tetap membutuhkan akses internet dasar.'
+        },
+        {
+            id: 'faq_device',
+            category: 'Layar Pelanggan',
+            title: 'Perangkat apa yang bisa jadi Layar Pelanggan?',
+            content: '<strong>Hampir semua perangkat.</strong> Anda bisa menggunakan Tablet Android bekas, iPad lama, atau bahkan HP Android murah. Syaratnya hanya satu: Bisa membuka browser modern (Chrome/Edge/Safari) dan terhubung ke internet.'
+        },
+        {
+            id: 'faq_waste',
+            category: 'Stok',
+            title: 'Di mana saya melihat laporan barang rusak (waste) atau riwayat restock?',
+            content: 'Semua aktivitas perubahan stok (selain penjualan) tercatat di menu <strong>Laporan</strong>.<br/>1. Buka menu Laporan.<br/>2. Di bagian bawah (tabel), klik tab <strong>"Mutasi Stok & Log"</strong> (disebelah tab Riwayat Penjualan).<br/>Di sana Anda akan melihat daftar lengkap: kapan barang masuk (Restock), kapan keluar (Waste/Rusak), dan hasil Stock Opname.'
+        },
+        {
+            id: 'faq_dropbox',
+            category: 'Keamanan',
+            title: 'Kenapa kolom App Key & Secret Dropbox jadi kosong setelah terhubung?',
+            content: 'Ini adalah fitur keamanan <strong>(Security by Obscurity)</strong>.<br/>Sistem secara otomatis menyembunyikan App Key dan App Secret dari tampilan layar agar <strong>tidak bisa dicuri atau disalin</strong> oleh staf/orang lain yang meminjam perangkat Admin. Data sebenarnya <strong>tetap tersimpan aman</strong> di dalam sistem.'
+        },
+        {
+            id: 'faq_transfer',
+            category: 'Stok',
+            title: 'Apa bedanya "Transfer Stok" dan "Stok Manual"?',
+            content: '<strong>Transfer Stok</strong> digunakan oleh Gudang Pusat untuk mengirim barang ke Cabang secara digital (membutuhkan internet). Cabang akan menerima stok saat Sync.<br/><strong>Stok Manual</strong> digunakan untuk input barang yang dibeli sendiri oleh toko dari supplier lokal/pasar (bisa offline) atau untuk mencatat barang rusak/waste.'
+        },
+        {
+            id: 'faq_sync_gudang',
+            category: 'Stok',
+            title: 'Gudang sudah kirim barang, kenapa stok di kasir belum bertambah?',
+            content: 'Karena aplikasi ini <em>Offline-First</em>, data tidak masuk otomatis detik itu juga. Kasir/Staf Toko harus menekan tombol <strong>"Cek Update" (ikon panah bawah)</strong> di bagian atas layar (Header) untuk mengunduh data kiriman dari Gudang. Pastikan ada internet saat menekan tombol tersebut.'
+        },
+        {
+            id: 'faq_ble',
+            category: 'Hardware',
+            title: 'Printer Bluetooth tidak terdeteksi di Android 12+?',
+            content: 'Android 12/13/14/15 membutuhkan izin <strong>"Nearby Devices" (Perangkat Sekitar)</strong>. Pastikan Anda mengklik "Izinkan" saat pertama kali membuka menu Printer. Jika terlewat, buka <em>Settings HP -> Apps -> Artea POS -> Permissions -> Nearby Devices -> Allow</em>.'
+        },
+        {
+            id: 'faq_scanner',
+            category: 'Hardware',
+            title: 'Apakah barcode scanner bisa untuk kartu member?',
+            content: '<strong>Ya!</strong> Tombol Scanner di menu Kasir sekarang sudah "Smart". Jika yang discan adalah kartu member, sistem otomatis login pelanggan tersebut. Jika yang discan adalah barang, sistem otomatis menambahkannya ke keranjang.'
+        },
+        {
+            id: 'faq_identity',
+            category: 'Member',
+            title: 'Saya koperasi sekolah/kantor, bisa pakai data Kelas/Divisi?',
+            content: '<strong>Bisa.</strong> Kolom "Kontak" pada data pelanggan bersifat bebas. Anda bisa mengisinya dengan "Kelas 12A", "NIK 12345", atau "Divisi Gudang". Data ini juga bisa digunakan sebagai kata kunci pencarian di halaman kasir.'
+        },
+        {
+            id: 'faq_topup',
+            category: 'Member',
+            title: 'Apakah uang Top Up Saldo dihitung sebagai Omzet Penjualan?',
+            content: '<strong>Tidak.</strong> Dalam akuntansi, uang Top Up dianggap sebagai <strong>Utang/Deposit</strong> (Uang Titipan). Di Artea POS, saat Top Up terjadi, uang masuk ke laporan <strong>Arus Kas (Kas Masuk)</strong> agar laci kasir tetap balance, tapi TIDAK menambah angka "Total Penjualan" hari itu.'
+        },
+        {
+            id: 'faq_cloud',
+            category: 'Cloud',
+            title: 'Apakah data cabang otomatis tersimpan di HP Admin?',
+            content: '<strong>Tidak otomatis.</strong> Aplikasi ini didesain agar perangkat Admin tetap ringan ("Mode Intip"). Data cabang tersimpan di Dropbox. Saat Anda menekan tombol "Refresh" di Dashboard, aplikasi hanya mengunduh data tersebut ke memori sementara untuk ditampilkan (View Only).'
+        }
+    ];
+
+    // Grouping for TOC logic
+    const categories = Array.from(new Set(faqs.map(f => f.category)));
+    const tocItems = categories.map(c => ({ 
+        id: `cat_${c.replace(/\s+/g, '_')}`, 
+        label: c 
+    }));
+
     return (
-        <div className="animate-fade-in max-w-3xl mx-auto space-y-4">
-            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                <h3 className="font-bold text-white mb-2 text-lg">Tanya Jawab & Masalah Umum</h3>
-                <div className="space-y-4">
-                    
-                    {/* --- FAQ CUSTOMER DISPLAY (NEW) --- */}
-                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah fitur Layar Pelanggan (Dual Screen) butuh internet?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: <strong>Ya, butuh.</strong><br/>
-                            Fitur ini menggunakan teknologi WebRTC (PeerJS) untuk menghubungkan dua browser berbeda (Kasir & Pelanggan). 
-                            Koneksi internet diperlukan untuk proses awal (handshake/pairing). Setelah terhubung, data akan mengalir lebih stabil jika kedua perangkat dalam jaringan WiFi yang sama, tapi tetap membutuhkan akses internet dasar.
-                        </p>
-                    </div>
+        <div className="animate-fade-in max-w-3xl mx-auto space-y-6">
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+                <h3 className="font-bold text-white text-lg">Tanya Jawab & Masalah Umum</h3>
+                <p className="text-xs text-slate-400">Jawaban cepat untuk pertanyaan teknis dan operasional.</p>
+            </div>
 
-                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Perangkat apa yang bisa jadi Layar Pelanggan?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: <strong>Hampir semua perangkat.</strong><br/>
-                            Anda bisa menggunakan Tablet Android bekas, iPad lama, atau bahkan HP Android murah. 
-                            Syaratnya hanya satu: Bisa membuka browser modern (Chrome/Edge/Safari) dan terhubung ke internet.
-                        </p>
-                    </div>
+            <TableOfContents items={tocItems} />
 
-                    {/* --- FAQ STOK (EXISTING) --- */}
-                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Di mana saya melihat laporan barang rusak (waste) atau riwayat restock?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Semua aktivitas perubahan stok (selain penjualan) tercatat di menu <strong>Laporan</strong>.<br/>
-                            1. Buka menu Laporan.<br/>
-                            2. Di bagian bawah (tabel), klik tab <strong>"Mutasi Stok & Log"</strong> (disebelah tab Riwayat Penjualan).<br/>
-                            Di sana Anda akan melihat daftar lengkap: kapan barang masuk (Restock), kapan keluar (Waste/Rusak), dan hasil Stock Opname.
-                        </p>
+            <div className="space-y-8">
+                {categories.map(cat => (
+                    <div key={cat} id={`cat_${cat.replace(/\s+/g, '_')}`} className="scroll-mt-24">
+                        <h4 className="text-sm font-bold text-[#52a37c] mb-3 uppercase tracking-wider border-b border-slate-700 pb-1">
+                            {cat}
+                        </h4>
+                        <div className="space-y-2">
+                            {faqs.filter(f => f.category === cat).map(f => (
+                                <AccordionItem 
+                                    key={f.id}
+                                    title={f.title}
+                                    isOpen={openId === f.id}
+                                    onToggle={() => toggle(f.id)}
+                                    icon="question"
+                                >
+                                    <div dangerouslySetInnerHTML={{ __html: f.content }} />
+                                </AccordionItem>
+                            ))}
+                        </div>
                     </div>
-
-                    {/* --- FAQ SECURITY KEY (EXISTING) --- */}
-                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                        <h4 className="font-bold text-yellow-400 mb-1">Q: Kenapa kolom App Key & Secret Dropbox jadi kosong setelah terhubung?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Ini adalah fitur keamanan <strong>(Security by Obscurity)</strong>.<br/><br/>
-                            Sistem secara otomatis menyembunyikan App Key dan App Secret dari tampilan layar agar <strong>tidak bisa dicuri atau disalin</strong> oleh staf/orang lain yang meminjam perangkat Admin. <br/>
-                            Data sebenarnya <strong>tetap tersimpan aman</strong> di dalam sistem. Anda hanya perlu mengisi kolom tersebut jika ingin <strong>mengganti</strong> akun Dropbox dengan yang baru.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apa bedanya "Transfer Stok" dan "Stok Manual"?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: <strong>Transfer Stok</strong> digunakan oleh Gudang Pusat untuk mengirim barang ke Cabang secara digital (membutuhkan internet). Cabang akan menerima stok saat Sync.<br/><br/>
-                            <strong>Stok Manual</strong> digunakan untuk input barang yang dibeli sendiri oleh toko dari supplier lokal/pasar (bisa offline) atau untuk mencatat barang rusak/waste.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Gudang sudah kirim barang, kenapa stok di kasir belum bertambah?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Karena aplikasi ini <em>Offline-First</em>, data tidak masuk otomatis detik itu juga. <br/>
-                            Kasir/Staf Toko harus menekan tombol <strong>"Cek Update" (ikon panah bawah)</strong> di bagian atas layar (Header) untuk mengunduh data kiriman dari Gudang. Pastikan ada internet saat menekan tombol tersebut.
-                        </p>
-                    </div>
-                    {/* ------------------------------- */}
-
-                    {/* --- NEW FAQ FOR BLUETOOTH & DEVICE --- */}
-                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Printer Bluetooth tidak terdeteksi di Android 12+?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Android 12/13/14/15 membutuhkan izin <strong>"Nearby Devices" (Perangkat Sekitar)</strong>.
-                            Pastikan Anda mengklik "Izinkan" saat pertama kali membuka menu Printer. 
-                            Jika terlewat, buka <em>Settings HP &rarr; Apps &rarr; Artea POS &rarr; Permissions &rarr; Nearby Devices &rarr; Allow</em>.
-                        </p>
-                    </div>
-                    {/* ------------------------------- */}
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah barcode scanner bisa untuk kartu member?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: <strong>Ya!</strong> Tombol Scanner di menu Kasir sekarang sudah "Smart".
-                            Jika yang discan adalah kartu member, sistem otomatis login pelanggan tersebut.
-                            Jika yang discan adalah barang, sistem otomatis menambahkannya ke keranjang.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Saya koperasi sekolah/kantor, bisa pakai data Kelas/Divisi?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: <strong>Bisa.</strong> Kolom "Kontak" pada data pelanggan bersifat bebas. Anda bisa mengisinya dengan 
-                            "Kelas 12A", "NIK 12345", atau "Divisi Gudang". 
-                            Data ini juga bisa digunakan sebagai kata kunci pencarian di halaman kasir.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Bagaimana cara mengirim Kartu Member ke Pelanggan?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Di menu <strong>Keuangan &rarr; Tab Pelanggan &rarr; Ikon Kartu</strong>, klik tombol <strong>"Share WA"</strong>. 
-                            Ini akan otomatis mengunduh gambar kartu (PNG) dan membuka WhatsApp. Anda tinggal melampirkan gambar tersebut ke chat pelanggan.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah uang Top Up Saldo dihitung sebagai Omzet Penjualan?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: <strong>Tidak.</strong> Dalam akuntansi, uang Top Up dianggap sebagai <strong>Utang/Deposit</strong> (Uang Titipan). 
-                            Di Artea POS, saat Top Up terjadi, uang masuk ke laporan <strong>Arus Kas (Kas Masuk)</strong> agar laci kasir tetap balance, tapi TIDAK menambah angka "Total Penjualan" hari itu.
-                            <br/><br/>
-                            Omzet Penjualan baru akan bertambah secara sah ketika member tersebut <strong>membelanjakan</strong> saldonya untuk membeli produk.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg border-l-4 border-red-500">
-                        <h4 className="font-bold text-red-400 mb-1">Q: Apakah aman Staff bisa Top Up saldo member? Nanti disalahgunakan?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: <strong>Aman, asalkan Anda mengaktifkan fitur Sesi (Shift).</strong> 
-                            Sistem Artea POS mencatat setiap Top Up sebagai "Uang Masuk". 
-                            <br/><br/>
-                            <em>Contoh Kasus:</em> Jika Staff nakal melakukan Top Up palsu ke akunnya sendiri sebesar Rp 100.000 tanpa memasukkan uang ke laci, maka saat Tutup Toko (End Session), sistem akan menagih uang tersebut. Laporan kasir akan menunjukkan <strong>Selisih (Kurang) Rp 100.000</strong> yang harus diganti oleh Staff.
-                            <br/>Selain itu, semua aktivitas Top Up tercatat di menu <strong>Pengaturan &rarr; Audit Log</strong>.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah data cabang otomatis tersimpan di HP Admin?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: <strong>Tidak otomatis.</strong> Aplikasi ini didesain agar perangkat Admin tetap ringan ("Mode Intip"). Data cabang tersimpan di Dropbox. Saat Anda menekan tombol "Refresh" di Dashboard, aplikasi hanya mengunduh data tersebut ke memori sementara untuk ditampilkan (View Only).
-                            <br/>Data tidak akan memenuhi penyimpanan lokal HP Anda kecuali Anda menekan tombol "Simpan ke Lokal".
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apa bedanya setting identitas "PUSAT" dengan Cabang biasa?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: <strong>"PUSAT"</strong> ditujukan khusus untuk perangkat Admin/Owner yang hanya digunakan untuk memantau laporan dan mengelola harga/produk. 
-                            <br/>Perangkat yang diset sebagai Pusat <strong>tidak memiliki stok fisik toko</strong> dan sebaiknya tidak digunakan untuk kasir harian. 
-                            <br/>Sedangkan identitas cabang (misal: JKT-01) wajib dipilih oleh perangkat kasir di toko agar laporan penjualannya teridentifikasi dengan jelas.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Bagaimana cara update harga ke semua cabang sekaligus?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: Di perangkat Admin (Pusat): Ubah harga di menu Produk &rarr; Buka menu <strong>Data</strong> (ikon database di atas) &rarr; Klik tombol <strong>"Kirim Master (Push)"</strong>.
-                            <br/>Di perangkat Cabang: Klik tombol <strong>"Cek Menu & Harga Baru"</strong>. Harga akan otomatis terupdate.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Bisakah banyak kasir/cabang input data bersamaan?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: <strong>YA, Sangat Aman!</strong> Sistem Artea POS telah diperbarui dengan teknologi <em>Smart Unique ID</em>.
-                            Setiap transaksi kini memiliki sidik jari unik. Jadi meskipun banyak kasir menekan tombol "Bayar" bersamaan, semua data akan tersimpan rapi di Cloud tanpa ada yang tertimpa.
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900/50 p-4 rounded-lg">
-                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah aplikasi ini boleh disebarkan/dijual lagi?</h4>
-                        <p className="text-slate-300 text-sm">
-                            A: <strong>Sangat Boleh!</strong> Artea POS adalah Open Source (GPL v3.0). Anda bebas membagikannya ke teman, komunitas, atau bahkan menjadikannya paket bundling dengan hardware (Tablet/Printer) yang Anda jual, selama Anda menyertakan informasi lisensi aslinya.
-                        </p>
-                    </div>
-
-                </div>
+                ))}
             </div>
         </div>
     );

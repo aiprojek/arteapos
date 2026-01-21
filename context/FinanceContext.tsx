@@ -27,7 +27,7 @@ interface FinanceContextType {
     addPurchase: (purchase: Omit<Purchase, 'id' | 'status' | 'supplierName' | 'totalAmount'>) => void;
     addPaymentToPurchase: (purchaseId: string, amount: number) => void;
     addPaymentToTransaction: (transactionId: string, payments: Array<Omit<Payment, 'id' | 'createdAt'>>) => void;
-    refundTransaction: (transactionId: string) => void;
+    refundTransaction: (transactionId: string, reason?: string) => void;
     importTransactions: (newTransactions: TransactionType[]) => void;
     importFinanceData: (expenses: Expense[], incomes: OtherIncome[], purchases: Purchase[]) => void;
 }
@@ -239,13 +239,14 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
         setTimeout(() => triggerAutoSync(getStaffName()), 500);
     }, [setData, triggerAutoSync, currentUser]);
 
-    const refundTransaction = useCallback((transactionId: string) => {
+    const refundTransaction = useCallback((transactionId: string, reason?: string) => {
         setData(prev => {
             const targetTransaction = prev.transactionRecords.find(t => t.id === transactionId);
             if (!targetTransaction || targetTransaction.paymentStatus === 'refunded') return prev;
 
             // Audit Log
-            logAudit(currentUser, 'REFUND_TRANSACTION', `Refund transaksi #${transactionId.slice(-4)}. Total: ${CURRENCY_FORMATTER.format(targetTransaction.total)}`, transactionId);
+            const reasonText = reason ? `. Alasan: ${reason}` : '';
+            logAudit(currentUser, 'REFUND_TRANSACTION', `Refund transaksi #${transactionId.slice(-4)}. Total: ${CURRENCY_FORMATTER.format(targetTransaction.total)}${reasonText}`, transactionId);
 
             const updatedTransaction: TransactionType = { ...targetTransaction, paymentStatus: 'refunded' };
             const updatedTransactions = prev.transactionRecords.map(t => t.id === transactionId ? updatedTransaction : t);

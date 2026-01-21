@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { useFinance } from '../../context/FinanceContext';
 import { useSession } from '../../context/SessionContext'; // Import Session
 import { useUI } from '../../context/UIContext';
@@ -11,6 +11,7 @@ import VirtualizedTable from '../VirtualizedTable';
 import Modal from '../Modal';
 import Icon from '../Icon';
 import type { Transaction, PaymentMethod } from '../../types';
+import { compressImage } from '../../utils/imageCompression';
 
 interface DebtsTabProps {
     dataSource?: 'local' | 'cloud' | 'dropbox';
@@ -29,6 +30,8 @@ const DebtsTab: React.FC<DebtsTabProps> = ({ dataSource = 'local', cloudData = [
     const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
     const [paymentAmount, setPaymentAmount] = useState('');
+    const [evidenceImage, setEvidenceImage] = useState<string>(''); // NEW
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const activeTransactions = dataSource === 'local' ? localTransactions : cloudData;
 
@@ -46,7 +49,20 @@ const DebtsTab: React.FC<DebtsTabProps> = ({ dataSource = 'local', cloudData = [
         setSelectedTransaction(t);
         setPaymentAmount((t.total - t.amountPaid).toString()); // Default full amount
         setPaymentMethod('cash');
+        setEvidenceImage(''); // Reset image
         setPaymentModalOpen(true);
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            try {
+                const compressed = await compressImage(file);
+                setEvidenceImage(compressed);
+            } catch (err) {
+                showAlert({ type: 'alert', title: 'Error', message: 'Gagal memproses gambar.' });
+            }
+        }
     };
 
     const handleConfirmPayment = () => {
@@ -61,8 +77,8 @@ const DebtsTab: React.FC<DebtsTabProps> = ({ dataSource = 'local', cloudData = [
             return;
         }
 
-        // 1. Catat Pembayaran di Transaksi
-        addPaymentToTransaction(selectedTransaction.id, [{ method: paymentMethod, amount }]);
+        // 1. Catat Pembayaran di Transaksi (Include Evidence)
+        addPaymentToTransaction(selectedTransaction.id, [{ method: paymentMethod, amount, evidenceImageUrl: evidenceImage }]);
 
         // 2. LOGIKA KRUSIAL: Jika Tunai, Catat di Arus Kas Sesi (Cash In)
         if (paymentMethod === 'cash' && session) {
@@ -153,6 +169,35 @@ const DebtsTab: React.FC<DebtsTabProps> = ({ dataSource = 'local', cloudData = [
                                 <Icon name="pay" className="w-6 h-6" />
                                 <span className="font-bold">Non-Tunai</span>
                             </button>
+                        </div>
+                    </div>
+
+                    {/* NEW: Evidence Upload for Debt Repayment */}
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Foto Bukti Transfer (Opsional)</label>
+                        <div className="flex flex-col items-center gap-3 p-3 border-2 border-dashed border-slate-600 rounded-lg bg-slate-900/50">
+                            {evidenceImage ? (
+                                <div className="relative w-full">
+                                    <img src={evidenceImage} alt="Bukti" className="h-32 w-full object-contain rounded" />
+                                    <button 
+                                        onClick={() => setEvidenceImage('')}
+                                        className="absolute top-0 right-0 bg-red-600 text-white p-1 rounded-full m-1 hover:bg-red-500"
+                                    >
+                                        <Icon name="close" className="w-3 h-3"/>
+                                    </button>
+                                </div>
+                            ) : (
+                                <div onClick={() => fileInputRef.current?.click()} className="cursor-pointer py-2 text-center w-full">
+                                    <Icon name="camera" className="w-6 h-6 text-slate-500 mx-auto mb-1"/>
+                                    <span className="text-[10px] text-slate-400">Upload Struk/QRIS</span>
+                                </div>
+                            )}
+                            <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                            {!evidenceImage && (
+                                <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} className="w-full">
+                                    Ambil Foto
+                                </Button>
+                            )}
                         </div>
                     </div>
 

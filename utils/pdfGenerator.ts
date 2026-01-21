@@ -54,22 +54,27 @@ export const generateSalesReportPDF = async (
     doc.text(CURRENCY_FORMATTER.format(summary.totalProfit), pageWidth - 25, summaryY + 18, { align: 'right' });
 
     // 5. Transaction Table
-    const tableColumn = ["Waktu", "ID Transaksi", "Pelanggan", "Item", "Status", "Total"];
+    // UPDATED: Added "Kasir" column
+    const tableColumn = ["Waktu", "ID", "Kasir", "Pelanggan", "Item", "Status", "Bukti", "Total"];
     const tableRows: any[] = [];
 
     transactions.forEach(t => {
         const date = new Date(t.createdAt).toLocaleDateString('id-ID');
         const time = new Date(t.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
         
-        // FIX: Add safety check (t.items || []) to prevent crash if items is undefined
         const itemsSummary = (t.items || []).map(i => `${i.name} (${i.quantity})`).join(', ');
         
+        // Cari gambar bukti di dalam array payments
+        const evidenceImg = (t.payments || []).find(p => p.evidenceImageUrl)?.evidenceImageUrl || '';
+
         const rowData = [
-            `${date} ${time}`,
-            t.id.slice(-6),
+            `${date}\n${time}`, // Waktu (Multiline)
+            t.id.slice(-4),     // ID (Short)
+            t.userName || '-',  // Kasir
             t.customerName || 'Umum',
             itemsSummary,
             t.paymentStatus === 'paid' ? 'Lunas' : t.paymentStatus,
+            evidenceImg, // Kolom Bukti (Raw Base64 string) - Akan dirender jadi gambar
             CURRENCY_FORMATTER.format(t.total)
         ];
         tableRows.push(rowData);
@@ -81,15 +86,45 @@ export const generateSalesReportPDF = async (
         startY: summaryY + 35,
         theme: 'striped',
         headStyles: { fillColor: [52, 119, 88] }, // #347758 (Artea Brand Color)
-        styles: { fontSize: 8, cellPadding: 2 },
+        styles: { fontSize: 8, cellPadding: 2, valign: 'middle' },
         columnStyles: {
-            0: { cellWidth: 30 }, // Waktu
-            1: { cellWidth: 20 }, // ID
-            2: { cellWidth: 30 }, // Pelanggan
-            3: { cellWidth: 'auto' }, // Items
-            4: { cellWidth: 20 }, // Status
-            5: { cellWidth: 30, halign: 'right' }, // Total
+            0: { cellWidth: 20 }, // Waktu
+            1: { cellWidth: 15 }, // ID
+            2: { cellWidth: 20 }, // Kasir (NEW)
+            3: { cellWidth: 20 }, // Pelanggan
+            4: { cellWidth: 'auto' }, // Items
+            5: { cellWidth: 15 }, // Status
+            6: { cellWidth: 15, halign: 'center' }, // Bukti (Image Slot)
+            7: { cellWidth: 25, halign: 'right' }, // Total
         },
+        didDrawCell: (data) => {
+            // Hook untuk menggambar gambar di kolom ke-6 (index 6 = 'Bukti')
+            if (data.column.index === 6 && data.cell.section === 'body') {
+                const base64Img = data.cell.raw as string;
+                if (base64Img && base64Img.startsWith('data:image')) {
+                    // Dimensi Cell
+                    const dim = data.cell.height - 2; // Padding 1px
+                    const x = data.cell.x + (data.cell.width - dim) / 2;
+                    const y = data.cell.y + 1;
+                    
+                    try {
+                        doc.addImage(base64Img, 'JPEG', x, y, dim, dim);
+                    } catch (e) {
+                        // Ignore image error
+                    }
+                }
+            }
+        },
+        didParseCell: (data) => {
+            // Kosongkan teks di kolom bukti agar tidak menumpuk dengan gambar
+            if (data.column.index === 6 && data.cell.section === 'body') {
+                if (data.cell.raw && (data.cell.raw as string).startsWith('data:image')) {
+                    data.cell.text = []; // Clear text content
+                } else {
+                    data.cell.text = ['-'];
+                }
+            }
+        }
     });
 
     // 6. Footer
@@ -116,13 +151,14 @@ export const generateSalesReportPDF = async (
     }
 };
 
-// --- Generic Generator for Finance Tables ---
+// --- Generic Generator for Finance Tables (Updated to support Images) ---
 export const generateTablePDF = async (
     title: string,
     headers: string[],
     rows: (string | number)[][],
     settings: ReceiptSettings,
-    orientation: 'p' | 'l' = 'p' // Portrait or Landscape
+    orientation: 'p' | 'l' = 'p', // Portrait or Landscape
+    imageColumnIndex: number = -1 // New Parameter: If >= 0, this column contains base64 images
 ) => {
     const doc = new jsPDF({ orientation });
     const pageWidth = doc.internal.pageSize.width;
@@ -153,7 +189,30 @@ export const generateTablePDF = async (
         startY: 45,
         theme: 'striped',
         headStyles: { fillColor: [52, 119, 88] },
-        styles: { fontSize: 9, cellPadding: 2 },
+        styles: { fontSize: 9, cellPadding: 2, valign: 'middle' },
+        didDrawCell: (data) => {
+            // Draw image if column matches and content is base64
+            if (imageColumnIndex >= 0 && data.column.index === imageColumnIndex && data.cell.section === 'body') {
+                const base64Img = data.cell.raw as string;
+                if (base64Img && base64Img.startsWith('data:image')) {
+                    const dim = data.cell.height - 2; 
+                    const x = data.cell.x + (data.cell.width - dim) / 2;
+                    const y = data.cell.y + 1;
+                    try {
+                        doc.addImage(base64Img, 'JPEG', x, y, dim, dim);
+                    } catch (e) {}
+                }
+            }
+        },
+        didParseCell: (data) => {
+            if (imageColumnIndex >= 0 && data.column.index === imageColumnIndex && data.cell.section === 'body') {
+                if (data.cell.raw && (data.cell.raw as string).startsWith('data:image')) {
+                    data.cell.text = []; // Clear text
+                } else {
+                    data.cell.text = ['-'];
+                }
+            }
+        }
     });
 
     // Footer

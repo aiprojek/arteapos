@@ -264,9 +264,45 @@ const FinanceView: React.FC = () => {
 
     const handleExportPDF = () => {
         const { headers, rows, fileNameBase } = prepareTableData();
-        // Format numbers for PDF display
-        const pdfRows = rows.map(row => row.map(cell => typeof cell === 'number' ? CURRENCY_FORMATTER.format(cell) : cell));
-        generateTablePDF(fileNameBase.replace(/_/g, ' '), headers, pdfRows, receiptSettings);
+        const mode = mainView === 'finance' ? activeTab : 'customers';
+        const isCloud = dataSource !== 'local';
+        
+        // --- Special Logic to Include Images in PDF ---
+        let pdfHeaders = [...headers];
+        let pdfRows = [...rows];
+        let imageColIndex = -1;
+
+        if (mode === 'expenses' || mode === 'other_income' || mode === 'purchasing') {
+            // Add 'Bukti' Column for PDF only
+            pdfHeaders.push('Bukti');
+            imageColIndex = pdfHeaders.length - 1;
+
+            const sourceList = dataSource === 'local' 
+                ? (mode === 'expenses' ? localExpenses : mode === 'other_income' ? localIncomes : localPurchases)
+                : (mode === 'expenses' ? cloudData.expenses : mode === 'other_income' ? cloudData.otherIncomes : cloudData.purchases);
+            
+            // Re-map rows to include image data (base64)
+            // Note: sort order must match prepareTableData above
+            const sortedList = [...sourceList].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            
+            pdfRows = sortedList.map(item => {
+               const basicRow = rows.find(r => r.includes(item.description || item.supplierName)); // Simplistic matching
+               // Better matching needed if descriptions duplicate. 
+               // For robust implementation, we should rebuild rows here instead of searching.
+               
+               const date = new Date(item.date).toLocaleDateString('id-ID');
+               const baseRow = mode === 'purchasing' 
+                    ? (isCloud ? [date, (item as any).storeId, (item as any).supplierName, (item as any).status, (item as any).totalAmount] : [date, (item as any).supplierName, (item as any).status, (item as any).totalAmount])
+                    : (isCloud ? [date, (item as any).storeId, item.description, item.category, item.amount] : [date, item.description, item.category, item.amount]);
+               
+               return [...baseRow, item.evidenceImageUrl || ''];
+            });
+        }
+
+        // Format numbers
+        const formattedRows = pdfRows.map(row => row.map(cell => typeof cell === 'number' ? CURRENCY_FORMATTER.format(cell) : cell));
+        
+        generateTablePDF(fileNameBase.replace(/_/g, ' '), pdfHeaders, formattedRows, receiptSettings, 'p', imageColIndex);
         setIsExportDropdownOpen(false);
     };
 

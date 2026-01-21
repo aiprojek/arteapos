@@ -1,12 +1,17 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useFinance } from '../../context/FinanceContext';
 import { CURRENCY_FORMATTER } from '../../constants';
 import Button from '../Button';
 import Icon from '../Icon';
 import Modal from '../Modal';
 import VirtualizedTable from '../VirtualizedTable';
-import type { OtherIncome } from '../../types';
+import type { OtherIncome, PaymentMethod } from '../../types';
+import { compressImage } from '../../utils/imageCompression';
+import { ocrService } from '../../services/ocrService';
+import { useUI } from '../../context/UIContext';
+import { Capacitor } from '@capacitor/core';
+import { saveBinaryFileNative } from '../../utils/nativeHelper';
 
 interface IncomeTabProps {
     dataSource?: 'local' | 'cloud' | 'dropbox';
@@ -15,10 +20,22 @@ interface IncomeTabProps {
 
 const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData = [] }) => {
     const { otherIncomes: localIncomes, addOtherIncome, deleteOtherIncome, updateOtherIncome } = useFinance();
+    const { showAlert } = useUI();
     const [isModalOpen, setModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [formData, setFormData] = useState({ description: '', amount: '', category: 'Lainnya', date: new Date().toISOString().slice(0, 10) });
+    const [formData, setFormData] = useState({ 
+        description: '', 
+        amount: '', 
+        category: 'Lainnya', 
+        date: new Date().toISOString().slice(0, 10),
+        evidenceImageUrl: '',
+        paymentMethod: 'cash' as PaymentMethod
+    });
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [isScanning, setIsScanning] = useState(false);
+    // UPDATED: Using Object for evidence
+    const [viewEvidence, setViewEvidence] = useState<{ url: string; filename: string } | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const activeIncomes = dataSource === 'local' ? localIncomes : cloudData;
 
@@ -32,7 +49,9 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
             description: formData.description,
             amount: parseFloat(formData.amount),
             category: formData.category,
-            date: new Date(formData.date).toISOString()
+            date: new Date(formData.date).toISOString(),
+            evidenceImageUrl: formData.evidenceImageUrl,
+            paymentMethod: formData.paymentMethod
         };
 
         if (editingId) {
@@ -41,9 +60,20 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
         } else {
             addOtherIncome(payload);
         }
+        closeModal();
+    };
+
+    const closeModal = () => {
         setModalOpen(false);
         setEditingId(null);
-        setFormData({ description: '', amount: '', category: 'Lainnya', date: new Date().toISOString().slice(0, 10) });
+        setFormData({ 
+            description: '', 
+            amount: '', 
+            category: 'Lainnya', 
+            date: new Date().toISOString().slice(0, 10),
+            evidenceImageUrl: '',
+            paymentMethod: 'cash'
+        });
     };
 
     const handleEdit = (inc: OtherIncome) => {
@@ -52,14 +82,86 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
             description: inc.description,
             amount: inc.amount.toString(),
             category: inc.category,
-            date: inc.date.slice(0, 10)
+            date: inc.date.slice(0, 10),
+            evidenceImageUrl: inc.evidenceImageUrl || '',
+            paymentMethod: inc.paymentMethod || 'cash'
         });
         setModalOpen(true);
     };
 
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            try {
+                const compressed = await compressImage(file);
+                setFormData(prev => ({ ...prev, evidenceImageUrl: compressed }));
+            } catch (err) {
+                showAlert({ type: 'alert', title: 'Error', message: 'Gagal memproses gambar.' });
+            }
+        }
+    };
+
+    const handleScanOCR = async () => {
+        if (!formData.evidenceImageUrl) return;
+        setIsScanning(true);
+        try {
+            const result = await ocrService.scanReceipt(formData.evidenceImageUrl);
+            setFormData(prev => ({
+                ...prev,
+                amount: result.amount ? result.amount.toString() : prev.amount,
+                date: result.date ? result.date : prev.date
+            }));
+            showAlert({ type: 'alert', title: 'Scan Selesai', message: 'Nominal & Tanggal diperbarui dari gambar.' });
+        } catch (err: any) {
+            showAlert({ type: 'alert', title: 'Gagal Scan', message: err.message });
+        } finally {
+            setIsScanning(false);
+        }
+    };
+
+    const handleDownloadEvidence = async () => {
+        if (!viewEvidence) return;
+        try {
+            const fileName = viewEvidence.filename;
+            if (Capacitor.isNativePlatform()) {
+                await saveBinaryFileNative(fileName, viewEvidence.url.split(',')[1]);
+                showAlert({ type: 'alert', title: 'Berhasil', message: `Gambar disimpan: ${fileName}` });
+            } else {
+                const link = document.createElement('a');
+                link.href = viewEvidence.url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        } catch (e: any) {
+            showAlert({ type: 'alert', title: 'Gagal', message: e.message });
+        }
+    };
+
     const columns = [
         { label: 'Tanggal', width: '1fr', render: (i: OtherIncome) => new Date(i.date).toLocaleDateString('id-ID') },
-        { label: 'Keterangan', width: '2fr', render: (i: OtherIncome) => i.description },
+        { label: 'Keterangan', width: '2fr', render: (i: OtherIncome) => (
+            <div className="flex items-center gap-2">
+                {i.evidenceImageUrl && (
+                    <button 
+                        onClick={(evt) => { 
+                            evt.stopPropagation(); 
+                            const safeDesc = i.description.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
+                            setViewEvidence({
+                                url: i.evidenceImageUrl!,
+                                filename: `Bukti_Masuk_${safeDesc}_${i.date.slice(0,10)}.jpg`
+                            }); 
+                        }}
+                        className="text-blue-400 hover:text-blue-300"
+                        title="Lihat Bukti"
+                    >
+                        <Icon name="camera" className="w-4 h-4" />
+                    </button>
+                )}
+                <span>{i.description}</span>
+            </div>
+        ) },
         { label: 'Kategori', width: '1fr', render: (i: OtherIncome) => <span className="text-xs bg-slate-700 px-2 py-1 rounded text-slate-300">{i.category}</span> },
         { label: 'Jumlah', width: '1fr', render: (i: OtherIncome) => <span className="text-green-400 font-bold">{CURRENCY_FORMATTER.format(i.amount)}</span> },
         ...(dataSource !== 'local' ? [{ 
@@ -90,18 +192,101 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
                 <VirtualizedTable data={filteredIncomes} columns={columns} rowHeight={50} minWidth={dataSource !== 'local' ? 900 : 800}/>
             </div>
 
-            <Modal isOpen={isModalOpen} onClose={() => setModalOpen(false)} title={editingId ? "Edit Pemasukan" : "Catat Pemasukan Lain"}>
-                <div className="space-y-4">
-                    <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white" />
-                    <input type="text" placeholder="Keterangan (cth: Jual Kardus Bekas)" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white" />
-                    <input type="number" placeholder="Jumlah (Rp)" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white" />
-                    <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white">
-                        <option>Lainnya</option>
-                        <option>Modal Tambahan</option>
-                        <option>Investasi</option>
-                        <option>Hibah/Hadiah</option>
-                    </select>
+            <Modal isOpen={isModalOpen} onClose={closeModal} title={editingId ? "Edit Pemasukan" : "Catat Pemasukan Lain"}>
+                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+                    
+                    {/* ENHANCED Evidence Section */}
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Foto Bukti (Opsional)</label>
+                        <div className="flex flex-col items-center gap-3 p-4 border-2 border-dashed border-slate-600 rounded-lg bg-slate-900/50">
+                            {formData.evidenceImageUrl ? (
+                                <div className="relative w-full">
+                                    <img src={formData.evidenceImageUrl} alt="Bukti" className="h-40 w-full object-contain rounded bg-black/40" />
+                                    <button 
+                                        onClick={() => setFormData(prev => ({ ...prev, evidenceImageUrl: '' }))}
+                                        className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full hover:bg-red-500"
+                                    >
+                                        <Icon name="close" className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div onClick={() => fileInputRef.current?.click()} className="text-center cursor-pointer w-full py-2">
+                                    <Icon name="camera" className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+                                    <span className="text-xs text-slate-400">Klik untuk upload foto</span>
+                                </div>
+                            )}
+                            <div className="flex gap-2 w-full mt-1">
+                                <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                                <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} className="flex-1">
+                                    {formData.evidenceImageUrl ? 'Ganti Foto' : 'Ambil Foto'}
+                                </Button>
+                                {formData.evidenceImageUrl && (
+                                    <Button size="sm" variant="secondary" onClick={handleScanOCR} disabled={isScanning} className="flex-1 bg-blue-900/30 text-blue-300 border-blue-800">
+                                        {isScanning ? 'Scanning...' : <><Icon name="eye" className="w-4 h-4" /> Scan (AI)</>}
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-xs text-slate-400">Tanggal</label>
+                            <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-400">Metode Terima</label>
+                            <select 
+                                value={formData.paymentMethod} 
+                                onChange={e => setFormData({...formData, paymentMethod: e.target.value as PaymentMethod})}
+                                className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                            >
+                                <option value="cash">Tunai (Kas)</option>
+                                <option value="non-cash">Non-Tunai (Rekening)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-xs text-slate-400">Keterangan</label>
+                        <input type="text" placeholder="cth: Jual Kardus Bekas" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-xs text-slate-400">Jumlah (Rp)</label>
+                            <input type="number" placeholder="0" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white font-bold" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-400">Kategori</label>
+                            <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white">
+                                <option>Lainnya</option>
+                                <option>Modal Tambahan</option>
+                                <option>Investasi</option>
+                                <option>Hibah/Hadiah</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <Button onClick={handleSubmit} className="w-full">{editingId ? "Simpan Perubahan" : "Simpan"}</Button>
+                </div>
+            </Modal>
+
+            {/* View Image Modal */}
+            <Modal isOpen={!!viewEvidence} onClose={() => setViewEvidence(null)} title="Bukti Transaksi">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="flex justify-center bg-black/20 p-2 rounded w-full">
+                        {viewEvidence && (
+                            <img src={viewEvidence.url} alt="Bukti" className="max-h-[60vh] max-w-full object-contain rounded" />
+                        )}
+                    </div>
+                    <div className="flex justify-end gap-3 w-full">
+                        <Button onClick={handleDownloadEvidence} className="bg-blue-600 hover:bg-blue-500 border-none">
+                            <Icon name="download" className="w-4 h-4"/> Unduh
+                        </Button>
+                        <Button variant="secondary" onClick={() => setViewEvidence(null)}>Tutup</Button>
+                    </div>
+                    {viewEvidence && <div className="text-[10px] text-slate-500 font-mono text-center w-full">{viewEvidence.filename}</div>}
                 </div>
             </Modal>
         </div>

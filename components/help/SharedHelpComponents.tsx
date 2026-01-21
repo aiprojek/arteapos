@@ -40,8 +40,8 @@ export const AccordionItem: React.FC<AccordionItemProps> = ({ title, children, i
     </div>
 );
 
-export const SectionHeader: React.FC<{ title: string; icon: any; desc: string }> = ({ title, icon, desc }) => (
-    <div className="mb-4 mt-10 pb-2 border-b border-slate-700 first:mt-0">
+export const SectionHeader: React.FC<{ title: string; icon: any; desc: string; id?: string }> = ({ title, icon, desc, id }) => (
+    <div id={id} className="mb-4 mt-10 pb-2 border-b border-slate-700 first:mt-0 scroll-mt-24">
         <div className="flex items-center gap-2">
             <Icon name={icon} className="w-6 h-6 text-[#52a37c]" />
             <h2 className="text-xl font-bold text-white">{title}</h2>
@@ -70,7 +70,6 @@ export const ScenarioCard: React.FC<{
     return (
         <div className={`bg-slate-800 p-5 rounded-xl border border-slate-700 hover:border-slate-500 transition-colors relative overflow-hidden group h-full`}>
             <div className={`absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity ${textColor}`}>
-                {/* Gunakan style fontSize eksplisit untuk memastikan ikon font menjadi besar */}
                 <Icon name={icon} className="w-32 h-32" style={{ fontSize: '8rem' }} />
             </div>
             <h3 className={`text-lg font-bold mb-2 flex items-center gap-2 ${textColor}`}>
@@ -85,6 +84,34 @@ export const ScenarioCard: React.FC<{
                         </span>
                         <span dangerouslySetInnerHTML={{__html: step}} />
                     </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+export const TableOfContents: React.FC<{ items: { id: string, label: string }[] }> = ({ items }) => {
+    const scrollToId = (id: string) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+
+    return (
+        <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-xl mb-8">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <Icon name="list" className="w-3 h-3"/> Daftar Isi
+            </h4>
+            <div className="flex flex-wrap gap-2">
+                {items.map(item => (
+                    <button
+                        key={item.id}
+                        onClick={() => scrollToId(item.id)}
+                        className="text-xs bg-slate-700 hover:bg-[#347758] hover:text-white text-slate-300 px-3 py-1.5 rounded-full transition-colors border border-slate-600"
+                    >
+                        {item.label}
+                    </button>
                 ))}
             </div>
         </div>

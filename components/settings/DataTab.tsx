@@ -15,6 +15,7 @@ import BarcodeScannerModal from '../BarcodeScannerModal';
 import DataArchivingModal from '../DataArchivingModal'; 
 import { generateTablePDF } from '../../utils/pdfGenerator';
 import { CURRENCY_FORMATTER } from '../../constants';
+import { Capacitor } from '@capacitor/core'; // Import Capacitor
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
     <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
@@ -32,10 +33,14 @@ const DataTab: React.FC = () => {
     const { data, restoreData } = useData();
     const { importTransactions } = useFinance();
     const { showAlert } = useUI();
+    const isNative = Capacitor.isNativePlatform();
     
     // Offline Status State
     const [isOfflineReady, setIsOfflineReady] = useState(false);
     const [isRetryingSW, setIsRetryingSW] = useState(false);
+
+    // PWA Install State
+    const [installPrompt, setInstallPrompt] = useState<any>(null);
 
     // Cloud Settings State
     const [dbxKey, setDbxKey] = useState('');
@@ -89,11 +94,18 @@ const DataTab: React.FC = () => {
             setIsOfflineReady(false);
         }
 
-        // Load credentials safely
+        // PWA Install Prompt Listener
+        const handleBeforeInstallPrompt = (e: any) => {
+            e.preventDefault();
+            setInstallPrompt(e);
+        };
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+        // Load credentials status safely
         const creds = dropboxService.getCredentials();
         if (creds) {
-            setDbxKey(creds.clientId);
-            setDbxSecret(creds.clientSecret);
+            // SECURITY UPDATE: Jangan tampilkan Key/Secret di UI (setDbxKey/setDbxSecret dihapus)
+            // Biarkan state kosong agar input terlihat kosong/placeholder
             setIsConfigured(true);
             checkDropboxQuota();
         } else {
@@ -108,23 +120,30 @@ const DataTab: React.FC = () => {
         } catch (e) {
             console.error("Failed to calc size", e);
         }
+
+        return () => {
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        }
     }, [data]);
+
+    const handleInstallApp = async () => {
+        if (!installPrompt) return;
+        installPrompt.prompt();
+        const { outcome } = await installPrompt.userChoice;
+        if (outcome === 'accepted') {
+            setInstallPrompt(null);
+        }
+    };
 
     const handleRetrySW = async () => {
         setIsRetryingSW(true);
         try {
             if ('serviceWorker' in navigator) {
-                // Unregister first to force clean slate
                 const registrations = await navigator.serviceWorker.getRegistrations();
                 for (const registration of registrations) {
                     await registration.unregister();
                 }
-                
-                // Re-register
-                // Catatan: './sw.js' harus benar-benar ada di root saat di-serve.
                 const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
-                
-                // Force update logic
                 if (reg.installing) {
                     const sw = reg.installing;
                     sw.addEventListener('statechange', () => {
@@ -143,8 +162,6 @@ const DataTab: React.FC = () => {
         } catch (e: any) {
             let title = 'Gagal';
             let message = e.message;
-
-            // Handle Specific MIME Type Error (Common in Preview Environments)
             if (message.includes('MIME type') || message.includes('text/html')) {
                 title = 'Mode Preview Terbatas';
                 message = (
@@ -160,7 +177,6 @@ const DataTab: React.FC = () => {
             } else {
                 message = 'Gagal mengaktifkan mode offline: ' + e.message;
             }
-
             showAlert({ type: 'alert', title: title, message: message });
         } finally {
             setIsRetryingSW(false);
@@ -206,9 +222,21 @@ const DataTab: React.FC = () => {
     };
 
     const saveCloudSettings = () => {
-        const currentCreds = dropboxService.getCredentials();
-        dropboxService.saveCredentials(dbxKey, dbxSecret, currentCreds?.refreshToken || '');
-        showAlert({ type: 'alert', title: 'Tersimpan', message: 'Kredensial App Key/Secret diperbarui (Enkripsi Aktif).' });
+        // SECURITY UPDATE: Only save if user actually typed new credentials
+        if (dbxKey && dbxSecret) {
+            const currentCreds = dropboxService.getCredentials();
+            dropboxService.saveCredentials(dbxKey, dbxSecret, currentCreds?.refreshToken || '');
+            showAlert({ type: 'alert', title: 'Tersimpan', message: 'Kredensial App Key/Secret diperbarui (Enkripsi Aktif).' });
+            
+            // Clear inputs after save to hide them again
+            setDbxKey('');
+            setDbxSecret('');
+            setIsConfigured(true);
+        } else if (isConfigured) {
+            showAlert({ type: 'alert', title: 'Info', message: 'Kredensial yang tersimpan tidak berubah.' });
+        } else {
+            showAlert({ type: 'alert', title: 'Data Kurang', message: 'Silakan isi App Key dan App Secret.' });
+        }
     };
 
     const handleDisconnect = () => {
@@ -276,8 +304,7 @@ const DataTab: React.FC = () => {
             if (payload && payload.k && payload.s && payload.t) {
                 dropboxService.saveCredentials(payload.k, payload.s, payload.t);
                 
-                setDbxKey(payload.k);
-                setDbxSecret(payload.s);
+                // Don't set state variables to keep UI clean/hidden
                 setIsConfigured(true);
 
                 showAlert({ 
@@ -357,7 +384,12 @@ const DataTab: React.FC = () => {
     // --- Dropbox Logic ---
     const handleDbxConnect = async () => {
         if (!dbxKey || !dbxSecret) {
-            showAlert({ type: 'alert', title: 'Data Kurang', message: 'Masukkan App Key dan App Secret terlebih dahulu.' });
+            // Note: In connected mode, keys are hidden. If user clicks this, they must re-enter keys.
+            if (isConfigured) {
+                showAlert({ type: 'alert', title: 'Kredensial Tersembunyi', message: 'Karena alasan keamanan, App Key & Secret tidak ditampilkan. Silakan masukkan ulang jika ingin mengubah koneksi.' });
+            } else {
+                showAlert({ type: 'alert', title: 'Data Kurang', message: 'Masukkan App Key dan App Secret terlebih dahulu.' });
+            }
             return;
         }
         
@@ -371,13 +403,37 @@ const DataTab: React.FC = () => {
 
     const handleDbxExchange = async () => {
         if (!dbxAuthCode) return;
+        
+        // We need key/secret to exchange code. 
+        // If hidden (isConfigured), we try to get them from service.
+        // If user typed new ones, we use state.
+        let key = dbxKey;
+        let secret = dbxSecret;
+
+        if (isConfigured && (!key || !secret)) {
+            const stored = dropboxService.getCredentials();
+            if (stored) {
+                key = stored.clientId;
+                secret = stored.clientSecret;
+            }
+        }
+
+        if (!key || !secret) {
+             showAlert({ type: 'alert', title: 'Gagal', message: 'App Key/Secret diperlukan untuk verifikasi.' });
+             return;
+        }
+
         setIsDbxConnecting(true);
         try {
-            const refreshToken = await dropboxService.exchangeCodeForToken(dbxKey, dbxSecret, dbxAuthCode);
-            dropboxService.saveCredentials(dbxKey, dbxSecret, refreshToken);
+            const refreshToken = await dropboxService.exchangeCodeForToken(key, secret, dbxAuthCode);
+            dropboxService.saveCredentials(key, secret, refreshToken);
             setIsConfigured(true);
             
+            // Clear all sensitive inputs
             setDbxAuthCode('');
+            setDbxKey('');
+            setDbxSecret('');
+            
             setShowDbxHelpModal(false);
             showAlert({ type: 'alert', title: 'Terhubung!', message: 'Dropbox berhasil dihubungkan. Token telah diamankan.' });
         } catch (e: any) {
@@ -603,31 +659,40 @@ const DataTab: React.FC = () => {
 
     return (
         <div className="animate-fade-in">
-            {/* --- NEW: STATUS APLIKASI (OFFLINE CHECK) --- */}
-            <SettingsCard title="Status Aplikasi" description="Cek apakah aplikasi siap berjalan tanpa internet.">
-                <div className={`p-4 rounded-lg border flex items-center justify-between ${isOfflineReady ? 'bg-green-900/20 border-green-800' : 'bg-red-900/20 border-red-800'}`}>
-                    <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-full ${isOfflineReady ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                            <Icon name={isOfflineReady ? "check-circle-fill" : "warning"} className="w-6 h-6" />
+            {/* --- STATUS APLIKASI (WEB ONLY) --- */}
+            {!isNative && (
+                <SettingsCard title="Status Aplikasi" description="Cek apakah aplikasi siap berjalan tanpa internet.">
+                    <div className={`p-4 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isOfflineReady ? 'bg-green-900/20 border-green-800' : 'bg-red-900/20 border-red-800'}`}>
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-full ${isOfflineReady ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                <Icon name={isOfflineReady ? "check-circle-fill" : "warning"} className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <h4 className={`font-bold ${isOfflineReady ? 'text-green-300' : 'text-red-300'}`}>
+                                    {isOfflineReady ? 'Siap Offline' : 'Mode Online Saja'}
+                                </h4>
+                                <p className="text-xs text-slate-400">
+                                    {isOfflineReady 
+                                        ? 'Aset aplikasi sudah tersimpan. Bisa dibuka tanpa internet.' 
+                                        : 'Aset belum terunduh sempurna. Perlu internet untuk membuka aplikasi.'}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h4 className={`font-bold ${isOfflineReady ? 'text-green-300' : 'text-red-300'}`}>
-                                {isOfflineReady ? 'Siap Offline' : 'Mode Online Saja'}
-                            </h4>
-                            <p className="text-xs text-slate-400">
-                                {isOfflineReady 
-                                    ? 'Aset aplikasi sudah tersimpan. Bisa dibuka tanpa internet.' 
-                                    : 'Aset belum terunduh sempurna. Perlu internet untuk membuka aplikasi.'}
-                            </p>
+                        <div className="flex flex-wrap gap-2">
+                            {!isOfflineReady && (
+                                <Button size="sm" onClick={handleRetrySW} disabled={isRetryingSW} className="w-full sm:w-auto">
+                                    {isRetryingSW ? 'Mengunduh...' : 'Download Aset Offline'}
+                                </Button>
+                            )}
+                            {installPrompt && (
+                                <Button size="sm" onClick={handleInstallApp} className="bg-sky-600 hover:bg-sky-500 w-full sm:w-auto border-none">
+                                    <Icon name="download" className="w-4 h-4" /> Install Aplikasi
+                                </Button>
+                            )}
                         </div>
                     </div>
-                    {!isOfflineReady && (
-                        <Button size="sm" onClick={handleRetrySW} disabled={isRetryingSW}>
-                            {isRetryingSW ? 'Mengunduh...' : 'Download Aset Offline'}
-                        </Button>
-                    )}
-                </div>
-            </SettingsCard>
+                </SettingsCard>
+            )}
 
             <SettingsCard title="Diagnosa Sistem" description="Cek kesehatan database lokal dan penyimpanan browser.">
                 {/* ... existing diagnostics content ... */}
@@ -846,18 +911,18 @@ const DataTab: React.FC = () => {
                         <div className="grid gap-3">
                             <input 
                                 type="text" 
-                                placeholder="App Key"
+                                placeholder={isConfigured ? "Tersimpan (Tersembunyi)" : "App Key"}
                                 value={dbxKey} 
                                 onChange={(e) => setDbxKey(e.target.value)}
-                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500"
                             />
                             {/* Mask the secret if already saved and connected */}
                             <input 
                                 type="password" 
-                                placeholder="App Secret"
+                                placeholder={isConfigured ? "Tersimpan (Tersembunyi)" : "App Secret"}
                                 value={dbxSecret} 
                                 onChange={(e) => setDbxSecret(e.target.value)}
-                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500"
                             />
                             {isConfigured ? (
                                 <div className="space-y-2">

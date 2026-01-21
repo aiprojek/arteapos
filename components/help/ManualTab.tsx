@@ -142,7 +142,35 @@ const ManualTab: React.FC = () => {
                 </div>
             </div>
 
-            {/* MENU 4: KEUANGAN */}
+            {/* MENU 4: LAPORAN (NEW) */}
+            <div>
+                <SectionHeader title="Menu: Laporan" icon="file-lock" desc="Melihat riwayat transaksi dan pergerakan stok." />
+                <div className="space-y-2">
+                    <AccordionItem title="Tab 1: Riwayat Penjualan" isOpen={openAccordion === 'rep_sales'} onToggle={() => toggleAccordion('rep_sales')} icon="cash" colorClass="text-green-400">
+                        <p>Menampilkan daftar transaksi penjualan kepada pelanggan.</p>
+                        <ul className="list-disc pl-5 mt-2 space-y-1 text-sm">
+                            <li>Gunakan filter waktu (Hari Ini/Minggu Ini/Bulan Ini).</li>
+                            <li>Klik tombol <strong>PDF</strong> atau <strong>CSV</strong> untuk mengunduh laporan.</li>
+                            <li>Jika menggunakan Cloud, Admin bisa melihat kolom "Cabang" untuk membedakan asal transaksi.</li>
+                        </ul>
+                    </AccordionItem>
+                    <AccordionItem title="Tab 2: Mutasi Stok & Log" isOpen={openAccordion === 'rep_stock'} onToggle={() => toggleAccordion('rep_stock')} icon="boxes" colorClass="text-orange-400" badge="Penting">
+                        <p>Di sinilah Anda memantau semua pergerakan barang (selain penjualan).</p>
+                        <ul className="list-disc pl-5 mt-2 space-y-2 text-sm">
+                            <li>
+                                <strong>Apa yang dicatat?</strong><br/>
+                                <span className="bg-green-900/50 text-green-300 px-1 rounded text-xs">MASUK</span> Barang dari supplier/stok manual.<br/>
+                                <span className="bg-red-900/50 text-red-300 px-1 rounded text-xs">KELUAR</span> Barang rusak, expired, atau waste.<br/>
+                                <span className="bg-blue-900/50 text-blue-300 px-1 rounded text-xs">OPNAME</span> Hasil penyesuaian stok fisik.<br/>
+                                <span className="bg-purple-900/50 text-purple-300 px-1 rounded text-xs">TRANSFER</span> Barang kiriman dari gudang.
+                            </li>
+                            <li>Cek kolom <strong>Catatan</strong> untuk melihat alasan kerusakan atau siapa staf yang melakukan input.</li>
+                        </ul>
+                    </AccordionItem>
+                </div>
+            </div>
+
+            {/* MENU 5: KEUANGAN */}
             <div>
                 <SectionHeader title="Menu: Keuangan" icon="finance" desc="Pusat pencatatan arus kas, utang, dan belanja." />
                 <div className="space-y-2">
@@ -173,7 +201,7 @@ const ManualTab: React.FC = () => {
                 </div>
             </div>
 
-            {/* MENU 5: PELANGGAN (NEW) */}
+            {/* MENU 6: PELANGGAN (NEW) */}
             <div>
                 <SectionHeader title="Menu: Pelanggan (Membership)" icon="users" desc="Kelola database member dan kartu digital." />
                 <div className="space-y-2">
@@ -204,10 +232,22 @@ const ManualTab: React.FC = () => {
                 </div>
             </div>
 
-            {/* MENU 6: PENGATURAN & CLOUD */}
+            {/* MENU 7: PENGATURAN & CLOUD */}
             <div>
                 <SectionHeader title="Menu: Pengaturan & Cloud" icon="settings" desc="Konfigurasi sistem, sinkronisasi, dan manajemen memori." />
                 <div className="space-y-2">
+                    {/* NEW: INSTALL PWA GUIDE */}
+                    <AccordionItem title="Instalasi Aplikasi (Siap Offline)" isOpen={openAccordion === 'install_app'} onToggle={() => toggleAccordion('install_app')} icon="download" colorClass="text-green-400" badge="Wajib">
+                        <p>Agar aplikasi bisa berjalan tanpa internet (Offline Mode), Anda wajib menginstalnya ke perangkat:</p>
+                        <ol className="list-decimal pl-5 space-y-1 mt-2 text-sm text-slate-300">
+                            <li>Masuk ke menu <strong>Pengaturan</strong> &rarr; Tab <strong>Data & Cloud</strong>.</li>
+                            <li>Cari kartu paling atas bernama <strong>"Status Aplikasi"</strong>.</li>
+                            <li>Tunggu hingga muncul status "Siap Offline".</li>
+                            <li>Klik tombol biru <strong>"Install Aplikasi"</strong> (jika tersedia) atau <strong>"Download Aset Offline"</strong>.</li>
+                            <li>Aplikasi akan muncul di layar utama HP Anda dan bisa dibuka kapan saja meski kuota habis.</li>
+                        </ol>
+                    </AccordionItem>
+
                     <AccordionItem title="Setup Perangkat Pusat (Admin)" isOpen={openAccordion === 'set_central'} onToggle={() => toggleAccordion('set_central')} icon="star" colorClass="text-yellow-400" badge="Baru">
                         <p className="mb-2">Jika Anda adalah Owner/Admin yang ingin memantau cabang dari jauh:</p>
                         <ol className="list-decimal pl-5 space-y-1 text-sm">
@@ -251,14 +291,14 @@ const ManualTab: React.FC = () => {
                         <p>Cara mencegah Staff nakal melakukan Top Up palsu atau kecurangan:</p>
                         <ul className="list-disc pl-5 space-y-1 mt-2">
                             <li><strong>Wajibkan Sesi (Shift):</strong> Aktifkan di Pengaturan. Saat Top Up saldo member, sistem mencatatnya sebagai "Uang Masuk". Jika staff Top Up palsu tanpa memasukkan uang, laci kasir akan minus/selisih saat tutup toko. Staff harus mengganti selisih tersebut.</li>
-                            <li><strong>Audit Log:</strong> Semua aktivitas Top Up Saldo, Refund, dan Hapus Produk tercatat di tab Audit Log lengkap dengan nama User dan Jam.</li>
+                            <li><strong>Audit Log:</strong> Semua aktivitas Top Up Saldo, Refund, dan Hapus Produk tercatat di menu <strong>Pengaturan &rarr; Audit Log</strong>.</li>
                             <li><strong>PIN:</strong> Setiap user wajib punya PIN untuk identifikasi.</li>
                         </ul>
                     </AccordionItem>
                 </div>
             </div>
 
-            {/* MENU 7: KOMUNITAS & BERBAGI */}
+            {/* MENU 8: KOMUNITAS & BERBAGI */}
             <div>
                 <SectionHeader title="Komunitas & Berbagi" icon="share" desc="Bantu UMKM lain naik kelas dengan membagikan aplikasi ini." />
                 <div className="space-y-2">

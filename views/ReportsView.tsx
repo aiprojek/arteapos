@@ -1,971 +1,298 @@
 
-import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useFinance } from '../context/FinanceContext';
 import { useProduct } from '../context/ProductContext';
-import { useSession } from '../context/SessionContext';
 import { useSettings } from '../context/SettingsContext';
-import { useData } from '../context/DataContext';
-import { CURRENCY_FORMATTER } from '../constants';
-import Button from '../components/Button';
-import Icon from '../components/Icon';
-import type { Transaction as TransactionType, SessionHistory, StockAdjustment } from '../types';
-import ReceiptModal from '../components/ReceiptModal';
-import Modal from '../components/Modal';
-import UpdatePaymentModal from '../components/UpdatePaymentModal';
-import VirtualizedTable from '../components/VirtualizedTable';
-import { dataService } from '../services/dataService';
 import { useUI } from '../context/UIContext';
 import { dropboxService } from '../services/dropboxService';
 import { mockDataService } from '../services/mockData';
+import { CURRENCY_FORMATTER } from '../constants';
+import Button from '../components/Button';
+import Icon from '../components/Icon';
+import VirtualizedTable from '../components/VirtualizedTable';
 import ReportCharts from '../components/reports/ReportCharts';
-import { generateSalesReportPDF, generateTablePDF } from '../utils/pdfGenerator';
-import { db } from '../services/db'; // Direct DB Access for Lazy Loading
-
-type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
-type ReportScope = 'session' | 'historical' | 'session_history';
-type ReportTab = 'sales' | 'stock_logs' | 'hourly' | 'products';
-
-const StatCard: React.FC<{title: string; value: string; className?: string}> = ({title, value, className}) => (
-    <div className={`bg-slate-800 p-4 rounded-lg ${className}`}>
-        <h3 className="text-slate-400 text-sm">{title}</h3>
-        <p className="text-2xl font-bold text-white">{value}</p>
-    </div>
-);
-
-const PaymentStatusBadge: React.FC<{ status: TransactionType['paymentStatus'] }> = ({ status }) => {
-    const statusInfo = {
-        paid: { text: 'Lunas', className: 'bg-green-500/20 text-green-300' },
-        partial: { text: 'Kurang Bayar', className: 'bg-yellow-500/20 text-yellow-300' },
-        unpaid: { text: 'Belum Bayar', className: 'bg-red-500/20 text-red-300' },
-        refunded: { text: 'Refunded', className: 'bg-slate-600 text-slate-300 line-through' },
-    };
-    const { text, className } = statusInfo[status] || { text: 'Unknown', className: 'bg-slate-500/20 text-slate-300' };
-
-    return <span className={`px-2 py-1 text-xs font-medium rounded-full ${className}`}>{text}</span>;
-};
-
-const ActionMenu: React.FC<{
-    transaction: TransactionType;
-    onViewReceipt: (t: TransactionType) => void;
-    onPay: (t: TransactionType) => void;
-    onRefund: (t: TransactionType) => void;
-    disabled?: boolean;
-}> = ({ transaction, onViewReceipt, onPay, onRefund, disabled }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const menuRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, []);
-
-    if (disabled) {
-        return <button onClick={() => onViewReceipt(transaction)} className="text-slate-400 hover:text-white"><Icon name="printer" className="w-4 h-4"/></button>
-    }
-
-    return (
-        <div className="relative" ref={menuRef}>
-            <button 
-                onClick={() => setIsOpen(!isOpen)} 
-                className="flex items-center gap-1 bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-xs font-medium text-white transition-colors"
-            >
-                Aksi <Icon name="chevron-down" className="w-3 h-3" />
-            </button>
-            {isOpen && (
-                <div className="absolute right-0 top-full mt-1 w-40 bg-slate-800 border border-slate-600 rounded-md shadow-xl z-[50] flex flex-col overflow-hidden">
-                    <button 
-                        className="text-left px-4 py-2 text-sm text-slate-200 hover:bg-slate-700 hover:text-white flex items-center gap-2"
-                        onClick={() => { onViewReceipt(transaction); setIsOpen(false); }}
-                    >
-                        <Icon name="printer" className="w-4 h-4" /> Lihat Struk
-                    </button>
-                    {transaction.paymentStatus !== 'refunded' && (
-                        <>
-                            {(transaction.paymentStatus === 'unpaid' || transaction.paymentStatus === 'partial') && (
-                                <button 
-                                    className="text-left px-4 py-2 text-sm text-yellow-300 hover:bg-slate-700 flex items-center gap-2"
-                                    onClick={() => { onPay(transaction); setIsOpen(false); }}
-                                >
-                                    <Icon name="cash" className="w-4 h-4" /> Bayar
-                                </button>
-                            )}
-                            <button 
-                                className="text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700 hover:text-red-300 flex items-center gap-2 border-t border-slate-700"
-                                onClick={() => { onRefund(transaction); setIsOpen(false); }}
-                            >
-                                <Icon name="reset" className="w-4 h-4" /> Refund
-                            </button>
-                        </>
-                    )}
-                </div>
-            )}
-        </div>
-    );
-};
-
-const SessionHistoryTable: React.FC<{ history: SessionHistory[] }> = ({ history }) => {
-    return (
-        <div className="bg-slate-800 rounded-lg shadow-md overflow-x-auto">
-            <table className="w-full text-left min-w-[900px] text-sm">
-                <thead className="bg-slate-700 text-slate-200">
-                    <tr>
-                        <th className="p-3">Mulai</th>
-                        <th className="p-3">Selesai</th>
-                        <th className="p-3">User</th>
-                        <th className="p-3 text-right">Modal Awal</th>
-                        <th className="p-3 text-right">Omzet Tunai</th>
-                        <th className="p-3 text-right">Fisik (Aktual)</th>
-                        <th className="p-3 text-right">Selisih</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {history.length === 0 ? (
-                        <tr><td colSpan={7} className="p-4 text-center text-slate-500">Belum ada riwayat sesi.</td></tr>
-                    ) : history.map(s => (
-                        <tr key={s.id} className="border-b border-slate-700 last:border-b-0">
-                            <td className="p-3 text-slate-400">{new Date(s.startTime).toLocaleString('id-ID')}</td>
-                            <td className="p-3 text-slate-400">{s.endTime ? new Date(s.endTime).toLocaleString('id-ID') : '-'}</td>
-                            <td className="p-3">{s.userName}</td>
-                            <td className="p-3 text-right text-slate-400">{CURRENCY_FORMATTER.format(s.startingCash)}</td>
-                            <td className="p-3 text-right text-green-400 font-medium">{CURRENCY_FORMATTER.format(s.totalSales)}</td>
-                            <td className="p-3 text-right text-white font-bold">{CURRENCY_FORMATTER.format(s.actualCash)}</td>
-                            <td className={`p-3 text-right font-bold ${s.variance === 0 ? 'text-slate-500' : s.variance > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {CURRENCY_FORMATTER.format(s.variance)}
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    );
-};
+import { generateSalesReportPDF } from '../utils/pdfGenerator';
+import { dataService } from '../services/dataService';
+import type { Transaction, StockAdjustment } from '../types';
 
 const ReportsView: React.FC = () => {
-    const { addPaymentToTransaction, refundTransaction, importTransactions } = useFinance();
-    const { importStockAdjustments } = useProduct();
-    const { session, sessionSettings } = useSession();
-    const { data: appData } = useData();
+    const { transactions: localTransactions } = useFinance();
+    const { stockAdjustments: localStockAdjustments } = useProduct();
     const { receiptSettings } = useSettings();
     const { showAlert } = useUI();
-    
-    // UI State
-    const [filter, setFilter] = useState<TimeFilter>('today');
-    const [reportScope, setReportScope] = useState<ReportScope>('session');
-    const [activeTab, setActiveTab] = useState<ReportTab>('sales');
-    const [selectedTransaction, setSelectedTransaction] = useState<TransactionType | null>(null);
-    const [updatingTransaction, setUpdatingTransaction] = useState<TransactionType | null>(null);
-    const [customStartDate, setCustomStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
-    const [customEndDate, setCustomEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
-    const [isFilterDropdownOpen, setFilterDropdownOpen] = useState(false);
-    const filterDropdownRef = useRef<HTMLDivElement>(null);
 
-    // OPTIMIZATION: Local Data State (Lazy Loaded from Dexie)
-    const [localTransactions, setLocalTransactions] = useState<TransactionType[]>([]);
-    const [localStockLogs, setLocalStockLogs] = useState<StockAdjustment[]>([]);
-    const [isLocalLoading, setIsLocalLoading] = useState(false);
-
-    // Export Dropdown
-    const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
-    const exportDropdownRef = useRef<HTMLDivElement>(null);
-
-    // Branch Filtering State
-    const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
-
-    // Cloud Mode State
     const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
-    const [cloudTransactions, setCloudTransactions] = useState<TransactionType[]>([]);
-    const [cloudStockLogs, setCloudStockLogs] = useState<StockAdjustment[]>([]);
-    const [isCloudLoading, setIsCloudLoading] = useState(false);
-    const [isDemoMode, setIsDemoMode] = useState(false);
-    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+    const [filter, setFilter] = useState<'today' | 'week' | 'month' | 'all'>('today');
+    const [cloudData, setCloudData] = useState<{ transactions: Transaction[], stockAdjustments: StockAdjustment[] }>({ transactions: [], stockAdjustments: [] });
+    const [isLoading, setIsLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState<'sales' | 'stock'>('sales');
 
-    const handleRefund = (transaction: TransactionType) => {
-        showAlert({
-            type: 'confirm',
-            title: 'Batalkan Transaksi (Refund)?',
-            message: `Anda yakin ingin membatalkan transaksi ini? Stok produk akan dikembalikan dan omzet akan dikurangi. Tindakan ini tidak dapat dibatalkan.`,
-            confirmVariant: 'danger',
-            confirmText: 'Ya, Refund',
-            onConfirm: async () => {
-                await refundTransaction(transaction.id);
-                // Re-fetch data to show update
-                if(dataSource === 'local') fetchLocalData();
-            }
-        });
-    };
-    
-    useEffect(() => {
-        if (sessionSettings.enabled && !session) {
-          setReportScope('historical');
-        }
-    }, [session, sessionSettings.enabled]);
-    
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
-                setFilterDropdownOpen(false);
-            }
-            if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
-                setIsExportDropdownOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, []);
-
-    // --- LAZY LOADING FROM DEXIE (PERFORMANCE OPTIMIZATION) ---
-    const fetchLocalData = useCallback(async () => {
-        if (dataSource !== 'local') return;
-        setIsLocalLoading(true);
-
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        let startDate: Date;
-        let endDate: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-
-        // Determine Range based on Filter
-        if (sessionSettings.enabled && reportScope === 'session' && session) {
-            startDate = new Date(session.startTime);
-        } else {
-            switch (filter) {
-                case 'today':
-                    startDate = today;
-                    break;
-                case 'week':
-                    startDate = new Date(today);
-                    startDate.setDate(today.getDate() - 7);
-                    break;
-                case 'month':
-                    startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-                    break;
-                case 'custom':
-                    startDate = new Date(customStartDate);
-                    startDate.setHours(0, 0, 0, 0);
-                    endDate = new Date(customEndDate);
-                    endDate.setHours(23, 59, 59, 999);
-                    break;
-                case 'all':
-                    startDate = new Date(0); // Epoch
-                    break;
-                default:
-                    startDate = today;
-            }
-        }
-
-        try {
-            // Query IndexedDB directly
-            const [txns, logs] = await Promise.all([
-                db.transactionRecords.where('createdAt').between(startDate.toISOString(), endDate.toISOString(), true, true).toArray(),
-                db.stockAdjustments.where('createdAt').between(startDate.toISOString(), endDate.toISOString(), true, true).toArray()
-            ]);
-
-            // Sort Descending (Newest first)
-            setLocalTransactions(txns.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-            setLocalStockLogs(logs.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-
-        } catch (error) {
-            console.error("Error fetching local reports:", error);
-            showAlert({type: 'alert', title: 'Error', message: 'Gagal memuat data laporan dari database.'});
-        } finally {
-            setIsLocalLoading(false);
-        }
-    }, [filter, customStartDate, customEndDate, dataSource, session, reportScope, sessionSettings.enabled, showAlert]);
-
-    // Trigger fetch when filters change
-    useEffect(() => {
-        fetchLocalData();
-    }, [fetchLocalData]);
-
-
-    const loadCloudData = useCallback(async () => {
-        setIsCloudLoading(true);
-        setCloudTransactions([]);
-        setCloudStockLogs([]);
-        setIsDemoMode(false);
-
-        // Updated Security Check
+    const loadCloudData = async () => {
+        setIsLoading(true);
         if (!dropboxService.isConfigured()) {
-            const mock = mockDataService.getMockDashboardData();
-            setCloudTransactions(mock.transactions);
-            setCloudStockLogs(mock.stockAdjustments);
-            setIsDemoMode(true);
-            setLastUpdated(new Date());
-            setIsCloudLoading(false);
-            return;
+             const mock = mockDataService.getMockDashboardData();
+             setCloudData({
+                 transactions: mock.transactions,
+                 stockAdjustments: mock.stockAdjustments
+             });
+             setIsLoading(false);
+             return;
         }
 
         try {
             const allBranches = await dropboxService.fetchAllBranchData();
-            let allTxns: any[] = [];
-            let allLogs: any[] = [];
-
+            let txns: any[] = [];
+            let adjs: any[] = [];
             allBranches.forEach(branch => {
-                if (branch.transactionRecords) {
-                    allTxns = [...allTxns, ...branch.transactionRecords.map((t:any) => ({...t, storeId: branch.storeId}))];
-                }
-                if (branch.stockAdjustments) {
-                    allLogs = [...allLogs, ...branch.stockAdjustments.map((s:any) => ({...s, storeId: branch.storeId}))];
-                }
+                if (branch.transactionRecords) txns.push(...branch.transactionRecords.map((t:any) => ({...t, storeId: branch.storeId})));
+                if (branch.stockAdjustments) adjs.push(...branch.stockAdjustments.map((a:any) => ({...a, storeId: branch.storeId})));
             });
-            
-            setCloudTransactions(allTxns);
-            setCloudStockLogs(allLogs);
-            setLastUpdated(new Date());
-        } catch (err: any) {
-            console.error("Cloud Load Error:", err);
-            showAlert({ type: 'alert', title: 'Gagal Memuat', message: err.message });
+            setCloudData({ transactions: txns, stockAdjustments: adjs });
+        } catch (e: any) {
+            showAlert({ type: 'alert', title: 'Gagal', message: e.message });
             setDataSource('local');
         } finally {
-            setIsCloudLoading(false);
+            setIsLoading(false);
         }
-    }, [showAlert]);
+    };
 
     useEffect(() => {
-        if (dataSource !== 'local') {
+        if (dataSource === 'dropbox') {
             loadCloudData();
         }
-    }, [dataSource, loadCloudData]);
+    }, [dataSource]);
 
-    const handleMergeToLocal = () => {
-        if (cloudTransactions.length === 0 && cloudStockLogs.length === 0) {
-            showAlert({ type: 'alert', title: 'Data Kosong', message: 'Tidak ada data cloud untuk disimpan.' });
-            return;
-        }
+    const activeTransactions = dataSource === 'local' ? localTransactions : cloudData.transactions;
+    const activeStockAdjustments = dataSource === 'local' ? localStockAdjustments : cloudData.stockAdjustments;
 
-        showAlert({
-            type: 'confirm',
-            title: 'Simpan Permanen?',
-            message: (
-                <div className="text-left text-sm">
-                    <p>Anda akan menyimpan data berikut ke database lokal perangkat ini:</p>
-                    <ul className="list-disc pl-5 mt-2 text-slate-300">
-                        <li>{cloudTransactions.length} Transaksi</li>
-                        <li>{cloudStockLogs.length} Riwayat Stok</li>
-                    </ul>
-                    <p className="mt-2 text-yellow-300 bg-yellow-900/30 p-2 rounded border border-yellow-700">
-                        Pastikan data ini valid. Data dengan ID yang sama tidak akan diduplikasi.
-                    </p>
-                </div>
-            ),
-            confirmText: 'Ya, Simpan',
-            onConfirm: () => {
-                importTransactions(cloudTransactions);
-                importStockAdjustments(cloudStockLogs);
-                showAlert({ type: 'alert', title: 'Berhasil', message: 'Data cloud berhasil digabungkan ke database lokal.' });
-                setDataSource('local');
-            }
+    const filteredData = useMemo(() => {
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const weekStart = new Date(todayStart);
+        weekStart.setDate(weekStart.getDate() - 6);
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+        const filterFn = (dateStr: string) => {
+            const time = new Date(dateStr).getTime();
+            if (filter === 'today') return time >= todayStart;
+            if (filter === 'week') return time >= weekStart.getTime();
+            if (filter === 'month') return time >= monthStart;
+            return true;
+        };
+
+        const txns = activeTransactions.filter(t => filterFn(t.createdAt) && t.paymentStatus !== 'refunded').sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const stock = activeStockAdjustments.filter(s => filterFn(s.createdAt)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        return { txns, stock };
+    }, [filter, activeTransactions, activeStockAdjustments]);
+
+    // --- CHART DATA PREPARATION ---
+    const chartData = useMemo(() => {
+        // Hourly Sales (Today/Average)
+        const hourlyMap = new Array(24).fill(0).map((_, i) => ({ name: `${i}:00`, total: 0, count: 0 }));
+        filteredData.txns.forEach(t => {
+            const h = new Date(t.createdAt).getHours();
+            hourlyMap[h].total += t.total;
+            hourlyMap[h].count += 1;
         });
-    };
-    
-    const isSessionMode = sessionSettings.enabled && session;
-    // Use Local State or Cloud State based on source
-    const transactions = dataSource === 'local' ? localTransactions : cloudTransactions;
-    const stockLogs = dataSource === 'local' ? localStockLogs : cloudStockLogs;
 
-    const availableBranches = useMemo(() => {
-        const branches = new Set<string>();
-        branches.add(receiptSettings.storeId || 'LOCAL');
-        transactions.forEach(t => {
-            if (t.storeId) branches.add(t.storeId);
+        // Sales Over Time
+        const salesMap = new Map<string, number>();
+        filteredData.txns.forEach(t => {
+            const date = new Date(t.createdAt).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' });
+            salesMap.set(date, (salesMap.get(date) || 0) + t.total);
         });
-        return Array.from(branches).sort();
-    }, [transactions, receiptSettings.storeId]);
+        const salesOverTime = Array.from(salesMap.entries()).map(([name, total]) => ({ name, total }));
 
-    const filteredTransactions = useMemo(() => {
-        let result = transactions;
-        if (selectedBranch !== 'ALL') {
-            result = result.filter(t => t.storeId === selectedBranch);
-        }
-        return result;
-    }, [transactions, selectedBranch]);
-
-    const filteredStockLogs = useMemo(() => {
-        let result = stockLogs;
-        if (dataSource !== 'local' && selectedBranch !== 'ALL') {
-             // @ts-ignore
-             result = result.filter(s => s.storeId === selectedBranch);
-        }
-        return result;
-    }, [stockLogs, dataSource, selectedBranch]);
-
-    const activeTransactions = useMemo(() => filteredTransactions.filter(t => t.paymentStatus !== 'refunded'), [filteredTransactions]);
-
-    const reportData = useMemo(() => {
-        let totalSales = 0;
-        let totalProfit = 0;
-        let totalCashSales = 0;
+        // Category Sales
+        const categoryMap = new Map<string, number>();
+        const productMap = new Map<string, number>();
         
-        const hourlyStats = Array.from({ length: 24 }, (_, i) => ({
-            id: i.toString(),
-            hourLabel: `${String(i).padStart(2, '0')}:00`,
-            rawHour: i,
-            total: 0,
-            count: 0
-        }));
-
-        const productSales = new Map<string, {id: string, name: string, quantity: number, revenue: number}>();
-        
-        activeTransactions.forEach(t => {
-            totalSales += t.total;
-            const cashPayment = t.payments?.find((p: any) => p.method === 'cash');
-            if (cashPayment) {
-                totalCashSales += cashPayment.amount;
-            }
-
-            const tDate = new Date(t.createdAt);
-            const hour = tDate.getHours();
-            if (hour >= 0 && hour < 24) {
-                hourlyStats[hour].total += t.total;
-                hourlyStats[hour].count += 1;
-            }
-
-            const safeItems = t.items || [];
-            const transactionCost = safeItems.reduce((sum: number, item: any) => {
-                return sum + ((item.costPrice || 0) * item.quantity);
-            }, 0);
-            totalProfit += t.total - transactionCost;
-            
-            safeItems.forEach((item: any) => {
-                const existing = productSales.get(item.id) || { id: item.id, name: item.name, quantity: 0, revenue: 0 };
-                productSales.set(item.id, {
-                    ...existing,
-                    quantity: existing.quantity + item.quantity,
-                    revenue: existing.revenue + (item.price * item.quantity),
-                });
+        filteredData.txns.forEach(t => {
+            t.items.forEach(item => {
+                if(!item.isReward) {
+                    const cats = item.category || ['Umum'];
+                    cats.forEach(c => categoryMap.set(c, (categoryMap.get(c) || 0) + (item.price * item.quantity)));
+                    productMap.set(item.name, (productMap.get(item.name) || 0) + item.quantity);
+                }
             });
         });
 
-        const allProductSales = Array.from(productSales.values()).sort((a, b) => b.quantity - a.quantity);
-        const bestSellingProducts = allProductSales.slice(0, 10);
+        const categorySales = Array.from(categoryMap.entries()).map(([name, value]) => ({ name, value }));
+        const topProducts = Array.from(productMap.entries()).map(([name, quantity]) => ({ name, quantity })).sort((a,b) => b.quantity - a.quantity).slice(0, 10);
+
+        return { hourly: hourlyMap, trend: salesOverTime, category: categorySales, products: topProducts };
+    }, [filteredData]);
+
+    const summary = useMemo(() => {
+        const totalSales = filteredData.txns.reduce((sum, t) => sum + t.total, 0);
+        // Estimate Profit (Simplified: Total - Cost of Items)
+        const totalCost = filteredData.txns.reduce((sum, t) => {
+            return sum + t.items.reduce((is, i) => is + ((i.costPrice || 0) * i.quantity), 0);
+        }, 0);
         
-        const hourlyChartData = hourlyStats.map(h => ({
-            name: h.hourLabel,
-            total: h.total,
-        }));
-
-        const hourlyBreakdown = hourlyStats
-            .filter(h => h.total > 0 || h.count > 0)
-            .map(h => ({
-                id: h.id,
-                timeRange: `${h.hourLabel} - ${String(h.rawHour + 1).padStart(2, '0')}:00`,
-                count: h.count,
-                total: h.total
-            }));
-
-        let cashIn = 0;
-        let cashOut = 0;
-        if (session && reportScope === 'session' && dataSource === 'local') {
-            session.cashMovements.forEach(m => {
-                if (m.type === 'in') cashIn += m.amount;
-                else cashOut += m.amount;
-            });
-        }
-
         return {
             totalSales,
-            totalCashSales,
-            totalProfit,
-            totalTransactions: activeTransactions.length,
-            avgTransaction: activeTransactions.length > 0 ? totalSales / activeTransactions.length : 0,
-            profitMargin: totalSales > 0 ? (totalProfit / totalSales) * 100 : 0,
-            bestSellingProducts,
-            allProductSales,
-            hourlyChartData,
-            hourlyBreakdown,
-            cashIn,
-            cashOut
+            totalProfit: totalSales - totalCost,
+            transactionCount: filteredData.txns.length
         };
-    }, [activeTransactions, session, reportScope, dataSource]);
+    }, [filteredData]);
 
-
-    const salesOverTimeData = useMemo(() => {
-        const salesMap = new Map<string, number>();
-        activeTransactions.forEach(t => {
-            const dateKey = new Date(t.createdAt).toISOString().split('T')[0];
-            salesMap.set(dateKey, (salesMap.get(dateKey) || 0) + t.total);
+    const handleExport = () => {
+        const periodLabel = filter === 'today' ? 'Hari Ini' : filter === 'week' ? 'Minggu Ini' : filter === 'month' ? 'Bulan Ini' : 'Semua Waktu';
+        generateSalesReportPDF(filteredData.txns, receiptSettings, periodLabel, { 
+            totalSales: summary.totalSales, 
+            totalProfit: summary.totalProfit,
+            totalTransactions: summary.transactionCount 
         });
+    };
 
-        return Array.from(salesMap.entries())
-            .sort(([dateA], [dateB]) => new Date(dateA).getTime() - new Date(dateB).getTime())
-            .map(([date, total]) => ({
-                name: new Date(date).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' }),
-                total,
-            }));
-    }, [activeTransactions]);
-
-    const categorySalesData = useMemo(() => {
-        const categoryMap = new Map<string, number>();
-        activeTransactions.forEach(t => {
-            (t.items || []).forEach((item: any) => {
-                const categories = (item.category && Array.isArray(item.category) && item.category.length > 0) ? item.category : ['Uncategorized'];
-                categories.forEach((cat: string) => {
-                    categoryMap.set(cat, (categoryMap.get(cat) || 0) + (item.price * item.quantity));
-                });
-            });
+    const handleExportCSV = () => {
+        dataService.exportAllReportsCSV({ 
+            transactionRecords: filteredData.txns, 
+            stockAdjustments: filteredData.stock,
+            products: [], rawMaterials: [], users: [], expenses: [], otherIncomes: [], suppliers: [], purchases: [], customers: [], discountDefinitions: [], heldCarts: [], sessionHistory: [], auditLogs: [],
+            receiptSettings: receiptSettings as any, inventorySettings: {} as any, authSettings: {} as any, sessionSettings: {} as any, membershipSettings: {} as any, categories: [], balanceLogs: []
         });
-        return Array.from(categoryMap.entries()).map(([name, value]) => ({ name, value }));
-    }, [activeTransactions]);
-
-    const getPeriodLabel = () => {
-        if (filter === 'today') return `Hari Ini (${new Date().toLocaleDateString('id-ID')})`;
-        if (filter === 'week') return 'Minggu Ini';
-        if (filter === 'month') return 'Bulan Ini';
-        if (filter === 'custom') return `${customStartDate} s/d ${customEndDate}`;
-        if (isSessionMode && reportScope === 'session') return 'Sesi Aktif';
-        return 'Semua Data';
     };
 
-    const handleExportPDF = () => {
-        const label = getPeriodLabel();
-        
-        // Export logic based on Active Tab
-        if (activeTab === 'sales') {
-            generateSalesReportPDF(filteredTransactions, receiptSettings, label, {
-                totalSales: reportData.totalSales,
-                totalProfit: reportData.totalProfit,
-                totalTransactions: reportData.totalTransactions
-            });
-        } else if (activeTab === 'stock_logs') {
-            const headers = ['Waktu', 'Produk', 'Perubahan', 'Stok Akhir', 'Catatan', 'Cabang'];
-            const rows = filteredStockLogs.map(s => [
-                new Date(s.createdAt).toLocaleString('id-ID'),
-                s.productName,
-                s.change,
-                s.newStock,
-                s.notes || '-',
-                (s as any).storeId || '-'
-            ]);
-            generateTablePDF(`Laporan Riwayat Stok (${label})`, headers, rows, receiptSettings);
-        } else if (activeTab === 'products') {
-            const headers = ['Nama Produk', 'Terjual (Qty)', 'Total Pendapatan'];
-            const rows = reportData.allProductSales.map(p => [
-                p.name, 
-                p.quantity, 
-                CURRENCY_FORMATTER.format(p.revenue)
-            ]);
-            generateTablePDF(`Rekap Penjualan Produk (${label})`, headers, rows, receiptSettings);
-        } else if (activeTab === 'hourly') {
-            const headers = ['Jam', 'Jumlah Transaksi', 'Total Omzet'];
-            const rows = reportData.hourlyBreakdown.map(h => [
-                h.timeRange, 
-                h.count, 
-                CURRENCY_FORMATTER.format(h.total)
-            ]);
-            generateTablePDF(`Analisa Per Jam (${label})`, headers, rows, receiptSettings);
-        }
-
-        setIsExportDropdownOpen(false);
-    }
-
-    const handleExportSpreadsheet = (format: 'xlsx' | 'ods' | 'csv') => {
-        const timestamp = new Date().toISOString().slice(0,10);
-        
-        if (activeTab === 'stock_logs') {
-            const headers = ['Waktu', 'Produk', 'Perubahan', 'Stok Akhir', 'Catatan', 'Cabang'];
-            const rows = filteredStockLogs.map(s => [
-                new Date(s.createdAt).toLocaleString('id-ID'),
-                s.productName,
-                s.change,
-                s.newStock,
-                s.notes || '-',
-                (s as any).storeId || '-'
-            ]);
-            dataService.exportToSpreadsheet(headers, rows, `stock_log_${timestamp}`, format);
-        } else {
-            // Transaction Export
-            const headers = ['ID', 'Waktu', 'Total', 'Item', 'Kasir', 'Status', 'Cabang'];
-            const rows = filteredTransactions.map(t => [
-                t.id,
-                new Date(t.createdAt).toLocaleString('id-ID'),
-                t.total,
-                (t.items || []).map((i: any) => `${i.name} (x${i.quantity})`).join('; '),
-                t.userName,
-                t.paymentStatus,
-                t.storeId || ''
-            ]);
-            dataService.exportToSpreadsheet(headers, rows, `sales_report_${timestamp}`, format);
-        }
-        setIsExportDropdownOpen(false);
-    };
-
-    const showSessionView = sessionSettings.enabled && reportScope === 'session' && dataSource === 'local';
-    
-    const filterLabels: Record<TimeFilter, string> = {
-        today: 'Hari Ini',
-        week: 'Minggu Ini',
-        month: 'Bulan Ini',
-        all: 'Semua (Hati-hati)',
-        custom: 'Kustom'
-    };
-
-    const handleFilterChange = (newFilter: TimeFilter) => {
-        setFilter(newFilter);
-        setFilterDropdownOpen(false);
-    };
-
-    // Columns for Transaction Table
-    const txnColumns = useMemo(() => [
-        { label: 'Waktu', width: '1.5fr', render: (t: TransactionType) => <span className="text-slate-400 whitespace-nowrap">{new Date(t.createdAt).toLocaleString('id-ID')}</span> },
-        { label: 'Cabang', width: '1fr', render: (t: TransactionType) => <span className="text-xs bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{t.storeId || '-'}</span> },
-        { label: 'Pelanggan', width: '1.5fr', render: (t: TransactionType) => <span className="font-semibold text-white">{t.customerName || '-'}</span> },
-        { label: 'Kasir', width: '1fr', render: (t: TransactionType) => <span>{t.userName}</span> },
-        { label: 'Total', width: '1fr', render: (t: TransactionType) => <span className={`font-medium ${t.paymentStatus === 'refunded' ? 'line-through text-slate-500' : ''}`}>{CURRENCY_FORMATTER.format(t.total)}</span> },
-        { label: 'Status', width: '1fr', render: (t: TransactionType) => <PaymentStatusBadge status={t.paymentStatus} /> },
-        { 
-            label: 'Items', 
-            width: '2.5fr', 
-            render: (t: TransactionType) => {
-                if (!t.items || t.items.length === 0) return <span className="text-slate-500 italic"> - </span>;
-                const itemsStr = t.items.map((i: any) => `${i.name || 'Unknown'} (x${i.quantity})`).join(', ');
-                return <span title={itemsStr} className="block truncate">{itemsStr}</span>;
-            } 
-        },
-        { label: 'Aksi', width: '1fr', className: 'overflow-visible', render: (t: TransactionType) => (
-            <ActionMenu 
-                transaction={t}
-                onViewReceipt={setSelectedTransaction}
-                onPay={(txn) => {
-                    setUpdatingTransaction(txn);
-                    if(dataSource === 'local') fetchLocalData(); // Refresh local list after payment update
-                }}
-                onRefund={handleRefund}
-                disabled={dataSource !== 'local'}
-            />
-        )}
-    ], [setSelectedTransaction, setUpdatingTransaction, handleRefund, dataSource, fetchLocalData]);
+    // --- COLUMNS ---
+    const transactionColumns = useMemo(() => [
+        { label: 'Waktu', width: '1.2fr', render: (t: Transaction) => <span className="text-slate-400 text-xs">{new Date(t.createdAt).toLocaleString('id-ID')}</span> },
+        { label: 'ID', width: '1fr', render: (t: Transaction) => <span className="font-mono text-xs text-slate-500">#{t.id.slice(-4)}</span> },
+        ...(dataSource !== 'local' ? [{ 
+            label: 'Cabang', 
+            width: '0.8fr', 
+            render: (t: any) => <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{t.storeId || '-'}</span> 
+        }] : []),
+        { label: 'Total', width: '1fr', render: (t: Transaction) => <span className="font-bold text-white text-sm">{CURRENCY_FORMATTER.format(t.total)}</span> },
+        { label: 'Metode', width: '1fr', render: (t: Transaction) => {
+            const methods = t.payments.map(p => p.method === 'cash' ? 'Tunai' : p.method === 'member-balance' ? 'Saldo' : 'Non-Tunai').join(', ');
+            return <span className="text-xs bg-slate-700 px-2 py-1 rounded text-slate-300">{methods}</span>
+        }},
+    ], [dataSource]);
 
     const stockColumns = useMemo(() => [
-        { label: 'Waktu', width: '1.5fr', render: (s: StockAdjustment) => <span className="text-slate-400 whitespace-nowrap">{new Date(s.createdAt).toLocaleString('id-ID')}</span> },
-        { label: 'Produk', width: '2fr', render: (s: StockAdjustment) => <span className="font-semibold text-white">{s.productName}</span> },
-        { label: 'Tipe', width: '1fr', render: (s: StockAdjustment) => (
-            <span className={`px-2 py-1 text-xs font-bold rounded ${s.change > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                {s.change > 0 ? 'MASUK' : 'KELUAR'}
-            </span>
-        ) },
-        { label: 'Jumlah', width: '1fr', render: (s: StockAdjustment) => (
-            <span className={`font-mono font-bold ${s.change > 0 ? 'text-green-400' : 'text-red-400'}`}>
+        { label: 'Waktu', width: '1.2fr', render: (s: StockAdjustment) => <span className="text-slate-400 whitespace-nowrap text-xs">{new Date(s.createdAt).toLocaleString('id-ID')}</span> },
+        // Kolom Cabang Khusus Mode Cloud
+        ...(dataSource !== 'local' ? [{ 
+            label: 'Cabang', 
+            width: '0.8fr', 
+            render: (s: any) => <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{s.storeId || '-'}</span> 
+        }] : []),
+        { label: 'Produk', width: '2fr', render: (s: StockAdjustment) => <span className="font-semibold text-white text-sm">{s.productName}</span> },
+        { label: 'Tipe', width: '1fr', render: (s: StockAdjustment) => {
+            // Deteksi Tipe dari Notes atau Change
+            const isOpname = s.notes?.toLowerCase().includes('opname');
+            const isTransfer = s.notes?.toLowerCase().includes('transfer');
+            const isWaste = s.change < 0 && !isTransfer;
+            
+            let badgeClass = 'bg-slate-700 text-slate-300';
+            let label = 'UPDATE';
+
+            if (isOpname) {
+                badgeClass = 'bg-blue-500/20 text-blue-300';
+                label = 'OPNAME';
+            } else if (isTransfer) {
+                badgeClass = 'bg-purple-500/20 text-purple-300';
+                label = 'TRANSFER';
+            } else if (s.change > 0) {
+                badgeClass = 'bg-green-500/20 text-green-400';
+                label = 'MASUK';
+            } else if (isWaste) {
+                badgeClass = 'bg-red-500/20 text-red-400';
+                label = 'KELUAR';
+            }
+
+            return (
+                <span className={`px-2 py-1 text-[10px] font-bold rounded ${badgeClass}`}>
+                    {label}
+                </span>
+            );
+        } },
+        { label: 'Jml', width: '0.8fr', render: (s: StockAdjustment) => (
+            <span className={`font-mono font-bold text-sm ${s.change > 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {s.change > 0 ? '+' : ''}{s.change}
             </span>
         ) },
-        { label: 'Stok Akhir', width: '1fr', render: (s: StockAdjustment) => <span className="text-slate-300">{s.newStock}</span> },
-        { label: 'Keterangan', width: '2fr', render: (s: StockAdjustment) => (
-            <div>
-                <p className="text-sm truncate">{s.notes || '-'}</p>
-                {/* @ts-ignore */}
-                {s.storeId && <span className="text-[9px] bg-slate-700 px-1 rounded text-slate-300">{s.storeId}</span>}
-            </div>
-        ) },
+        { label: 'Sisa', width: '0.8fr', render: (s: StockAdjustment) => <span className="text-slate-300 text-sm">{s.newStock}</span> },
+        { label: 'Catatan', width: '2.5fr', render: (s: StockAdjustment) => <span className="text-xs text-slate-400 italic">{s.notes || '-'}</span> },
     ], [dataSource]);
 
-    const hourlyColumns = useMemo(() => [
-        { label: 'Jam', width: '1fr', render: (h: any) => h.timeRange },
-        { label: 'Jumlah Transaksi', width: '1fr', render: (h: any) => h.count },
-        { label: 'Total Omzet', width: '1fr', render: (h: any) => CURRENCY_FORMATTER.format(h.total) }
-    ], []);
-
-    const productSalesColumns = useMemo(() => [
-        { label: 'Nama Produk', width: '2fr', render: (p: any) => <span className="font-medium text-white">{p.name}</span> },
-        { label: 'Terjual (Qty)', width: '1fr', render: (p: any) => p.quantity },
-        { label: 'Total Pendapatan', width: '1fr', render: (p: any) => CURRENCY_FORMATTER.format(p.revenue) }
-    ], []);
-
     return (
-        <div className="space-y-6">
-            <div className="space-y-4">
-                {/* Header Section */}
-                <div className="flex justify-between items-start flex-wrap gap-4">
-                     <div>
-                         <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                             {showSessionView && session ? 'Laporan Sesi Saat Ini' : reportScope === 'session_history' ? 'Riwayat Sesi (Shift)' : 'Laporan & Audit'}
-                             {dataSource !== 'local' && <span className="text-sm font-normal px-2 py-0.5 rounded text-white bg-blue-600">Mode Dropbox</span>}
-                         </h1>
-                         {showSessionView && session && (
-                            <p className="text-sm text-slate-400">Dimulai pada {new Date(session.startTime).toLocaleString('id-ID')} oleh {session.userName}</p>
-                         )}
+        <div className="space-y-6 pb-20">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <h1 className="text-2xl font-bold text-white">Laporan</h1>
+                
+                <div className="flex flex-wrap gap-2 items-center">
+                    {/* Data Source Toggle */}
+                    <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700">
+                        <button onClick={() => setDataSource('local')} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'local' ? 'bg-[#347758] text-white' : 'text-slate-400'}`}>Lokal</button>
+                        <button onClick={() => setDataSource('dropbox')} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'dropbox' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Cloud</button>
                     </div>
-                     <div className="flex gap-2 items-center flex-wrap justify-end">
-                        
-                        {dataSource === 'dropbox' && (
-                            <div className="flex items-center gap-2 mr-2">
-                                {lastUpdated && (
-                                    <span className="text-[10px] text-slate-400 hidden sm:block">
-                                        {lastUpdated.toLocaleTimeString()}
-                                    </span>
-                                )}
-                                <Button 
-                                    size="sm" 
-                                    onClick={loadCloudData} 
-                                    disabled={isCloudLoading} 
-                                    className="bg-blue-600 hover:bg-blue-500 text-white border-none"
-                                    title="Tarik data terbaru"
-                                >
-                                    <Icon name="reset" className={`w-4 h-4 ${isCloudLoading ? 'animate-spin' : ''}`} />
-                                    {isCloudLoading ? '' : 'Refresh'}
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    onClick={handleMergeToLocal}
-                                    className="bg-green-600 hover:bg-green-500 text-white border-none"
-                                    title="Simpan data cloud ke lokal"
-                                >
-                                    <Icon name="download" className="w-4 h-4" /> Simpan ke Lokal
-                                </Button>
-                            </div>
-                        )}
 
-                        {/* Branch Selector */}
-                        {availableBranches.length > 1 && (
-                            <div className="bg-slate-700 p-1 rounded-lg">
-                                <select 
-                                    value={selectedBranch} 
-                                    onChange={(e) => setSelectedBranch(e.target.value)}
-                                    className="bg-transparent text-sm text-white px-2 py-1 outline-none cursor-pointer"
-                                >
-                                    <option value="ALL">Semua Cabang</option>
-                                    {availableBranches.map(b => (
-                                        <option key={b} value={b} className="bg-slate-800">{b}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-
-                        <div className="bg-slate-800 p-1 rounded-lg flex items-center border border-slate-700">
-                            <button
-                                onClick={() => setDataSource('local')}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                                title="Data Lokal"
-                            >
-                                Lokal
+                    {/* Time Filter */}
+                    <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700 overflow-x-auto max-w-[200px] sm:max-w-none hide-scrollbar">
+                        {(['today', 'week', 'month', 'all'] as const).map(f => (
+                            <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap ${filter === f ? 'bg-slate-600 text-white' : 'text-slate-400'}`}>
+                                {f === 'today' ? 'Hari Ini' : f === 'week' ? 'Minggu Ini' : f === 'month' ? 'Bulan Ini' : 'Semua'}
                             </button>
-                            <button
-                                onClick={() => setDataSource('dropbox')}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                                title="Data Gabungan dari Dropbox"
-                            >
-                                Dropbox
-                            </button>
-                        </div>
-
-                        {sessionSettings.enabled && dataSource === 'local' && (
-                            <div className="flex bg-slate-700 p-1 rounded-lg overflow-x-auto">
-                                <button onClick={() => setReportScope('session')} disabled={!session} className={`px-3 py-1 text-sm rounded-md transition-colors whitespace-nowrap ${reportScope === 'session' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-600'} disabled:opacity-50 disabled:cursor-not-allowed`}>
-                                    Sesi Saat Ini
-                                </button>
-                                <button onClick={() => setReportScope('historical')} className={`px-3 py-1 text-sm rounded-md transition-colors whitespace-nowrap ${reportScope === 'historical' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-600'}`}>
-                                    Semua Penjualan
-                                </button>
-                                 <button onClick={() => setReportScope('session_history')} className={`px-3 py-1 text-sm rounded-md transition-colors whitespace-nowrap ${reportScope === 'session_history' ? 'bg-[#347758] text-white' : 'text-slate-300 hover:bg-slate-600'}`}>
-                                    Riwayat Shift
-                                </button>
-                            </div>
-                        )}
-                        
-                        {(!sessionSettings.enabled || reportScope === 'historical' || dataSource !== 'local') && (
-                            <div className="relative" ref={filterDropdownRef}>
-                                <Button variant="secondary" size="sm" onClick={() => setFilterDropdownOpen(prev => !prev)}>
-                                    Filter: {filterLabels[filter]}
-                                    <svg className={`w-4 h-4 ml-1 transition-transform ${isFilterDropdownOpen ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                                </Button>
-                                {isFilterDropdownOpen && (
-                                    <div className="absolute top-full right-0 mt-2 w-48 bg-slate-700 rounded-lg shadow-xl z-10">
-                                        {(['today', 'week', 'month', 'all', 'custom'] as TimeFilter[]).map(f => (
-                                            <button 
-                                                key={f}
-                                                onClick={() => handleFilterChange(f)}
-                                                className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter === f ? 'bg-[#347758] text-white' : 'text-slate-200 hover:bg-slate-600'}`}
-                                            >
-                                                {filterLabels[f]}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                        
-                        {/* Export Dropdown */}
-                        <div className="relative" ref={exportDropdownRef}>
-                            <Button variant="secondary" size="sm" onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)} title="Export Report">
-                                <Icon name="download" className="w-4 h-4"/>
-                                <span className="hidden sm:inline ml-1">Export</span>
-                                <Icon name="chevron-down" className="w-3 h-3 ml-1"/>
-                            </Button>
-                            {isExportDropdownOpen && (
-                                <div className="absolute top-full right-0 mt-2 w-48 bg-slate-700 rounded-lg shadow-xl z-20 overflow-hidden border border-slate-600">
-                                    <button onClick={handleExportPDF} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2">
-                                        <Icon name="printer" className="w-4 h-4"/> PDF (Cetak)
-                                    </button>
-                                    <button onClick={() => handleExportSpreadsheet('xlsx')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2 border-t border-slate-600">
-                                        <Icon name="boxes" className="w-4 h-4"/> Excel (.xlsx)
-                                    </button>
-                                    <button onClick={() => handleExportSpreadsheet('ods')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2">
-                                        <Icon name="file-lock" className="w-4 h-4"/> OpenDoc (.ods)
-                                    </button>
-                                    <button onClick={() => handleExportSpreadsheet('csv')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2 border-t border-slate-600">
-                                        <Icon name="database" className="w-4 h-4"/> CSV (Raw)
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        ))}
                     </div>
+
+                    {/* Export */}
+                    <Button size="sm" onClick={handleExport} variant="secondary"><Icon name="printer" className="w-4 h-4" /> PDF</Button>
+                    <Button size="sm" onClick={handleExportCSV} variant="secondary"><Icon name="download" className="w-4 h-4" /> CSV</Button>
                 </div>
-
-                {/* Date Picker for Custom Filter */}
-                {filter === 'custom' && (!sessionSettings.enabled || reportScope === 'historical' || dataSource !== 'local') && (
-                    <div className="flex gap-2 items-center justify-end bg-slate-800 p-2 rounded-lg w-fit ml-auto">
-                        <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} className="bg-slate-700 text-white rounded px-2 py-1 text-sm border border-slate-600" />
-                        <span className="text-slate-400">-</span>
-                        <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} className="bg-slate-700 text-white rounded px-2 py-1 text-sm border border-slate-600" />
-                    </div>
-                )}
             </div>
 
-            {/* Info Banner for Demo Mode */}
-            {isDemoMode && dataSource === 'dropbox' && (
-                <div className="mb-4 bg-yellow-900/30 border border-yellow-700 p-3 rounded-lg flex items-center gap-3 text-yellow-200 text-sm animate-fade-in">
-                    <Icon name="warning" className="w-5 h-5 flex-shrink-0" />
-                    <div className="flex-1">
-                        <p className="font-bold">Mode Demo (Simulasi)</p>
-                        <p className="opacity-80">
-                            Dropbox belum diatur. Data di bawah ini adalah data palsu untuk menunjukkan tampilan laporan terpusat dari beberapa cabang.
-                        </p>
-                    </div>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-[#347758] shadow-md">
+                    <p className="text-slate-400 text-sm uppercase">Total Omzet</p>
+                    <p className="text-2xl font-bold text-white">{CURRENCY_FORMATTER.format(summary.totalSales)}</p>
                 </div>
-            )}
-
-            {isCloudLoading && (
-                <div className="w-full text-center py-8 bg-slate-800 rounded-lg border border-slate-700">
-                    <span className="text-white animate-pulse">Memuat data dari Dropbox...</span>
+                <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-blue-500 shadow-md">
+                    <p className="text-slate-400 text-sm uppercase">Total Transaksi</p>
+                    <p className="text-2xl font-bold text-white">{summary.transactionCount}</p>
                 </div>
-            )}
+                <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-yellow-500 shadow-md">
+                    <p className="text-slate-400 text-sm uppercase">Estimasi Profit</p>
+                    <p className="text-2xl font-bold text-white">{CURRENCY_FORMATTER.format(summary.totalProfit)}</p>
+                </div>
+            </div>
 
-            {!isCloudLoading && (
-                <>
-                    {reportScope === 'session_history' && dataSource === 'local' ? (
-                        <SessionHistoryTable history={appData.sessionHistory} />
+            {/* Charts */}
+            <ReportCharts 
+                hourlyChartData={chartData.hourly}
+                salesOverTimeData={chartData.trend}
+                categorySalesData={chartData.category}
+                bestSellingProducts={chartData.products}
+                filter={filter}
+                showSessionView={false}
+            />
+
+            {/* Tables Tab */}
+            <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 flex flex-col h-[600px]">
+                <div className="flex border-b border-slate-700">
+                    <button onClick={() => setActiveTab('sales')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'sales' ? 'border-[#347758] text-[#52a37c]' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                        Riwayat Penjualan
+                    </button>
+                    <button onClick={() => setActiveTab('stock')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'stock' ? 'border-[#347758] text-[#52a37c]' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                        Mutasi Stok & Log
+                    </button>
+                </div>
+                
+                <div className="flex-1 p-4 overflow-hidden">
+                    {isLoading ? (
+                        <div className="h-full flex items-center justify-center text-slate-500 animate-pulse">Memuat data...</div>
+                    ) : activeTab === 'sales' ? (
+                        <VirtualizedTable data={filteredData.txns} columns={transactionColumns} rowHeight={50} minWidth={dataSource === 'dropbox' ? 900 : 700} />
                     ) : (
-                        <>
-                            {/* Stats Cards */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <StatCard title="Total Omzet" value={CURRENCY_FORMATTER.format(reportData.totalSales)} className="border-b-4 border-green-500" />
-                                <StatCard title="Total Transaksi" value={reportData.totalTransactions.toString()} className="border-b-4 border-blue-500" />
-                                <StatCard title="Profit (Estimasi)" value={CURRENCY_FORMATTER.format(reportData.totalProfit)} className="border-b-4 border-yellow-500" />
-                                <StatCard title="Margin Rata-rata" value={`${reportData.profitMargin.toFixed(1)}%`} className="border-b-4 border-purple-500" />
-                            </div>
-
-                            {/* Charts */}
-                            <ReportCharts 
-                                hourlyChartData={reportData.hourlyChartData}
-                                salesOverTimeData={salesOverTimeData}
-                                categorySalesData={categorySalesData}
-                                bestSellingProducts={reportData.bestSellingProducts}
-                                filter={reportScope === 'session' ? 'today' : filter}
-                                showSessionView={showSessionView}
-                            />
-
-                            {/* Tabs for Table View */}
-                            <div className="mt-6">
-                                <div className="flex border-b border-slate-700 mb-4 overflow-x-auto">
-                                    <button 
-                                        className={`pb-2 px-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'sales' ? 'border-b-2 border-[#347758] text-[#52a37c]' : 'text-slate-400 hover:text-white'}`}
-                                        onClick={() => setActiveTab('sales')}
-                                    >
-                                        Riwayat Penjualan
-                                    </button>
-                                    <button 
-                                        className={`pb-2 px-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'products' ? 'border-b-2 border-[#347758] text-[#52a37c]' : 'text-slate-400 hover:text-white'}`}
-                                        onClick={() => setActiveTab('products')}
-                                    >
-                                        Rekap Produk
-                                    </button>
-                                    <button 
-                                        className={`pb-2 px-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'hourly' ? 'border-b-2 border-[#347758] text-[#52a37c]' : 'text-slate-400 hover:text-white'}`}
-                                        onClick={() => setActiveTab('hourly')}
-                                    >
-                                        Analisa Per Jam
-                                    </button>
-                                    <button 
-                                        className={`pb-2 px-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'stock_logs' ? 'border-b-2 border-[#347758] text-[#52a37c]' : 'text-slate-400 hover:text-white'}`}
-                                        onClick={() => setActiveTab('stock_logs')}
-                                    >
-                                        Riwayat Stok
-                                    </button>
-                                </div>
-
-                                {/* Table Content */}
-                                <div className="h-[600px] relative">
-                                    {isLocalLoading && (
-                                        <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center z-10">
-                                            <span className="text-white animate-pulse">Mengambil data dari database...</span>
-                                        </div>
-                                    )}
-                                    {activeTab === 'sales' && (
-                                        <VirtualizedTable 
-                                            data={filteredTransactions} 
-                                            columns={txnColumns} 
-                                            rowHeight={50} 
-                                        />
-                                    )}
-                                    {activeTab === 'products' && (
-                                        <VirtualizedTable 
-                                            data={reportData.allProductSales} 
-                                            columns={productSalesColumns} 
-                                            rowHeight={50} 
-                                        />
-                                    )}
-                                    {activeTab === 'hourly' && (
-                                        <VirtualizedTable 
-                                            data={reportData.hourlyBreakdown} 
-                                            columns={hourlyColumns} 
-                                            rowHeight={50} 
-                                        />
-                                    )}
-                                    {activeTab === 'stock_logs' && (
-                                        <VirtualizedTable 
-                                            data={filteredStockLogs} 
-                                            columns={stockColumns} 
-                                            rowHeight={50} 
-                                        />
-                                    )}
-                                </div>
-                            </div>
-                        </>
+                        <VirtualizedTable data={filteredData.stock} columns={stockColumns} rowHeight={50} minWidth={dataSource === 'dropbox' ? 1000 : 800} />
                     )}
-                </>
-            )}
-
-            {selectedTransaction && (
-                <ReceiptModal 
-                    isOpen={!!selectedTransaction} 
-                    onClose={() => setSelectedTransaction(null)} 
-                    transaction={selectedTransaction} 
-                />
-            )}
-
-            {updatingTransaction && (
-                <UpdatePaymentModal 
-                    isOpen={!!updatingTransaction} 
-                    onClose={() => {
-                        setUpdatingTransaction(null);
-                        // Refresh logic handled inside useEffect monitoring filters
-                        if(dataSource === 'local') fetchLocalData();
-                    }} 
-                    transaction={updatingTransaction}
-                    onConfirm={(payments) => {
-                        addPaymentToTransaction(updatingTransaction.id, payments);
-                        setUpdatingTransaction(null);
-                        if(dataSource === 'local') fetchLocalData();
-                    }}
-                />
-            )}
+                </div>
+            </div>
         </div>
     );
 };

@@ -10,6 +10,26 @@ const FAQTab: React.FC = () => {
                     
                     {/* --- FAQ STOK (NEW) --- */}
                     <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Di mana saya melihat laporan barang rusak (waste) atau riwayat restock?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: Semua aktivitas perubahan stok (selain penjualan) tercatat di menu <strong>Laporan</strong>.<br/>
+                            1. Buka menu Laporan.<br/>
+                            2. Di bagian bawah (tabel), klik tab <strong>"Mutasi Stok & Log"</strong> (disebelah tab Riwayat Penjualan).<br/>
+                            Di sana Anda akan melihat daftar lengkap: kapan barang masuk (Restock), kapan keluar (Waste/Rusak), dan hasil Stock Opname.
+                        </p>
+                    </div>
+
+                    {/* --- FAQ SECURITY KEY (NEW) --- */}
+                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                        <h4 className="font-bold text-yellow-400 mb-1">Q: Kenapa kolom App Key & Secret Dropbox jadi kosong setelah terhubung?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: Ini adalah fitur keamanan <strong>(Security by Obscurity)</strong>.<br/><br/>
+                            Sistem secara otomatis menyembunyikan App Key dan App Secret dari tampilan layar agar <strong>tidak bisa dicuri atau disalin</strong> oleh staf/orang lain yang meminjam perangkat Admin. <br/>
+                            Data sebenarnya <strong>tetap tersimpan aman</strong> di dalam sistem. Anda hanya perlu mengisi kolom tersebut jika ingin <strong>mengganti</strong> akun Dropbox dengan yang baru.
+                        </p>
+                    </div>
+
+                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
                         <h4 className="font-bold text-[#52a37c] mb-1">Q: Apa bedanya "Transfer Stok" dan "Stok Manual"?</h4>
                         <p className="text-slate-300 text-sm">
                             A: <strong>Transfer Stok</strong> digunakan oleh Gudang Pusat untuk mengirim barang ke Cabang secara digital (membutuhkan internet). Cabang akan menerima stok saat Sync.<br/><br/>

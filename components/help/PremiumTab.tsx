@@ -21,6 +21,21 @@ const PremiumTab: React.FC = () => {
 
     const services: ServicePackage[] = [
         {
+            id: 'native_apps',
+            title: 'File Installer Native (Pro)',
+            priceRange: 'Donasi Rp 100.000',
+            description: 'Jalankan Artea POS layaknya software profesional tanpa browser. Lebih stabil, layar penuh, dan performa maksimal di PC/Laptop.',
+            features: [
+                'Windows (.exe) - Portable & Cepat',
+                'Linux (.AppImage) - Sangat Stabil',
+                'Android (.apk) - Early Access',
+                'Lisensi Lifetime (Sekali Bayar)'
+            ],
+            icon: 'download',
+            color: 'text-teal-400',
+            ctaMessage: 'Halo, saya ingin donasi Rp 100rb untuk mendapatkan file Installer Native (EXE/Linux/APK)'
+        },
+        {
             id: 'data_entry',
             title: 'Jasa Input Menu & Data',
             priceRange: 'Mulai Rp 99.000',
@@ -94,7 +109,7 @@ const PremiumTab: React.FC = () => {
             <div className="text-center max-w-2xl mx-auto mb-8">
                 <h2 className="text-2xl font-bold text-white mb-2">Layanan Premium & Dukungan</h2>
                 <p className="text-slate-400">
-                    Software ini Gratis 100%. Namun jika Anda membutuhkan bantuan teknis, setup, atau perangkat keras, kami menyediakan layanan profesional untuk menghemat waktu Anda.
+                    Software ini Gratis 100% (Versi Web). Namun untuk pengalaman terbaik (Desktop App) atau bantuan teknis, kami menyediakan layanan khusus bagi para donatur dan mitra.
                 </p>
             </div>
 
@@ -104,8 +119,8 @@ const PremiumTab: React.FC = () => {
                 <div className="text-sm text-yellow-200">
                     <p className="font-bold mb-1">Catatan Penting:</p>
                     <p>
-                        Harga yang tertera di bawah adalah estimasi dan <strong>dapat berubah sewaktu-waktu</strong> mengikuti harga pasar (terutama untuk Paket Hardware) serta kompleksitas data toko Anda.
-                        Silakan hubungi tim Artea untuk mendapatkan penawaran terkini.
+                        Harga yang tertera di bawah adalah estimasi dan <strong>dapat berubah sewaktu-waktu</strong>. 
+                        Untuk "File Installer Native", kami memberikannya sebagai bentuk apresiasi kepada pengguna yang memberikan donasi untuk pengembangan aplikasi.
                     </p>
                 </div>
             </div>

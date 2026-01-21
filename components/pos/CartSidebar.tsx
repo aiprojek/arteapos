@@ -264,7 +264,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                     className={`p-1.5 rounded transition-colors ${isDisplayConnected ? 'bg-[#347758] text-white animate-pulse' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
                     title="Layar Kedua (Pelanggan)"
                 >
-                    <Icon name="shop" className="w-5 h-5"/>
+                    <Icon name="cast" className="w-5 h-5"/>
                 </button>
             </div>
             

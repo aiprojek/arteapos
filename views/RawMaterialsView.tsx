@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
 import { useUI } from '../context/UIContext';
+import { useAuth } from '../context/AuthContext'; // Import Auth
 import type { RawMaterial } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -14,9 +15,7 @@ import { useSettings } from '../context/SettingsContext';
 
 // --- HELPER FORMAT CURRENCY INPUT ---
 const formatNumberStr = (val: string) => {
-    // Hapus non-digit
     const raw = val.replace(/\D/g, '');
-    // Tambah titik ribuan
     return raw.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
@@ -24,7 +23,7 @@ const unformatNumber = (val: string) => {
     return parseFloat(val.replace(/\./g, '')) || 0;
 };
 
-// Custom Input for Numbers with Dot Separator
+// Custom Input for Numbers
 const CurrencyInput: React.FC<{
     value: string | number;
     onChange: (val: string) => void;
@@ -33,20 +32,15 @@ const CurrencyInput: React.FC<{
     label?: string;
     required?: boolean;
 }> = ({ value, onChange, placeholder, className, label, required }) => {
-    
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
-        // Allow user to empty the field
         if (val === '') {
             onChange('');
             return;
         }
-        // Format display
         const formatted = formatNumberStr(val);
         onChange(formatted);
     };
-
-    // Ensure value passed is formatted for display
     const displayValue = value !== '' ? formatNumberStr(value.toString()) : '';
 
     return (
@@ -76,7 +70,7 @@ const InputField: React.FC<{
     required?: boolean;
     min?: string;
     placeholder?: string;
-    step?: string; // Added step prop explicitly
+    step?: string;
 }> = ({ name, label, value, onChange, type = 'text', required = false, min, placeholder, step = "any" }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
@@ -87,23 +81,20 @@ const InputField: React.FC<{
             value={value}
             onChange={(e) => {
                 if(type === 'number') {
-                    // Prevent negative signs or scientific notation e/E
                     const val = e.target.value;
                     if(val.includes('-')) return;
-                    // Allow decimals, prevent invalid chars except dot
                     if(val && !/^\d*\.?\d*$/.test(val)) return;
                 }
                 onChange(e);
             }}
             required={required}
             min={min}
-            step={step} // Use step="any" to allow decimals
+            step={step}
             placeholder={placeholder}
             className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
         />
     </div>
 );
-
 
 const RawMaterialForm: React.FC<{ 
     material?: RawMaterial | null, 
@@ -111,7 +102,10 @@ const RawMaterialForm: React.FC<{
     onCancel: () => void 
 }> = ({ material, onSave, onCancel }) => {
     const { receiptSettings } = useSettings();
+    const { currentUser } = useAuth();
     
+    const isStaff = currentUser?.role === 'staff'; // Check Role
+
     // Form State
     const [formData, setFormData] = useState({ 
         name: '', 
@@ -122,11 +116,10 @@ const RawMaterialForm: React.FC<{
         conversionRate: ''
     });
 
-    // Calculator State (For Cost Per Unit)
     const [calc, setCalc] = useState({
-        buyPrice: '', // Harga Beli Total (String formatted)
-        buyQty: '1',  // Jumlah Beli (untuk pembagi)
-        costPerUnit: 0 // Hasil hitungan
+        buyPrice: '', 
+        buyQty: '1',
+        costPerUnit: 0
     });
     
     const availableBranches = receiptSettings.branches || [];
@@ -141,7 +134,6 @@ const RawMaterialForm: React.FC<{
                 purchaseUnit: material.purchaseUnit || '',
                 conversionRate: material.conversionRate ? material.conversionRate.toString() : ''
             });
-            // Init calculator with existing cost
             setCalc({
                 buyPrice: (material.costPerUnit || 0).toString(),
                 buyQty: '1',
@@ -153,7 +145,6 @@ const RawMaterialForm: React.FC<{
         }
     }, [material]);
 
-    // Auto Calculate Cost Per Unit whenever Buy Price or Buy Qty changes
     useEffect(() => {
         const price = unformatNumber(calc.buyPrice);
         const qty = parseFloat(calc.buyQty) || 1;
@@ -186,7 +177,7 @@ const RawMaterialForm: React.FC<{
         const materialData = {
             ...formData,
             stock: Math.max(0, parseFloat(formData.stock) || 0),
-            costPerUnit: calc.costPerUnit, // Use calculated cost
+            costPerUnit: calc.costPerUnit, 
             conversionRate: formData.conversionRate ? Math.max(1, parseFloat(formData.conversionRate)) : undefined,
             purchaseUnit: formData.purchaseUnit || undefined,
             validStoreIds: formData.validStoreIds.length === 0 ? undefined : formData.validStoreIds
@@ -207,40 +198,41 @@ const RawMaterialForm: React.FC<{
                 <InputField name="stock" label="Stok Saat Ini" type="number" step="any" required value={formData.stock} onChange={handleChange} min="0" placeholder="0"/>
             </div>
             
-            {/* CALCULATOR HPP SECTION */}
-            <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600">
-                <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
-                    <Icon name="finance" className="w-4 h-4 text-green-400"/> Hitung Harga Modal (HPP)
-                </h4>
-                <div className="grid grid-cols-2 gap-4 mb-2">
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Total Harga Beli</label>
-                        <CurrencyInput 
-                            value={calc.buyPrice} 
-                            onChange={(val) => setCalc(prev => ({...prev, buyPrice: val}))} 
-                            placeholder="0"
-                        />
+            {/* HIDE COST CALCULATOR FOR STAFF */}
+            {!isStaff && (
+                <div className="bg-slate-700/50 p-4 rounded-lg border border-slate-600">
+                    <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                        <Icon name="finance" className="w-4 h-4 text-green-400"/> Hitung Harga Modal (HPP)
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4 mb-2">
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Total Harga Beli</label>
+                            <CurrencyInput 
+                                value={calc.buyPrice} 
+                                onChange={(val) => setCalc(prev => ({...prev, buyPrice: val}))} 
+                                placeholder="0"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Dapat Jumlah ({formData.unit || 'Unit'})</label>
+                            <input
+                                type="number"
+                                value={calc.buyQty}
+                                onChange={(e) => setCalc(prev => ({...prev, buyQty: e.target.value}))}
+                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-mono"
+                                placeholder="1"
+                                min="0"
+                                step="any" 
+                            />
+                        </div>
                     </div>
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Dapat Jumlah ({formData.unit || 'Unit'})</label>
-                        <input
-                            type="number"
-                            value={calc.buyQty}
-                            onChange={(e) => setCalc(prev => ({...prev, buyQty: e.target.value}))}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-mono"
-                            placeholder="1"
-                            min="0"
-                            step="any" 
-                        />
+                    <div className="text-right">
+                        <span className="text-xs text-slate-400">Harga per {formData.unit || 'unit'}: </span>
+                        <span className="text-green-400 font-bold font-mono text-lg">{CURRENCY_FORMATTER.format(calc.costPerUnit)}</span>
                     </div>
                 </div>
-                <div className="text-right">
-                    <span className="text-xs text-slate-400">Harga per {formData.unit || 'unit'}: </span>
-                    <span className="text-green-400 font-bold font-mono text-lg">{CURRENCY_FORMATTER.format(calc.costPerUnit)}</span>
-                </div>
-            </div>
+            )}
 
-            {/* Conversion Section */}
             <div className="bg-slate-900 p-3 rounded-lg border border-slate-700 space-y-3">
                 <h4 className="text-sm font-semibold text-white flex items-center gap-2">
                     <Icon name="share" className="w-4 h-4"/> Konversi Satuan Beli (Opsional)
@@ -253,7 +245,6 @@ const RawMaterialForm: React.FC<{
                 </div>
             </div>
 
-            {/* Branch Restriction Selector */}
             {availableBranches.length > 0 && (
                 <div className="pt-2 border-t border-slate-700">
                     <label className="block text-sm font-medium text-slate-300 mb-1">Ketersediaan Cabang</label>
@@ -279,9 +270,6 @@ const RawMaterialForm: React.FC<{
                             )
                         })}
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1">
-                        Jika dipilih, bahan baku ini hanya akan muncul di cabang tersebut.
-                    </p>
                 </div>
             )}
 
@@ -293,23 +281,21 @@ const RawMaterialForm: React.FC<{
     );
 };
 
-// --- NEW: Bulk Raw Material Modal ---
 const BulkRawMaterialModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     onSave: (materials: RawMaterial[]) => void;
 }> = ({ isOpen, onClose, onSave }) => {
     const { showAlert } = useUI();
+    const { currentUser } = useAuth();
+    const isStaff = currentUser?.role === 'staff';
+
     const [mode, setMode] = useState<'manual' | 'import'>('manual');
-    
-    // Revised State for Bulk Input: buyPrice & buyQty instead of direct costPerUnit
     const [rows, setRows] = useState<Array<{
         name: string, stock: string, unit: string, 
-        buyPrice: string, buyQty: string, // NEW
+        buyPrice: string, buyQty: string,
         validStoreIds: string, purchaseUnit: string, conversionRate: string
     }>>([
-        { name: '', stock: '', unit: '', buyPrice: '', buyQty: '1', validStoreIds: '', purchaseUnit: '', conversionRate: '' },
-        { name: '', stock: '', unit: '', buyPrice: '', buyQty: '1', validStoreIds: '', purchaseUnit: '', conversionRate: '' },
         { name: '', stock: '', unit: '', buyPrice: '', buyQty: '1', validStoreIds: '', purchaseUnit: '', conversionRate: '' },
         { name: '', stock: '', unit: '', buyPrice: '', buyQty: '1', validStoreIds: '', purchaseUnit: '', conversionRate: '' },
         { name: '', stock: '', unit: '', buyPrice: '', buyQty: '1', validStoreIds: '', purchaseUnit: '', conversionRate: '' },
@@ -348,7 +334,7 @@ const BulkRawMaterialModal: React.FC<{
                 name: r.name,
                 stock: parseFloat(r.stock) || 0,
                 unit: r.unit,
-                costPerUnit: costPerUnit, // Calculated
+                costPerUnit: costPerUnit, 
                 purchaseUnit: r.purchaseUnit || undefined,
                 conversionRate: parseFloat(r.conversionRate) || undefined,
                 validStoreIds: r.validStoreIds ? r.validStoreIds.split(',').map(s => s.trim()).filter(Boolean) : undefined
@@ -359,25 +345,9 @@ const BulkRawMaterialModal: React.FC<{
         setRows([{ name: '', stock: '', unit: '', buyPrice: '', buyQty: '1', validStoreIds: '', purchaseUnit: '', conversionRate: '' }]);
     };
 
-    const handleDownloadTemplate = () => {
-        const headers = ['name', 'stock', 'unit', 'costPerUnit', 'purchaseUnit', 'conversionRate', 'validStoreIds'];
-        const sample = ['Kopi Arabica', '1000', 'gram', '150', 'Kg', '1000', 'JKT01;BDG01'];
-        const csvContent = [headers.join(','), sample.map(s => `"${s}"`).join(',')].join('\n');
-        
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'template_bahan_baku_artea.csv';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
     const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
         try {
             const materials = await dataService.importRawMaterialsCSV(file);
             if (materials.length > 0) {
@@ -410,9 +380,10 @@ const BulkRawMaterialModal: React.FC<{
                                         <th className="p-2 w-48">Nama Bahan*</th>
                                         <th className="p-2 w-20">Stok</th>
                                         <th className="p-2 w-24">Satuan*</th>
-                                        <th className="p-2 w-24">Harga Beli</th>
-                                        <th className="p-2 w-20">Dapat Qty</th>
-                                        <th className="p-2 w-32">Harga/Satuan (Preview)</th>
+                                        {/* HIDE COST COLUMNS FOR STAFF */}
+                                        {!isStaff && <th className="p-2 w-24">Harga Beli</th>}
+                                        {!isStaff && <th className="p-2 w-20">Dapat Qty</th>}
+                                        {!isStaff && <th className="p-2 w-32">Harga/Satuan (Preview)</th>}
                                         <th className="p-2 w-24">Cabang</th>
                                         <th className="p-2 w-10"></th>
                                     </tr>
@@ -428,16 +399,24 @@ const BulkRawMaterialModal: React.FC<{
                                                 <td className="p-1"><input className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.name} onChange={e => handleRowChange(idx, 'name', e.target.value)} placeholder="Nama" /></td>
                                                 <td className="p-1"><input type="number" step="any" className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.stock} onChange={e => handleRowChange(idx, 'stock', e.target.value)} placeholder="0" /></td>
                                                 <td className="p-1"><input className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.unit} onChange={e => handleRowChange(idx, 'unit', e.target.value)} placeholder="ml/gr" /></td>
-                                                <td className="p-1">
-                                                    <CurrencyInput 
-                                                        value={row.buyPrice} 
-                                                        onChange={(val) => handleRowChange(idx, 'buyPrice', val)} 
-                                                        className="px-2 py-1"
-                                                        placeholder="Total"
-                                                    />
-                                                </td>
-                                                <td className="p-1"><input type="number" step="any" className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.buyQty} onChange={e => handleRowChange(idx, 'buyQty', e.target.value)} placeholder="1" /></td>
-                                                <td className="p-1 text-green-400 font-mono text-xs">{CURRENCY_FORMATTER.format(cost)}</td>
+                                                
+                                                {!isStaff && (
+                                                    <td className="p-1">
+                                                        <CurrencyInput 
+                                                            value={row.buyPrice} 
+                                                            onChange={(val) => handleRowChange(idx, 'buyPrice', val)} 
+                                                            className="px-2 py-1"
+                                                            placeholder="Total"
+                                                        />
+                                                    </td>
+                                                )}
+                                                {!isStaff && (
+                                                    <td className="p-1"><input type="number" step="any" className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.buyQty} onChange={e => handleRowChange(idx, 'buyQty', e.target.value)} placeholder="1" /></td>
+                                                )}
+                                                {!isStaff && (
+                                                    <td className="p-1 text-green-400 font-mono text-xs">{CURRENCY_FORMATTER.format(cost)}</td>
+                                                )}
+                                                
                                                 <td className="p-1"><input className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.validStoreIds} onChange={e => handleRowChange(idx, 'validStoreIds', e.target.value)} placeholder="JKT,BDG" /></td>
                                                 <td className="p-1 text-center"><button onClick={() => removeRow(idx)} className="text-red-400 hover:text-white"><Icon name="trash" className="w-4 h-4" /></button></td>
                                             </tr>
@@ -459,12 +438,10 @@ const BulkRawMaterialModal: React.FC<{
                             <ol className="list-decimal pl-5 text-sm text-slate-300 space-y-1">
                                 <li>Unduh template CSV.</li>
                                 <li>Isi data (Nama & Satuan Wajib).</li>
-                                <li>Untuk Cabang, pisahkan dengan titik koma (;).</li>
                                 <li>Simpan sebagai .CSV dan upload.</li>
                             </ol>
                         </div>
                         <div className="flex justify-center gap-4">
-                            <Button variant="secondary" onClick={handleDownloadTemplate}><Icon name="download" className="w-4 h-4"/> Unduh Template</Button>
                             <div className="relative">
                                 <Button variant="primary" onClick={() => fileInputRef.current?.click()}><Icon name="upload" className="w-4 h-4"/> Upload CSV</Button>
                                 <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleImportFile} />
@@ -477,16 +454,19 @@ const BulkRawMaterialModal: React.FC<{
     );
 };
 
-
 const RawMaterialsView: React.FC = () => {
     const { rawMaterials, addRawMaterial, updateRawMaterial, deleteRawMaterial, bulkAddRawMaterials } = useProduct();
     const { showAlert } = useUI();
+    const { currentUser } = useAuth();
+    
+    // Check Role
+    const isStaff = currentUser?.role === 'staff';
+
     const [isModalOpen, setModalOpen] = useState(false);
     const [editingMaterial, setEditingMaterial] = useState<RawMaterial | null>(null);
     const [isOpnameOpen, setIsOpnameOpen] = useState(false); 
-    const importInputRef = useRef<HTMLInputElement>(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [isBulkModalOpen, setBulkModalOpen] = useState(false); // NEW STATE
+    const [isBulkModalOpen, setBulkModalOpen] = useState(false);
 
     const filteredMaterials = useMemo(() => {
         return rawMaterials.filter(material =>
@@ -494,7 +474,6 @@ const RawMaterialsView: React.FC = () => {
             material.unit.toLowerCase().includes(searchTerm.toLowerCase())
         ).sort((a,b) => a.name.localeCompare(b.name));
     }, [rawMaterials, searchTerm]);
-
 
     const handleOpenModal = (material: RawMaterial | null = null) => {
         setEditingMaterial(material);
@@ -517,45 +496,13 @@ const RawMaterialsView: React.FC = () => {
     
     const handleExport = () => {
         dataService.exportRawMaterialsCSV(rawMaterials);
-        showAlert({
-            type: 'alert',
-            title: 'Ekspor Berhasil',
-            message: 'Data bahan baku (CSV) berhasil diunduh. Anda dapat menggunakan file ini sebagai template untuk impor.'
-        });
+        showAlert({ type: 'alert', title: 'Ekspor Berhasil', message: 'Data bahan baku berhasil diunduh.' });
     };
 
-    const handleImportChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (file) {
-            try {
-                const newMaterials = await dataService.importRawMaterialsCSV(file);
-                bulkAddRawMaterials(newMaterials);
-                 showAlert({
-                    type: 'alert',
-                    title: 'Impor Berhasil',
-                    message: `${newMaterials.length} bahan baku berhasil diimpor atau diperbarui.`
-                 });
-            } catch (error) {
-                 showAlert({
-                    type: 'alert',
-                    title: 'Impor Gagal',
-                    message: (error as Error).message
-                 });
-            } finally {
-                if(importInputRef.current) importInputRef.current.value = "";
-            }
-        }
-    };
-
-    // NEW: Handle Bulk Save
     const handleBulkSave = (newMaterials: RawMaterial[]) => {
         bulkAddRawMaterials(newMaterials);
         setBulkModalOpen(false);
-        showAlert({
-            type: 'alert',
-            title: 'Berhasil',
-            message: `${newMaterials.length} bahan baku berhasil ditambahkan.`
-        });
+        showAlert({ type: 'alert', title: 'Berhasil', message: `${newMaterials.length} bahan baku berhasil ditambahkan.` });
     };
     
     const columns = useMemo(() => [
@@ -569,7 +516,9 @@ const RawMaterialsView: React.FC = () => {
                 )}
             </div>
         ) },
-        { label: 'Biaya per Satuan', width: '1.5fr', render: (m: RawMaterial) => m.costPerUnit ? CURRENCY_FORMATTER.format(m.costPerUnit) : '-' },
+        // HIDE COST COLUMN FOR STAFF
+        ...(isStaff ? [] : [{ label: 'Biaya per Satuan', width: '1.5fr', render: (m: RawMaterial) => m.costPerUnit ? CURRENCY_FORMATTER.format(m.costPerUnit) : '-' }]),
+        
         { label: 'Stok', width: '1fr', render: (m: RawMaterial) => m.stock },
         { label: 'Satuan', width: '1fr', render: (m: RawMaterial) => m.unit },
         { label: 'Aksi', width: '1fr', render: (m: RawMaterial) => (
@@ -582,7 +531,7 @@ const RawMaterialsView: React.FC = () => {
                 </button>
             </div>
         )}
-    ], [deleteRawMaterial]);
+    ], [deleteRawMaterial, isStaff]);
 
     return (
         <div className="flex flex-col h-full">
@@ -599,7 +548,6 @@ const RawMaterialsView: React.FC = () => {
                         />
                          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     </div>
-                    {/* Updated Buttons */}
                     <Button variant="secondary" onClick={() => setBulkModalOpen(true)} className="flex-shrink-0 bg-blue-900/30 text-blue-300 border-blue-800 hover:bg-blue-900/50">
                         <Icon name="boxes" className="w-5 h-5"/>
                         <span className="hidden lg:inline">Tambah Massal</span>
@@ -628,7 +576,7 @@ const RawMaterialsView: React.FC = () => {
                     />
                  ) : (
                     <div className="flex-1 flex items-center justify-center text-center p-8 text-slate-500">
-                        {searchTerm ? `Tidak ada bahan baku yang cocok dengan "${searchTerm}".` : 'Belum ada bahan baku. Klik "Tambah Bahan Baku" untuk memulai, atau gunakan fitur Impor.'}
+                        {searchTerm ? `Tidak ada bahan baku yang cocok dengan "${searchTerm}".` : 'Belum ada bahan baku. Klik "Tambah Bahan Baku" untuk memulai.'}
                     </div>
                 )}
             </div>
@@ -637,18 +585,9 @@ const RawMaterialsView: React.FC = () => {
                 <RawMaterialForm material={editingMaterial} onSave={handleSaveMaterial} onCancel={handleCloseModal} />
             </Modal>
 
-            <StockOpnameModal 
-                isOpen={isOpnameOpen} 
-                onClose={() => setIsOpnameOpen(false)} 
-                initialTab="raw_material"
-            />
+            <StockOpnameModal isOpen={isOpnameOpen} onClose={() => setIsOpnameOpen(false)} initialTab="raw_material" />
 
-            {/* Render Bulk Modal */}
-            <BulkRawMaterialModal
-                isOpen={isBulkModalOpen}
-                onClose={() => setBulkModalOpen(false)}
-                onSave={handleBulkSave}
-            />
+            <BulkRawMaterialModal isOpen={isBulkModalOpen} onClose={() => setBulkModalOpen(false)} onSave={handleBulkSave} />
         </div>
     );
 };

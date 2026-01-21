@@ -10,7 +10,7 @@ export type IconName =
   | 'book' | 'star-fill' | 'check-circle-fill' | 'menu' | 'tag' | 'trending-up' 
   | 'chevron-down' | 'chevron-up' | 'keyboard' | 'play' | 'wifi' | 'database' 
   | 'warning' | 'question' | 'bluetooth' | 'lock' | 'clipboard' | 'boxes' | 'file-lock' 
-  | 'clock-history' | 'eye' | 'cloud' | 'shop' | 'tools' | 'money' | 'lightbulb';
+  | 'clock-history' | 'eye' | 'cloud' | 'shop' | 'tools' | 'money' | 'lightbulb' | 'cast';
 
 interface IconProps {
   name: IconName;
@@ -95,7 +95,8 @@ const Icon: React.FC<IconProps> = ({ name, className = 'w-6 h-6', title, style }
     shop: 'bi-shop',
     tools: 'bi-tools',
     money: 'bi-currency-dollar',
-    lightbulb: 'bi-lightbulb' // Added
+    lightbulb: 'bi-lightbulb',
+    cast: 'bi-cast' // Ditambahkan
   };
 
   const biClass = iconMap[name] || 'bi-question-square';

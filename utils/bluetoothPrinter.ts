@@ -299,23 +299,43 @@ export const bluetoothPrinterService = {
         }
 
         // 2. WEB BROWSER
-        if (!webPrinterCharacteristic) {
-            const connected = await bluetoothPrinterService.connectWeb();
-            if (!connected) return;
+        if (webPrinterCharacteristic) {
+             const encoder = new TextEncoder();
+            try {
+                const encodedData = encoder.encode(rawData);
+                const CHUNK_SIZE = 100; 
+                for (let i = 0; i < encodedData.length; i += CHUNK_SIZE) {
+                    const chunk = encodedData.slice(i, i + CHUNK_SIZE);
+                    await webPrinterCharacteristic?.writeValue(chunk);
+                    await new Promise(r => setTimeout(r, 20)); 
+                }
+            } catch (e) {
+                console.error('Failed to print via Web Bluetooth', e);
+                webPrinterCharacteristic = null; 
+            }
+            return;
         }
 
-        const encoder = new TextEncoder();
+        // 3. FALLBACK: RAWBT (Untuk Browser Android yang tidak support Web Bluetooth)
+        // Jika tidak ada koneksi Web Bluetooth dan tidak di Native App.
         try {
-            const encodedData = encoder.encode(rawData);
-            const CHUNK_SIZE = 100; 
-            for (let i = 0; i < encodedData.length; i += CHUNK_SIZE) {
-                const chunk = encodedData.slice(i, i + CHUNK_SIZE);
-                await webPrinterCharacteristic?.writeValue(chunk);
-                await new Promise(r => setTimeout(r, 20)); 
+            const encoder = new TextEncoder();
+            const bytes = encoder.encode(rawData);
+            let binary = '';
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            const base64 = btoa(binary);
+
+            // Intent Scheme untuk RawBT
+            const scheme = `rawbt:base64,${base64}`;
+            
+            if (confirm("Browser ini tidak mendukung koneksi Bluetooth langsung. Cetak menggunakan aplikasi RawBT?")) {
+                window.location.href = scheme;
             }
         } catch (e) {
-            console.error('Failed to print', e);
-            webPrinterCharacteristic = null; 
+             console.error("RawBT Fallback Error", e);
         }
     },
 

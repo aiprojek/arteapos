@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { SectionHeader, AccordionItem } from './SharedHelpComponents';
+import Icon from '../Icon';
 
 const ManualTab: React.FC = () => {
     const [openAccordion, setOpenAccordion] = useState<string | null>(null);
@@ -55,6 +56,19 @@ const ManualTab: React.FC = () => {
                             <li><strong>Struk:</strong> Setelah sukses, struk muncul. Bisa dicetak atau dibagikan gambar via WA.</li>
                         </ol>
                     </AccordionItem>
+                    
+                    {/* NEW: CUSTOMER DISPLAY GUIDE */}
+                    <AccordionItem title="Layar Pelanggan (Dual Screen)" isOpen={openAccordion === 'pos_dual'} onToggle={() => toggleAccordion('pos_dual')} icon="shop" colorClass="text-yellow-400" badge="Baru">
+                        <p>Tampilkan keranjang belanja secara real-time ke pelanggan menggunakan HP/Tablet bekas.</p>
+                        <ol className="list-decimal pl-5 space-y-2 mt-2 text-sm text-slate-300">
+                            <li><strong>Siapkan Perangkat Ke-2:</strong> Gunakan HP/Tablet apa saja untuk menghadap ke pelanggan. Buka Artea POS di browser perangkat tersebut.</li>
+                            <li><strong>Mode Layar:</strong> Di halaman Login perangkat ke-2, jangan login. Klik tombol kecil di bawah: <strong>"Mode Layar Pelanggan"</strong>. Akan muncul QR Code.</li>
+                            <li><strong>Hubungkan Kasir:</strong> Di Tablet Kasir Utama, buka menu Kasir. Klik tombol ikon Toko <Icon name="shop" className="w-3 h-3 inline"/> (di sebelah kiri judul "Keranjang").</li>
+                            <li><strong>Scan & Connect:</strong> Pilih "Scan QR" dan scan layar perangkat ke-2.</li>
+                            <li><strong>Selesai:</strong> Apapun yang diklik kasir akan muncul di layar pelanggan.</li>
+                        </ol>
+                    </AccordionItem>
+
                     <AccordionItem title="Membership, Cari & Scan Kartu" isOpen={openAccordion === 'pos_member'} onToggle={() => toggleAccordion('pos_member')} icon="users" colorClass="text-pink-400" badge="Update">
                         <p>Kelola pelanggan dengan lebih cepat:</p>
                         <ul className="list-disc pl-5 space-y-1 mt-2">

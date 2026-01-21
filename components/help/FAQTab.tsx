@@ -8,7 +8,26 @@ const FAQTab: React.FC = () => {
                 <h3 className="font-bold text-white mb-2 text-lg">Tanya Jawab & Masalah Umum</h3>
                 <div className="space-y-4">
                     
-                    {/* --- FAQ STOK (NEW) --- */}
+                    {/* --- FAQ CUSTOMER DISPLAY (NEW) --- */}
+                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Apakah fitur Layar Pelanggan (Dual Screen) butuh internet?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: <strong>Ya, butuh.</strong><br/>
+                            Fitur ini menggunakan teknologi WebRTC (PeerJS) untuk menghubungkan dua browser berbeda (Kasir & Pelanggan). 
+                            Koneksi internet diperlukan untuk proses awal (handshake/pairing). Setelah terhubung, data akan mengalir lebih stabil jika kedua perangkat dalam jaringan WiFi yang sama, tapi tetap membutuhkan akses internet dasar.
+                        </p>
+                    </div>
+
+                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                        <h4 className="font-bold text-[#52a37c] mb-1">Q: Perangkat apa yang bisa jadi Layar Pelanggan?</h4>
+                        <p className="text-slate-300 text-sm">
+                            A: <strong>Hampir semua perangkat.</strong><br/>
+                            Anda bisa menggunakan Tablet Android bekas, iPad lama, atau bahkan HP Android murah. 
+                            Syaratnya hanya satu: Bisa membuka browser modern (Chrome/Edge/Safari) dan terhubung ke internet.
+                        </p>
+                    </div>
+
+                    {/* --- FAQ STOK (EXISTING) --- */}
                     <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
                         <h4 className="font-bold text-[#52a37c] mb-1">Q: Di mana saya melihat laporan barang rusak (waste) atau riwayat restock?</h4>
                         <p className="text-slate-300 text-sm">
@@ -19,7 +38,7 @@ const FAQTab: React.FC = () => {
                         </p>
                     </div>
 
-                    {/* --- FAQ SECURITY KEY (NEW) --- */}
+                    {/* --- FAQ SECURITY KEY (EXISTING) --- */}
                     <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
                         <h4 className="font-bold text-yellow-400 mb-1">Q: Kenapa kolom App Key & Secret Dropbox jadi kosong setelah terhubung?</h4>
                         <p className="text-slate-300 text-sm">

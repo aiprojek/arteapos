@@ -4,6 +4,7 @@ import Modal from '../Modal';
 import Button from '../Button';
 import Icon from '../Icon';
 import BarcodeScannerModal from '../BarcodeScannerModal';
+import CameraCaptureModal from '../CameraCaptureModal'; // NEW: Import local camera modal
 import { CURRENCY_FORMATTER } from '../../constants';
 import { useCart } from '../../context/CartContext';
 import { useSession } from '../../context/SessionContext';
@@ -212,6 +213,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
     // Evidence State
     const [evidenceImage, setEvidenceImage] = useState<string>('');
     const [isWaitingForCustomer, setIsWaitingForCustomer] = useState(false); // Waiting for camera
+    const [isLocalCameraOpen, setLocalCameraOpen] = useState(false); // Local Camera state
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Instant Top Up State
@@ -541,19 +543,31 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                             <Icon name="camera" className="w-3 h-3"/> Bukti Pembayaran (Opsional)
                         </label>
                         
-                        <div className="flex items-center gap-3">
-                            <div 
-                                className="w-16 h-16 bg-slate-800 border border-dashed border-slate-500 rounded flex items-center justify-center cursor-pointer hover:bg-slate-700 transition-colors relative overflow-hidden"
-                                onClick={() => fileInputRef.current?.click()}
-                            >
-                                {evidenceImage ? (
-                                    <img src={evidenceImage} alt="Bukti" className="w-full h-full object-cover" />
-                                ) : (
-                                    <Icon name="plus" className="w-6 h-6 text-slate-500" />
-                                )}
+                        {evidenceImage ? (
+                            <div className="relative w-full mb-2">
+                                <img src={evidenceImage} alt="Bukti" className="h-32 w-full object-contain rounded bg-black/40" />
+                                <button 
+                                    onClick={() => setEvidenceImage('')} 
+                                    className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full hover:bg-red-500"
+                                >
+                                    <Icon name="close" className="w-4 h-4"/>
+                                </button>
                             </div>
-                            
-                            <div className="flex-1 space-y-2">
+                        ) : null}
+
+                        <div className="grid grid-cols-3 gap-2">
+                            {/* LOCAL CAMERA */}
+                            <Button 
+                                size="sm" 
+                                variant="secondary" 
+                                onClick={() => setLocalCameraOpen(true)}
+                                className="flex flex-col items-center justify-center h-16 text-xs p-1"
+                            >
+                                <Icon name="camera" className="w-5 h-5 mb-1"/> Kamera
+                            </Button>
+
+                            {/* FILE UPLOAD */}
+                            <div className="relative">
                                 <input 
                                     type="file" 
                                     accept="image/*" 
@@ -561,34 +575,37 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                                     className="hidden" 
                                     onChange={handleFileChange} 
                                 />
-                                {evidenceImage ? (
-                                    <button 
-                                        onClick={() => setEvidenceImage('')} 
-                                        className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
-                                    >
-                                        <Icon name="trash" className="w-3 h-3"/> Hapus Foto
-                                    </button>
-                                ) : (
-                                    <div className="flex flex-col gap-1">
-                                        <p className="text-[10px] text-slate-400">
-                                            Upload foto struk EDC atau bukti transfer QRIS.
-                                        </p>
-                                        {isDisplayConnected && (
-                                            <button 
-                                                onClick={handleRequestCustomerPhoto}
-                                                disabled={isWaitingForCustomer}
-                                                className={`text-xs bg-purple-700 hover:bg-purple-600 text-white px-2 py-1.5 rounded flex items-center justify-center gap-1 transition-colors ${isWaitingForCustomer ? 'opacity-75 cursor-wait' : ''}`}
-                                            >
-                                                {isWaitingForCustomer ? (
-                                                    <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Menunggu Pelanggan...</>
-                                                ) : (
-                                                    <><Icon name="camera" className="w-3 h-3"/> Minta Pelanggan Foto</>
-                                                )}
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
+                                <Button 
+                                    size="sm" 
+                                    variant="secondary" 
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="w-full flex flex-col items-center justify-center h-16 text-xs p-1"
+                                >
+                                    <Icon name="upload" className="w-5 h-5 mb-1"/> Upload
+                                </Button>
                             </div>
+
+                            {/* CUSTOMER DISPLAY CAMERA */}
+                            {isDisplayConnected ? (
+                                <Button 
+                                    size="sm" 
+                                    variant="secondary"
+                                    onClick={handleRequestCustomerPhoto}
+                                    disabled={isWaitingForCustomer}
+                                    className={`flex flex-col items-center justify-center h-16 text-xs p-1 ${isWaitingForCustomer ? 'bg-purple-900/30 text-purple-300' : 'bg-purple-700 text-white hover:bg-purple-600'}`}
+                                >
+                                    {isWaitingForCustomer ? (
+                                        <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mb-1"></span> Menunggu...</>
+                                    ) : (
+                                        <><Icon name="cast" className="w-5 h-5 mb-1"/> Minta Pelanggan</>
+                                    )}
+                                </Button>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-16 text-xs p-1 bg-slate-800 rounded text-slate-500 border border-slate-600">
+                                    <Icon name="cast" className="w-5 h-5 mb-1 opacity-50"/> 
+                                    Offline
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -640,6 +657,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                     </Button>
                 )}
             </div>
+
+            {/* Local Camera Capture Modal */}
+            <CameraCaptureModal 
+                isOpen={isLocalCameraOpen}
+                onClose={() => setLocalCameraOpen(false)}
+                onCapture={(img) => setEvidenceImage(img)}
+            />
         </Modal>
     );
 };

@@ -45,6 +45,9 @@ const FinanceView: React.FC = () => {
         customers: Customer[] // Added Customers
     }>({ transactions: [], expenses: [], otherIncomes: [], purchases: [], customers: [] });
     
+    // BRANCH FILTER STATE
+    const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
+
     const [isCloudLoading, setIsCloudLoading] = useState(false);
     const [isDemoMode, setIsDemoMode] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -123,6 +126,29 @@ const FinanceView: React.FC = () => {
         }
     }, [dataSource, loadCloudData]);
 
+    // CALCULATE AVAILABLE BRANCHES
+    const availableBranches = useMemo(() => {
+        if (dataSource === 'local') return [];
+        const branches = new Set<string>();
+        // Check all sources for store IDs
+        [...cloudData.transactions, ...cloudData.expenses, ...cloudData.otherIncomes].forEach((item: any) => {
+            if (item.storeId) branches.add(item.storeId);
+        });
+        return Array.from(branches).sort();
+    }, [cloudData, dataSource]);
+
+    // APPLY BRANCH FILTER TO CLOUD DATA
+    const filteredCloudData = useMemo(() => {
+        if (selectedBranch === 'ALL') return cloudData;
+        return {
+            transactions: cloudData.transactions.filter((t:any) => t.storeId === selectedBranch),
+            expenses: cloudData.expenses.filter((e:any) => e.storeId === selectedBranch),
+            otherIncomes: cloudData.otherIncomes.filter((i:any) => i.storeId === selectedBranch),
+            purchases: cloudData.purchases.filter((p:any) => (p as any).storeId === selectedBranch),
+            customers: cloudData.customers.filter((c:any) => (c as any).storeId === selectedBranch)
+        };
+    }, [cloudData, selectedBranch]);
+
     // NEW: Merge Cloud to Local Logic for Finance
     const handleMergeToLocal = () => {
         if (cloudData.expenses.length === 0 && cloudData.otherIncomes.length === 0) {
@@ -160,8 +186,13 @@ const FinanceView: React.FC = () => {
         </button>
     );
 
+    // ... (prepareTableData and handleExportPDF/Spreadsheet remains unchanged, implicitly uses cloudData/filteredCloudData if we pass filteredCloudData to tabs) ...
+    // Note: To keep export consistent with view, we should use `filteredCloudData` in `prepareTableData` logic as well if refactoring deeply,
+    // but typically `activeTransactions` inside child components handle display. For export button here in parent:
+    
     // --- DATA PREPARATION FOR EXPORT (SHARED) ---
     const prepareTableData = () => {
+        // USE FILTERED DATA HERE
         const source = dataSource === 'local' ? {
             tx: localTransactions,
             exp: localExpenses,
@@ -169,13 +200,13 @@ const FinanceView: React.FC = () => {
             purch: localPurchases,
             cust: localCustomers
         } : {
-            tx: cloudData.transactions,
-            exp: cloudData.expenses,
-            inc: cloudData.otherIncomes,
-            purch: cloudData.purchases,
-            cust: cloudData.customers
+            tx: filteredCloudData.transactions,
+            exp: filteredCloudData.expenses,
+            inc: filteredCloudData.otherIncomes,
+            purch: filteredCloudData.purchases,
+            cust: filteredCloudData.customers
         };
-
+        // ... rest of prepareTableData logic (unchanged) ...
         // Helper sort
         const sortByBranchAndDate = (a: any, b: any) => {
             if (dataSource !== 'local') {
@@ -208,7 +239,7 @@ const FinanceView: React.FC = () => {
             headers = isCloud ? ['Tanggal', 'Cabang', 'Tipe', 'Keterangan', 'Jumlah'] : ['Tanggal', 'Tipe', 'Keterangan', 'Jumlah'];
             rows = flows.map(f => {
                 const date = new Date(f.date).toLocaleDateString('id-ID');
-                const amt = f.amount; // Use raw number for Excel/CSV, formatted in PDF
+                const amt = f.amount; 
                 return isCloud ? [date, f.storeId || '-', f.type, f.desc, amt] : [date, f.type, f.desc, amt];
             });
             fileNameBase = 'Laporan_Arus_Kas';
@@ -267,29 +298,22 @@ const FinanceView: React.FC = () => {
         const mode = mainView === 'finance' ? activeTab : 'customers';
         const isCloud = dataSource !== 'local';
         
-        // --- Special Logic to Include Images in PDF ---
         let pdfHeaders = [...headers];
         let pdfRows = [...rows];
         let imageColIndex = -1;
 
         if (mode === 'expenses' || mode === 'other_income' || mode === 'purchasing') {
-            // Add 'Bukti' Column for PDF only
             pdfHeaders.push('Bukti');
             imageColIndex = pdfHeaders.length - 1;
 
+            // Use FILTERED Data for source list
             const sourceList = dataSource === 'local' 
                 ? (mode === 'expenses' ? localExpenses : mode === 'other_income' ? localIncomes : localPurchases)
-                : (mode === 'expenses' ? cloudData.expenses : mode === 'other_income' ? cloudData.otherIncomes : cloudData.purchases);
+                : (mode === 'expenses' ? filteredCloudData.expenses : mode === 'other_income' ? filteredCloudData.otherIncomes : filteredCloudData.purchases);
             
-            // Re-map rows to include image data (base64)
-            // Note: sort order must match prepareTableData above
             const sortedList = [...sourceList].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
             pdfRows = sortedList.map(item => {
-               const basicRow = rows.find(r => r.includes(item.description || item.supplierName)); // Simplistic matching
-               // Better matching needed if descriptions duplicate. 
-               // For robust implementation, we should rebuild rows here instead of searching.
-               
                const date = new Date(item.date).toLocaleDateString('id-ID');
                const baseRow = mode === 'purchasing' 
                     ? (isCloud ? [date, (item as any).storeId, (item as any).supplierName, (item as any).status, (item as any).totalAmount] : [date, (item as any).supplierName, (item as any).status, (item as any).totalAmount])
@@ -299,9 +323,7 @@ const FinanceView: React.FC = () => {
             });
         }
 
-        // Format numbers
         const formattedRows = pdfRows.map(row => row.map(cell => typeof cell === 'number' ? CURRENCY_FORMATTER.format(cell) : cell));
-        
         generateTablePDF(fileNameBase.replace(/_/g, ' '), pdfHeaders, formattedRows, receiptSettings, 'p', imageColIndex);
         setIsExportDropdownOpen(false);
     };
@@ -337,6 +359,22 @@ const FinanceView: React.FC = () => {
                 {/* Controls Section */}
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center flex-wrap w-full lg:w-auto">
                     
+                    {/* Branch Filter (Only in Dropbox Mode) */}
+                    {dataSource === 'dropbox' && availableBranches.length > 0 && (
+                        <div className="bg-slate-800 p-1 rounded-lg border border-slate-700">
+                            <select 
+                                value={selectedBranch} 
+                                onChange={(e) => setSelectedBranch(e.target.value)}
+                                className="bg-transparent text-sm text-white px-3 py-1.5 outline-none cursor-pointer w-full sm:w-auto"
+                            >
+                                <option value="ALL" className="bg-slate-800">Semua Cabang</option>
+                                {availableBranches.map(b => (
+                                    <option key={b} value={b} className="bg-slate-800">{b}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     {/* Action Group: Sync & Export */}
                     <div className="flex items-center gap-2 flex-wrap">
                         {dataSource === 'dropbox' && (
@@ -423,14 +461,18 @@ const FinanceView: React.FC = () => {
                 </div>
             </div>
 
-            {/* Info Banner for Demo Mode */}
-            {isDemoMode && dataSource === 'dropbox' && (
-                <div className="mb-4 bg-yellow-900/30 border border-yellow-700 p-3 rounded-lg flex items-center gap-3 text-yellow-200 text-sm animate-fade-in">
-                    <Icon name="warning" className="w-5 h-5 flex-shrink-0" />
+            {/* Info Banner for Cloud Mode */}
+            {dataSource !== 'local' && (
+                <div className={`p-3 rounded-lg flex items-center gap-3 text-sm animate-fade-in ${isDemoMode ? 'bg-yellow-900/30 border border-yellow-700 text-yellow-200' : 'bg-blue-900/30 border border-blue-800 text-blue-200'}`}>
+                    <Icon name={isDemoMode ? "warning" : "info-circle"} className="w-5 h-5 flex-shrink-0" />
                     <div className="flex-1">
-                        <p className="font-bold">Mode Demo (Simulasi)</p>
+                        <p className="font-bold">{isDemoMode ? "Mode Demo (Data Dummy)" : "Mode Laporan Terpusat (Dropbox)"}</p>
                         <p className="opacity-80">
-                            Dropbox belum diatur. Data di bawah ini adalah data palsu untuk menunjukkan tampilan laporan terpusat dari beberapa cabang.
+                            {isDemoMode 
+                                ? "Dropbox belum dikonfigurasi. Menampilkan data simulasi." 
+                                : (selectedBranch === 'ALL' 
+                                    ? 'Menampilkan data gabungan dari semua cabang.' 
+                                    : `Menampilkan data spesifik untuk cabang: ${selectedBranch}`)}
                         </p>
                     </div>
                 </div>
@@ -451,16 +493,18 @@ const FinanceView: React.FC = () => {
                             {renderSubTabButton('debt-receivables', 'Utang & Piutang')}
                         </div>
                         
-                        {/* Pass dataSource and cloudData to children via props */}
-                        {isManagement && activeTab === 'cashflow' && <CashFlowTab dataSource={dataSource} cloudData={cloudData} />}
-                        {activeTab === 'expenses' && <ExpensesTab dataSource={dataSource} cloudData={cloudData.expenses} />}
-                        {activeTab === 'other_income' && <IncomeTab dataSource={dataSource} cloudData={cloudData.otherIncomes} />}
-                        {activeTab === 'purchasing' && <PurchasingTab dataSource={dataSource} cloudData={cloudData.purchases} />}
-                        {activeTab === 'debt-receivables' && <DebtsTab dataSource={dataSource} cloudData={cloudData.transactions} />}
+                        {/* Pass filteredCloudData to children */}
+                        {isManagement && activeTab === 'cashflow' && <CashFlowTab dataSource={dataSource} cloudData={filteredCloudData} />}
+                        {activeTab === 'expenses' && <ExpensesTab dataSource={dataSource} cloudData={filteredCloudData.expenses} />}
+                        {activeTab === 'other_income' && <IncomeTab dataSource={dataSource} cloudData={filteredCloudData.otherIncomes} />}
+                        {activeTab === 'purchasing' && <PurchasingTab dataSource={dataSource} cloudData={filteredCloudData.purchases} />}
+                        {activeTab === 'debt-receivables' && <DebtsTab dataSource={dataSource} cloudData={filteredCloudData.transactions} />}
                         
                     </div>
                 ) : (
-                    // Customers View
+                    // Customers View (Note: CustomersTab internally manages local vs prop data if updated, currently it uses context. 
+                    // To fully support cloud customers here, CustomersTab would need update like others. 
+                    // For now, it stays local unless we update CustomersTab to accept props)
                     <CustomersTab />
                 )}
             </div>

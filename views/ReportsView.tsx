@@ -26,7 +26,13 @@ const ReportsView: React.FC = () => {
     const { showAlert } = useUI();
 
     const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
-    const [filter, setFilter] = useState<'today' | 'week' | 'month' | 'all'>('today');
+    const [filter, setFilter] = useState<'today' | 'week' | 'month' | 'all' | 'custom'>('today'); // Add 'custom'
+    const [customStartDate, setCustomStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [customEndDate, setCustomEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    
+    // BRANCH FILTER
+    const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
+
     const [cloudData, setCloudData] = useState<{ transactions: Transaction[], stockAdjustments: StockAdjustment[] }>({ transactions: [], stockAdjustments: [] });
     const [isLoading, setIsLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'transactions' | 'products' | 'stock'>('transactions');
@@ -80,6 +86,19 @@ const ReportsView: React.FC = () => {
     const activeTransactions = dataSource === 'local' ? localTransactions : cloudData.transactions;
     const activeStockAdjustments = dataSource === 'local' ? localStockAdjustments : cloudData.stockAdjustments;
 
+    // CALCULATE AVAILABLE BRANCHES
+    const availableBranches = useMemo(() => {
+        if (dataSource === 'local') return [];
+        const branches = new Set<string>();
+        cloudData.transactions.forEach(t => {
+            if (t.storeId) branches.add(t.storeId);
+        });
+        cloudData.stockAdjustments.forEach(s => {
+            if ((s as any).storeId) branches.add((s as any).storeId);
+        });
+        return Array.from(branches).sort();
+    }, [cloudData, dataSource]);
+
     const filteredData = useMemo(() => {
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -87,19 +106,33 @@ const ReportsView: React.FC = () => {
         weekStart.setDate(weekStart.getDate() - 6);
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
-        const filterFn = (dateStr: string) => {
+        const filterFn = (dateStr: string, itemStoreId?: string) => {
+            // 1. Branch Filter
+            if (dataSource !== 'local' && selectedBranch !== 'ALL') {
+                if (itemStoreId !== selectedBranch) return false;
+            }
+
+            // 2. Date Filter
             const time = new Date(dateStr).getTime();
             if (filter === 'today') return time >= todayStart;
             if (filter === 'week') return time >= weekStart.getTime();
             if (filter === 'month') return time >= monthStart;
+            if (filter === 'custom') {
+                if (!customStartDate || !customEndDate) return true;
+                const start = new Date(customStartDate);
+                start.setHours(0,0,0,0);
+                const end = new Date(customEndDate);
+                end.setHours(23,59,59,999);
+                return time >= start.getTime() && time <= end.getTime();
+            }
             return true;
         };
 
-        const txns = activeTransactions.filter(t => filterFn(t.createdAt)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        const stock = activeStockAdjustments.filter(s => filterFn(s.createdAt)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const txns = activeTransactions.filter(t => filterFn(t.createdAt, t.storeId)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const stock = activeStockAdjustments.filter(s => filterFn(s.createdAt, (s as any).storeId)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         return { txns, stock };
-    }, [filter, activeTransactions, activeStockAdjustments]);
+    }, [filter, activeTransactions, activeStockAdjustments, selectedBranch, dataSource, customStartDate, customEndDate]);
 
     // --- AGGREGATION LOGIC ---
 
@@ -363,7 +396,24 @@ const ReportsView: React.FC = () => {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <h1 className="text-2xl font-bold text-white">Laporan</h1>
                 
-                <div className="flex flex-wrap gap-2 items-center">
+                <div className="flex flex-wrap gap-2 items-center w-full md:w-auto justify-end">
+                    
+                    {/* Branch Selector (Only if Cloud) */}
+                    {dataSource !== 'local' && availableBranches.length > 0 && (
+                        <div className="bg-slate-800 p-1 rounded-lg border border-slate-700">
+                            <select 
+                                value={selectedBranch} 
+                                onChange={(e) => setSelectedBranch(e.target.value)}
+                                className="bg-transparent text-sm text-white px-3 py-1.5 outline-none cursor-pointer"
+                            >
+                                <option value="ALL" className="bg-slate-800">Semua Cabang</option>
+                                {availableBranches.map(b => (
+                                    <option key={b} value={b} className="bg-slate-800">{b}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     {/* Data Source Toggle */}
                     <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700">
                         <button onClick={() => setDataSource('local')} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'local' ? 'bg-[#347758] text-white' : 'text-slate-400'}`}>Lokal</button>
@@ -372,12 +422,31 @@ const ReportsView: React.FC = () => {
 
                     {/* Time Filter */}
                     <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700 overflow-x-auto max-w-[200px] sm:max-w-none hide-scrollbar">
-                        {(['today', 'week', 'month', 'all'] as const).map(f => (
+                        {(['today', 'week', 'month', 'custom', 'all'] as const).map(f => (
                             <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap ${filter === f ? 'bg-slate-600 text-white' : 'text-slate-400'}`}>
-                                {f === 'today' ? 'Hari Ini' : f === 'week' ? 'Minggu Ini' : f === 'month' ? 'Bulan Ini' : 'Semua'}
+                                {f === 'today' ? 'Hari Ini' : f === 'week' ? 'Minggu Ini' : f === 'month' ? 'Bulan Ini' : f === 'custom' ? 'Kustom' : 'Semua'}
                             </button>
                         ))}
                     </div>
+
+                     {/* CUSTOM DATE UI */}
+                     {filter === 'custom' && (
+                        <div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-slate-700 animate-fade-in">
+                            <input 
+                                type="date" 
+                                value={customStartDate} 
+                                onChange={(e) => setCustomStartDate(e.target.value)}
+                                className="bg-slate-700 text-white px-2 py-1 rounded text-xs border-none focus:ring-1 focus:ring-[#347758]"
+                            />
+                            <span className="text-slate-400 text-xs">-</span>
+                            <input 
+                                type="date" 
+                                value={customEndDate} 
+                                onChange={(e) => setCustomEndDate(e.target.value)}
+                                className="bg-slate-700 text-white px-2 py-1 rounded text-xs border-none focus:ring-1 focus:ring-[#347758]"
+                            />
+                        </div>
+                    )}
 
                     {/* Export */}
                     <Button size="sm" onClick={handleExport} variant="secondary"><Icon name="printer" className="w-4 h-4" /> PDF</Button>

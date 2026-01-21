@@ -267,9 +267,9 @@ const CustomerDisplayView: React.FC = () => {
                 </div>
             </header>
 
-            {/* SECURITY BANNER */}
+            {/* SECURITY BANNER - CHANGED TEXT HERE */}
             <div className="bg-yellow-600 text-black font-bold text-center py-2 px-4 text-sm sm:text-base animate-pulse shadow-md z-20">
-                ⚠️ MOHON JANGAN MEMBAYAR SEBELUM MENERIMA STRUK/BUKTI TRANSAKSI
+                ⚠️ PASTIKAN ANDA MENERIMA STRUK/BUKTI TRANSAKSI SETELAH PEMBAYARAN
             </div>
 
             <div className="flex-1 flex overflow-hidden">

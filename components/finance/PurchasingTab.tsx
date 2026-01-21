@@ -13,6 +13,7 @@ import { ocrService } from '../../services/ocrService';
 import { useUI } from '../../context/UIContext';
 import { Capacitor } from '@capacitor/core';
 import { saveBinaryFileNative } from '../../utils/nativeHelper';
+import CameraCaptureModal from '../CameraCaptureModal'; // NEW Import
 
 interface PurchasingTabProps {
     dataSource?: 'local' | 'cloud' | 'dropbox';
@@ -55,6 +56,9 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
     // UPDATED: Evidence View with Zoom
     const [viewEvidence, setViewEvidence] = useState<{ url: string; filename: string } | null>(null);
     const [zoomLevel, setZoomLevel] = useState(1);
+    
+    // NEW: Camera Modal
+    const [isCameraOpen, setCameraOpen] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -312,23 +316,43 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                                         <Icon name="close" className="w-3 h-3"/>
                                     </button>
                                 </div>
-                            ) : (
-                                <div onClick={() => fileInputRef.current?.click()} className="text-center cursor-pointer w-full py-2">
-                                    <Icon name="camera" className="w-6 h-6 mx-auto mb-1 text-slate-500"/>
-                                    <span className="text-[10px] text-slate-400">Klik untuk upload foto</span>
+                            ) : null}
+
+                            {!purchaseForm.evidenceImageUrl && (
+                                <div className="grid grid-cols-2 gap-3 w-full">
+                                    <Button 
+                                        variant="secondary" 
+                                        onClick={() => setCameraOpen(true)}
+                                        className="flex flex-col items-center justify-center h-20 text-xs gap-1"
+                                    >
+                                        <Icon name="camera" className="w-6 h-6 text-slate-400" />
+                                        Ambil Foto
+                                    </Button>
+                                    <div className="relative">
+                                         <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                                         <Button 
+                                            variant="secondary" 
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="w-full flex flex-col items-center justify-center h-20 text-xs gap-1"
+                                        >
+                                            <Icon name="upload" className="w-6 h-6 text-slate-400" />
+                                            Upload File
+                                        </Button>
+                                    </div>
                                 </div>
                             )}
-                            <div className="flex gap-2 w-full mt-1">
-                                <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-                                <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} className="flex-1">
-                                    {purchaseForm.evidenceImageUrl ? 'Ganti Foto' : 'Ambil Foto'}
-                                </Button>
-                                {purchaseForm.evidenceImageUrl && (
+
+                            {purchaseForm.evidenceImageUrl && (
+                                <div className="flex gap-2 w-full mt-1">
+                                    <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                                    <Button size="sm" variant="secondary" onClick={() => setCameraOpen(true)} className="flex-1">
+                                        Ganti Foto
+                                    </Button>
                                     <Button size="sm" variant="secondary" onClick={handleScanOCR} disabled={isScanning} className="flex-1 bg-blue-900/30 text-blue-300 border-blue-800">
                                         {isScanning ? 'Scanning...' : <><Icon name="eye" className="w-4 h-4" /> Scan Tgl/Total</>}
                                     </Button>
-                                )}
-                            </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -480,6 +504,13 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                     </Button>
                 </div>
             </Modal>
+
+            {/* Camera Capture Modal */}
+            <CameraCaptureModal 
+                isOpen={isCameraOpen}
+                onClose={() => setCameraOpen(false)}
+                onCapture={(img) => setPurchaseForm(prev => ({ ...prev, evidenceImageUrl: img }))}
+            />
 
             {/* View Image Modal with Zoom */}
              <Modal isOpen={!!viewEvidence} onClose={() => setViewEvidence(null)} title="Bukti Pembelian">

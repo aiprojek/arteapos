@@ -12,6 +12,7 @@ import { ocrService } from '../../services/ocrService';
 import { useUI } from '../../context/UIContext';
 import { Capacitor } from '@capacitor/core';
 import { saveBinaryFileNative } from '../../utils/nativeHelper';
+import CameraCaptureModal from '../CameraCaptureModal'; // NEW Import
 
 interface IncomeTabProps {
     dataSource?: 'local' | 'cloud' | 'dropbox';
@@ -37,6 +38,9 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
     // UPDATED: View Evidence & Zoom State
     const [viewEvidence, setViewEvidence] = useState<{ url: string; filename: string } | null>(null);
     const [zoomLevel, setZoomLevel] = useState(1);
+    
+    // NEW: Camera Modal
+    const [isCameraOpen, setCameraOpen] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -191,9 +195,20 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
 
     return (
         <div className="space-y-4">
-            <div className="flex justify-between">
-                <input type="text" placeholder="Cari pemasukan..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white" />
-                {dataSource === 'local' && <Button onClick={() => setModalOpen(true)}>+ Catat Pemasukan</Button>}
+             {/* Responsive Header: Stack on Mobile, Row on Sm */}
+            <div className="flex flex-col sm:flex-row justify-between gap-2">
+                <input 
+                    type="text" 
+                    placeholder="Cari pemasukan..." 
+                    value={searchTerm} 
+                    onChange={e => setSearchTerm(e.target.value)} 
+                    className="w-full sm:w-auto flex-grow bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:ring-[#347758] focus:border-[#347758]" 
+                />
+                {dataSource === 'local' && (
+                    <Button onClick={() => setModalOpen(true)} className="w-full sm:w-auto whitespace-nowrap">
+                        <Icon name="plus" className="w-4 h-4" /> Catat Pemasukan
+                    </Button>
+                )}
             </div>
             
             <div className="h-[500px]">
@@ -202,8 +217,7 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
 
             <Modal isOpen={isModalOpen} onClose={closeModal} title={editingId ? "Edit Pemasukan" : "Catat Pemasukan Lain"}>
                 <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-                    
-                    {/* ENHANCED Evidence Section */}
+                    {/* ... (Modal content unchanged) ... */}
                     <div>
                         <label className="block text-sm font-medium text-slate-300 mb-2">Foto Bukti (Opsional)</label>
                         <div className="flex flex-col items-center gap-3 p-4 border-2 border-dashed border-slate-600 rounded-lg bg-slate-900/50">
@@ -217,23 +231,43 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
                                         <Icon name="close" className="w-4 h-4" />
                                     </button>
                                 </div>
-                            ) : (
-                                <div onClick={() => fileInputRef.current?.click()} className="text-center cursor-pointer w-full py-2">
-                                    <Icon name="camera" className="w-8 h-8 text-slate-500 mx-auto mb-2" />
-                                    <span className="text-xs text-slate-400">Klik untuk upload foto</span>
+                            ) : null}
+                            
+                            {!formData.evidenceImageUrl && (
+                                <div className="grid grid-cols-2 gap-3 w-full">
+                                    <Button 
+                                        variant="secondary" 
+                                        onClick={() => setCameraOpen(true)}
+                                        className="flex flex-col items-center justify-center h-20 text-xs gap-1"
+                                    >
+                                        <Icon name="camera" className="w-6 h-6 text-slate-400" />
+                                        Ambil Foto
+                                    </Button>
+                                    <div className="relative">
+                                         <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                                         <Button 
+                                            variant="secondary" 
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="w-full flex flex-col items-center justify-center h-20 text-xs gap-1"
+                                        >
+                                            <Icon name="upload" className="w-6 h-6 text-slate-400" />
+                                            Upload File
+                                        </Button>
+                                    </div>
                                 </div>
                             )}
-                            <div className="flex gap-2 w-full mt-1">
-                                <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-                                <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} className="flex-1">
-                                    {formData.evidenceImageUrl ? 'Ganti Foto' : 'Ambil Foto'}
-                                </Button>
-                                {formData.evidenceImageUrl && (
+
+                            {formData.evidenceImageUrl && (
+                                <div className="flex gap-2 w-full mt-1">
+                                    <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                                    <Button size="sm" variant="secondary" onClick={() => setCameraOpen(true)} className="flex-1">
+                                        Ganti Foto
+                                    </Button>
                                     <Button size="sm" variant="secondary" onClick={handleScanOCR} disabled={isScanning} className="flex-1 bg-blue-900/30 text-blue-300 border-blue-800">
                                         {isScanning ? 'Scanning...' : <><Icon name="eye" className="w-4 h-4" /> Scan (AI)</>}
                                     </Button>
-                                )}
-                            </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -279,6 +313,13 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
                     <Button onClick={handleSubmit} className="w-full">{editingId ? "Simpan Perubahan" : "Simpan"}</Button>
                 </div>
             </Modal>
+
+            {/* Camera Capture Modal */}
+            <CameraCaptureModal 
+                isOpen={isCameraOpen}
+                onClose={() => setCameraOpen(false)}
+                onCapture={(img) => setFormData(prev => ({ ...prev, evidenceImageUrl: img }))}
+            />
 
             {/* View Image Modal with Zoom */}
             <Modal isOpen={!!viewEvidence} onClose={() => setViewEvidence(null)} title="Bukti Transaksi">

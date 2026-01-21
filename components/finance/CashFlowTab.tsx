@@ -106,7 +106,7 @@ const CashFlowTab: React.FC<CashFlowTabProps> = ({ dataSource = 'local', cloudDa
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                 <div className="flex items-center gap-2 flex-wrap w-full">
+                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-wrap w-full">
                     
                     <div className="relative" ref={filterDropdownRef}>
                         <Button variant="secondary" onClick={() => setFilterDropdownOpen(prev => !prev)}>
@@ -123,6 +123,25 @@ const CashFlowTab: React.FC<CashFlowTabProps> = ({ dataSource = 'local', cloudDa
                             </div>
                         )}
                     </div>
+                    
+                    {/* CUSTOM DATE UI (FIXED) */}
+                    {filter === 'custom' && (
+                        <div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-slate-600 animate-fade-in">
+                            <input 
+                                type="date" 
+                                value={customStartDate} 
+                                onChange={(e) => setCustomStartDate(e.target.value)}
+                                className="bg-slate-700 text-white px-2 py-1 rounded text-sm border-none focus:ring-1 focus:ring-[#347758]"
+                            />
+                            <span className="text-slate-400 text-xs">s/d</span>
+                            <input 
+                                type="date" 
+                                value={customEndDate} 
+                                onChange={(e) => setCustomEndDate(e.target.value)}
+                                className="bg-slate-700 text-white px-2 py-1 rounded text-sm border-none focus:ring-1 focus:ring-[#347758]"
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
             

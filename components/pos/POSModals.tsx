@@ -201,6 +201,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
     const { addBalance } = useCustomer();
     const { logAudit } = useAudit(); 
     const { currentUser } = useAuth();
+    // NEW: Customer Display Context
+    const { requestCustomerCamera, customerImage, isDisplayConnected, clearCustomerImage } = useCustomerDisplay();
     
     const [amountPaid, setAmountPaid] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
@@ -209,6 +211,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
     
     // Evidence State
     const [evidenceImage, setEvidenceImage] = useState<string>('');
+    const [isWaitingForCustomer, setIsWaitingForCustomer] = useState(false); // Waiting for camera
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Instant Top Up State
@@ -226,8 +229,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
             setInstantTopUpAmount('');
             setSplitCashInput('');
             setEvidenceImage(''); // Reset image
+            clearCustomerImage(); // Clear remote image cache
+            setIsWaitingForCustomer(false);
         }
     }, [isOpen, selectedCustomer]);
+
+    // Listener for incoming image from customer display
+    useEffect(() => {
+        if (customerImage && isWaitingForCustomer) {
+            setEvidenceImage(customerImage);
+            setIsWaitingForCustomer(false);
+        }
+    }, [customerImage, isWaitingForCustomer]);
 
     const handleQuickAmount = (amt: number) => {
         setAmountPaid(amt.toString());
@@ -238,6 +251,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
         setInstantTopUpAmount(''); 
         setSplitCashInput('');
         setEvidenceImage(''); // Clear image on method switch
+        setIsWaitingForCustomer(false); // Reset waiting state
         
         if (method === 'member-balance' || method === 'non-cash') {
             setAmountPaid(total.toString());
@@ -256,6 +270,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                 alert('Gagal memproses gambar.');
             }
         }
+    };
+
+    const handleRequestCustomerPhoto = () => {
+        if (!isDisplayConnected) {
+            alert("Layar pelanggan belum terhubung!");
+            return;
+        }
+        setIsWaitingForCustomer(true);
+        requestCustomerCamera();
     };
 
     const handleInstantTopUp = () => {
@@ -402,8 +425,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                 {/* --- LOGIC: MEMBER BALANCE PAYMENT --- */}
                 {paymentMethod === 'member-balance' && selectedCustomer && (
                     <div className={`p-3 border rounded-lg text-sm ${canPayWithBalance ? 'bg-purple-900/30 border-purple-700' : 'bg-slate-800 border-slate-700'}`}>
-                         {/* ... existing balance content ... */}
-                         {/* Keeping brevity */}
                          <div className="flex justify-between items-center mb-2">
                             <span className="text-slate-300">Saldo Member:</span>
                             <span className={`font-bold ${canPayWithBalance ? 'text-white' : 'text-red-400'}`}>{CURRENCY_FORMATTER.format(memberBalance)}</span>
@@ -548,9 +569,24 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                                         <Icon name="trash" className="w-3 h-3"/> Hapus Foto
                                     </button>
                                 ) : (
-                                    <p className="text-[10px] text-slate-400">
-                                        Upload foto struk EDC atau bukti transfer QRIS.
-                                    </p>
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-[10px] text-slate-400">
+                                            Upload foto struk EDC atau bukti transfer QRIS.
+                                        </p>
+                                        {isDisplayConnected && (
+                                            <button 
+                                                onClick={handleRequestCustomerPhoto}
+                                                disabled={isWaitingForCustomer}
+                                                className={`text-xs bg-purple-700 hover:bg-purple-600 text-white px-2 py-1.5 rounded flex items-center justify-center gap-1 transition-colors ${isWaitingForCustomer ? 'opacity-75 cursor-wait' : ''}`}
+                                            >
+                                                {isWaitingForCustomer ? (
+                                                    <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Menunggu Pelanggan...</>
+                                                ) : (
+                                                    <><Icon name="camera" className="w-3 h-3"/> Minta Pelanggan Foto</>
+                                                )}
+                                            </button>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         </div>

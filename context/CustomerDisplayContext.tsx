@@ -12,6 +12,12 @@ interface CustomerDisplayContextType {
     myPeerId: string;
     setupReceiver: () => void;
     receivedData: CustomerDisplayPayload | null;
+    
+    // NEW: Bi-directional Communication Features
+    requestCustomerCamera: () => void;
+    customerImage: string | null;
+    clearCustomerImage: () => void;
+    sendImageToCashier: (imageBase64: string) => void;
 }
 
 const CustomerDisplayContext = createContext<CustomerDisplayContextType | undefined>(undefined);
@@ -21,11 +27,13 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
     const [isDisplayConnected, setIsDisplayConnected] = useState(false);
     const cashierPeerRef = useRef<Peer | null>(null);
     const connectionRef = useRef<any>(null); // DataConnection
+    const [customerImage, setCustomerImage] = useState<string | null>(null);
 
     // --- RECEIVER STATE (DISPLAY) ---
     const [myPeerId, setMyPeerId] = useState<string>('');
     const receiverPeerRef = useRef<Peer | null>(null);
     const [receivedData, setReceivedData] = useState<CustomerDisplayPayload | null>(null);
+    const receiverConnectionRef = useRef<any>(null); // To reply back
 
     // --- CASHIER LOGIC (SENDER) ---
     const connectToDisplay = useCallback(async (displayId: string) => {
@@ -46,6 +54,14 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
                     connectionRef.current = conn;
                     setIsDisplayConnected(true);
                     resolve();
+
+                    // Listen for replies (Images)
+                    conn.on('data', (data: any) => {
+                        if (data && data.cameraImage) {
+                            console.log("Image received from customer display");
+                            setCustomerImage(data.cameraImage);
+                        }
+                    });
                 });
 
                 conn.on('close', () => {
@@ -83,15 +99,20 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
         }
     }, [isDisplayConnected]);
 
+    // Request Camera specific helper
+    const requestCustomerCamera = useCallback(() => {
+        setCustomerImage(null); // Reset previous image
+        sendDataToDisplay({ type: 'REQUEST_CAMERA' });
+    }, [sendDataToDisplay]);
+
+    const clearCustomerImage = useCallback(() => {
+        setCustomerImage(null);
+    }, []);
+
     // --- DISPLAY LOGIC (RECEIVER) ---
     const setupReceiver = useCallback(() => {
         if (receiverPeerRef.current) return; // Already setup
 
-        // Generate Random Short ID for easier typing if needed
-        // But PeerJS default ID is UUID. Let's use custom ID if possible or just use generated.
-        // For simplicity and avoiding collisions, we'll let PeerJS generate, but maybe prefix it?
-        // Prefixing not supported well without own server. Let's rely on generated ID.
-        
         const peer = new Peer(); 
         receiverPeerRef.current = peer;
 
@@ -101,6 +122,7 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
 
         peer.on('connection', (conn) => {
             console.log('Incoming connection from cashier...');
+            receiverConnectionRef.current = conn;
             
             conn.on('data', (data: any) => {
                 setReceivedData(data);
@@ -109,12 +131,20 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
             conn.on('close', () => {
                 // Reset to welcome screen if disconnected
                 setReceivedData(prev => prev ? { ...prev, type: 'WELCOME' } : null);
+                receiverConnectionRef.current = null;
             });
         });
 
         peer.on('error', (err) => {
             console.error('Receiver Peer Error:', err);
         });
+    }, []);
+
+    const sendImageToCashier = useCallback((imageBase64: string) => {
+        if (receiverConnectionRef.current) {
+            // Send back simple object with the image
+            receiverConnectionRef.current.send({ cameraImage: imageBase64 });
+        }
     }, []);
 
     // Cleanup on unmount
@@ -133,7 +163,11 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
             sendDataToDisplay,
             myPeerId,
             setupReceiver,
-            receivedData
+            receivedData,
+            requestCustomerCamera,
+            customerImage,
+            clearCustomerImage,
+            sendImageToCashier
         }}>
             {children}
         </CustomerDisplayContext.Provider>

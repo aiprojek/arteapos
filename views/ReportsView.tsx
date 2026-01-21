@@ -35,6 +35,7 @@ const ReportsView: React.FC = () => {
     const [receiptTransaction, setReceiptTransaction] = useState<Transaction | null>(null);
     // UPDATED: Evidence State now holds URL and Filename
     const [evidenceData, setEvidenceData] = useState<{ url: string; filename: string } | null>(null);
+    const [zoomLevel, setZoomLevel] = useState(1); // ZOOM STATE
 
     // Refund State
     const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
@@ -235,6 +236,11 @@ const ReportsView: React.FC = () => {
         }
     };
 
+    // Zoom Handlers
+    const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.5, 4));
+    const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.5, 1));
+    const handleResetZoom = () => setZoomLevel(1);
+
     // --- COLUMNS FOR TRANSACTION TABLE ---
     const transactionColumns = [
         { label: 'Waktu', width: '120px', render: (t: Transaction) => <span className="text-slate-400 text-xs">{new Date(t.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</span> },
@@ -273,6 +279,7 @@ const ReportsView: React.FC = () => {
                                     url: img,
                                     filename: `Bukti_Trx_${safeId}_${dateStr}.jpg`
                                 });
+                                setZoomLevel(1); // Reset zoom
                             }
                         }}
                         className="text-blue-400 hover:text-blue-300 p-1"
@@ -463,10 +470,51 @@ const ReportsView: React.FC = () => {
 
             {evidenceData && (
                 <Modal isOpen={!!evidenceData} onClose={() => setEvidenceData(null)} title="Bukti Pembayaran">
-                    <div className="flex flex-col items-center gap-4">
-                        <div className="flex justify-center bg-black/20 p-2 rounded w-full">
-                            <img src={evidenceData.url} alt="Bukti" className="max-h-[60vh] max-w-full object-contain rounded" />
+                    <div className="flex flex-col items-center gap-4 relative">
+                        <div className="flex justify-center bg-black/40 p-2 rounded w-full overflow-hidden relative" style={{ maxHeight: '60vh' }}>
+                            <div className="overflow-auto w-full h-full flex items-center justify-center">
+                                <img 
+                                    src={evidenceData.url} 
+                                    alt="Bukti" 
+                                    style={{ 
+                                        transform: `scale(${zoomLevel})`, 
+                                        transformOrigin: 'top center',
+                                        transition: 'transform 0.2s ease-out'
+                                    }}
+                                    className="max-w-full object-contain rounded" 
+                                />
+                            </div>
+                            
+                            {/* Floating Zoom Controls */}
+                            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-2 bg-slate-800/80 p-2 rounded-full backdrop-blur-sm border border-slate-600 shadow-lg z-10">
+                                <button 
+                                    onClick={handleZoomOut} 
+                                    className="p-1.5 hover:bg-slate-700 rounded-full text-white transition-colors"
+                                    title="Zoom Out"
+                                >
+                                    <Icon name="zoom-out" className="w-4 h-4" />
+                                </button>
+                                <span className="text-xs font-mono text-white min-w-[3rem] text-center">
+                                    {(zoomLevel * 100).toFixed(0)}%
+                                </span>
+                                <button 
+                                    onClick={handleZoomIn} 
+                                    className="p-1.5 hover:bg-slate-700 rounded-full text-white transition-colors"
+                                    title="Zoom In"
+                                >
+                                    <Icon name="zoom-in" className="w-4 h-4" />
+                                </button>
+                                <div className="w-px h-4 bg-slate-600 mx-1"></div>
+                                <button 
+                                    onClick={handleResetZoom} 
+                                    className="text-xs text-sky-400 hover:text-white px-2 font-bold"
+                                    title="Reset Zoom"
+                                >
+                                    Reset
+                                </button>
+                            </div>
                         </div>
+
                         <div className="flex justify-end gap-3 w-full">
                             <Button onClick={handleDownloadEvidence} className="bg-blue-600 hover:bg-blue-500 border-none">
                                 <Icon name="download" className="w-4 h-4"/> Unduh

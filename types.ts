@@ -433,13 +433,14 @@ export interface AuditLog {
 
 // --- CUSTOMER DISPLAY PAYLOAD (P2P) ---
 export interface CustomerDisplayPayload {
-    type: 'CART_UPDATE' | 'PAYMENT_SUCCESS' | 'WELCOME' | 'REFUND_ALERT';
-    cartItems: CartItem[];
-    subtotal: number;
-    discount: number;
-    tax: number;
-    total: number;
+    type: 'CART_UPDATE' | 'PAYMENT_SUCCESS' | 'WELCOME' | 'REFUND_ALERT' | 'REQUEST_CAMERA';
+    cartItems?: CartItem[];
+    subtotal?: number;
+    discount?: number;
+    tax?: number;
+    total?: number;
     change?: number; // Only for Payment Success
     shopName?: string;
     refundReason?: string; // Only for REFUND_ALERT
+    cameraImage?: string; // Only for CAMERA_RESULT (Base64)
 }

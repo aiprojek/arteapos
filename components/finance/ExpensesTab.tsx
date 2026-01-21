@@ -33,8 +33,11 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ dataSource = 'local', cloudDa
     });
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isScanning, setIsScanning] = useState(false);
-    // UPDATED: Using Object for evidence
+    
+    // UPDATED: Evidence Viewer State
     const [viewEvidence, setViewEvidence] = useState<{ url: string; filename: string } | null>(null);
+    const [zoomLevel, setZoomLevel] = useState(1); // ZOOM STATE
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const activeExpenses = dataSource === 'local' ? localExpenses : cloudData;
@@ -141,6 +144,10 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ dataSource = 'local', cloudDa
         }
     };
 
+    const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.5, 4));
+    const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.5, 1));
+    const handleResetZoom = () => setZoomLevel(1);
+
     const columns = [
         { label: 'Tanggal', width: '1fr', render: (e: Expense) => new Date(e.date).toLocaleDateString('id-ID') },
         { label: 'Keterangan', width: '2fr', render: (e: Expense) => (
@@ -154,6 +161,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ dataSource = 'local', cloudDa
                                 url: e.evidenceImageUrl!,
                                 filename: `Bukti_Exp_${safeDesc}_${e.date.slice(0,10)}.jpg`
                             }); 
+                            setZoomLevel(1); // Reset Zoom
                         }}
                         className="text-blue-400 hover:text-blue-300"
                         title="Lihat Bukti Foto"
@@ -277,14 +285,55 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ dataSource = 'local', cloudDa
                 </div>
             </Modal>
 
-            {/* View Image Modal */}
+            {/* View Image Modal with Zoom */}
             <Modal isOpen={!!viewEvidence} onClose={() => setViewEvidence(null)} title="Bukti Transaksi">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="flex justify-center bg-black/20 p-2 rounded w-full">
-                        {viewEvidence && (
-                            <img src={viewEvidence.url} alt="Bukti" className="max-h-[60vh] max-w-full object-contain rounded" />
-                        )}
+                <div className="flex flex-col items-center gap-4 relative">
+                    <div className="flex justify-center bg-black/40 p-2 rounded w-full overflow-hidden relative" style={{ maxHeight: '60vh' }}>
+                        <div className="overflow-auto w-full h-full flex items-center justify-center">
+                            {viewEvidence && (
+                                <img 
+                                    src={viewEvidence.url} 
+                                    alt="Bukti" 
+                                    style={{ 
+                                        transform: `scale(${zoomLevel})`, 
+                                        transformOrigin: 'top center',
+                                        transition: 'transform 0.2s ease-out'
+                                    }}
+                                    className="max-w-full object-contain rounded" 
+                                />
+                            )}
+                        </div>
+
+                        {/* Floating Zoom Controls */}
+                        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-2 bg-slate-800/80 p-2 rounded-full backdrop-blur-sm border border-slate-600 shadow-lg z-10">
+                            <button 
+                                onClick={handleZoomOut} 
+                                className="p-1.5 hover:bg-slate-700 rounded-full text-white transition-colors"
+                                title="Zoom Out"
+                            >
+                                <Icon name="zoom-out" className="w-4 h-4" />
+                            </button>
+                            <span className="text-xs font-mono text-white min-w-[3rem] text-center">
+                                {(zoomLevel * 100).toFixed(0)}%
+                            </span>
+                            <button 
+                                onClick={handleZoomIn} 
+                                className="p-1.5 hover:bg-slate-700 rounded-full text-white transition-colors"
+                                title="Zoom In"
+                            >
+                                <Icon name="zoom-in" className="w-4 h-4" />
+                            </button>
+                            <div className="w-px h-4 bg-slate-600 mx-1"></div>
+                            <button 
+                                onClick={handleResetZoom} 
+                                className="text-xs text-sky-400 hover:text-white px-2 font-bold"
+                                title="Reset Zoom"
+                            >
+                                Reset
+                            </button>
+                        </div>
                     </div>
+
                     <div className="flex justify-end gap-3 w-full">
                         <Button onClick={handleDownloadEvidence} className="bg-blue-600 hover:bg-blue-500 border-none">
                             <Icon name="download" className="w-4 h-4"/> Unduh

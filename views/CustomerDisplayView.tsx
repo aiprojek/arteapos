@@ -1,19 +1,95 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useCustomerDisplay } from '../context/CustomerDisplayContext';
 import { CURRENCY_FORMATTER } from '../constants';
 import Icon from '../components/Icon';
 import Button from '../components/Button';
 
 const CustomerDisplayView: React.FC = () => {
-    const { setupReceiver, receivedData, myPeerId } = useCustomerDisplay();
+    const { setupReceiver, receivedData, myPeerId, sendImageToCashier } = useCustomerDisplay();
     const [currentTime, setCurrentTime] = useState(new Date());
+
+    // Camera State
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [isCameraActive, setIsCameraActive] = useState(false);
+    const [isCapturing, setIsCapturing] = useState(false);
 
     useEffect(() => {
         setupReceiver();
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, [setupReceiver]);
+
+    // Handle Camera Request
+    useEffect(() => {
+        if (receivedData?.type === 'REQUEST_CAMERA') {
+            startCamera();
+        } else {
+            stopCamera(); // Auto stop if type changes (e.g. payment success)
+        }
+    }, [receivedData]);
+
+    const startCamera = async () => {
+        setIsCameraActive(true);
+        try {
+            // Front camera by default for customer display
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'user' }, 
+                audio: false 
+            });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+            }
+        } catch (err) {
+            console.error("Camera access failed", err);
+            // Optionally send error back or show alert on screen
+        }
+    };
+
+    const stopCamera = () => {
+        if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(track => track.stop());
+            videoRef.current.srcObject = null;
+        }
+        setIsCameraActive(false);
+    };
+
+    const handleCapture = () => {
+        if (!videoRef.current || !canvasRef.current) return;
+        
+        setIsCapturing(true);
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const context = canvas.getContext('2d');
+
+        if (context) {
+            // 1. Set dimensions (Max 800px width for decent quality but manageable size)
+            const maxWidth = 800;
+            const ratio = video.videoWidth / video.videoHeight;
+            canvas.width = maxWidth;
+            canvas.height = maxWidth / ratio;
+
+            // 2. Draw
+            // Optional: Flip horizontally if we want to save "mirror" image as seen? 
+            // Usually better to save normal image so text is readable. 
+            // But user sees mirror. Let's save normal image (readable text).
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // 3. Compress & Send
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            
+            // 4. Send back
+            sendImageToCashier(dataUrl);
+
+            // 5. Cleanup UI (Wait a bit or stop immediately)
+            // Ideally we wait for next signal from cashier (e.g. Cart Update or Success)
+            // But for now let's stop camera locally to indicate success
+            stopCamera();
+        }
+        setIsCapturing(false);
+    };
 
     const WaitingScreen = () => (
         <div className="flex flex-col items-center justify-center h-screen bg-slate-900 text-white p-8 space-y-8">
@@ -47,6 +123,44 @@ const CustomerDisplayView: React.FC = () => {
     );
 
     if (!receivedData) return <WaitingScreen />;
+
+    // --- CAMERA OVERLAY ---
+    if (isCameraActive) {
+        return (
+            <div className="h-screen bg-black flex flex-col items-center justify-center relative">
+                <h2 className="absolute top-8 text-2xl font-bold text-white z-20 text-center w-full drop-shadow-md">
+                    Arahkan Bukti Transfer ke Kamera
+                </h2>
+                
+                {/* Video Container with Mirror Effect */}
+                <div className="relative w-full max-w-2xl aspect-[3/4] sm:aspect-video rounded-xl overflow-hidden shadow-2xl border-4 border-[#347758]">
+                    <video 
+                        ref={videoRef} 
+                        autoPlay 
+                        playsInline 
+                        muted 
+                        className="w-full h-full object-cover transform -scale-x-100" 
+                    />
+                    
+                    {/* Capture Button Overlay */}
+                    <div className="absolute bottom-6 left-0 right-0 flex justify-center z-30">
+                        <button 
+                            onClick={handleCapture}
+                            disabled={isCapturing}
+                            className="w-20 h-20 rounded-full bg-white border-4 border-slate-300 flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+                        >
+                            {isCapturing ? <div className="w-10 h-10 border-4 border-[#347758] border-t-transparent rounded-full animate-spin"/> : <div className="w-16 h-16 bg-[#347758] rounded-full" />}
+                        </button>
+                    </div>
+                </div>
+
+                <p className="text-slate-400 mt-4 text-sm animate-pulse">
+                    Pastikan nominal dan tanggal terlihat jelas
+                </p>
+                <canvas ref={canvasRef} className="hidden" />
+            </div>
+        );
+    }
 
     // --- REFUND ALERT SCREEN (ANTI-FRAUD) ---
     if (receivedData.type === 'REFUND_ALERT') {

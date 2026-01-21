@@ -10,7 +10,8 @@ export type IconName =
   | 'book' | 'star-fill' | 'check-circle-fill' | 'menu' | 'tag' | 'trending-up' 
   | 'chevron-down' | 'chevron-up' | 'keyboard' | 'play' | 'wifi' | 'database' 
   | 'warning' | 'question' | 'bluetooth' | 'lock' | 'clipboard' | 'boxes' | 'file-lock' 
-  | 'clock-history' | 'eye' | 'cloud' | 'shop' | 'tools' | 'money' | 'lightbulb' | 'cast';
+  | 'clock-history' | 'eye' | 'cloud' | 'shop' | 'tools' | 'money' | 'lightbulb' | 'cast'
+  | 'zoom-in' | 'zoom-out' | 'dash'; // Added new icons
 
 interface IconProps {
   name: IconName;
@@ -96,14 +97,15 @@ const Icon: React.FC<IconProps> = ({ name, className = 'w-6 h-6', title, style }
     tools: 'bi-tools',
     money: 'bi-currency-dollar',
     lightbulb: 'bi-lightbulb',
-    cast: 'bi-cast' // Ditambahkan
+    cast: 'bi-cast',
+    'zoom-in': 'bi-zoom-in',
+    'zoom-out': 'bi-zoom-out',
+    dash: 'bi-dash'
   };
 
   const biClass = iconMap[name] || 'bi-question-square';
 
   // Smart Sizing Logic
-  // Font icons need 'text-size' to grow. 
-  // We infer the text size from the width class if no text size is provided explicitly.
   let sizeClass = '';
   if (!className.includes('text-')) {
       if (className.includes('w-3')) sizeClass = 'text-xs';

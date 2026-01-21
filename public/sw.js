@@ -37,7 +37,8 @@ const OPTIONAL_URLS = [
   'https://esm.sh/dropbox@^10.34.0',
   'https://esm.sh/path-browserify@^1.0.1',
   'https://esm.sh/url',
-  'https://esm.sh/peerjs@1.5.2?bundle-deps' 
+  'https://esm.sh/peerjs@1.5.2?bundle-deps',
+  'https://esm.sh/tesseract.js@^7.0.0'
 ];
 
 // Helper untuk fetch dengan timeout dan mode cors

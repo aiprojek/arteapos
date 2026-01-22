@@ -242,7 +242,7 @@ const POSView: React.FC = () => {
             if (logic.isSessionLocked) return; 
             if (e.key === 'F2') {
                 e.preventDefault();
-                if (logic.cart.length > 0) logic.setPaymentModalOpen(true);
+                if (logic.cart.length > 0) logic.handleOpenPayment(); // Use Handler with Validation
             }
             if (e.key === 'F4') {
                 e.preventDefault();
@@ -335,7 +335,7 @@ const POSView: React.FC = () => {
                         onOpenDiscountModal={logic.handleOpenDiscountModal}
                         onOpenCartDiscountModal={() => logic.setCartDiscountModalOpen(true)}
                         onOpenRewardModal={() => logic.selectedCustomer ? logic.setRewardsModalOpen(true) : alert('Silakan pilih pelanggan.')}
-                        onOpenPaymentModal={() => logic.setPaymentModalOpen(true)}
+                        onOpenPaymentModal={() => logic.handleOpenPayment()} // Use NEW handler
                         onOpenNameModal={(cart) => { logic.setCartToRename(cart); logic.setNameModalOpen(true); }}
                         onQuickPay={logic.handleQuickPay}
                         selectedCustomer={logic.selectedCustomer}

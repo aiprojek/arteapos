@@ -21,7 +21,8 @@ export const usePOSLogic = () => {
         holdActiveCart, updateHeldCartName,
         applyItemDiscount, removeItemDiscount,
         cartDiscount, applyCartDiscount, removeCartDiscount,
-        getCartTotals, splitCart
+        getCartTotals, splitCart,
+        orderType, tableNumber, paxCount // Import order related info
     } = useCart();
     const { showAlert } = useUI();
     const { sessionSettings, session, startSession } = useSession();
@@ -78,6 +79,43 @@ export const usePOSLogic = () => {
     }, [customers, selectedCustomer]);
 
     // -- Handlers --
+    
+    // NEW: Validation Logic
+    const validateTransactionRequirements = useCallback(() => {
+        if (cart.length === 0) {
+            showAlert({ type: 'alert', title: 'Keranjang Kosong', message: 'Tambahkan produk sebelum membayar.' });
+            return false;
+        }
+
+        // Check Table & Pax Requirement
+        const isDineIn = orderType.toLowerCase().includes('makan') || orderType.toLowerCase().includes('dine') || orderType.toLowerCase().includes('meja');
+        
+        if (sessionSettings.enableTableManagement && sessionSettings.requireTableInfo && isDineIn) {
+            const isTableFilled = tableNumber && tableNumber.trim().length > 0;
+            const isPaxFilled = paxCount && paxCount > 0;
+
+            if (!isTableFilled || !isPaxFilled) {
+                let msg = 'Data pesanan belum lengkap.';
+                if (!isTableFilled && !isPaxFilled) msg = 'Wajib mengisi Nomor Meja DAN Jumlah Tamu (Pax).';
+                else if (!isTableFilled) msg = 'Wajib mengisi Nomor Meja.';
+                else if (!isPaxFilled) msg = 'Wajib mengisi Jumlah Tamu (Pax).';
+
+                showAlert({ 
+                    type: 'alert', 
+                    title: 'Info Meja Wajib', 
+                    message: msg 
+                });
+                return false;
+            }
+        }
+        return true;
+    }, [cart.length, orderType, sessionSettings, tableNumber, paxCount, showAlert]);
+
+    const handleOpenPayment = () => {
+        if (validateTransactionRequirements()) {
+            setPaymentModalOpen(true);
+        }
+    };
 
     const handleProductClick = (product: Product) => {
         if (product.modifierGroups && product.modifierGroups.length > 0) {
@@ -172,7 +210,9 @@ export const usePOSLogic = () => {
     }, [saveTransaction, showAlert, receiptSettings.enableKitchenPrinter]);
 
     const handleQuickPay = useCallback((paymentAmount: number) => {
-        if (cart.length === 0) return;
+        // Use Validator first
+        if (!validateTransactionRequirements()) return;
+
         const { finalTotal } = getCartTotals();
         if (paymentAmount < finalTotal - 0.01) {
             showAlert({ type: 'alert', title: 'Pembayaran Kurang', message: `Jumlah pembayaran cepat tidak mencukupi total tagihan.` });
@@ -193,7 +233,7 @@ export const usePOSLogic = () => {
             console.error(error);
             showAlert({type: 'alert', title: 'Error', message: 'Gagal menyimpan transaksi.'});
         }
-    }, [cart.length, getCartTotals, saveTransaction, showAlert, selectedCustomer, receiptSettings.enableKitchenPrinter]);
+    }, [getCartTotals, saveTransaction, showAlert, selectedCustomer, receiptSettings.enableKitchenPrinter, validateTransactionRequirements]);
 
     // UPDATED: Logic Scan Barcode to support Member Card
     const handleBarcodeScan = useCallback((barcode: string) => {
@@ -297,7 +337,7 @@ export const usePOSLogic = () => {
         productForModifier, setProductForModifier,
         isSplitBillModalOpen, setSplitBillModalOpen,
         mobileTab, setMobileTab,
-        isMemberSearchOpen, setMemberSearchOpen, // Export new state
+        isMemberSearchOpen, setMemberSearchOpen,
         
         // Computed
         totalCartItems,
@@ -327,6 +367,10 @@ export const usePOSLogic = () => {
         handleBarcodeScan,
         handleSaveName,
         handleOpenDiscountModal,
-        handleSplitBill
+        handleSplitBill,
+        
+        // NEW EXPORT
+        validateTransactionRequirements,
+        handleOpenPayment
     };
 };

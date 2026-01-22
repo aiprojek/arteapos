@@ -8,6 +8,7 @@ import Modal from '../Modal';
 interface GeneralTabProps {
     form: ReceiptSettings;
     onChange: (settings: ReceiptSettings) => void;
+    isTableFeatureEnabled?: boolean; // New prop to control locking
 }
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
@@ -41,7 +42,8 @@ const ToggleSwitch: React.FC<{ label: string; checked: boolean; onChange: (check
 const OrderTypeManager: React.FC<{
     types: string[];
     onChange: (newTypes: string[]) => void;
-}> = ({ types, onChange }) => {
+    isTableFeatureEnabled?: boolean;
+}> = ({ types, onChange, isTableFeatureEnabled }) => {
     const [newType, setNewType] = useState('');
 
     const handleAdd = () => {
@@ -55,18 +57,31 @@ const OrderTypeManager: React.FC<{
         onChange(types.filter(t => t !== typeToRemove));
     };
 
+    const isLocked = (type: string) => {
+        return isTableFeatureEnabled && type.toLowerCase() === 'makan di tempat';
+    };
+
     return (
         <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Tipe Pesanan</label>
             <div className="flex flex-wrap gap-2 p-2 bg-slate-900 border border-slate-600 rounded-lg mb-2 min-h-[44px]">
-                {types.map(type => (
-                    <div key={type} className="flex items-center gap-1 bg-[#347758]/20 text-[#7ac0a0] text-sm font-medium px-2 py-1 rounded-full">
-                        {type}
-                        <button type="button" onClick={() => handleRemove(type)} className="text-[#a0d9bf] hover:text-white">
-                            <Icon name="close" className="w-3 h-3"/>
-                        </button>
-                    </div>
-                ))}
+                {types.map(type => {
+                    const locked = isLocked(type);
+                    return (
+                        <div key={type} className={`flex items-center gap-1 text-sm font-medium px-2 py-1 rounded-full ${locked ? 'bg-yellow-900/30 text-yellow-300 border border-yellow-700' : 'bg-[#347758]/20 text-[#7ac0a0]'}`}>
+                            {type}
+                            {locked ? (
+                                <span title="Terkunci: Fitur Meja Aktif" className="ml-1 cursor-help">
+                                    <Icon name="lock" className="w-3 h-3"/>
+                                </span>
+                            ) : (
+                                <button type="button" onClick={() => handleRemove(type)} className="text-[#a0d9bf] hover:text-white">
+                                    <Icon name="close" className="w-3 h-3"/>
+                                </button>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
             <div className="flex gap-2">
                 <input
@@ -188,7 +203,7 @@ const BranchManager: React.FC<{
     );
 };
 
-const GeneralTab: React.FC<GeneralTabProps> = ({ form, onChange }) => {
+const GeneralTab: React.FC<GeneralTabProps> = ({ form, onChange, isTableFeatureEnabled }) => {
     return (
         <div className="animate-fade-in">
             <SettingsCard title="Informasi Toko & Cabang" description="Kelola identitas toko dan cabang Anda.">
@@ -236,6 +251,7 @@ const GeneralTab: React.FC<GeneralTabProps> = ({ form, onChange }) => {
                         <OrderTypeManager
                             types={form.orderTypes || []}
                             onChange={(newTypes) => onChange({ ...form, orderTypes: newTypes })}
+                            isTableFeatureEnabled={isTableFeatureEnabled}
                         />
                     </div>
                 </div>

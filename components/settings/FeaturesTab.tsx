@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import type { SessionSettings, MembershipSettings, DiscountDefinition, PointRule } from '../../types';
+import type { SessionSettings, MembershipSettings, ReceiptSettings, PointRule } from '../../types';
 import Button from '../Button';
 import Icon from '../Icon';
 import Modal from '../Modal';
@@ -12,6 +12,9 @@ interface FeaturesTabProps {
     onSessionChange: (s: SessionSettings) => void;
     membershipForm: MembershipSettings;
     onMembershipChange: (s: MembershipSettings) => void;
+    // New props for updating receipt types
+    receiptForm?: ReceiptSettings;
+    onReceiptChange?: (s: ReceiptSettings) => void;
 }
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
@@ -42,7 +45,14 @@ const ToggleSwitch: React.FC<{ label: string; checked: boolean; onChange: (check
     </div>
 );
 
-const FeaturesTab: React.FC<FeaturesTabProps> = ({ sessionForm, onSessionChange, membershipForm, onMembershipChange }) => {
+const FeaturesTab: React.FC<FeaturesTabProps> = ({ 
+    sessionForm, 
+    onSessionChange, 
+    membershipForm, 
+    onMembershipChange,
+    receiptForm,
+    onReceiptChange
+}) => {
     const { discountDefinitions, addDiscountDefinition, deleteDiscountDefinition } = useDiscount();
     
     // Discount Modal State
@@ -100,6 +110,28 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ sessionForm, onSessionChange,
         });
     };
 
+    const handleTableManagementToggle = (enabled: boolean) => {
+        // 1. Update Session Settings
+        onSessionChange({...sessionForm, enableTableManagement: enabled});
+
+        // 2. Auto-add "Makan di Tempat" if enabled and missing
+        if (enabled && receiptForm && onReceiptChange) {
+            const currentTypes = receiptForm.orderTypes || [];
+            const dineInKey = "Makan di Tempat";
+            
+            // Check case-insensitive to avoid duplicates like "makan di tempat"
+            const exists = currentTypes.some(t => t.toLowerCase() === dineInKey.toLowerCase());
+            
+            if (!exists) {
+                // Add to beginning of list
+                onReceiptChange({
+                    ...receiptForm,
+                    orderTypes: [dineInKey, ...currentTypes]
+                });
+            }
+        }
+    };
+
     return (
         <div className="animate-fade-in">
             <SettingsCard title="Manajemen Sesi Penjualan" description="Mengelola shift kasir dan pencatatan uang fisik.">
@@ -131,10 +163,22 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ sessionForm, onSessionChange,
                     
                      <ToggleSwitch 
                         label="Aktifkan Manajemen Meja & Pax" 
-                        description="Tampilkan kolom input Nomor Meja dan Jumlah Tamu saat pesanan Makan di Tempat."
+                        description="Tampilkan kolom input Nomor Meja dan Jumlah Tamu. Otomatis menambahkan tipe 'Makan di Tempat'."
                         checked={sessionForm?.enableTableManagement || false} 
-                        onChange={(val) => onSessionChange({...sessionForm, enableTableManagement: val})} 
+                        onChange={handleTableManagementToggle} 
                     />
+                    
+                    {/* SUB FEATURE: Require Table Info */}
+                    {sessionForm?.enableTableManagement && (
+                        <div className="ml-4 pl-4 border-l-2 border-slate-700 mt-2 space-y-3 animate-fade-in">
+                            <ToggleSwitch 
+                                label="Wajibkan Isi Meja & Pax" 
+                                description="Kasir TIDAK BISA BAYAR jika 'Nomor Meja' atau 'Jumlah Tamu' kosong. Keduanya wajib diisi."
+                                checked={sessionForm.requireTableInfo || false} 
+                                onChange={(val) => onSessionChange({...sessionForm, requireTableInfo: val})} 
+                            />
+                        </div>
+                    )}
                 </div>
             </SettingsCard>
 

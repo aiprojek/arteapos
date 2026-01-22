@@ -9,6 +9,12 @@ const FAQTab: React.FC = () => {
 
     const faqs = [
         {
+            id: 'faq_pay_blocked',
+            category: 'Transaksi',
+            title: 'Kenapa muncul peringatan "Info Meja Wajib" saat mau Bayar?',
+            content: 'Ini terjadi karena pengaturan keamanan aktif.<br/><br/>Anda telah mengaktifkan opsi <strong>"Wajibkan Isi Meja & Pax"</strong> di menu Pengaturan > Fitur Kasir. <br/>Untuk pesanan tipe "Makan di Tempat", sistem mewajibkan Anda mengisi <strong>Nomor Meja DAN Jumlah Tamu (Pax)</strong> sebelum bisa memproses pembayaran.'
+        },
+        {
             id: 'faq_cam_customer',
             category: 'Transaksi',
             title: 'Bagaimana cara minta pelanggan foto bukti transfer langsung di layar mereka?',

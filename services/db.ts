@@ -92,7 +92,8 @@ export const initialData: AppData = {
         address: 'Alamat Toko',
         footerMessage: 'Terima kasih telah berbelanja!',
         taxRate: 0,
-        serviceChargeRate: 0
+        serviceChargeRate: 0,
+        orderTypes: ['Makan di Tempat', 'Bawa Pulang', 'Pesan Antar'] // DEFAULT VALUES ADDED HERE
     },
     inventorySettings: {
         enabled: true,
@@ -106,7 +107,8 @@ export const initialData: AppData = {
         enabled: false,
         enableCartHolding: false,
         enableBlindAudit: false,
-        enableTableManagement: false // DEFAULT OFF
+        enableTableManagement: false,
+        requireTableInfo: false // DEFAULT OFF
     },
     membershipSettings: {
         enabled: false,

@@ -17,7 +17,7 @@ import InventoryTab from '../components/settings/InventoryTab';
 import FeaturesTab from '../components/settings/FeaturesTab';
 import AuthTab from '../components/settings/AuthTab';
 import AuditTab from '../components/settings/AuditTab';
-import HardwareTab from '../components/settings/HardwareTab'; // NEW IMPORT
+import HardwareTab from '../components/settings/HardwareTab';
 
 const SettingsView: React.FC = () => {
     const { receiptSettings: originalReceiptSettings, updateReceiptSettings } = useSettings();
@@ -83,7 +83,7 @@ const SettingsView: React.FC = () => {
             <div className="flex flex-nowrap overflow-x-auto gap-2 border-b border-slate-700 pb-2">
                 {[
                     { id: 'general', label: 'Toko & Struk', icon: 'settings', restricted: false },
-                    { id: 'hardware', label: 'Perangkat Keras', icon: 'bluetooth', restricted: false }, // NEW TAB
+                    { id: 'hardware', label: 'Perangkat Keras', icon: 'bluetooth', restricted: false },
                     { id: 'features', label: 'Fitur Kasir', icon: 'star', restricted: false },
                     { id: 'inventory', label: 'Inventaris', icon: 'boxes', restricted: false },
                     { id: 'auth', label: 'Keamanan', icon: 'lock', restricted: true }, 
@@ -102,9 +102,16 @@ const SettingsView: React.FC = () => {
             </div>
 
             {/* Content Area */}
-            {activeTab === 'general' && <GeneralTab form={receiptForm} onChange={setReceiptForm} />}
+            {activeTab === 'general' && (
+                <GeneralTab 
+                    form={receiptForm} 
+                    onChange={setReceiptForm}
+                    // Pass current session settings to check table feature status
+                    isTableFeatureEnabled={sessionForm.enableTableManagement} 
+                />
+            )}
             
-            {activeTab === 'hardware' && <HardwareTab />} {/* NEW RENDER */}
+            {activeTab === 'hardware' && <HardwareTab />}
 
             {activeTab === 'features' && (
                 <FeaturesTab 
@@ -112,6 +119,9 @@ const SettingsView: React.FC = () => {
                     onSessionChange={setSessionForm}
                     membershipForm={membershipForm}
                     onMembershipChange={setMembershipForm}
+                    // Pass receipt settings to auto-add 'Makan di Tempat'
+                    receiptForm={receiptForm}
+                    onReceiptChange={setReceiptForm}
                 />
             )}
 

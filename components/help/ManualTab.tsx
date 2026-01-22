@@ -71,12 +71,12 @@ const ManualTab: React.FC = () => {
                             </ol>
                         </AccordionItem>
                         
-                        <AccordionItem title="Nomor Meja & Pax (Restoran)" isOpen={openAccordion === 'pos_table'} onToggle={() => toggleAccordion('pos_table')} icon="ingredients" colorClass="text-orange-400" badge="Opsional">
-                            <p>Fitur khusus untuk usaha FnB/Restoran.</p>
+                        <AccordionItem title="Nomor Meja & Pax (Restoran)" isOpen={openAccordion === 'pos_table'} onToggle={() => toggleAccordion('pos_table')} icon="ingredients" colorClass="text-orange-400" badge="Penting">
+                            <p>Fitur manajemen pesanan untuk restoran/kafe:</p>
                             <ul className="list-disc pl-5 space-y-1 mt-2">
-                                <li>Jika Anda mengaktifkan <strong>"Manajemen Meja & Pax"</strong> di Pengaturan > Fitur Kasir.</li>
-                                <li>Kolom input "Meja" dan "Pax" (Jumlah Orang) akan muncul di keranjang saat Anda memilih tipe pesanan <strong>"Makan di Tempat"</strong>.</li>
-                                <li>Nomor Meja akan tercetak di struk dan muncul di Layar Dapur agar pelayan mudah mengantar pesanan.</li>
+                                <li><strong>Aktivasi:</strong> Buka Pengaturan &gt; Fitur Kasir &gt; Nyalakan "Manajemen Meja & Pax".</li>
+                                <li><strong>Mode Wajib (Strict):</strong> Jika Anda mengaktifkan opsi tambahan <em>"Wajibkan Isi Meja & Pax"</em>, kasir <strong>TIDAK BISA BAYAR</strong> jika kolom Meja atau Jumlah Tamu (Pax) masih kosong.</li>
+                                <li><strong>Aturan Validasi:</strong> Keduanya (Meja DAN Pax) harus diisi. Ini berguna untuk mencegah kecurangan dan memastikan data laporan rata-rata pengunjung akurat.</li>
                             </ul>
                         </AccordionItem>
                         

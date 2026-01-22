@@ -187,7 +187,8 @@ export interface SessionSettings {
   enabled: boolean;
   enableCartHolding?: boolean; 
   enableBlindAudit?: boolean; 
-  enableTableManagement?: boolean; // NEW: Optional Table & Pax
+  enableTableManagement?: boolean; 
+  requireTableInfo?: boolean; // NEW: Mandatory Table/Pax check
 }
 
 export interface CashMovement {

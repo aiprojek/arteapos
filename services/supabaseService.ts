@@ -432,7 +432,8 @@ export const supabaseService = {
             if (myPrices) myPrices.forEach((mp: any) => priceMap.set(mp.product_id, mp.price));
 
             if (remoteProducts && remoteProducts.length > 0) {
-                await db.transaction('rw', db.products, async () => {
+                // Cast db to any to use transaction
+                await (db as any).transaction('rw', db.products, async () => {
                     for (const rp of remoteProducts) {
                         const localP = await db.products.get(rp.id);
                         const overridePrice = priceMap.get(rp.id);

@@ -3,22 +3,21 @@ import React, { useState } from 'react';
 import { useCart } from '../../context/CartContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useCustomer } from '../../context/CustomerContext';
-import { useSession } from '../../context/SessionContext';
-import { useCustomerDisplay } from '../../context/CustomerDisplayContext'; // NEW
+import { useSession } from '../../context/SessionContext'; // IMPORTED
+import { useCustomerDisplay } from '../../context/CustomerDisplayContext'; 
 import { CURRENCY_FORMATTER } from '../../constants';
 import Icon from '../Icon';
 import Button from '../Button';
 import ActiveOrderList from './ActiveOrderList';
 import Modal from '../Modal';
-import { MemberSearchModal, DualScreenModal } from './POSModals'; // Import new DualScreenModal
+import { MemberSearchModal, DualScreenModal } from './POSModals'; 
 import type { Customer, OrderType } from '../../types';
 
-// Sub-components moved here for cleaner file structure
+// Sub-components
 const HeldCartsTabs: React.FC<{
     onSwitch: (cartId: string | null) => void;
 }> = ({ onSwitch }) => {
     const { heldCarts, activeHeldCartId } = useCart();
-
     return (
         <div className="mb-4 -mx-4 px-2">
             <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide px-2">
@@ -55,18 +54,22 @@ const CustomerSelection: React.FC<{
     selectedCustomer: Customer | null;
     onSelectCustomer: (customer: Customer | null) => void;
     onOpenAddModal: () => void;
-    onOpenSearchModal: () => void; // New Prop
-    onOpenScanner: () => void; // New Prop
+    onOpenSearchModal: () => void;
+    onOpenScanner: () => void; 
     onSelectOrderType: (type: OrderType) => void;
     onTopUpClick: () => void;
     orderType: OrderType;
 }> = ({ selectedCustomer, onSelectCustomer, onOpenAddModal, onOpenSearchModal, onOpenScanner, onSelectOrderType, onTopUpClick, orderType }) => {
     const { membershipSettings } = useCustomer();
     const { receiptSettings } = useSettings();
+    const { sessionSettings } = useSession(); // Access Session Settings for Toggle
+    const { tableNumber, setTableNumber, paxCount, setPaxCount } = useCart(); 
     
     const availableOrderTypes = receiptSettings.orderTypes && receiptSettings.orderTypes.length > 0
         ? receiptSettings.orderTypes
         : ['Makan di Tempat', 'Bawa Pulang', 'Pesan Antar'];
+    
+    const isDineIn = orderType.toLowerCase().includes('makan') || orderType.toLowerCase().includes('dine') || orderType.toLowerCase().includes('meja');
 
     return (
         <div className="space-y-3">
@@ -81,6 +84,37 @@ const CustomerSelection: React.FC<{
                     </button>
                 ))}
             </div>
+            
+            {/* CONDITIONAL RENDER: Table & Pax (Only if Enabled & Dine-In) */}
+            {sessionSettings.enableTableManagement && isDineIn && (
+                <div className="grid grid-cols-2 gap-2 animate-fade-in">
+                    <div className="relative">
+                         <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                            <span className="text-slate-500 text-xs font-bold">Meja</span>
+                        </div>
+                        <input 
+                            type="text" 
+                            value={tableNumber} 
+                            onChange={(e) => setTableNumber(e.target.value)} 
+                            placeholder="Nomor"
+                            className="w-full bg-slate-700 border border-slate-600 rounded text-white text-sm pl-12 pr-2 py-1.5 focus:border-[#347758] outline-none text-center font-bold"
+                        />
+                    </div>
+                    <div className="relative">
+                         <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                            <Icon name="users" className="w-3 h-3 text-slate-500" />
+                        </div>
+                        <input 
+                            type="number" 
+                            min="1"
+                            value={paxCount || ''} 
+                            onChange={(e) => setPaxCount(parseInt(e.target.value) || 0)} 
+                            placeholder="Pax"
+                            className="w-full bg-slate-700 border border-slate-600 rounded text-white text-sm pl-8 pr-2 py-1.5 focus:border-[#347758] outline-none text-center font-bold"
+                        />
+                    </div>
+                </div>
+            )}
             
             {membershipSettings.enabled && (
                 <div className="space-y-2">
@@ -172,28 +206,22 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const { 
         cart, cartDiscount, getCartTotals, clearCart, 
         heldCarts, activeHeldCartId, switchActiveCart, deleteHeldCart,
-        orderType, setOrderType
+        orderType, setOrderType // tableNumber & paxCount handled inside CustomerSelection
     } = useCart();
     
     const { sessionSettings } = useSession();
     const { membershipSettings, addBalance } = useCustomer();
     const { receiptSettings } = useSettings();
-    const { isDisplayConnected } = useCustomerDisplay(); // NEW
+    const { isDisplayConnected } = useCustomerDisplay(); 
 
     const { subtotal, itemDiscountAmount, cartDiscountAmount, taxAmount, serviceChargeAmount, finalTotal } = getCartTotals();
     const quickPayAmounts = [20000, 50000, 100000];
 
-    // --- Top Up State ---
     const [isTopUpOpen, setIsTopUpOpen] = useState(false);
     const [topUpAmount, setTopUpAmount] = useState('');
-    
-    // --- Member Search State ---
     const [isMemberSearchOpen, setIsMemberSearchOpen] = useState(false);
-    
-    // --- Dual Screen State ---
     const [isDualScreenModalOpen, setDualScreenModalOpen] = useState(false);
 
-    // Actions Logic
     const handleSwitchCart = (cartId: string | null) => {
         switchActiveCart(cartId);
         setSelectedCustomer(null);
@@ -299,7 +327,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                             <Button variant="secondary" size="sm" onClick={onOpenCartDiscountModal} className="flex-1">
                                 <Icon name="tag" className="w-4 h-4"/> Diskon Total
                             </Button>
-                            {/* Split Bill Button */}
                             {onSplitBill && (
                                 <Button variant="secondary" size="sm" onClick={onSplitBill} disabled={cart.length === 0} className="flex-1" title="Pisah item untuk bayar sebagian">
                                     <Icon name="share" className="w-4 h-4"/> Split
@@ -329,7 +356,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                             )}
                             {taxAmount > 0 && (
                                 <div className="flex justify-between text-slate-400">
-                                    <span>Pajak (Global + Produk)</span>
+                                    <span>Pajak</span>
                                     <span>{CURRENCY_FORMATTER.format(taxAmount)}</span>
                                 </div>
                             )}
@@ -418,10 +445,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         ))}
                     </div>
 
-                    <div className="text-xs text-yellow-500 bg-yellow-900/20 p-2 rounded">
-                        <p>Catatan: Uang yang diterima akan dicatat sebagai <strong>Kas Masuk</strong> pada sesi kasir saat ini.</p>
-                    </div>
-
                     <div className="flex justify-end gap-3 pt-2">
                         <Button variant="secondary" onClick={() => setIsTopUpOpen(false)}>Batal</Button>
                         <Button onClick={handleConfirmTopUp} disabled={!topUpAmount || parseFloat(topUpAmount) <= 0}>Konfirmasi</Button>
@@ -429,7 +452,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 </div>
             </Modal>
 
-            {/* Member Search Modal */}
             <MemberSearchModal 
                 isOpen={isMemberSearchOpen}
                 onClose={() => setIsMemberSearchOpen(false)}
@@ -438,7 +460,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 onScan={triggerScanner}
             />
 
-            {/* Dual Screen Modal */}
             <DualScreenModal
                 isOpen={isDualScreenModalOpen}
                 onClose={() => setDualScreenModalOpen(false)}

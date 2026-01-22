@@ -71,25 +71,56 @@ const ManualTab: React.FC = () => {
                             </ol>
                         </AccordionItem>
                         
+                        <AccordionItem title="Nomor Meja & Pax (Restoran)" isOpen={openAccordion === 'pos_table'} onToggle={() => toggleAccordion('pos_table')} icon="ingredients" colorClass="text-orange-400" badge="Opsional">
+                            <p>Fitur khusus untuk usaha FnB/Restoran.</p>
+                            <ul className="list-disc pl-5 space-y-1 mt-2">
+                                <li>Jika Anda mengaktifkan <strong>"Manajemen Meja & Pax"</strong> di Pengaturan > Fitur Kasir.</li>
+                                <li>Kolom input "Meja" dan "Pax" (Jumlah Orang) akan muncul di keranjang saat Anda memilih tipe pesanan <strong>"Makan di Tempat"</strong>.</li>
+                                <li>Nomor Meja akan tercetak di struk dan muncul di Layar Dapur agar pelayan mudah mengantar pesanan.</li>
+                            </ul>
+                        </AccordionItem>
+                        
                         <AccordionItem title="Upload Bukti Pembayaran (Transfer/QRIS)" isOpen={openAccordion === 'pos_evidence'} onToggle={() => toggleAccordion('pos_evidence')} icon="camera" colorClass="text-purple-400" badge="Baru">
                             <p>Simpan bukti transfer pelanggan langsung di aplikasi agar tidak tercampur di galeri HP pribadi.</p>
                             <ul className="list-disc pl-5 space-y-1 mt-2">
                                 <li>Saat menekan tombol <strong>"Bayar"</strong>, pilih metode <strong>"Non-Tunai"</strong>.</li>
                                 <li>Klik kotak "Bukti Pembayaran (Opsional)".</li>
-                                <li>Ambil foto layar HP pelanggan (bukti transfer) atau foto struk EDC.</li>
-                                <li>Foto akan tersimpan permanen dan bisa dilihat/diunduh kembali di menu <strong>Laporan</strong>.</li>
+                                <li><strong>Cara 1 (Manual):</strong> Foto pakai kamera HP Kasir atau Upload file.</li>
+                                <li><strong>Cara 2 (Via Pelanggan):</strong> Jika Layar Pelanggan terhubung, klik tombol <strong>"Minta Pelanggan"</strong>. Kamera di layar pelanggan akan menyala, minta mereka arahkan bukti transfer ke kamera tersebut. Foto akan otomatis masuk ke Tablet Kasir.</li>
                             </ul>
                         </AccordionItem>
 
-                        <AccordionItem title="Layar Pelanggan (Dual Screen)" isOpen={openAccordion === 'pos_dual'} onToggle={() => toggleAccordion('pos_dual')} icon="shop" colorClass="text-yellow-400" badge="Baru">
-                            <p>Tampilkan keranjang belanja secara real-time ke pelanggan menggunakan HP/Tablet bekas.</p>
-                            <ol className="list-decimal pl-5 space-y-2 mt-2 text-sm text-slate-300">
-                                <li><strong>Siapkan Perangkat Ke-2:</strong> Gunakan HP/Tablet apa saja untuk menghadap ke pelanggan. Buka Artea POS di browser perangkat tersebut.</li>
-                                <li><strong>Mode Layar:</strong> Di halaman Login perangkat ke-2, jangan login. Klik tombol kecil di bawah: <strong>"Mode Layar Pelanggan"</strong>. Akan muncul QR Code.</li>
-                                <li><strong>Hubungkan Kasir:</strong> Di Tablet Kasir Utama, buka menu Kasir. Klik tombol ikon Toko <Icon name="shop" className="w-3 h-3 inline"/> (di sebelah kiri judul "Keranjang").</li>
-                                <li><strong>Scan & Connect:</strong> Pilih "Scan QR" dan scan layar perangkat ke-2.</li>
-                                <li><strong>Selesai:</strong> Apapun yang diklik kasir akan muncul di layar pelanggan.</li>
-                            </ol>
+                        <AccordionItem title="Ekosistem Layar Ganda (Dual Screen)" isOpen={openAccordion === 'pos_dual'} onToggle={() => toggleAccordion('pos_dual')} icon="cast" colorClass="text-yellow-400" badge="Update">
+                            <p>Hubungkan HP/Tablet bekas untuk menjadi layar pendukung.</p>
+                            
+                            <div className="mt-3 space-y-3">
+                                <div className="bg-slate-900/50 p-3 rounded border border-slate-700">
+                                    <strong className="text-[#52a37c] block mb-1">A. Layar Pelanggan (Customer Display)</strong>
+                                    <ul className="list-disc pl-4 text-xs text-slate-300">
+                                        <li>Menampilkan keranjang belanja & total harga real-time.</li>
+                                        <li>Menampilkan peringatan MERAH jika kasir melakukan "Refund" (Anti-Fraud).</li>
+                                        <li>Bisa digunakan sebagai kamera untuk memfoto bukti transfer.</li>
+                                    </ul>
+                                </div>
+                                
+                                <div className="bg-slate-900/50 p-3 rounded border border-slate-700">
+                                    <strong className="text-orange-400 block mb-1">B. Layar Dapur (Kitchen Display System)</strong>
+                                    <ul className="list-disc pl-4 text-xs text-slate-300">
+                                        <li>Menggantikan printer dapur. Pesanan otomatis muncul di sini.</li>
+                                        <li>Koki bisa ubah status: "Baru" &rarr; "Dimasak" &rarr; "Selesai".</li>
+                                        <li>Menampilkan durasi pesanan (Warna berubah jika terlalu lama).</li>
+                                    </ul>
+                                </div>
+
+                                <div className="p-2 bg-blue-900/20 rounded border border-blue-800 text-xs">
+                                    <strong>Cara Menghubungkan:</strong>
+                                    <ol className="list-decimal pl-4 mt-1">
+                                        <li>Di HP Kedua, buka Artea POS &rarr; Halaman Login &rarr; Klik tombol shortcut di bawah ("Mode Pelanggan" atau "Mode Dapur").</li>
+                                        <li>Di Kasir Utama, klik ikon <strong>"Cast/Layar"</strong> (pojok kiri atas keranjang).</li>
+                                        <li>Pilih tab yang sesuai, lalu Scan QR Code yang muncul di HP Kedua.</li>
+                                    </ol>
+                                </div>
+                            </div>
                         </AccordionItem>
 
                         <AccordionItem title="Membership, Cari & Scan Kartu" isOpen={openAccordion === 'pos_member'} onToggle={() => toggleAccordion('pos_member')} icon="users" colorClass="text-pink-400" badge="Update">
@@ -297,6 +328,15 @@ const ManualTab: React.FC = () => {
                             </ol>
                         </AccordionItem>
 
+                        <AccordionItem title="Perangkat Keras (Printer & Scanner)" isOpen={openAccordion === 'set_hw'} onToggle={() => toggleAccordion('set_hw')} icon="bluetooth" colorClass="text-purple-400" badge="Penting">
+                            <p className="mb-2">Masuk ke tab <strong>"Perangkat Keras"</strong> untuk mengatur alat:</p>
+                            <ul className="list-disc pl-5 space-y-1 text-sm">
+                                <li><strong>Printer Bluetooth (Native App):</strong> Jika menggunakan aplikasi Android (APK), support printer bluetooth lebih stabil. Pastikan aktifkan Bluetooth dan pasangkan (pair) printer di pengaturan HP terlebih dahulu. Lalu di aplikasi Artea, klik "Cari Perangkat (Paired)".</li>
+                                <li><strong>Printer USB/Kabel:</strong> Gunakan opsi "System Printer" untuk membuka dialog cetak bawaan Android/Windows (RawBT atau Print Service).</li>
+                                <li><strong>Barcode Scanner:</strong> Mendukung scanner fisik (USB/Wireless) dan kamera HP.</li>
+                            </ul>
+                        </AccordionItem>
+
                         <AccordionItem title="Setup Perangkat Pusat (Admin)" isOpen={openAccordion === 'set_central'} onToggle={() => toggleAccordion('set_central')} icon="star" colorClass="text-yellow-400" badge="Baru">
                             <p className="mb-2">Jika Anda adalah Owner/Admin yang ingin memantau cabang dari jauh:</p>
                             <ol className="list-decimal pl-5 space-y-1 text-sm">
@@ -325,15 +365,6 @@ const ManualTab: React.FC = () => {
                                 <li>Setelah file aman terunduh, klik tombol merah <strong>"Kosongkan Folder Laporan"</strong>.</li>
                                 <li>Dropbox Anda kembali bersih dan siap menerima data bulan berikutnya. Perangkat Admin Anda tetap ringan karena tidak perlu menampung ribuan data lama.</li>
                             </ol>
-                        </AccordionItem>
-
-                        <AccordionItem title="Perangkat Keras (Printer & Scanner)" isOpen={openAccordion === 'set_hw'} onToggle={() => toggleAccordion('set_hw')} icon="bluetooth" colorClass="text-purple-400">
-                            <p className="mb-2">Masuk ke tab <strong>"Perangkat Keras"</strong> untuk mengatur alat:</p>
-                            <ul className="list-disc pl-5 space-y-1 text-sm">
-                                <li><strong>Printer Bluetooth:</strong> (Hanya Android/Chrome). Klik "Cari Printer", pilih perangkat, lalu tes print.</li>
-                                <li><strong>Printer USB/Kabel:</strong> Gunakan opsi "System Printer". Pastikan matikan "Headers & Footers" di pengaturan print browser agar rapi.</li>
-                                <li><strong>Barcode Scanner:</strong> Sebagian besar scanner fisik bekerja sebagai keyboard. Colok/Pair, lalu tes di kolom yang disediakan.</li>
-                            </ul>
                         </AccordionItem>
                         
                         <AccordionItem title="Keamanan, User & Audit (PENTING)" isOpen={openAccordion === 'set_2'} onToggle={() => toggleAccordion('set_2')} icon="lock" colorClass="text-red-400" badge="Anti-Fraud">

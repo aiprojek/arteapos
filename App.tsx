@@ -15,7 +15,8 @@ import SettingsView from './views/SettingsView';
 import LoginView from './views/LoginView';
 import FinanceView from './views/FinanceView';
 import HelpView from './views/HelpView';
-import CustomerDisplayView from './views/CustomerDisplayView'; // NEW
+import CustomerDisplayView from './views/CustomerDisplayView';
+import KitchenDisplayView from './views/KitchenDisplayView'; // NEW
 import Header from './components/Header';
 import Icon from './components/Icon';
 import AlertModal from './components/AlertModal';
@@ -35,9 +36,10 @@ const AppContent = () => {
   
   // Initialize view based on role
   const [activeView, setActiveView] = useState<View>(() => {
-      // Check URL search params for direct linking (e.g. ?view=customer-display)
+      // Check URL search params for direct linking
       const params = new URLSearchParams(window.location.search);
       if (params.get('view') === 'customer-display') return 'customer-display';
+      if (params.get('view') === 'kitchen-display') return 'kitchen-display'; // NEW ROUTE
 
       if (isStaff) return 'pos';
       return 'dashboard'; // Admin, Manager, and Viewer default to dashboard
@@ -68,7 +70,7 @@ const AppContent = () => {
   
   // --- HARDWARE BARCODE SCANNER LOGIC ---
   useEffect(() => {
-    if (isViewer || activeView === 'customer-display') return;
+    if (isViewer || activeView === 'customer-display' || activeView === 'kitchen-display') return;
     let buffer = "";
     let lastKeyTime = Date.now();
 
@@ -104,9 +106,12 @@ const AppContent = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [findProductByBarcode, addToCart, activeView, showAlert, isViewer]);
 
-  // SPECIAL RENDER FOR CUSTOMER DISPLAY (No Layout)
+  // SPECIAL RENDER FOR DISPLAYS (No Layout)
   if (activeView === 'customer-display') {
       return <CustomerDisplayView />;
+  }
+  if (activeView === 'kitchen-display') {
+      return <KitchenDisplayView />;
   }
 
   const renderView = () => {
@@ -122,7 +127,8 @@ const AppContent = () => {
       reports: <ReportsView />, 
       settings: <SettingsView />, 
       help: <HelpView />,
-      'customer-display': <CustomerDisplayView /> // Fallback if reached via nav
+      'customer-display': <CustomerDisplayView />,
+      'kitchen-display': <KitchenDisplayView />
     };
     return views[activeView] || <POSView />;
   };
@@ -189,13 +195,17 @@ const RootNavigator = () => {
 
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('view') === 'customer-display') {
-          setUrlView('customer-display');
+      const view = params.get('view');
+      if (view === 'customer-display' || view === 'kitchen-display') {
+          setUrlView(view);
       }
   }, []);
 
   if (urlView === 'customer-display') {
       return <CustomerDisplayView />;
+  }
+  if (urlView === 'kitchen-display') {
+      return <KitchenDisplayView />;
   }
 
   return (

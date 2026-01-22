@@ -4,7 +4,7 @@ import Modal from '../Modal';
 import Button from '../Button';
 import Icon from '../Icon';
 import BarcodeScannerModal from '../BarcodeScannerModal';
-import CameraCaptureModal from '../CameraCaptureModal'; // NEW: Import local camera modal
+import CameraCaptureModal from '../CameraCaptureModal'; 
 import { CURRENCY_FORMATTER } from '../../constants';
 import { useCart } from '../../context/CartContext';
 import { useSession } from '../../context/SessionContext';
@@ -14,47 +14,82 @@ import { useAudit } from '../../context/AuditContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCustomerDisplay } from '../../context/CustomerDisplayContext';
 import type { Customer, Transaction, PaymentMethod, Discount, Reward } from '../../types';
-import { compressImage } from '../../utils/imageCompression'; // Import compression
+import { compressImage } from '../../utils/imageCompression';
 
-// --- NEW: DUAL SCREEN MODAL ---
+// --- NEW: DUAL SCREEN MODAL (UPDATED FOR KITCHEN) ---
 interface DualScreenModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
 export const DualScreenModal: React.FC<DualScreenModalProps> = ({ isOpen, onClose }) => {
-    const { isDisplayConnected, connectToDisplay, disconnectDisplay } = useCustomerDisplay();
+    const { 
+        isDisplayConnected, connectToDisplay, disconnectDisplay, 
+        isKitchenConnected, connectToKitchen, disconnectKitchen 
+    } = useCustomerDisplay();
+    
+    const [activeTab, setActiveTab] = useState<'customer' | 'kitchen'>('customer');
     const [isScanning, setIsScanning] = useState(false);
     const [displayIdInput, setDisplayIdInput] = useState('');
     const [isConnecting, setIsConnecting] = useState(false);
 
+    const isConnected = activeTab === 'customer' ? isDisplayConnected : isKitchenConnected;
+
     const handleConnect = async (id: string) => {
         setIsConnecting(true);
         try {
-            await connectToDisplay(id);
-            onClose();
+            if (activeTab === 'customer') {
+                await connectToDisplay(id);
+            } else {
+                await connectToKitchen(id);
+            }
+            // Don't close immediately so user sees success state
         } catch (error) {
-            alert('Gagal menghubungkan. Pastikan ID benar dan perangkat pelanggan sudah membuka halaman Display.');
+            alert('Gagal menghubungkan. Pastikan ID benar dan perangkat target sudah standby.');
         } finally {
             setIsConnecting(false);
         }
     };
 
+    const handleDisconnect = () => {
+        if (activeTab === 'customer') disconnectDisplay();
+        else disconnectKitchen();
+    };
+
     if (!isOpen) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Layar Pelanggan (Dual Screen)">
-            <div className="space-y-6">
-                {isDisplayConnected ? (
-                    <div className="bg-green-900/20 border border-green-800 p-4 rounded-lg text-center">
-                        <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <Icon name="check-circle-fill" className="w-8 h-8 text-green-400" />
+        <Modal isOpen={isOpen} onClose={onClose} title="Koneksi Layar Tambahan">
+            <div className="space-y-4">
+                
+                {/* Tabs */}
+                <div className="flex bg-slate-700 p-1 rounded-lg">
+                    <button 
+                        onClick={() => { setActiveTab('customer'); setDisplayIdInput(''); }} 
+                        className={`flex-1 py-2 text-sm rounded transition-colors flex items-center justify-center gap-2 ${activeTab === 'customer' ? 'bg-[#347758] text-white font-bold' : 'text-slate-300'}`}
+                    >
+                        <Icon name="users" className="w-4 h-4"/> Pelanggan
+                    </button>
+                    <button 
+                        onClick={() => { setActiveTab('kitchen'); setDisplayIdInput(''); }} 
+                        className={`flex-1 py-2 text-sm rounded transition-colors flex items-center justify-center gap-2 ${activeTab === 'kitchen' ? 'bg-orange-600 text-white font-bold' : 'text-slate-300'}`}
+                    >
+                        <Icon name="tools" className="w-4 h-4"/> Dapur (KDS)
+                    </button>
+                </div>
+
+                {isConnected ? (
+                    <div className={`border p-4 rounded-lg text-center ${activeTab === 'customer' ? 'bg-green-900/20 border-green-800' : 'bg-orange-900/20 border-orange-800'}`}>
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${activeTab === 'customer' ? 'bg-green-500/20' : 'bg-orange-500/20'}`}>
+                            <Icon name="check-circle-fill" className={`w-8 h-8 ${activeTab === 'customer' ? 'text-green-400' : 'text-orange-400'}`} />
                         </div>
-                        <h3 className="text-xl font-bold text-green-300">Terhubung</h3>
+                        <h3 className={`text-xl font-bold ${activeTab === 'customer' ? 'text-green-300' : 'text-orange-300'}`}>Terhubung</h3>
                         <p className="text-sm text-slate-400 mt-2">
-                            Keranjang belanja sedang ditampilkan ke pelanggan secara real-time.
+                            {activeTab === 'customer' 
+                                ? 'Keranjang belanja muncul di layar pelanggan.' 
+                                : 'Pesanan akan otomatis dikirim ke layar dapur.'}
                         </p>
-                        <Button onClick={disconnectDisplay} variant="danger" className="w-full mt-4">
+                        <Button onClick={handleDisconnect} variant="danger" className="w-full mt-4">
                             Putuskan Koneksi
                         </Button>
                     </div>
@@ -63,10 +98,14 @@ export const DualScreenModal: React.FC<DualScreenModalProps> = ({ isOpen, onClos
                         <div className="bg-slate-800 p-3 rounded text-sm text-slate-300">
                             <p className="mb-2"><strong>Cara Penggunaan:</strong></p>
                             <ol className="list-decimal pl-5 space-y-1">
-                                <li>Siapkan Tablet/HP kedua untuk pelanggan.</li>
-                                <li>Buka aplikasi Artea POS di perangkat tersebut.</li>
-                                <li>Di halaman Login, klik tombol <strong>"Mode Layar Pelanggan"</strong>.</li>
-                                <li>Scan QR Code yang muncul menggunakan tombol di bawah.</li>
+                                <li>Siapkan perangkat kedua (Tablet/HP).</li>
+                                <li>Buka Artea POS di perangkat tersebut.</li>
+                                <li>
+                                    {activeTab === 'customer' 
+                                        ? 'Di layar Login, klik "Mode Layar Pelanggan".' 
+                                        : 'Di layar Login, klik "Mode Layar Pelanggan" lalu ganti URL menjadi ?view=kitchen-display atau pindai QR di bawah.'}
+                                </li>
+                                <li>Scan QR Code yang muncul di perangkat tersebut.</li>
                             </ol>
                         </div>
 
@@ -81,7 +120,6 @@ export const DualScreenModal: React.FC<DualScreenModalProps> = ({ isOpen, onClos
                                 <div className="flex-grow border-t border-slate-700"></div>
                             </div>
 
-                            {/* RESPONSIVE FIX: flex-col on mobile, flex-row on sm */}
                             <div className="flex flex-col sm:flex-row gap-2">
                                 <input 
                                     type="text" 
@@ -108,6 +146,7 @@ export const DualScreenModal: React.FC<DualScreenModalProps> = ({ isOpen, onClos
     );
 };
 
+// ... (Other modals: MemberSearchModal, PaymentModal etc remain unchanged)
 // --- MEMBER SEARCH MODAL ---
 interface MemberSearchModalProps {
     isOpen: boolean;

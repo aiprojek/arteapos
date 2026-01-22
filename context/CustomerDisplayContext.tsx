@@ -1,19 +1,27 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import type { CustomerDisplayPayload } from '../types';
+import type { CustomerDisplayPayload, KitchenDisplayPayload } from '../types';
 import Peer from 'peerjs';
 
 interface CustomerDisplayContextType {
+    // CUSTOMER DISPLAY
     isDisplayConnected: boolean;
     connectToDisplay: (displayId: string) => Promise<void>;
     disconnectDisplay: () => void;
     sendDataToDisplay: (data: CustomerDisplayPayload) => void;
-    // Receiver (Display Side)
+    
+    // KITCHEN DISPLAY (NEW)
+    isKitchenConnected: boolean;
+    connectToKitchen: (displayId: string) => Promise<void>;
+    disconnectKitchen: () => void;
+    sendOrderToKitchen: (data: KitchenDisplayPayload) => void;
+
+    // RECEIVER (Generic)
     myPeerId: string;
     setupReceiver: () => void;
-    receivedData: CustomerDisplayPayload | null;
+    receivedData: any | null; // Generic received data
     
-    // NEW: Bi-directional Communication Features
+    // CAMERA FEATURES
     requestCustomerCamera: () => void;
     customerImage: string | null;
     clearCustomerImage: () => void;
@@ -23,85 +31,111 @@ interface CustomerDisplayContextType {
 const CustomerDisplayContext = createContext<CustomerDisplayContextType | undefined>(undefined);
 
 export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    // --- SENDER STATE (CASHIER) ---
-    const [isDisplayConnected, setIsDisplayConnected] = useState(false);
+    const [myPeerId, setMyPeerId] = useState<string>('');
     const cashierPeerRef = useRef<Peer | null>(null);
-    const connectionRef = useRef<any>(null); // DataConnection
+    const receiverPeerRef = useRef<Peer | null>(null);
+
+    // --- CUSTOMER CONNECTION ---
+    const [isDisplayConnected, setIsDisplayConnected] = useState(false);
+    const customerConnectionRef = useRef<any>(null); 
     const [customerImage, setCustomerImage] = useState<string | null>(null);
 
-    // --- RECEIVER STATE (DISPLAY) ---
-    const [myPeerId, setMyPeerId] = useState<string>('');
-    const receiverPeerRef = useRef<Peer | null>(null);
-    const [receivedData, setReceivedData] = useState<CustomerDisplayPayload | null>(null);
+    // --- KITCHEN CONNECTION (NEW) ---
+    const [isKitchenConnected, setIsKitchenConnected] = useState(false);
+    const kitchenConnectionRef = useRef<any>(null);
+
+    // --- RECEIVER DATA ---
+    const [receivedData, setReceivedData] = useState<any | null>(null);
     const receiverConnectionRef = useRef<any>(null); // To reply back
 
-    // --- CASHIER LOGIC (SENDER) ---
-    const connectToDisplay = useCallback(async (displayId: string) => {
-        if (cashierPeerRef.current) {
-            cashierPeerRef.current.destroy();
-        }
-
-        const peer = new Peer();
-        cashierPeerRef.current = peer;
-
-        return new Promise<void>((resolve, reject) => {
-            peer.on('open', (id) => {
-                console.log('Cashier Peer ID:', id);
-                const conn = peer.connect(displayId);
-                
-                conn.on('open', () => {
-                    console.log('Connected to Display:', displayId);
-                    connectionRef.current = conn;
-                    setIsDisplayConnected(true);
-                    resolve();
-
-                    // Listen for replies (Images)
-                    conn.on('data', (data: any) => {
-                        if (data && data.cameraImage) {
-                            console.log("Image received from customer display");
-                            setCustomerImage(data.cameraImage);
-                        }
-                    });
-                });
-
-                conn.on('close', () => {
-                    setIsDisplayConnected(false);
-                    connectionRef.current = null;
-                });
-
-                conn.on('error', (err) => {
-                    console.error('Connection Error:', err);
-                    reject(err);
-                });
+    // Helper: Init Cashier Peer if not exists
+    const ensureCashierPeer = useCallback((): Promise<Peer> => {
+        return new Promise((resolve, reject) => {
+            if (cashierPeerRef.current && !cashierPeerRef.current.disconnected) {
+                resolve(cashierPeerRef.current);
+                return;
+            }
+            const peer = new Peer();
+            peer.on('open', () => {
+                cashierPeerRef.current = peer;
+                resolve(peer);
             });
-
-            peer.on('error', (err) => {
-                console.error('Peer Error:', err);
-                reject(err);
-            });
+            peer.on('error', (err) => reject(err));
         });
     }, []);
 
+    // --- CONNECT TO CUSTOMER ---
+    const connectToDisplay = useCallback(async (displayId: string) => {
+        const peer = await ensureCashierPeer();
+        
+        return new Promise<void>((resolve, reject) => {
+            const conn = peer.connect(displayId);
+            conn.on('open', () => {
+                customerConnectionRef.current = conn;
+                setIsDisplayConnected(true);
+                resolve();
+
+                // Listen for replies (Images)
+                conn.on('data', (data: any) => {
+                    if (data && data.cameraImage) {
+                        setCustomerImage(data.cameraImage);
+                    }
+                });
+            });
+            conn.on('close', () => {
+                setIsDisplayConnected(false);
+                customerConnectionRef.current = null;
+            });
+            conn.on('error', (err) => reject(err));
+        });
+    }, [ensureCashierPeer]);
+
+    // --- CONNECT TO KITCHEN ---
+    const connectToKitchen = useCallback(async (displayId: string) => {
+        const peer = await ensureCashierPeer();
+        
+        return new Promise<void>((resolve, reject) => {
+            const conn = peer.connect(displayId);
+            conn.on('open', () => {
+                kitchenConnectionRef.current = conn;
+                setIsKitchenConnected(true);
+                resolve();
+            });
+            conn.on('close', () => {
+                setIsKitchenConnected(false);
+                kitchenConnectionRef.current = null;
+            });
+            conn.on('error', (err) => reject(err));
+        });
+    }, [ensureCashierPeer]);
+
     const disconnectDisplay = useCallback(() => {
-        if (connectionRef.current) {
-            connectionRef.current.close();
-        }
-        if (cashierPeerRef.current) {
-            cashierPeerRef.current.destroy();
-        }
+        if (customerConnectionRef.current) customerConnectionRef.current.close();
         setIsDisplayConnected(false);
-        connectionRef.current = null;
+        customerConnectionRef.current = null;
+    }, []);
+
+    const disconnectKitchen = useCallback(() => {
+        if (kitchenConnectionRef.current) kitchenConnectionRef.current.close();
+        setIsKitchenConnected(false);
+        kitchenConnectionRef.current = null;
     }, []);
 
     const sendDataToDisplay = useCallback((data: CustomerDisplayPayload) => {
-        if (connectionRef.current && isDisplayConnected) {
-            connectionRef.current.send(data);
+        if (customerConnectionRef.current && isDisplayConnected) {
+            customerConnectionRef.current.send(data);
         }
     }, [isDisplayConnected]);
 
+    const sendOrderToKitchen = useCallback((data: KitchenDisplayPayload) => {
+        if (kitchenConnectionRef.current && isKitchenConnected) {
+            kitchenConnectionRef.current.send(data);
+        }
+    }, [isKitchenConnected]);
+
     // Request Camera specific helper
     const requestCustomerCamera = useCallback(() => {
-        setCustomerImage(null); // Reset previous image
+        setCustomerImage(null); 
         sendDataToDisplay({ type: 'REQUEST_CAMERA' });
     }, [sendDataToDisplay]);
 
@@ -109,9 +143,9 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
         setCustomerImage(null);
     }, []);
 
-    // --- DISPLAY LOGIC (RECEIVER) ---
+    // --- RECEIVER LOGIC (Display/Kitchen Device) ---
     const setupReceiver = useCallback(() => {
-        if (receiverPeerRef.current) return; // Already setup
+        if (receiverPeerRef.current) return; 
 
         const peer = new Peer(); 
         receiverPeerRef.current = peer;
@@ -121,7 +155,6 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
         });
 
         peer.on('connection', (conn) => {
-            console.log('Incoming connection from cashier...');
             receiverConnectionRef.current = conn;
             
             conn.on('data', (data: any) => {
@@ -129,8 +162,7 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
             });
 
             conn.on('close', () => {
-                // Reset to welcome screen if disconnected
-                setReceivedData(prev => prev ? { ...prev, type: 'WELCOME' } : null);
+                setReceivedData(null); // Reset or keep last state? Better reset to waiting.
                 receiverConnectionRef.current = null;
             });
         });
@@ -142,12 +174,10 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
 
     const sendImageToCashier = useCallback((imageBase64: string) => {
         if (receiverConnectionRef.current) {
-            // Send back simple object with the image
             receiverConnectionRef.current.send({ cameraImage: imageBase64 });
         }
     }, []);
 
-    // Cleanup on unmount
     useEffect(() => {
         return () => {
             if (cashierPeerRef.current) cashierPeerRef.current.destroy();
@@ -157,13 +187,24 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
 
     return (
         <CustomerDisplayContext.Provider value={{
+            // Customer
             isDisplayConnected,
             connectToDisplay,
             disconnectDisplay,
             sendDataToDisplay,
+            
+            // Kitchen
+            isKitchenConnected,
+            connectToKitchen,
+            disconnectKitchen,
+            sendOrderToKitchen,
+
+            // Common
             myPeerId,
             setupReceiver,
             receivedData,
+            
+            // Camera
             requestCustomerCamera,
             customerImage,
             clearCustomerImage,

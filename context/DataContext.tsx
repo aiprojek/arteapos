@@ -43,10 +43,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const loadData = async () => {
       try {
-        await db.open();
+        // Cast db to any to avoid TS errors
+        await (db as any).open();
         console.log("Database opened successfully");
         
-        const [
+        let [
           products, categoriesObj, rawMaterials, transactionRecords, users, settings,
           expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts, sessionHistory, auditLogs, balanceLogs
         ] = await Promise.all([
@@ -69,6 +70,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           db.balanceLogs.toArray(),
         ]);
         
+        // --- SEEDING LOGIC (Jika Produk Kosong, Isi Sample) ---
+        if (products.length === 0) {
+            console.log("Database kosong. Mengisi data sampel...");
+            await db.products.bulkAdd(initialData.products);
+            // Refresh products variable
+            products = await db.products.toArray();
+            
+            // Seed Categories jika kosong
+            if (!categoriesObj) {
+                await db.appState.put({ key: 'categories', value: initialData.categories });
+                categoriesObj = { value: initialData.categories };
+            }
+        }
+        // -------------------------------------------------------
+
         // Calculate DB Load
         const totalRecs = transactionRecords.length + stockAdjustments.length + auditLogs.length + (balanceLogs?.length || 0);
         setDbUsageStatus({
@@ -121,7 +137,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     const persist = async () => {
       try {
-        await db.transaction('rw', db.tables.map(t => t.name), async () => {
+        // Cast db to any to avoid TS errors
+        await (db as any).transaction('rw', (db as any).tables.map((t: any) => t.name), async () => {
           const promises: Promise<any>[] = [];
           
           Object.keys(data).forEach(keyStr => {
@@ -148,7 +165,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 case 'balanceLogs':
                   // Note: Full table replace on change is inefficient for large datasets, 
                   // but retained here for consistency with original architecture until further refactor.
-                  promises.push(db.table(key).clear().then(() => db.table(key).bulkAdd(value as any[])));
+                  // Cast db to any to avoid TS error
+                  promises.push((db as any).table(key).clear().then(() => (db as any).table(key).bulkAdd(value as any[])));
                   break;
                 case 'categories':
                   promises.push(db.appState.put({ key: 'categories', value }));
@@ -179,8 +197,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const restoreData = useCallback(async (backupData: AppData) => {
-    await db.transaction('rw', db.tables.map(t => t.name), async () => {
-      await Promise.all(db.tables.map(table => table.clear()));
+    // Cast db to any to avoid TS errors
+    await (db as any).transaction('rw', (db as any).tables.map((t: any) => t.name), async () => {
+      await Promise.all((db as any).tables.map((table: any) => table.clear()));
 
       const productsWithBlobs = (backupData.products || []).map(p => {
         const prod: any = { ...p };

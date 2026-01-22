@@ -295,7 +295,8 @@ const exportStockAdjustmentsCSV = (stockAdjustments: StockAdjustment[]) => {
 const getExportData = async (): Promise<Partial<AppData>> => {
     const data: Partial<AppData> = {};
     
-    await db.transaction('r', db.tables.map(t => t.name), async () => {
+    // Cast db to any to avoid TS errors
+    await (db as any).transaction('r', (db as any).tables.map((t: any) => t.name), async () => {
       const [
         products, categoriesObj, rawMaterials, transactionRecords, users, settings,
         expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts, sessionHistory, auditLogs
@@ -360,7 +361,8 @@ const mergeMasterData = async (masterData: AppData) => {
     const receiptSettings = settings?.value as ReceiptSettings;
     const myStoreId = receiptSettings?.storeId || 'UNKNOWN';
 
-    await db.transaction('rw', db.products, db.customers, db.discountDefinitions, db.settings, db.appState, db.suppliers, async () => {
+    // Cast db to any to use transaction
+    await (db as any).transaction('rw', db.products, db.customers, db.discountDefinitions, db.settings, db.appState, db.suppliers, async () => {
         if (masterData.products && masterData.products.length > 0) {
             const masterProducts = await Promise.all(masterData.products.map(async (mp) => {
                 const prod: any = { ...mp };
@@ -453,7 +455,8 @@ const getOldOperationalData = async (cutoffDate: Date) => {
 const deleteOperationalDataByRange = async (cutoffDate: Date) => {
     const cutoffStr = cutoffDate.toISOString();
     
-    await db.transaction('rw', [db.transactionRecords, db.expenses, db.otherIncomes, db.purchases, db.stockAdjustments, db.auditLogs, db.sessionHistory], async () => {
+    // Cast db to any to use transaction
+    await (db as any).transaction('rw', [db.transactionRecords, db.expenses, db.otherIncomes, db.purchases, db.stockAdjustments, db.auditLogs, db.sessionHistory], async () => {
         await db.transactionRecords.where('createdAt').below(cutoffStr).delete();
         await db.expenses.where('date').below(cutoffStr).delete();
         await db.otherIncomes.where('date').below(cutoffStr).delete();

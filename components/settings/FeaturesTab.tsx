@@ -28,14 +28,14 @@ const SettingsCard: React.FC<{ title: string; description?: string; children: Re
 
 const ToggleSwitch: React.FC<{ label: string; checked: boolean; onChange: (checked: boolean) => void; description?: string }> = ({ label, checked, onChange, description }) => (
     <div className="flex items-center justify-between">
-        <div>
+        <div className="mr-4">
             <span className="text-slate-200 font-medium">{label}</span>
             {description && <p className="text-xs text-slate-400 mt-0.5">{description}</p>}
         </div>
         <button
             type="button"
             onClick={() => onChange(!checked)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#347758] focus:ring-offset-2 focus:ring-offset-slate-800 ${checked ? 'bg-[#347758]' : 'bg-slate-700'}`}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#347758] focus:ring-offset-2 focus:ring-offset-slate-800 ${checked ? 'bg-[#347758]' : 'bg-slate-700'}`}
         >
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
         </button>
@@ -106,15 +106,36 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ sessionForm, onSessionChange,
                 <ToggleSwitch 
                     label="Wajibkan Sesi (Shift)" 
                     description="Kasir harus memasukkan modal awal saat mulai dan menghitung uang saat tutup toko."
-                    checked={sessionForm.enabled} 
+                    checked={sessionForm?.enabled || false} 
                     onChange={(val) => onSessionChange({...sessionForm, enabled: val})} 
                 />
-                <ToggleSwitch 
-                    label="Fitur Simpan Pesanan (Open Bill)" 
-                    description="Memungkinkan menyimpan pesanan sementara (cth: sistem meja di kafe)."
-                    checked={sessionForm.enableCartHolding || false} 
-                    onChange={(val) => onSessionChange({...sessionForm, enableCartHolding: val})} 
-                />
+                
+                {sessionForm?.enabled && (
+                    <div className="ml-4 pl-4 border-l-2 border-slate-700 mt-2 space-y-3">
+                         <ToggleSwitch 
+                            label="Wajibkan Audit Stok (Blind Count)" 
+                            description="Saat tutup shift, kasir WAJIB menghitung sisa stok fisik 3 produk acak tanpa melihat angka sistem."
+                            checked={sessionForm.enableBlindAudit || false} 
+                            onChange={(val) => onSessionChange({...sessionForm, enableBlindAudit: val})} 
+                        />
+                    </div>
+                )}
+
+                <div className="border-t border-slate-700 my-2 pt-2 space-y-3">
+                    <ToggleSwitch 
+                        label="Fitur Simpan Pesanan (Open Bill)" 
+                        description="Memungkinkan menyimpan pesanan sementara (cth: sistem meja di kafe)."
+                        checked={sessionForm?.enableCartHolding || false} 
+                        onChange={(val) => onSessionChange({...sessionForm, enableCartHolding: val})} 
+                    />
+                    
+                     <ToggleSwitch 
+                        label="Aktifkan Manajemen Meja & Pax" 
+                        description="Tampilkan kolom input Nomor Meja dan Jumlah Tamu saat pesanan Makan di Tempat."
+                        checked={sessionForm?.enableTableManagement || false} 
+                        onChange={(val) => onSessionChange({...sessionForm, enableTableManagement: val})} 
+                    />
+                </div>
             </SettingsCard>
 
             <SettingsCard title="Daftar Diskon & Promo" description="Diskon prasetel yang bisa dipilih kasir.">
@@ -141,11 +162,11 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ sessionForm, onSessionChange,
             <SettingsCard title="Program Loyalitas Pelanggan" description="Berikan poin kepada pelanggan terdaftar.">
                 <ToggleSwitch 
                     label="Aktifkan Membership & Poin" 
-                    checked={membershipForm.enabled} 
+                    checked={membershipForm?.enabled || false} 
                     onChange={(val) => onMembershipChange({...membershipForm, enabled: val})} 
                 />
                 
-                {membershipForm.enabled && (
+                {membershipForm?.enabled && (
                     <div className="mt-4 pt-4 border-t border-slate-700">
                         <h4 className="font-bold text-white text-sm mb-2">Aturan Perolehan Poin</h4>
                         <div className="space-y-2 mb-3">

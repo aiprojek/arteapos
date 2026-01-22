@@ -194,7 +194,8 @@ const LoginView: React.FC = () => {
         if (resetConfirmation !== 'RESET') return;
         
         try {
-            await db.delete(); // Delete the entire Dexie DB
+            // Cast db to any to avoid TS error
+            await (db as any).delete(); // Delete the entire Dexie DB
             window.location.reload(); // Reload to re-initialize with default data
         } catch (e) {
             console.error("Factory Reset Failed", e);
@@ -219,6 +220,10 @@ const LoginView: React.FC = () => {
     const handleEnterDisplayMode = () => {
         // Redirect to Display View without logging in
         window.location.search = '?view=customer-display';
+    };
+
+    const handleEnterKitchenMode = () => {
+        window.location.search = '?view=kitchen-display';
     };
 
     const KeypadButton: React.FC<{ value: string, onClick: () => void, children?: React.ReactNode }> = ({ value, onClick, children }) => (
@@ -250,13 +255,20 @@ const LoginView: React.FC = () => {
                 ))}
             </div>
 
-            {/* CUSTOMER DISPLAY SHORTCUT */}
-            <div className="border-t border-slate-800 pt-6">
+            {/* CUSTOMER & KITCHEN DISPLAY SHORTCUTS */}
+            <div className="border-t border-slate-800 pt-6 flex gap-4 justify-center">
                 <button 
                     onClick={handleEnterDisplayMode}
-                    className="flex items-center justify-center gap-2 text-slate-500 hover:text-white transition-colors text-sm mx-auto"
+                    className="flex items-center justify-center gap-2 text-slate-500 hover:text-white transition-colors text-sm"
                 >
-                    <Icon name="shop" className="w-4 h-4"/> Mode Layar Pelanggan
+                    <Icon name="shop" className="w-4 h-4"/> Mode Pelanggan
+                </button>
+                <div className="w-px h-5 bg-slate-700"></div>
+                <button 
+                    onClick={handleEnterKitchenMode}
+                    className="flex items-center justify-center gap-2 text-slate-500 hover:text-white transition-colors text-sm"
+                >
+                    <Icon name="tools" className="w-4 h-4"/> Mode Dapur
                 </button>
             </div>
         </div>

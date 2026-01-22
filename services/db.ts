@@ -1,190 +1,116 @@
 
-import Dexie, { type EntityTable } from 'dexie';
-// FIX: The imported type 'Transaction' conflicts with Dexie's 'transaction' method. It is aliased to 'TransactionType' to resolve this.
+import Dexie, { Table } from 'dexie';
 import type { 
-    Product, RawMaterial, Transaction as TransactionType, User, Expense, Supplier, Purchase, 
-    StockAdjustment, Customer, DiscountDefinition, HeldCart, ReceiptSettings, 
-    InventorySettings, AuthSettings, SessionSettings, MembershipSettings, AppData, SessionState, OtherIncome, SessionHistory, AuditLog, BalanceLog
+    Product, 
+    RawMaterial, 
+    Transaction, 
+    User, 
+    Expense, 
+    OtherIncome, 
+    Supplier, 
+    Purchase, 
+    StockAdjustment, 
+    Customer, 
+    DiscountDefinition, 
+    HeldCart, 
+    SessionHistory, 
+    AuditLog,
+    BalanceLog,
+    AppData
 } from '../types';
-import { INITIAL_PRODUCTS } from '../constants';
+import { INITIAL_PRODUCTS } from '../constants'; // Import Data Sampel
 
-// Define the shape for key-value stores
-interface KeyValueStore<T> {
-    key: string;
-    value: T;
-}
+class ArteaPOSDB extends Dexie {
+    products!: Table<Product, string>;
+    rawMaterials!: Table<RawMaterial, string>;
+    transactionRecords!: Table<Transaction, string>;
+    users!: Table<User, string>;
+    expenses!: Table<Expense, string>;
+    otherIncomes!: Table<OtherIncome, string>;
+    suppliers!: Table<Supplier, string>;
+    purchases!: Table<Purchase, string>;
+    stockAdjustments!: Table<StockAdjustment, string>;
+    customers!: Table<Customer, string>;
+    discountDefinitions!: Table<DiscountDefinition, string>;
+    heldCarts!: Table<HeldCart, string>;
+    sessionHistory!: Table<SessionHistory, string>;
+    auditLogs!: Table<AuditLog, string>;
+    balanceLogs!: Table<BalanceLog, string>;
+    
+    // Key-Value stores for settings and app state
+    settings!: Table<{ key: string, value: any }, string>;
+    appState!: Table<{ key: string, value: any }, string>;
+    session!: Table<{ key: string, value: any }, string>; // For active session
 
-// Helper function to hash PINs using SHA-256
-async function hashPin(pin: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(pin);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  // convert bytes to hex string
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
-}
-
-function base64ToBlob(base64: string): Blob {
-    const [meta, data] = base64.split(',');
-    if (!meta || !data) {
-        return new Blob();
+    constructor() {
+        super('ArteaPOSDB');
+        (this as any).version(4).stores({
+            products: 'id, name, barcode, category',
+            rawMaterials: 'id, name',
+            transactionRecords: 'id, createdAt, paymentStatus, customerName',
+            users: 'id, name, role',
+            expenses: 'id, date, category',
+            otherIncomes: 'id, date, category',
+            suppliers: 'id, name',
+            purchases: 'id, date, supplierName',
+            stockAdjustments: 'id, productId, createdAt',
+            customers: 'id, memberId, name, contact',
+            discountDefinitions: 'id',
+            heldCarts: 'id, name',
+            sessionHistory: 'id, startTime, endTime',
+            auditLogs: 'id, timestamp, action, userId',
+            balanceLogs: 'id, customerId, timestamp',
+            settings: 'key',
+            appState: 'key',
+            session: 'key'
+        });
     }
-    const mime = meta.match(/:(.*?);/)?.[1];
-    const bstr = atob(data);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-        u8arr[n] = bstr.charCodeAt(n);
-    }
-    return new Blob([u8arr], { type: mime });
 }
 
+export const db = new ArteaPOSDB();
 
 export const initialData: AppData = {
-    products: INITIAL_PRODUCTS,
-    categories: ['Kopi', 'Non-Kopi', 'Makanan'],
+    products: INITIAL_PRODUCTS, // Masukkan Sample Produk disini
+    categories: ['Umum', 'Makanan', 'Minuman', 'Kopi', 'Non-Kopi'], // Update Kategori default
     rawMaterials: [],
-    // FIX: Renamed 'transactions' to 'transactionRecords' to match the updated AppData interface.
     transactionRecords: [],
     users: [],
-    receiptSettings: {
-        shopName: 'Artea POS',
-        address: 'Jalan Teknologi No. 1',
-        footerMessage: 'Terima kasih telah berbelanja!',
-        enableKitchenPrinter: false,
-        adminWhatsapp: '',
-        adminTelegram: '',
-        taxRate: 0,
-        serviceChargeRate: 0,
-        storeId: 'CABANG-01', // Default value
-        orderTypes: ['Makan di Tempat', 'Bawa Pulang', 'Pesan Antar'],
-    },
-    inventorySettings: {
-        enabled: false,
-        trackIngredients: false,
-        preventNegativeStock: false // Default to false (Allow negative)
-    },
-    authSettings: {
-        enabled: false,
-        securityQuestion: 'Apa nama aplikasi ini?', // Default Question
-        securityAnswer: 'artea', // Default Answer (lowercase)
-    },
-    sessionSettings: {
-        enabled: false,
-        enableCartHolding: false,
-    },
     expenses: [],
     otherIncomes: [],
     suppliers: [],
     purchases: [],
     stockAdjustments: [],
     customers: [],
-    membershipSettings: {
-        enabled: false,
-        pointRules: [],
-        rewards: [],
-    },
     discountDefinitions: [],
     heldCarts: [],
     sessionHistory: [],
     auditLogs: [],
     balanceLogs: [],
+    
+    receiptSettings: {
+        shopName: 'Toko Saya',
+        address: 'Alamat Toko',
+        footerMessage: 'Terima kasih telah berbelanja!',
+        taxRate: 0,
+        serviceChargeRate: 0
+    },
+    inventorySettings: {
+        enabled: true,
+        preventNegativeStock: false,
+        trackIngredients: false
+    },
+    authSettings: {
+        enabled: false
+    },
+    sessionSettings: {
+        enabled: false,
+        enableCartHolding: false,
+        enableBlindAudit: false,
+        enableTableManagement: false // DEFAULT OFF
+    },
+    membershipSettings: {
+        enabled: false,
+        pointRules: [],
+        rewards: []
+    }
 };
-
-
-// FIX: Refactored the database definition to use an intersection type (`Dexie & { ... }`).
-// The previous `interface ArteaPosDB extends Dexie` was incorrectly hiding the base Dexie methods,
-// causing errors like "Property 'transaction' does not exist". This change ensures the `db` object
-// has both the standard Dexie methods and the typed table properties, resolving all related errors.
-export const db = new Dexie('ArteaPosDB') as Dexie & {
-    products: EntityTable<Product, 'id'>;
-    rawMaterials: EntityTable<RawMaterial, 'id'>;
-    // The table's entity type is updated to use the aliased 'TransactionType' to avoid a naming conflict with Dexie's internal 'transaction' method.
-    transactionRecords: EntityTable<TransactionType, 'id'>;
-    users: EntityTable<User, 'id'>;
-    expenses: EntityTable<Expense, 'id'>;
-    otherIncomes: EntityTable<OtherIncome, 'id'>; // New Table
-    suppliers: EntityTable<Supplier, 'id'>;
-    purchases: EntityTable<Purchase, 'id'>;
-    stockAdjustments: EntityTable<StockAdjustment, 'id'>;
-    customers: EntityTable<Customer, 'id'>;
-    discountDefinitions: EntityTable<DiscountDefinition, 'id'>;
-    heldCarts: EntityTable<HeldCart, 'id'>;
-    sessionHistory: EntityTable<SessionHistory, 'id'>; 
-    auditLogs: EntityTable<AuditLog, 'id'>; 
-    balanceLogs: EntityTable<BalanceLog, 'id'>; // NEW TABLE
-
-    // Key-value stores
-    settings: EntityTable<KeyValueStore<ReceiptSettings | InventorySettings | AuthSettings | SessionSettings | MembershipSettings>, 'key'>;
-    appState: EntityTable<KeyValueStore<string[]>, 'key'>;
-    session: EntityTable<KeyValueStore<SessionState>, 'key'>;
-};
-
-db.version(1).stores({
-    products: 'id, name, *category',
-    rawMaterials: 'id, name',
-    // FIX: Renamed 'transactions' table to 'transactionRecords' in the schema definition.
-    transactionRecords: 'id, createdAt',
-    users: 'id',
-    expenses: 'id, date',
-    suppliers: 'id, name',
-    purchases: 'id, date, supplierId',
-    stockAdjustments: 'id, createdAt, productId',
-    customers: 'id, memberId, name',
-    discountDefinitions: 'id',
-    heldCarts: 'id',
-    settings: 'key',
-    appState: 'key',
-    session: 'key'
-});
-
-db.version(2).upgrade(async (tx) => {
-    await tx.table('products').toCollection().modify(product => {
-        if (product.imageUrl && product.imageUrl.startsWith('data:')) {
-            product.image = base64ToBlob(product.imageUrl);
-            // Keep http URLs, delete base64 data URLs
-            delete product.imageUrl;
-        }
-    });
-});
-
-db.version(3).stores({
-    otherIncomes: 'id, date'
-});
-
-db.version(4).stores({
-    sessionHistory: 'id, startTime, endTime, userId'
-});
-
-db.version(5).stores({
-    auditLogs: 'id, timestamp, action, userId'
-});
-
-db.version(6).stores({
-    balanceLogs: 'id, customerId, type, timestamp'
-}).upgrade(async (tx) => {
-    // Initialize balance for existing customers
-    await tx.table('customers').toCollection().modify(c => {
-        if (c.balance === undefined) c.balance = 0;
-    });
-});
-
-
-const populate = async () => {
-    const hashedPin = await hashPin('1111');
-    const defaultAdmin: User = { id: 'admin_default', name: 'Admin', pin: hashedPin, role: 'admin' };
-
-    await db.products.bulkAdd(initialData.products);
-    await db.users.add(defaultAdmin);
-    await db.appState.put({ key: 'categories', value: initialData.categories });
-    await db.settings.bulkAdd([
-        { key: 'receiptSettings', value: initialData.receiptSettings },
-        { key: 'inventorySettings', value: initialData.inventorySettings },
-        { key: 'authSettings', value: initialData.authSettings },
-        { key: 'sessionSettings', value: initialData.sessionSettings },
-        { key: 'membershipSettings', value: initialData.membershipSettings },
-    ]);
-};
-
-db.on('populate', populate);

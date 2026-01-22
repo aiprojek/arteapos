@@ -9,82 +9,70 @@ const FAQTab: React.FC = () => {
 
     const faqs = [
         {
+            id: 'faq_cam_customer',
+            category: 'Transaksi',
+            title: 'Bagaimana cara minta pelanggan foto bukti transfer langsung di layar mereka?',
+            content: 'Fitur ini membutuhkan <strong>Layar Pelanggan</strong> yang terhubung.<br/>1. Di kasir, tekan "Bayar" lalu pilih "Non-Tunai".<br/>2. Di bagian "Bukti Pembayaran", klik tombol ungu <strong>"Minta Pelanggan"</strong>.<br/>3. Layar di depan pelanggan akan berubah menjadi kamera. Minta pelanggan mengarahkan bukti transfer ke kamera tersebut.<br/>4. Foto akan otomatis muncul di tablet Kasir untuk disimpan.'
+        },
+        {
+            id: 'faq_table_remove',
+            category: 'Transaksi',
+            title: 'Bagaimana cara menghilangkan kolom "Nomor Meja"?',
+            content: 'Jika usaha Anda bukan restoran (misal Retail/Kelontong), Anda bisa mematikan fitur ini.<br/>Masuk ke menu <strong>Pengaturan</strong> > <strong>Fitur Kasir</strong> > Matikan toggle <strong>"Aktifkan Manajemen Meja & Pax"</strong>.'
+        },
+        {
             id: 'faq_evid',
             category: 'Transaksi',
-            title: 'Bagaimana cara simpan dan unduh bukti transfer?',
-            content: 'Saat pembayaran Non-Tunai, klik ikon kamera di kolom <strong>"Bukti Pembayaran (Opsional)"</strong> untuk memfoto struk/HP pelanggan.<br/><br/>Foto ini tersimpan di <strong>Laporan</strong>. Admin dapat mengklik ikon kamera biru di tabel laporan, lalu menekan tombol <strong>"Unduh"</strong>. File akan otomatis diberi nama sesuai <strong>ID Transaksi</strong> (cth: <code>Bukti_Trx_LOC-123...</code>) sehingga mudah dicocokkan dengan data Excel/CSV saat audit.'
+            title: 'Bagaimana cara unduh bukti transfer yang tersimpan?',
+            content: 'Semua foto tersimpan di menu <strong>Laporan -> Riwayat Penjualan</strong>.<br/>Klik ikon kamera biru pada transaksi terkait, lalu tekan tombol <strong>"Unduh"</strong>. File akan disimpan dengan nama yang mengandung ID Transaksi agar mudah dicocokkan.'
+        },
+        {
+            id: 'faq_kds_conn',
+            category: 'Layar Dapur',
+            title: 'Bagaimana cara menghubungkan Layar Dapur (KDS)?',
+            content: '1. Siapkan Tablet/HP untuk dapur.<br/>2. Buka Artea POS di perangkat dapur -> Layar Login -> Klik tombol "Mode Dapur" di bawah.<br/>3. Di Kasir Utama, buka menu Kasir -> Klik ikon "Layar Kedua" (Cast) -> Pilih tab <strong>"Dapur (KDS)"</strong>.<br/>4. Scan QR code yang ada di perangkat dapur.'
+        },
+        {
+            id: 'faq_kds_func',
+            category: 'Layar Dapur',
+            title: 'Apa fungsi tombol "Bersihkan Selesai" di Layar Dapur?',
+            content: 'Tombol ini menghapus pesanan yang statusnya sudah "SELESAI" dari layar, agar koki bisa fokus pada pesanan baru yang masuk. Pesanan tidak terhapus dari laporan penjualan, hanya hilang dari tampilan dapur.'
         },
         {
             id: 'faq_ocr',
             category: 'Keuangan',
             title: 'Apa fungsi tombol "Scan Data (AI)" saat catat pengeluaran?',
-            content: 'Ini adalah fitur cerdas untuk mempercepat kerja Anda. Cukup foto nota belanja pasar/supplier, lalu klik tombol Scan AI. Sistem akan otomatis membaca <strong>Tanggal</strong> dan <strong>Total Harga</strong> dari foto tersebut, jadi Anda tidak perlu mengetik manual.'
+            content: 'Fitur cerdas untuk mempercepat input data. Cukup foto nota belanja, klik Scan AI, dan sistem akan otomatis membaca <strong>Tanggal</strong> serta <strong>Total Harga</strong> dari foto tersebut.'
         },
         {
             id: 'faq_dual',
-            category: 'Layar Pelanggan',
-            title: 'Apakah fitur Layar Pelanggan (Dual Screen) butuh internet?',
-            content: '<strong>Ya, butuh.</strong> Fitur ini menggunakan teknologi WebRTC (PeerJS) untuk menghubungkan dua browser berbeda (Kasir & Pelanggan). Koneksi internet diperlukan untuk proses awal (handshake/pairing). Setelah terhubung, data akan mengalir lebih stabil jika kedua perangkat dalam jaringan WiFi yang sama, tapi tetap membutuhkan akses internet dasar.'
+            category: 'Koneksi',
+            title: 'Apakah fitur Layar Pelanggan/Dapur butuh internet?',
+            content: '<strong>Ya, butuh.</strong> Fitur ini menggunakan teknologi WebRTC (PeerJS) untuk menghubungkan antar browser. Koneksi internet diperlukan untuk proses awal (pairing). Setelah terhubung, data lebih stabil jika kedua perangkat dalam jaringan WiFi yang sama, tapi tetap membutuhkan akses internet dasar.'
         },
         {
-            id: 'faq_device',
-            category: 'Layar Pelanggan',
-            title: 'Perangkat apa yang bisa jadi Layar Pelanggan?',
-            content: '<strong>Hampir semua perangkat.</strong> Anda bisa menggunakan Tablet Android bekas, iPad lama, atau bahkan HP Android murah. Syaratnya hanya satu: Bisa membuka browser modern (Chrome/Edge/Safari) dan terhubung ke internet.'
+            id: 'faq_ble_native',
+            category: 'Hardware',
+            title: 'Saya pakai Aplikasi Android, kenapa Printer tidak bisa print?',
+            content: 'Jika menggunakan Aplikasi Android (APK/Play Store), pastikan Anda menggunakan tombol <strong>"Cari Perangkat (Paired)"</strong> di menu Pengaturan Hardware.<br/>Jangan lupa nyalakan Bluetooth HP dan pasangkan (pair) printer di menu Bluetooth Android terlebih dahulu sebelum membuka aplikasi.'
         },
         {
             id: 'faq_waste',
             category: 'Stok',
-            title: 'Di mana saya melihat laporan barang rusak (waste) atau riwayat restock?',
-            content: 'Semua aktivitas perubahan stok (selain penjualan) tercatat di menu <strong>Laporan</strong>.<br/>1. Buka menu Laporan.<br/>2. Di bagian bawah (tabel), klik tab <strong>"Mutasi Stok & Log"</strong> (disebelah tab Riwayat Penjualan).<br/>Di sana Anda akan melihat daftar lengkap: kapan barang masuk (Restock), kapan keluar (Waste/Rusak), dan hasil Stock Opname.'
+            title: 'Di mana melihat laporan barang rusak (waste)?',
+            content: 'Buka menu <strong>Laporan</strong> -> tab <strong>"Mutasi Stok & Log"</strong>. Di sana tercatat semua barang keluar selain penjualan (label merah "KELUAR").'
         },
         {
             id: 'faq_dropbox',
             category: 'Keamanan',
-            title: 'Kenapa kolom App Key & Secret Dropbox jadi kosong setelah terhubung?',
-            content: 'Ini adalah fitur keamanan <strong>(Security by Obscurity)</strong>.<br/>Sistem secara otomatis menyembunyikan App Key dan App Secret dari tampilan layar agar <strong>tidak bisa dicuri atau disalin</strong> oleh staf/orang lain yang meminjam perangkat Admin. Data sebenarnya <strong>tetap tersimpan aman</strong> di dalam sistem.'
+            title: 'Kenapa kolom App Key Dropbox jadi kosong?',
+            content: 'Fitur keamanan <strong>(Security by Obscurity)</strong>. Sistem menyembunyikan App Key/Secret dari layar agar tidak bisa disalin oleh orang lain. Data asli tetap tersimpan aman di sistem.'
         },
         {
             id: 'faq_transfer',
             category: 'Stok',
             title: 'Apa bedanya "Transfer Stok" dan "Stok Manual"?',
-            content: '<strong>Transfer Stok</strong> digunakan oleh Gudang Pusat untuk mengirim barang ke Cabang secara digital (membutuhkan internet). Cabang akan menerima stok saat Sync.<br/><strong>Stok Manual</strong> digunakan untuk input barang yang dibeli sendiri oleh toko dari supplier lokal/pasar (bisa offline) atau untuk mencatat barang rusak/waste.'
-        },
-        {
-            id: 'faq_sync_gudang',
-            category: 'Stok',
-            title: 'Gudang sudah kirim barang, kenapa stok di kasir belum bertambah?',
-            content: 'Karena aplikasi ini <em>Offline-First</em>, data tidak masuk otomatis detik itu juga. Kasir/Staf Toko harus menekan tombol <strong>"Cek Update" (ikon panah bawah)</strong> di bagian atas layar (Header) untuk mengunduh data kiriman dari Gudang. Pastikan ada internet saat menekan tombol tersebut.'
-        },
-        {
-            id: 'faq_ble',
-            category: 'Hardware',
-            title: 'Printer Bluetooth tidak terdeteksi di Android 12+?',
-            content: 'Android 12/13/14/15 membutuhkan izin <strong>"Nearby Devices" (Perangkat Sekitar)</strong>. Pastikan Anda mengklik "Izinkan" saat pertama kali membuka menu Printer. Jika terlewat, buka <em>Settings HP -> Apps -> Artea POS -> Permissions -> Nearby Devices -> Allow</em>.'
-        },
-        {
-            id: 'faq_scanner',
-            category: 'Hardware',
-            title: 'Apakah barcode scanner bisa untuk kartu member?',
-            content: '<strong>Ya!</strong> Tombol Scanner di menu Kasir sekarang sudah "Smart". Jika yang discan adalah kartu member, sistem otomatis login pelanggan tersebut. Jika yang discan adalah barang, sistem otomatis menambahkannya ke keranjang.'
-        },
-        {
-            id: 'faq_identity',
-            category: 'Member',
-            title: 'Saya koperasi sekolah/kantor, bisa pakai data Kelas/Divisi?',
-            content: '<strong>Bisa.</strong> Kolom "Kontak" pada data pelanggan bersifat bebas. Anda bisa mengisinya dengan "Kelas 12A", "NIK 12345", atau "Divisi Gudang". Data ini juga bisa digunakan sebagai kata kunci pencarian di halaman kasir.'
-        },
-        {
-            id: 'faq_topup',
-            category: 'Member',
-            title: 'Apakah uang Top Up Saldo dihitung sebagai Omzet Penjualan?',
-            content: '<strong>Tidak.</strong> Dalam akuntansi, uang Top Up dianggap sebagai <strong>Utang/Deposit</strong> (Uang Titipan). Di Artea POS, saat Top Up terjadi, uang masuk ke laporan <strong>Arus Kas (Kas Masuk)</strong> agar laci kasir tetap balance, tapi TIDAK menambah angka "Total Penjualan" hari itu.'
-        },
-        {
-            id: 'faq_cloud',
-            category: 'Cloud',
-            title: 'Apakah data cabang otomatis tersimpan di HP Admin?',
-            content: '<strong>Tidak otomatis.</strong> Aplikasi ini didesain agar perangkat Admin tetap ringan ("Mode Intip"). Data cabang tersimpan di Dropbox. Saat Anda menekan tombol "Refresh" di Dashboard, aplikasi hanya mengunduh data tersebut ke memori sementara untuk ditampilkan (View Only).'
+            content: '<strong>Transfer Stok:</strong> Gudang Pusat kirim barang ke Cabang (butuh internet).<br/><strong>Stok Manual:</strong> Toko beli barang sendiri dari pasar/supplier lokal.'
         }
     ];
 

@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { APP_LICENSE_ID } from '../constants';
 import type { View } from '../types';
 import { dropboxService } from '../services/dropboxService';
+import ShowcaseModal from './ShowcaseModal'; // IMPORT NEW COMPONENT
 
 interface OnboardingModalsProps {
     setActiveView: (view: View) => void;
@@ -17,6 +18,7 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
     const [showManagementWelcome, setShowManagementWelcome] = useState(false);
     const [showStaffBriefing, setShowStaffBriefing] = useState(false);
     const [showLicenseModal, setShowLicenseModal] = useState(false);
+    const [showShowcase, setShowShowcase] = useState(false); // STATE FOR SHOWCASE
     const [cloudMode, setCloudMode] = useState<'cloud' | 'local'>('local');
 
     useEffect(() => {
@@ -54,7 +56,6 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
             if (currentUser) {
                 localStorage.setItem(`ARTEA_WELCOME_SEEN_${currentUser.id}`, 'true');
             }
-            // Also set legacy key to prevent double popup for single admin setups
             localStorage.setItem('ARTEA_WELCOME_SEEN', 'true');
         } catch (e) {
             console.warn("LocalStorage set failed", e);
@@ -95,55 +96,58 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
             'Administrator';
 
         return (
-            <Modal isOpen={true} onClose={handleDismissManagement} title={`Halo, ${currentUser?.name}!`}>
-                <div className="text-center space-y-6">
-                    <div className="flex flex-col items-center">
-                        <div className="bg-[#347758]/20 p-4 rounded-full mb-3">
-                            <Icon name="logo" className="w-16 h-16 text-[#52a37c]" />
+            <>
+                <Modal isOpen={true} onClose={handleDismissManagement} title={`Halo, ${currentUser?.name}!`}>
+                    <div className="text-center space-y-6">
+                        <div className="flex flex-col items-center">
+                            <div className="bg-[#347758]/20 p-4 rounded-full mb-3">
+                                <Icon name="logo" className="w-16 h-16 text-[#52a37c]" />
+                            </div>
+                            <div className="font-arabic text-xl text-[#52a37c] font-medium tracking-wide mb-2">
+                                بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيم
+                            </div>
+                            <p className="text-white font-bold text-lg">Selamat Datang di Artea POS</p>
+                            <p className="text-slate-400 text-sm capitalize">Role: {roleLabel}</p>
                         </div>
-                        <div className="font-arabic text-xl text-[#52a37c] font-medium tracking-wide mb-2">
-                            بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيم
-                        </div>
-                        <p className="text-white font-bold text-lg">Selamat Datang di Artea POS</p>
-                        <p className="text-slate-400 text-sm capitalize">Role: {roleLabel}</p>
-                    </div>
-                    
-                    <div className="space-y-2 text-slate-300 text-sm">
-                        <p>
-                            {currentUser?.role === 'viewer' 
-                                ? "Anda memiliki akses khusus untuk melihat laporan dan dashboard performa bisnis tanpa risiko mengubah data." 
-                                : "Anda memiliki akses ke fitur manajemen operasional. Gunakan dashboard untuk memantau penjualan, mengelola stok produk, dan melihat laporan keuangan."}
-                        </p>
-                        {currentUser?.role === 'manager' && (
-                            <p className="bg-slate-900 p-2 rounded border border-slate-700 text-xs mt-2">
-                                ℹ️ <strong>Catatan:</strong> Sebagai Manager, akses Anda ke menu Keamanan (User) dan Reset Database dibatasi untuk menjaga integritas sistem.
-                            </p>
-                        )}
-                        {currentUser?.role === 'admin' && (
-                            <p className="bg-slate-900 p-2 rounded border border-slate-700 text-xs mt-2">
-                                💡 <strong>Tips:</strong> Atur "Store ID" di Pengaturan jika Anda mengelola banyak cabang.
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="flex flex-col gap-3">
-                        <Button onClick={handleGoToHelp} variant="secondary" className="w-full justify-center">
-                            <Icon name="book" className="w-5 h-5"/> Baca Panduan
-                        </Button>
-                        <Button onClick={handleDismissManagement} className="w-full justify-center">
-                            Mulai {currentUser?.role === 'viewer' ? 'Memantau' : 'Bekerja'}
-                        </Button>
                         
-                        <div className="mt-2 text-center">
-                            <button 
-                                onClick={() => setShowLicenseModal(true)}
-                                className="text-[10px] text-slate-500 hover:text-[#52a37c] underline underline-offset-2 transition-colors"
-                            >
-                                Lisensi: GNU GPL v3.0
-                            </button>
+                        <div className="space-y-2 text-slate-300 text-sm">
+                            <p>
+                                {currentUser?.role === 'viewer' 
+                                    ? "Anda memiliki akses khusus untuk melihat laporan dan dashboard performa bisnis tanpa risiko mengubah data." 
+                                    : "Solusi kasir Offline-First yang siap membantu Anda mengelola bisnis tanpa biaya langganan."}
+                            </p>
+                            {currentUser?.role === 'admin' && (
+                                <p className="bg-slate-900 p-2 rounded border border-slate-700 text-xs mt-2">
+                                    💡 <strong>Tips:</strong> Atur "Store ID" di Pengaturan jika Anda mengelola banyak cabang.
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="flex flex-col gap-3">
+                            <Button onClick={() => setShowShowcase(true)} variant="secondary" className="w-full justify-center bg-blue-600/20 text-blue-200 border-blue-800 hover:bg-blue-600/40">
+                                <Icon name="star" className="w-5 h-5"/> Lihat Fitur Unggulan
+                            </Button>
+                            
+                            <div className="grid grid-cols-2 gap-2">
+                                <Button onClick={handleGoToHelp} variant="secondary" className="w-full justify-center">
+                                    <Icon name="book" className="w-5 h-5"/> Panduan
+                                </Button>
+                                <Button onClick={handleDismissManagement} className="w-full justify-center">
+                                    Mulai
+                                </Button>
+                            </div>
+                            
+                            <div className="mt-2 text-center">
+                                <button 
+                                    onClick={() => setShowLicenseModal(true)}
+                                    className="text-[10px] text-slate-500 hover:text-[#52a37c] underline underline-offset-2 transition-colors"
+                                >
+                                    Lisensi: GNU GPL v3.0
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </Modal>
 
                 {/* License Overlay Modal */}
                 {showLicenseModal && (
@@ -164,7 +168,9 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
                         </div>
                     </div>
                 )}
-            </Modal>
+                
+                <ShowcaseModal isOpen={showShowcase} onClose={() => setShowShowcase(false)} />
+            </>
         );
     }
 

@@ -9,10 +9,11 @@ import { db } from '../services/db';
 import Icon from '../components/Icon';
 import Modal from '../components/Modal';
 import Button from '../components/Button';
+import ShowcaseModal from '../components/ShowcaseModal'; // IMPORT SHARED COMPONENT
 import type { User } from '../types';
 
 const LoginView: React.FC = () => {
-    const { users, login, authSettings, overrideAdminPin } = useAuth(); // Added overrideAdminPin
+    const { users, login, authSettings, overrideAdminPin } = useAuth(); 
     const { restoreData } = useData();
     const { showAlert, hideAlert } = useUI();
     const { receiptSettings } = useSettings();
@@ -30,6 +31,9 @@ const LoginView: React.FC = () => {
     // Reset PIN State
     const [newAdminPin, setNewAdminPin] = useState('');
     const [isResetSuccess, setIsResetSuccess] = useState(false);
+    
+    // Showcase State
+    const [isShowcaseOpen, setShowcaseOpen] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     
@@ -237,10 +241,19 @@ const LoginView: React.FC = () => {
 
     const ProfileSelectionScreen = () => (
         <div className="w-full max-w-md text-center">
-            <div onClick={handleLogoClick} className="inline-block p-2 cursor-pointer" title="Ketuk 5x untuk menu darurat">
+            <div onClick={handleLogoClick} className="inline-block p-2 cursor-pointer transition-transform active:scale-95" title="Ketuk 5x untuk menu darurat">
                 <Icon name="logo" className="w-16 h-16 text-[#52a37c] mx-auto" />
             </div>
-            <h1 className="text-2xl font-bold text-white mb-2 mt-4">Pilih Profil Anda</h1>
+            
+            {/* SHOWCASE BUTTON */}
+            <button 
+                onClick={() => setShowcaseOpen(true)}
+                className="mx-auto mt-2 mb-6 text-xs text-[#52a37c] bg-[#52a37c]/10 px-3 py-1.5 rounded-full hover:bg-[#52a37c]/20 transition-colors flex items-center gap-1"
+            >
+                <Icon name="star" className="w-3 h-3"/> Lihat Fitur Unggulan
+            </button>
+
+            <h1 className="text-2xl font-bold text-white mb-2">Pilih Profil Anda</h1>
             <p className="text-slate-400 mb-8">Siapa yang akan menggunakan kasir?</p>
             
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto mb-8">
@@ -324,6 +337,9 @@ const LoginView: React.FC = () => {
     return (
         <div className="h-screen w-screen flex items-center justify-center bg-slate-900 p-4">
             {selectedUser ? <PinEntryScreen /> : <ProfileSelectionScreen />}
+            
+            {/* Showcase Modal Shared */}
+            <ShowcaseModal isOpen={isShowcaseOpen} onClose={() => setShowcaseOpen(false)} />
 
             {/* Security Challenge Modal */}
             <Modal isOpen={isChallengeModalOpen} onClose={() => setChallengeModalOpen(false)} title="Tantangan Keamanan">

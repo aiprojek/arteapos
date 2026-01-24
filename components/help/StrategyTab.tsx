@@ -138,7 +138,7 @@ const StrategyTab: React.FC = () => {
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-2">Strategi Anti-Bocor & Keamanan</h2>
                 <p className="text-slate-300 text-sm max-w-xl mx-auto">
-                    Aplikasi kasir hanya alat. Keamanan bisnis sesungguhnya ada pada kombinasi sistem dan SOP yang cerdas. Berikut adalah taktik yang kami gunakan di Artea Group.
+                    Aplikasi kasir hanya alat. Keamanan bisnis sesungguhnya ada pada kombinasi sistem dan SOP yang cerdas. Berikut adalah taktik yang bisa Anda praktikan untuk menjaga bisnis dari praktik kecurangan staff.
                 </p>
             </div>
 

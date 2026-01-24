@@ -14,8 +14,8 @@ const ShowcaseModal: React.FC<ShowcaseModalProps> = ({ isOpen, onClose }) => {
 
     const slides = [
         {
-            title: "Kasir Offline Handal",
-            desc: "Jualan lancar tanpa tergantung sinyal internet. Data tersimpan aman di perangkat Anda (Local Database), anti macet dan super cepat.",
+            title: "100% Offline & Cepat",
+            desc: "Tidak perlu internet untuk jualan. Data tersimpan aman di perangkat Anda. Anti lemot, anti down, dan bebas biaya server bulanan.",
             icon: "wifi",
             color: "text-green-400",
             bg: "bg-green-900/30",
@@ -23,31 +23,55 @@ const ShowcaseModal: React.FC<ShowcaseModalProps> = ({ isOpen, onClose }) => {
         },
         {
             title: "Multi-Cabang Hemat",
-            desc: "Punya banyak cabang? Sinkronisasi laporan omzet dan stok secara otomatis menggunakan akun Dropbox gratisan. Tanpa biaya server mahal.",
+            desc: "Punya banyak outlet? Pantau omzet semua cabang dari satu dashboard. Sinkronisasi otomatis menggunakan akun Dropbox gratisan Anda.",
             icon: "cloud",
             color: "text-blue-400",
             bg: "bg-blue-900/30",
             glow: "shadow-blue-500/50"
         },
         {
-            title: "Ekosistem Layar Ganda",
-            desc: "Ubah HP bekas menjadi 'Layar Pelanggan' untuk menampilkan keranjang QRIS, atau 'Layar Dapur' (KDS) untuk koki. Terhubung via WiFi lokal.",
-            icon: "cast",
+            title: "Artea AI: Analis Bisnis",
+            desc: "Bingung cara menaikkan omzet? Tanyakan pada AI! Asisten cerdas yang menganalisis data penjualan Anda dan memberikan saran strategi bisnis praktis.",
+            icon: "chat",
             color: "text-purple-400",
             bg: "bg-purple-900/30",
             glow: "shadow-purple-500/50"
         },
         {
-            title: "Smart Inventory & Resep",
-            desc: "Bukan cuma stok barang jadi. Artea POS melacak stok bahan baku per gram/ml berdasarkan resep menu yang Anda buat.",
-            icon: "boxes",
+            title: "Resep & HPP Otomatis",
+            desc: "Jualan Kopi Susu, stok yang berkurang otomatis Kopi, Susu, dan Gula. Hitung HPP dan profit bersih per produk secara akurat.",
+            icon: "ingredients",
             color: "text-orange-400",
             bg: "bg-orange-900/30",
             glow: "shadow-orange-500/50"
         },
         {
-            title: "Aman & Transparan",
-            desc: "Fitur Audit Log mencatat setiap aktivitas sensitif (Hapus item, Refund, Edit Stok) untuk mencegah kecurangan karyawan.",
+            title: "Ekosistem Layar Ganda",
+            desc: "Manfaatkan HP bekas menjadi 'Layar Pelanggan' (QRIS) atau 'Layar Dapur' (KDS). Terhubung instan via WiFi tanpa kabel.",
+            icon: "cast",
+            color: "text-yellow-400",
+            bg: "bg-yellow-900/30",
+            glow: "shadow-yellow-500/50"
+        },
+        {
+            title: "Laporan Keuangan Utuh",
+            desc: "Bukan sekadar kasir. Catat Pengeluaran operasional, Utang/Piutang pelanggan, hingga Laporan Laba Rugi real-time.",
+            icon: "finance",
+            color: "text-teal-400",
+            bg: "bg-teal-900/30",
+            glow: "shadow-teal-500/50"
+        },
+        {
+            title: "Loyalty & E-Wallet Toko",
+            desc: "Ikat pelanggan dengan Poin Member. Pelanggan bahkan bisa Top Up saldo (Deposit) di toko Anda untuk pembayaran yang lebih cepat.",
+            icon: "award",
+            color: "text-pink-400",
+            bg: "bg-pink-900/30",
+            glow: "shadow-pink-500/50"
+        },
+        {
+            title: "Keamanan Anti-Fraud",
+            desc: "Tidur nyenyak. Fitur Audit Log mencatat setiap aktivitas sensitif (Hapus item, Refund, Edit Stok) untuk mencegah kecurangan karyawan.",
             icon: "lock",
             color: "text-red-400",
             bg: "bg-red-900/30",
@@ -68,10 +92,10 @@ const ShowcaseModal: React.FC<ShowcaseModalProps> = ({ isOpen, onClose }) => {
 
     return (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fade-in">
-            <div className="bg-slate-800 w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col h-[550px]">
+            <div className="bg-slate-800 w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col h-[600px]">
                 
                 {/* Image/Icon Area */}
-                <div className={`flex-[1.3] flex items-center justify-center p-8 relative overflow-hidden transition-colors duration-500 ${slides[slideIndex].bg}`}>
+                <div className={`flex-[1.4] flex items-center justify-center p-8 relative overflow-hidden transition-colors duration-500 ${slides[slideIndex].bg}`}>
                     
                     {/* Decorative Elements */}
                     <div key={`deco-${slideIndex}`} className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -92,7 +116,7 @@ const ShowcaseModal: React.FC<ShowcaseModalProps> = ({ isOpen, onClose }) => {
                          <Icon 
                             name={slides[slideIndex].icon} 
                             // Gunakan text-[8rem] atau lebih besar untuk memaksa font icon membesar
-                            className={`w-40 h-40 text-[8rem] ${slides[slideIndex].color} drop-shadow-2xl filter`} 
+                            className={`w-36 h-36 text-[7rem] ${slides[slideIndex].color} drop-shadow-2xl filter`} 
                          />
                     </div>
 
@@ -104,18 +128,19 @@ const ShowcaseModal: React.FC<ShowcaseModalProps> = ({ isOpen, onClose }) => {
                 {/* Text Content */}
                 <div className="p-6 flex flex-col justify-between flex-1 bg-slate-800 relative z-10 border-t border-slate-700/50">
                     <div key={slideIndex + "_text"} className="animate-fade-in text-center">
-                        <h2 className="text-2xl font-bold text-white mb-3">{slides[slideIndex].title}</h2>
+                        <h2 className="text-2xl font-bold text-white mb-3 leading-tight">{slides[slideIndex].title}</h2>
                         <p className="text-sm text-slate-400 leading-relaxed">{slides[slideIndex].desc}</p>
                     </div>
 
                     <div className="mt-4">
                         {/* Dots Indicator */}
-                        <div className="flex justify-center gap-2 mb-5">
+                        <div className="flex justify-center gap-1.5 mb-5">
                             {slides.map((_, idx) => (
                                 <button 
                                     key={idx} 
                                     onClick={() => setSlideIndex(idx)}
-                                    className={`h-2 rounded-full transition-all duration-300 ${idx === slideIndex ? `w-8 ${slides[slideIndex].color.replace('text-', 'bg-')}` : 'w-2 bg-slate-600 hover:bg-slate-500'}`} 
+                                    className={`h-1.5 rounded-full transition-all duration-300 ${idx === slideIndex ? `w-6 ${slides[slideIndex].color.replace('text-', 'bg-')}` : 'w-1.5 bg-slate-600 hover:bg-slate-500'}`} 
+                                    aria-label={`Slide ${idx + 1}`}
                                 />
                             ))}
                         </div>
@@ -128,10 +153,10 @@ const ShowcaseModal: React.FC<ShowcaseModalProps> = ({ isOpen, onClose }) => {
                                 </Button>
                             ) : (
                                 <Button variant="secondary" onClick={onClose} className="flex-1">
-                                    Tutup
+                                    Lewati
                                 </Button>
                             )}
-                            <Button onClick={nextSlide} className="flex-[2] shadow-lg shadow-green-900/20">
+                            <Button onClick={nextSlide} className="flex-[2] shadow-lg shadow-slate-900/50">
                                 {slideIndex === slides.length - 1 ? "Mulai Sekarang" : "Lanjut"}
                             </Button>
                         </div>

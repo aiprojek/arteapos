@@ -50,6 +50,7 @@ const DataTab: React.FC = () => {
     const [showDbxHelpModal, setShowDbxHelpModal] = useState(false);
     const [dbxAuthCode, setDbxAuthCode] = useState('');
     const [isDbxConnecting, setIsDbxConnecting] = useState(false);
+    const [manualAuthUrl, setManualAuthUrl] = useState(''); // NEW: Fallback URL
     
     // Pairing State
     const [showPairingModal, setShowPairingModal] = useState(false); 
@@ -383,6 +384,8 @@ const DataTab: React.FC = () => {
 
     // --- Dropbox Logic ---
     const handleDbxConnect = async () => {
+        setManualAuthUrl(''); // Reset manual URL
+        
         if (!dbxKey || !dbxSecret) {
             // Note: In connected mode, keys are hidden. If user clicks this, they must re-enter keys.
             if (isConfigured) {
@@ -395,7 +398,18 @@ const DataTab: React.FC = () => {
         
         try {
             const authUrl = await dropboxService.getAuthUrl(dbxKey);
-            window.open(authUrl, '_blank');
+            
+            // Attempt to open popup
+            const win = window.open(authUrl, '_blank');
+            
+            // If popup blocked or null, provide manual link
+            if (!win || win.closed || typeof win.closed == 'undefined') {
+                setManualAuthUrl(authUrl);
+                // No Alert needed, UI will show link automatically
+            } else {
+                // Also set manual URL just in case user closes popup by mistake
+                setManualAuthUrl(authUrl);
+            }
         } catch (e: any) {
             alert("Error generating URL: " + e.message);
         }
@@ -433,6 +447,7 @@ const DataTab: React.FC = () => {
             setDbxAuthCode('');
             setDbxKey('');
             setDbxSecret('');
+            setManualAuthUrl('');
             
             setShowDbxHelpModal(false);
             showAlert({ type: 'alert', title: 'Terhubung!', message: 'Dropbox berhasil dihubungkan. Token telah diamankan.' });
@@ -659,7 +674,7 @@ const DataTab: React.FC = () => {
 
     return (
         <div className="animate-fade-in">
-            {/* --- STATUS APLIKASI (WEB ONLY) --- */}
+            {/* ... (Status Aplikasi Card - Unchanged) ... */}
             {!isNative && (
                 <SettingsCard title="Status Aplikasi" description="Cek apakah aplikasi siap berjalan tanpa internet.">
                     <div className={`p-4 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isOfflineReady ? 'bg-green-900/20 border-green-800' : 'bg-red-900/20 border-red-800'}`}>
@@ -694,8 +709,8 @@ const DataTab: React.FC = () => {
                 </SettingsCard>
             )}
 
+            {/* ... (Diagnosa Sistem Card - Unchanged) ... */}
             <SettingsCard title="Diagnosa Sistem" description="Cek kesehatan database lokal dan penyimpanan browser.">
-                {/* ... existing diagnostics content ... */}
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
                         <p className="text-sm text-slate-300">
@@ -705,7 +720,6 @@ const DataTab: React.FC = () => {
                             {isChecking ? 'Mengecek...' : 'Cek Kesehatan Data'}
                         </Button>
                     </div>
-                    {/* ... health status render ... */}
                     {healthStatus && (
                         <div className="bg-slate-900 border border-slate-600 p-4 rounded-lg mt-2 text-xs font-mono animate-fade-in">
                             {healthStatus.error ? (
@@ -734,6 +748,7 @@ const DataTab: React.FC = () => {
                 </div>
             </SettingsCard>
 
+            {/* ... (Manajemen Memori Card - Unchanged) ... */}
             <SettingsCard title="Manajemen Memori (Pengarsipan)" description="Hapus data lama untuk menjaga performa aplikasi tetap cepat.">
                 <div className="bg-orange-900/20 border-l-4 border-orange-500 p-4 rounded-r mb-4">
                     <div className="flex items-start gap-3">
@@ -751,6 +766,7 @@ const DataTab: React.FC = () => {
                 </Button>
             </SettingsCard>
 
+            {/* ... (Manajemen Dropbox Card - Unchanged) ... */}
             <SettingsCard title="Manajemen Penyimpanan Dropbox" description="Pantau kuota penyimpanan dan lakukan pembersihan jika penuh.">
                 <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 mb-4">
                     <div className="space-y-4">
@@ -794,7 +810,6 @@ const DataTab: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3">
-                    {/* NEW: Download Archive Dropdown */}
                     <div className="relative flex-1" ref={cloudArchiveDropdownRef}>
                         <Button 
                             onClick={() => setCloudArchiveDropdownOpen(!isCloudArchiveDropdownOpen)} 
@@ -839,6 +854,7 @@ const DataTab: React.FC = () => {
                 </p>
             </SettingsCard>
 
+            {/* ... (Backup Restore Card - Unchanged) ... */}
             <SettingsCard title="Backup & Restore Lokal" description="Unduh file database (.json) ke perangkat ini atau pulihkan data dari file cadangan.">
                 <div className="flex flex-wrap gap-3">
                     <Button onClick={dataService.exportData} variant="secondary">
@@ -852,6 +868,7 @@ const DataTab: React.FC = () => {
                 </div>
             </SettingsCard>
 
+            {/* ... (Import Transaksi Card - Unchanged) ... */}
             <SettingsCard title="Laporan & Transaksi Lama" description="Impor data penjualan dari perangkat lain atau dari laporan WhatsApp yang aman.">
                 <div className="space-y-4">
                     <div className="flex flex-col gap-2">
@@ -881,8 +898,8 @@ const DataTab: React.FC = () => {
                 </div>
             </SettingsCard>
 
+            {/* --- KONEKSI CLOUD CARD --- */}
             <SettingsCard title="Koneksi Cloud (Dropbox)" description="Hubungkan akun Dropbox untuk backup otomatis dan sinkronisasi antar cabang.">
-                {/* ... existing Dropbox Card content ... */}
                 <div className="bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded-r mb-4">
                     <div className="flex items-start gap-3">
                         <Icon name="info-circle" className="w-5 h-5 text-blue-400 mt-0.5" />
@@ -1093,6 +1110,21 @@ const DataTab: React.FC = () => {
                         <Button onClick={handleDbxConnect} variant="secondary" className="w-full bg-blue-600 hover:bg-blue-500 text-white border-none">
                             <Icon name="share" className="w-4 h-4"/> Buka Halaman Izin Dropbox
                         </Button>
+                        
+                        {/* FALLBACK MANUAL LINK */}
+                        {manualAuthUrl && (
+                            <div className="bg-yellow-900/30 p-2 rounded border border-yellow-700 text-center animate-fade-in">
+                                <p className="text-xs text-yellow-200 mb-1">Pop-up tidak muncul? Klik link ini:</p>
+                                <a 
+                                    href={manualAuthUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-xs font-bold text-sky-400 underline break-all"
+                                >
+                                    Buka Link Manual
+                                </a>
+                            </div>
+                        )}
                     </div>
 
                     <div className="border-t border-slate-700"></div>

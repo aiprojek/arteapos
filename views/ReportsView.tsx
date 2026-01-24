@@ -15,13 +15,13 @@ import Modal from '../components/Modal';
 import ReceiptModal from '../components/ReceiptModal';
 import { generateSalesReportPDF } from '../utils/pdfGenerator';
 import { dataService } from '../services/dataService';
-import type { Transaction, StockAdjustment } from '../types';
+import type { Transaction, StockAdjustment, Product } from '../types';
 import { Capacitor } from '@capacitor/core';
 import { saveBinaryFileNative } from '../utils/nativeHelper';
 
 const ReportsView: React.FC = () => {
     const { transactions: localTransactions, refundTransaction } = useFinance();
-    const { stockAdjustments: localStockAdjustments } = useProduct();
+    const { stockAdjustments: localStockAdjustments, products: localProducts } = useProduct();
     const { receiptSettings } = useSettings();
     const { showAlert } = useUI();
 
@@ -33,9 +33,9 @@ const ReportsView: React.FC = () => {
     // BRANCH FILTER
     const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
 
-    const [cloudData, setCloudData] = useState<{ transactions: Transaction[], stockAdjustments: StockAdjustment[] }>({ transactions: [], stockAdjustments: [] });
+    const [cloudData, setCloudData] = useState<{ transactions: Transaction[], stockAdjustments: StockAdjustment[], inventory: any[] }>({ transactions: [], stockAdjustments: [], inventory: [] });
     const [isLoading, setIsLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<'transactions' | 'products' | 'stock'>('transactions');
+    const [activeTab, setActiveTab] = useState<'transactions' | 'products' | 'stock' | 'inventory'>('transactions');
     
     // Receipt & Evidence State
     const [receiptTransaction, setReceiptTransaction] = useState<Transaction | null>(null);
@@ -54,7 +54,8 @@ const ReportsView: React.FC = () => {
              const mock = mockDataService.getMockDashboardData();
              setCloudData({
                  transactions: mock.transactions,
-                 stockAdjustments: mock.stockAdjustments
+                 stockAdjustments: mock.stockAdjustments,
+                 inventory: mock.inventory
              });
              setIsLoading(false);
              return;
@@ -64,11 +65,14 @@ const ReportsView: React.FC = () => {
             const allBranches = await dropboxService.fetchAllBranchData();
             let txns: any[] = [];
             let adjs: any[] = [];
+            let invs: any[] = [];
+
             allBranches.forEach(branch => {
                 if (branch.transactionRecords) txns.push(...branch.transactionRecords.map((t:any) => ({...t, storeId: branch.storeId})));
                 if (branch.stockAdjustments) adjs.push(...branch.stockAdjustments.map((a:any) => ({...a, storeId: branch.storeId})));
+                if (branch.currentStock) invs.push(...branch.currentStock.map((i:any) => ({...i, storeId: branch.storeId})));
             });
-            setCloudData({ transactions: txns, stockAdjustments: adjs });
+            setCloudData({ transactions: txns, stockAdjustments: adjs, inventory: invs });
         } catch (e: any) {
             showAlert({ type: 'alert', title: 'Gagal', message: e.message });
             setDataSource('local');
@@ -85,6 +89,20 @@ const ReportsView: React.FC = () => {
 
     const activeTransactions = dataSource === 'local' ? localTransactions : cloudData.transactions;
     const activeStockAdjustments = dataSource === 'local' ? localStockAdjustments : cloudData.stockAdjustments;
+    
+    // Inventory Data Source
+    const activeInventory = useMemo(() => {
+        if (dataSource === 'local') {
+            return localProducts.filter(p => p.trackStock).map(p => ({
+                id: p.id,
+                name: p.name,
+                stock: p.stock || 0,
+                storeId: 'LOKAL'
+            }));
+        } else {
+            return cloudData.inventory;
+        }
+    }, [dataSource, localProducts, cloudData.inventory]);
 
     // CALCULATE AVAILABLE BRANCHES
     const availableBranches = useMemo(() => {
@@ -95,6 +113,10 @@ const ReportsView: React.FC = () => {
         });
         cloudData.stockAdjustments.forEach(s => {
             if ((s as any).storeId) branches.add((s as any).storeId);
+        });
+        // Also check inventory for branches that might be idle but have stock
+        cloudData.inventory.forEach(i => {
+             if (i.storeId) branches.add(i.storeId);
         });
         return Array.from(branches).sort();
     }, [cloudData, dataSource]);
@@ -130,9 +152,17 @@ const ReportsView: React.FC = () => {
 
         const txns = activeTransactions.filter(t => filterFn(t.createdAt, t.storeId)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         const stock = activeStockAdjustments.filter(s => filterFn(s.createdAt, (s as any).storeId)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        
+        // Inventory Filter (No Date, Only Branch)
+        const inventory = activeInventory.filter(i => {
+             if (dataSource !== 'local' && selectedBranch !== 'ALL') {
+                return i.storeId === selectedBranch;
+            }
+            return true;
+        }).sort((a,b) => a.stock - b.stock); // Sort by lowest stock
 
-        return { txns, stock };
-    }, [filter, activeTransactions, activeStockAdjustments, selectedBranch, dataSource, customStartDate, customEndDate]);
+        return { txns, stock, inventory };
+    }, [filter, activeTransactions, activeStockAdjustments, activeInventory, selectedBranch, dataSource, customStartDate, customEndDate]);
 
     // --- AGGREGATION LOGIC ---
 
@@ -345,7 +375,7 @@ const ReportsView: React.FC = () => {
         { label: 'Total Omzet', width: '1.5fr', render: (p: any) => <span className="text-green-400 font-bold">{CURRENCY_FORMATTER.format(p.total)}</span> }
     ];
 
-    // --- COLUMNS FOR STOCK TABLE (UNCHANGED) ---
+    // --- COLUMNS FOR STOCK TABLE ---
     const stockColumns = useMemo(() => [
         { label: 'Waktu', width: '1.2fr', render: (s: StockAdjustment) => <span className="text-slate-400 whitespace-nowrap text-xs">{new Date(s.createdAt).toLocaleString('id-ID')}</span> },
         ...(dataSource !== 'local' ? [{ 
@@ -391,6 +421,17 @@ const ReportsView: React.FC = () => {
         { label: 'Catatan', width: '2.5fr', render: (s: StockAdjustment) => <span className="text-xs text-slate-400 italic">{s.notes || '-'}</span> },
     ], [dataSource]);
 
+    // --- COLUMNS FOR INVENTORY MONITORING (NEW TAB) ---
+    const inventoryColumns = useMemo(() => [
+        { label: 'Nama Produk / Bahan', width: '3fr', render: (i: any) => <span className="font-bold text-white">{i.name}</span> },
+        { label: 'Sisa Stok', width: '1fr', render: (i: any) => <span className={`font-mono font-bold ${i.stock <= 5 ? 'text-red-400' : 'text-white'}`}>{i.stock}</span> },
+        ...(dataSource !== 'local' ? [{ 
+            label: 'Cabang', 
+            width: '1fr', 
+            render: (i: any) => <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{i.storeId || '-'}</span> 
+        }] : []),
+    ], [dataSource]);
+
     return (
         <div className="space-y-6 pb-20">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -420,17 +461,19 @@ const ReportsView: React.FC = () => {
                         <button onClick={() => setDataSource('dropbox')} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'dropbox' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Cloud</button>
                     </div>
 
-                    {/* Time Filter */}
-                    <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700 overflow-x-auto max-w-[200px] sm:max-w-none hide-scrollbar">
-                        {(['today', 'week', 'month', 'custom', 'all'] as const).map(f => (
-                            <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap ${filter === f ? 'bg-slate-600 text-white' : 'text-slate-400'}`}>
-                                {f === 'today' ? 'Hari Ini' : f === 'week' ? 'Minggu Ini' : f === 'month' ? 'Bulan Ini' : f === 'custom' ? 'Kustom' : 'Semua'}
-                            </button>
-                        ))}
-                    </div>
+                    {/* Time Filter - Hide for Inventory Tab */}
+                    {activeTab !== 'inventory' && (
+                        <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700 overflow-x-auto max-w-[200px] sm:max-w-none hide-scrollbar">
+                            {(['today', 'week', 'month', 'custom', 'all'] as const).map(f => (
+                                <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap ${filter === f ? 'bg-slate-600 text-white' : 'text-slate-400'}`}>
+                                    {f === 'today' ? 'Hari Ini' : f === 'week' ? 'Minggu Ini' : f === 'month' ? 'Bulan Ini' : f === 'custom' ? 'Kustom' : 'Semua'}
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
                      {/* CUSTOM DATE UI */}
-                     {filter === 'custom' && (
+                     {filter === 'custom' && activeTab !== 'inventory' && (
                         <div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-slate-700 animate-fade-in">
                             <input 
                                 type="date" 
@@ -448,37 +491,41 @@ const ReportsView: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Export */}
-                    <Button size="sm" onClick={handleExport} variant="secondary"><Icon name="printer" className="w-4 h-4" /> PDF</Button>
-                    <Button size="sm" onClick={handleExportCSV} variant="secondary"><Icon name="download" className="w-4 h-4" /> CSV</Button>
+                    {/* Export - Disable for Inventory for now or handle separately */}
+                    <Button size="sm" onClick={handleExport} variant="secondary" disabled={activeTab === 'inventory'}><Icon name="printer" className="w-4 h-4" /> PDF</Button>
+                    <Button size="sm" onClick={handleExportCSV} variant="secondary" disabled={activeTab === 'inventory'}><Icon name="download" className="w-4 h-4" /> CSV</Button>
                 </div>
             </div>
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-[#347758] shadow-md">
-                    <p className="text-slate-400 text-sm uppercase">Total Omzet</p>
-                    <p className="text-2xl font-bold text-white">{CURRENCY_FORMATTER.format(summary.totalSales)}</p>
+            {/* Summary Cards (Only show for Transactions) */}
+            {activeTab === 'transactions' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-[#347758] shadow-md">
+                        <p className="text-slate-400 text-sm uppercase">Total Omzet</p>
+                        <p className="text-2xl font-bold text-white">{CURRENCY_FORMATTER.format(summary.totalSales)}</p>
+                    </div>
+                    <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-blue-500 shadow-md">
+                        <p className="text-slate-400 text-sm uppercase">Total Transaksi</p>
+                        <p className="text-2xl font-bold text-white">{summary.transactionCount}</p>
+                    </div>
+                    <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-yellow-500 shadow-md">
+                        <p className="text-slate-400 text-sm uppercase">Estimasi Profit</p>
+                        <p className="text-2xl font-bold text-white">{CURRENCY_FORMATTER.format(summary.totalProfit)}</p>
+                    </div>
                 </div>
-                <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-blue-500 shadow-md">
-                    <p className="text-slate-400 text-sm uppercase">Total Transaksi</p>
-                    <p className="text-2xl font-bold text-white">{summary.transactionCount}</p>
-                </div>
-                <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-yellow-500 shadow-md">
-                    <p className="text-slate-400 text-sm uppercase">Estimasi Profit</p>
-                    <p className="text-2xl font-bold text-white">{CURRENCY_FORMATTER.format(summary.totalProfit)}</p>
-                </div>
-            </div>
+            )}
 
-            {/* Charts - Visible Always */}
-            <ReportCharts 
-                hourlyChartData={chartData.hourly}
-                salesOverTimeData={chartData.trend}
-                categorySalesData={chartData.category}
-                bestSellingProducts={chartData.products}
-                filter={filter}
-                showSessionView={false}
-            />
+            {/* Charts - Visible Always except Inventory */}
+            {activeTab !== 'inventory' && (
+                <ReportCharts 
+                    hourlyChartData={chartData.hourly}
+                    salesOverTimeData={chartData.trend}
+                    categorySalesData={chartData.category}
+                    bestSellingProducts={chartData.products}
+                    filter={filter}
+                    showSessionView={false}
+                />
+            )}
 
             {/* Main Tabs */}
             <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 flex flex-col h-[600px]">
@@ -489,8 +536,11 @@ const ReportsView: React.FC = () => {
                     <button onClick={() => setActiveTab('products')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'products' ? 'border-[#347758] text-[#52a37c]' : 'border-transparent text-slate-400 hover:text-white'}`}>
                         Rekap Produk
                     </button>
+                    <button onClick={() => setActiveTab('inventory')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'inventory' ? 'border-[#347758] text-[#52a37c]' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                        Monitoring Stok
+                    </button>
                     <button onClick={() => setActiveTab('stock')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'stock' ? 'border-[#347758] text-[#52a37c]' : 'border-transparent text-slate-400 hover:text-white'}`}>
-                        Mutasi Stok & Log
+                        Log Mutasi
                     </button>
                 </div>
                 
@@ -511,6 +561,14 @@ const ReportsView: React.FC = () => {
                                 <VirtualizedTable 
                                     data={productRecap} 
                                     columns={productColumns} 
+                                    rowHeight={50} 
+                                    minWidth={500} 
+                                />
+                            )}
+                            {activeTab === 'inventory' && (
+                                <VirtualizedTable 
+                                    data={filteredData.inventory} 
+                                    columns={inventoryColumns} 
                                     rowHeight={50} 
                                     minWidth={500} 
                                 />

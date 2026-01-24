@@ -347,6 +347,25 @@ const ManualTab: React.FC = () => {
                             </ol>
                         </AccordionItem>
 
+                        <AccordionItem title="Sinkronisasi Admin Ganda (PC & HP)" isOpen={openAccordion === 'multi_device'} onToggle={() => toggleAccordion('multi_device')} icon="sync" colorClass="text-sky-400" badge="Tips Pro">
+                            <p className="mb-2">Cara mengelola toko dari dua perangkat berbeda (misal: Laptop di rumah & Ponsel saat bepergian) sebagai Admin:</p>
+                            <ul className="list-disc pl-5 text-sm text-slate-300 space-y-2">
+                                <li>
+                                    <strong>Mengubah Harga/Produk:</strong><br/>
+                                    - Di PC (Sumber): Setelah edit, masuk ke <em>Pengaturan &rarr; Data</em>, klik <strong>"Kirim Master" (Push)</strong>.<br/>
+                                    - Di HP (Penerima): Masuk menu Data, klik <strong>"Update dari Pusat" (Pull)</strong>.
+                                </li>
+                                <li>
+                                    <strong>Melihat Laporan:</strong><br/>
+                                    Di kedua perangkat, cukup gunakan <strong>Mode Cloud (Dropbox)</strong> di Dashboard/Laporan dan tekan tombol <strong>"Refresh"</strong>. Data akan selalu sama.
+                                </li>
+                                <li>
+                                    <strong>Menggabungkan Data (Merge):</strong><br/>
+                                    Jika Anda ingin data fisik (stok) di HP juga ikut berubah sesuai laporan PC, klik tombol <strong>"Simpan ke Lokal"</strong> setelah Refresh di Dashboard.
+                                </li>
+                            </ul>
+                        </AccordionItem>
+
                         <AccordionItem title="Strategi Admin Ringan (Mode Intip)" isOpen={openAccordion === 'cloud_strategy'} onToggle={() => toggleAccordion('cloud_strategy')} icon="eye" colorClass="text-sky-400" badge="Recommended">
                             <div className="bg-sky-900/20 border border-sky-700 p-3 rounded-lg mb-2">
                                 <strong className="text-sky-300">Konsep Utama:</strong> Agar perangkat Admin tidak berat/lemot, Anda TIDAK PERLU menyimpan data semua cabang ke database HP Anda secara permanen.
@@ -365,6 +384,22 @@ const ManualTab: React.FC = () => {
                                 <li>Setelah file aman terunduh, klik tombol merah <strong>"Kosongkan Folder Laporan"</strong>.</li>
                                 <li>Dropbox Anda kembali bersih dan siap menerima data bulan berikutnya. Perangkat Admin Anda tetap ringan karena tidak perlu menampung ribuan data lama.</li>
                             </ol>
+                        </AccordionItem>
+                        
+                        <AccordionItem title="Cara Memilah Data Arsip (Filter Cabang)" isOpen={openAccordion === 'archive_filter'} onToggle={() => toggleAccordion('archive_filter')} icon="boxes" colorClass="text-green-400" badge="Penting">
+                            <p><strong>Info Penting:</strong> Saat Anda menekan tombol "Unduh Arsip" di menu Pengaturan Data:</p>
+                            <ul className="list-disc pl-5 mt-2 space-y-1 text-sm text-slate-300">
+                                <li>Sistem akan mengunduh <strong>SELURUH data gabungan</strong> dari semua cabang yang ada di Dropbox menjadi satu file Excel/CSV besar.</li>
+                                <li>Anda <strong>tidak perlu</strong> memilih cabang satu per satu saat mengunduh.</li>
+                                <li><strong>Cara Memilah di Excel:</strong>
+                                    <ol className="list-decimal pl-5 mt-1">
+                                        <li>Buka file Excel yang sudah diunduh.</li>
+                                        <li>Klik baris judul (Header), lalu pilih menu <strong>Data &rarr; Filter</strong>.</li>
+                                        <li>Cari kolom bernama <strong>"Cabang" (Store ID)</strong>.</li>
+                                        <li>Klik panah filter pada kolom tersebut dan centang cabang yang ingin Anda lihat.</li>
+                                    </ol>
+                                </li>
+                            </ul>
                         </AccordionItem>
                         
                         <AccordionItem title="Keamanan, User & Audit (PENTING)" isOpen={openAccordion === 'set_2'} onToggle={() => toggleAccordion('set_2')} icon="lock" colorClass="text-red-400" badge="Anti-Fraud">

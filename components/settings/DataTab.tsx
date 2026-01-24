@@ -18,8 +18,8 @@ import { CURRENCY_FORMATTER } from '../../constants';
 import { Capacitor } from '@capacitor/core'; // Import Capacitor
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
-    <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
-        <div className="p-4 border-b border-slate-700 bg-slate-800">
+    <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 mb-6">
+        <div className="p-4 border-b border-slate-700 bg-slate-800 rounded-t-lg">
             <h3 className="text-lg font-semibold text-white">{title}</h3>
             {description && <p className="text-sm text-slate-400 mt-1">{description}</p>}
         </div>
@@ -102,13 +102,19 @@ const DataTab: React.FC = () => {
         };
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-        // Load credentials status safely
-        const creds = dropboxService.getCredentials();
-        if (creds) {
-            // SECURITY UPDATE: Jangan tampilkan Key/Secret di UI (setDbxKey/setDbxSecret dihapus)
-            // Biarkan state kosong agar input terlihat kosong/placeholder
+        // Check if ANY config exists (even just keys without token)
+        const appConfig = dropboxService.getStoredAppConfig();
+        const fullCreds = dropboxService.getCredentials();
+
+        if (appConfig) {
+            // Kita anggap "configured" jika sudah ada key tersimpan (agar input field jadi hidden)
+            // Tapi untuk fitur sync, nanti akan cek fullCreds
             setIsConfigured(true);
-            checkDropboxQuota();
+            
+            // Cek kuota hanya jika full credentials (ada token)
+            if (fullCreds) {
+                checkDropboxQuota();
+            }
         } else {
             setIsConfigured(false);
         }
@@ -225,8 +231,10 @@ const DataTab: React.FC = () => {
     const saveCloudSettings = () => {
         // SECURITY UPDATE: Only save if user actually typed new credentials
         if (dbxKey && dbxSecret) {
+            // Ambil refresh token lama jika ada, atau kosong jika baru pertama kali
             const currentCreds = dropboxService.getCredentials();
             dropboxService.saveCredentials(dbxKey, dbxSecret, currentCreds?.refreshToken || '');
+            
             showAlert({ type: 'alert', title: 'Tersimpan', message: 'Kredensial App Key/Secret diperbarui (Enkripsi Aktif).' });
             
             // Clear inputs after save to hide them again
@@ -386,18 +394,27 @@ const DataTab: React.FC = () => {
     const handleDbxConnect = async () => {
         setManualAuthUrl(''); // Reset manual URL
         
-        if (!dbxKey || !dbxSecret) {
-            // Note: In connected mode, keys are hidden. If user clicks this, they must re-enter keys.
-            if (isConfigured) {
-                showAlert({ type: 'alert', title: 'Kredensial Tersembunyi', message: 'Karena alasan keamanan, App Key & Secret tidak ditampilkan. Silakan masukkan ulang jika ingin mengubah koneksi.' });
-            } else {
-                showAlert({ type: 'alert', title: 'Data Kurang', message: 'Masukkan App Key dan App Secret terlebih dahulu.' });
+        // 1. Tentukan Client ID (App Key)
+        let keyToUse = dbxKey;
+
+        // Jika input kosong, coba ambil dari storage (mungkin hidden state)
+        if (!keyToUse && isConfigured) {
+            // GUNAKAN getStoredAppConfig AGAR BISA AKSES KEY MESKIPUN TOKEN BELUM ADA
+            const stored = dropboxService.getStoredAppConfig();
+            if (stored) {
+                keyToUse = stored.clientId;
             }
+        }
+
+        // 2. Validasi Akhir
+        if (!keyToUse) {
+            showAlert({ type: 'alert', title: 'Data Kurang', message: 'Masukkan App Key dan App Secret terlebih dahulu, lalu klik Simpan Konfigurasi.' });
             return;
         }
         
+        // 3. Generate Link
         try {
-            const authUrl = await dropboxService.getAuthUrl(dbxKey);
+            const authUrl = await dropboxService.getAuthUrl(keyToUse);
             
             // Attempt to open popup
             const win = window.open(authUrl, '_blank');
@@ -419,13 +436,12 @@ const DataTab: React.FC = () => {
         if (!dbxAuthCode) return;
         
         // We need key/secret to exchange code. 
-        // If hidden (isConfigured), we try to get them from service.
-        // If user typed new ones, we use state.
+        // Use getStoredAppConfig to retrieve keys even without token
         let key = dbxKey;
         let secret = dbxSecret;
 
-        if (isConfigured && (!key || !secret)) {
-            const stored = dropboxService.getCredentials();
+        if (!key || !secret) {
+            const stored = dropboxService.getStoredAppConfig();
             if (stored) {
                 key = stored.clientId;
                 secret = stored.clientSecret;

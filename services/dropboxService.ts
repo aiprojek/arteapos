@@ -67,6 +67,7 @@ export const dropboxService = {
         if (refreshToken) safeStorage.setItem(KEY_REFRESH_TOKEN, encryptStorage(refreshToken));
     },
 
+    // Strict: Returns null if ANY credential (including token) is missing
     getCredentials: () => {
         const key = decryptStorage(safeStorage.getItem(KEY_APP_KEY));
         const secret = decryptStorage(safeStorage.getItem(KEY_APP_SECRET));
@@ -74,6 +75,14 @@ export const dropboxService = {
         
         if (!key || !secret || !refreshToken) return null;
         return { clientId: key, clientSecret: secret, refreshToken };
+    },
+
+    // Loose: Returns stored keys even if token is missing (For Step 2 Auth Flow)
+    getStoredAppConfig: () => {
+        const key = decryptStorage(safeStorage.getItem(KEY_APP_KEY));
+        const secret = decryptStorage(safeStorage.getItem(KEY_APP_SECRET));
+        if (!key || !secret) return null;
+        return { clientId: key, clientSecret: secret };
     },
 
     clearCredentials: () => {

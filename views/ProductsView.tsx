@@ -181,6 +181,94 @@ const CategoryInput: React.FC<{
     );
 };
 
+// --- RECIPE BUILDER (RESTORED) ---
+const RecipeBuilder: React.FC<{
+    recipe: RecipeItem[];
+    onChange: (recipe: RecipeItem[]) => void;
+}> = ({ recipe, onChange }) => {
+    const { rawMaterials } = useProduct();
+    const [selectedMaterial, setSelectedMaterial] = useState('');
+    const [amount, setAmount] = useState('');
+
+    const handleAdd = () => {
+        if (!selectedMaterial || !amount) return;
+        
+        const material = rawMaterials.find(m => m.id === selectedMaterial);
+        if (!material) return;
+
+        const newRecipeItem: RecipeItem = {
+            itemType: 'raw_material',
+            rawMaterialId: material.id,
+            quantity: parseFloat(amount) || 0
+        };
+
+        // Check duplicate
+        const exists = recipe.some(r => r.rawMaterialId === material.id);
+        if (exists) {
+            alert("Bahan ini sudah ada di resep.");
+            return;
+        }
+
+        onChange([...recipe, newRecipeItem]);
+        setSelectedMaterial('');
+        setAmount('');
+    };
+
+    const handleRemove = (index: number) => {
+        onChange(recipe.filter((_, i) => i !== index));
+    };
+
+    return (
+        <div className="bg-slate-900 border border-slate-700 p-4 rounded-lg space-y-3">
+            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <Icon name="ingredients" className="w-4 h-4 text-orange-400"/> Komposisi Resep
+            </h4>
+            <p className="text-xs text-slate-400">Stok bahan baku di bawah ini akan berkurang otomatis saat produk terjual.</p>
+            
+            <div className="space-y-2">
+                {recipe.map((item, idx) => {
+                    const mat = rawMaterials.find(m => m.id === item.rawMaterialId);
+                    return (
+                        <div key={idx} className="flex justify-between items-center bg-slate-800 p-2 rounded border border-slate-600">
+                            <div>
+                                <span className="text-white font-medium">{mat?.name || 'Unknown'}</span>
+                                <span className="text-xs text-slate-400 ml-2">{item.quantity} {mat?.unit}</span>
+                            </div>
+                            <button type="button" onClick={() => handleRemove(idx)} className="text-red-400 hover:text-white">
+                                <Icon name="close" className="w-4 h-4"/>
+                            </button>
+                        </div>
+                    )
+                })}
+                {recipe.length === 0 && <p className="text-xs text-slate-500 italic">Belum ada bahan baku.</p>}
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-slate-700">
+                <select 
+                    value={selectedMaterial}
+                    onChange={(e) => setSelectedMaterial(e.target.value)}
+                    className="flex-1 bg-slate-800 border border-slate-600 rounded text-xs px-2 py-1 text-white"
+                >
+                    <option value="">Pilih Bahan...</option>
+                    {rawMaterials.map(m => (
+                        <option key={m.id} value={m.id}>{m.name} ({m.unit})</option>
+                    ))}
+                </select>
+                <input 
+                    type="number" 
+                    placeholder="Jml" 
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    className="w-20 bg-slate-800 border border-slate-600 rounded text-xs px-2 py-1 text-white"
+                />
+                <Button type="button" size="sm" onClick={handleAdd} disabled={!selectedMaterial || !amount}>
+                    <Icon name="plus" className="w-3 h-3"/>
+                </Button>
+            </div>
+        </div>
+    );
+};
+
 const ModifierBuilder: React.FC<{
     groups: ModifierGroup[];
     onChange: (groups: ModifierGroup[]) => void;
@@ -344,8 +432,147 @@ const BulkProductModal: React.FC<{
     onClose: () => void;
     onSave: (products: Product[]) => void;
 }> = ({ isOpen, onClose, onSave }) => {
-    // Note: Implementation omitted for brevity, assuming existing logic or simple modal structure
-    return null; 
+    const { showAlert } = useUI();
+    const { currentUser } = useAuth();
+    const isStaff = currentUser?.role === 'staff';
+
+    const [mode, setMode] = useState<'manual' | 'import'>('manual');
+    // Initial 3 empty rows
+    const [rows, setRows] = useState<Array<{
+        name: string, price: string, costPrice: string, category: string, stock: string, barcode: string
+    }>>([
+        { name: '', price: '', costPrice: '', category: '', stock: '0', barcode: '' },
+        { name: '', price: '', costPrice: '', category: '', stock: '0', barcode: '' },
+        { name: '', price: '', costPrice: '', category: '', stock: '0', barcode: '' },
+    ]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleRowChange = (index: number, field: string, value: string) => {
+        const newRows = [...rows];
+        (newRows[index] as any)[field] = value;
+        setRows(newRows);
+    };
+
+    const addRow = () => {
+        setRows([...rows, { name: '', price: '', costPrice: '', category: '', stock: '0', barcode: '' }]);
+    };
+
+    const removeRow = (index: number) => {
+        setRows(rows.filter((_, i) => i !== index));
+    };
+
+    const handleSaveManual = () => {
+        // Filter rows that have at least a Name and Price
+        const validRows = rows.filter(r => r.name.trim() !== '' && r.price.trim() !== '');
+        
+        if (validRows.length === 0) {
+            showAlert({ type: 'alert', title: 'Data Kosong', message: 'Isi minimal satu Nama Produk dan Harga.' });
+            return;
+        }
+
+        const products: Product[] = validRows.map((r, i) => {
+            const stockVal = parseFloat(r.stock) || 0;
+            return {
+                id: `${Date.now()}-${i}`,
+                name: r.name,
+                price: parseFloat(r.price) || 0,
+                costPrice: parseFloat(r.costPrice) || 0,
+                category: r.category ? r.category.split(',').map(s => s.trim()) : ['Umum'],
+                stock: stockVal,
+                trackStock: stockVal > 0, // Auto track if stock > 0
+                barcode: r.barcode,
+            };
+        });
+
+        onSave(products);
+        // Reset rows
+        setRows([{ name: '', price: '', costPrice: '', category: '', stock: '0', barcode: '' }]);
+    };
+
+    const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const products = await dataService.importProductsCSV(file);
+            if (products.length > 0) {
+                onSave(products);
+            } else {
+                showAlert({ type: 'alert', title: 'Gagal', message: 'Tidak ada data valid ditemukan di file CSV.' });
+            }
+        } catch (err: any) {
+            showAlert({ type: 'alert', title: 'Error Import', message: err.message });
+        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Tambah Produk Massal">
+            <div className="space-y-4">
+                <div className="flex bg-slate-700 p-1 rounded-lg">
+                    <button onClick={() => setMode('manual')} className={`flex-1 py-2 text-sm rounded transition-colors ${mode === 'manual' ? 'bg-[#347758] text-white font-bold' : 'text-slate-300'}`}>Input Manual (Tabel)</button>
+                    <button onClick={() => setMode('import')} className={`flex-1 py-2 text-sm rounded transition-colors ${mode === 'import' ? 'bg-[#347758] text-white font-bold' : 'text-slate-300'}`}>Upload CSV</button>
+                </div>
+
+                {mode === 'manual' ? (
+                    <div className="space-y-4">
+                        <div className="overflow-x-auto max-h-[50vh] border border-slate-600 rounded-lg">
+                            <table className="w-full text-left text-sm text-slate-300 min-w-[800px]">
+                                <thead className="bg-slate-700 text-white font-bold sticky top-0 z-10">
+                                    <tr>
+                                        <th className="p-2 w-48">Nama Produk*</th>
+                                        <th className="p-2 w-28">Harga Jual*</th>
+                                        {!isStaff && <th className="p-2 w-28">Harga Modal</th>}
+                                        <th className="p-2 w-32">Kategori</th>
+                                        <th className="p-2 w-20">Stok Awal</th>
+                                        <th className="p-2 w-32">Barcode</th>
+                                        <th className="p-2 w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rows.map((row, idx) => (
+                                        <tr key={idx} className="border-b border-slate-700 bg-slate-800">
+                                            <td className="p-1"><input className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.name} onChange={e => handleRowChange(idx, 'name', e.target.value)} placeholder="Nama" /></td>
+                                            <td className="p-1"><input type="number" className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.price} onChange={e => handleRowChange(idx, 'price', e.target.value)} placeholder="0" /></td>
+                                            {!isStaff && <td className="p-1"><input type="number" className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.costPrice} onChange={e => handleRowChange(idx, 'costPrice', e.target.value)} placeholder="0" /></td>}
+                                            <td className="p-1"><input className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.category} onChange={e => handleRowChange(idx, 'category', e.target.value)} placeholder="Makanan, Minuman" /></td>
+                                            <td className="p-1"><input type="number" className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.stock} onChange={e => handleRowChange(idx, 'stock', e.target.value)} placeholder="0" /></td>
+                                            <td className="p-1"><input className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value={row.barcode} onChange={e => handleRowChange(idx, 'barcode', e.target.value)} placeholder="Scan/Ketik" /></td>
+                                            <td className="p-1 text-center"><button onClick={() => removeRow(idx)} className="text-red-400 hover:text-white"><Icon name="trash" className="w-4 h-4" /></button></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button size="sm" variant="secondary" onClick={addRow}><Icon name="plus" className="w-4 h-4" /> Tambah Baris</Button>
+                            <div className="flex-1"></div>
+                            <Button onClick={handleSaveManual}>Simpan Semua</Button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-6 text-center py-4">
+                        <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 inline-block text-left max-w-sm">
+                            <h4 className="font-bold text-white mb-2">Instruksi:</h4>
+                            <ol className="list-decimal pl-5 text-sm text-slate-300 space-y-1">
+                                <li>Gunakan fitur "Export" di menu produk untuk melihat contoh format CSV.</li>
+                                <li>Edit file di Excel/Spreadsheet.</li>
+                                <li>Pastikan kolom <strong>name</strong> dan <strong>price</strong> terisi.</li>
+                                <li>Simpan sebagai .CSV dan upload.</li>
+                            </ol>
+                        </div>
+                        <div className="flex justify-center gap-4">
+                            <div className="relative">
+                                <Button variant="primary" onClick={() => fileInputRef.current?.click()}><Icon name="upload" className="w-4 h-4"/> Upload CSV</Button>
+                                <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleImportFile} />
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </Modal>
+    );
 };
 
 // ... CategoryManagerModal ...
@@ -365,24 +592,26 @@ const ProductForm = React.forwardRef<HTMLFormElement, ProductFormProps>(({
     product, onSave, onCancel, onOpenCamera, isCameraAvailable, capturedImage 
 }, ref) => {
     const { currentUser } = useAuth();
-    const isStaff = currentUser?.role === 'staff'; // Permission Check
+    // PENTING: Ambil inventorySettings dari context agar bisa cek status Resep & Stok
+    const { inventorySettings } = useProduct(); 
+    const isStaff = currentUser?.role === 'staff'; 
 
     const [form, setForm] = useState<Partial<Product>>({
         name: '', price: 0, costPrice: 0, category: [], stock: 0, trackStock: false, 
-        barcode: '', modifierGroups: [], variants: [], addons: []
+        barcode: '', modifierGroups: [], variants: [], addons: [], recipe: []
     });
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (product) {
-            setForm({ ...product });
+            setForm({ ...product, recipe: product.recipe || [] });
             if (product.imageUrl) setImagePreview(product.imageUrl);
             else if (product.image instanceof Blob) setImagePreview(URL.createObjectURL(product.image));
         } else {
             setForm({ 
                 name: '', price: 0, costPrice: 0, category: [], stock: 0, trackStock: false, 
-                barcode: '', modifierGroups: [], variants: [], addons: []
+                barcode: '', modifierGroups: [], variants: [], addons: [], recipe: []
             });
             setImagePreview(null);
         }
@@ -458,26 +687,43 @@ const ProductForm = React.forwardRef<HTMLFormElement, ProductFormProps>(({
                 )}
             </div>
 
-            <div className="p-3 bg-slate-900 rounded-lg border border-slate-700">
-                <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium text-slate-300">Stok & Barcode</label>
-                    <div className="flex items-center">
-                        <input 
-                            type="checkbox" 
-                            checked={form.trackStock || false} 
-                            onChange={e => setForm({...form, trackStock: e.target.checked})} 
-                            className="mr-2 h-4 w-4"
-                        />
-                        <span className="text-xs text-slate-400">Lacak Stok</span>
+            {/* STOK SECTION (Always visible if setting enabled or form checked) */}
+            {(inventorySettings.enabled) && (
+                <div className="p-3 bg-slate-900 rounded-lg border border-slate-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-medium text-slate-300">Stok & Barcode</label>
+                        <div className="flex items-center">
+                            <input 
+                                type="checkbox" 
+                                checked={form.trackStock || false} 
+                                onChange={e => setForm({...form, trackStock: e.target.checked})} 
+                                className="mr-2 h-4 w-4"
+                            />
+                            <span className="text-xs text-slate-400">Lacak Stok Produk Ini</span>
+                        </div>
+                    </div>
+                    {/* Conditional Input: Show only if Track Stock is checked OR forced by system */}
+                    {form.trackStock && (
+                        <div className="mb-2">
+                             <InputField name="stock" label="Stok Awal" type="number" value={form.stock || ''} onChange={e => setForm({...form, stock: parseFloat(e.target.value)})} />
+                        </div>
+                    )}
+                    <div className="mt-2">
+                        <InputField name="barcode" label="Barcode" value={form.barcode || ''} onChange={e => setForm({...form, barcode: e.target.value})} placeholder="Scan atau ketik..." />
                     </div>
                 </div>
-                {form.trackStock && (
-                    <InputField name="stock" label="Stok Awal" type="number" value={form.stock || ''} onChange={e => setForm({...form, stock: parseFloat(e.target.value)})} />
-                )}
-                <div className="mt-2">
-                    <InputField name="barcode" label="Barcode" value={form.barcode || ''} onChange={e => setForm({...form, barcode: e.target.value})} placeholder="Scan atau ketik..." />
+            )}
+
+            {/* RECIPE BUILDER (RESTORED) - Only if enabled in Settings */}
+            {inventorySettings.trackIngredients && (
+                <div className="border-t border-slate-700 pt-4">
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Resep & Bahan Baku</label>
+                    <RecipeBuilder 
+                        recipe={form.recipe || []}
+                        onChange={r => setForm({...form, recipe: r})}
+                    />
                 </div>
-            </div>
+            )}
 
             <div className="border-t border-slate-700 pt-4">
                 <label className="block text-sm font-medium text-slate-300 mb-2">Varian & Modifier</label>

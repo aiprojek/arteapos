@@ -11,6 +11,7 @@ import { dataService } from '../services/dataService';
 import { CURRENCY_FORMATTER } from '../constants';
 import VirtualizedTable from '../components/VirtualizedTable';
 import StockOpnameModal from '../components/StockOpnameModal';
+import StaffRestockModal from '../components/StaffRestockModal'; // IMPORT RESTOCK MODAL
 import { useSettings } from '../context/SettingsContext';
 
 // --- HELPER FORMAT CURRENCY INPUT ---
@@ -467,6 +468,9 @@ const RawMaterialsView: React.FC = () => {
     const [isOpnameOpen, setIsOpnameOpen] = useState(false); 
     const [searchTerm, setSearchTerm] = useState('');
     const [isBulkModalOpen, setBulkModalOpen] = useState(false);
+    
+    // NEW: Restock Modal State
+    const [isRestockOpen, setIsRestockOpen] = useState(false);
 
     const filteredMaterials = useMemo(() => {
         return rawMaterials.filter(material =>
@@ -548,6 +552,12 @@ const RawMaterialsView: React.FC = () => {
                         />
                          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     </div>
+                    {/* NEW: KELOLA STOK BUTTON */}
+                    <Button variant="secondary" onClick={() => setIsRestockOpen(true)} className="flex-shrink-0 bg-slate-700 border-slate-600 hover:bg-slate-600" title="Terima Barang / Catat Kerusakan">
+                        <Icon name="tag" className="w-5 h-5"/>
+                        <span className="hidden lg:inline">Kelola Stok</span>
+                    </Button>
+
                     <Button variant="secondary" onClick={() => setBulkModalOpen(true)} className="flex-shrink-0 bg-blue-900/30 text-blue-300 border-blue-800 hover:bg-blue-900/50">
                         <Icon name="boxes" className="w-5 h-5"/>
                         <span className="hidden lg:inline">Tambah Massal</span>
@@ -588,6 +598,9 @@ const RawMaterialsView: React.FC = () => {
             <StockOpnameModal isOpen={isOpnameOpen} onClose={() => setIsOpnameOpen(false)} initialTab="raw_material" />
 
             <BulkRawMaterialModal isOpen={isBulkModalOpen} onClose={() => setBulkModalOpen(false)} onSave={handleBulkSave} />
+            
+            {/* NEW: StaffRestockModal added here for managing raw material stock */}
+            <StaffRestockModal isOpen={isRestockOpen} onClose={() => setIsRestockOpen(false)} />
         </div>
     );
 };

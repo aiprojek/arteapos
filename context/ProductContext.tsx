@@ -39,7 +39,7 @@ interface ProductContextType {
   isProductAvailable: (product: Product) => { available: boolean, reason: string };
   importStockAdjustments: (adjustments: StockAdjustment[]) => void;
   processIncomingTransfers: (transfers: StockTransferPayload[]) => void;
-  processOutgoingTransfer: (targetStoreId: string, items: StockTransferPayload['items'], notes: string) => void; // NEW FUNCTION
+  processOutgoingTransfer: (targetStoreId: string, items: StockTransferPayload['items'], notes: string) => void;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -69,7 +69,6 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
 
   const getStaffName = () => currentUser?.name || 'Staff';
 
-  // ... (Other functions unchanged: addProduct, updateProduct, etc.)
   const addProduct = useCallback((product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: Date.now().toString() };
     setData(prev => ({ ...prev, products: [...prev.products, newProduct] }));
@@ -162,16 +161,37 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
 
   const addStockAdjustment = useCallback((productId: string, quantity: number, notes?: string) => {
     setData(prev => {
+        // Try finding as Product first
         const productIndex = prev.products.findIndex(p => p.id === productId);
-        if (productIndex === -1) {
-            const materialIndex = prev.rawMaterials.findIndex(m => m.id === productId);
-            if (materialIndex === -1) return prev;
+        if (productIndex > -1) {
+             const product = prev.products[productIndex];
+             const newStock = (product.stock || 0) + quantity;
+             const updatedProducts = [...prev.products];
+             updatedProducts[productIndex] = { ...product, stock: newStock };
+             
+             const newAdjustment: StockAdjustment = {
+                id: Date.now().toString(),
+                productId: product.id,
+                productName: product.name,
+                change: quantity,
+                newStock,
+                notes,
+                createdAt: new Date().toISOString(),
+             };
+             return {
+                 ...prev,
+                 products: updatedProducts,
+                 stockAdjustments: [newAdjustment, ...(prev.stockAdjustments || [])]
+             };
+        }
 
+        // Try finding as Raw Material
+        const materialIndex = prev.rawMaterials.findIndex(m => m.id === productId);
+        if (materialIndex > -1) {
             const material = prev.rawMaterials[materialIndex];
             const newStock = (material.stock || 0) + quantity;
-            const updatedMaterial = { ...material, stock: newStock };
             const updatedMaterials = [...prev.rawMaterials];
-            updatedMaterials[materialIndex] = updatedMaterial;
+            updatedMaterials[materialIndex] = { ...material, stock: newStock };
 
             const newAdjustment: StockAdjustment = {
                 id: Date.now().toString(),
@@ -182,7 +202,6 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
                 notes,
                 createdAt: new Date().toISOString(),
             };
-            
             return {
                 ...prev,
                 rawMaterials: updatedMaterials,
@@ -190,36 +209,12 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
             }
         }
 
-        const product = prev.products[productIndex];
-        const newStock = (product.stock || 0) + quantity;
-        
-        const updatedProduct: Product = { ...product, stock: newStock };
-        const updatedProducts = [...prev.products];
-        updatedProducts[productIndex] = updatedProduct;
-
-        const newAdjustment: StockAdjustment = {
-            id: Date.now().toString(),
-            productId: product.id,
-            productName: product.name,
-            change: quantity,
-            newStock,
-            notes,
-            createdAt: new Date().toISOString(),
-        };
-
-        const currentAdjustments = prev.stockAdjustments || [];
-
-        return {
-            ...prev,
-            products: updatedProducts,
-            stockAdjustments: [newAdjustment, ...currentAdjustments],
-        };
+        return prev;
     });
     setTimeout(() => triggerAutoSync(getStaffName()), 500);
   }, [setData, triggerAutoSync, currentUser]);
 
   const performStockOpname = useCallback((items: OpnameItem[], notes: string = '') => {
-      // ... (unchanged)
       const count = items.filter(i => i.systemStock !== i.actualStock).length;
       if (count > 0) {
           logAudit(currentUser, 'STOCK_OPNAME', `Melakukan stock opname massal. ${count} item disesuaikan. ${notes}`, 'BATCH-OPNAME');
@@ -297,29 +292,36 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
     if (!inventorySettings.enabled) return { available: true, reason: '' };
     if (!inventorySettings.preventNegativeStock) return { available: true, reason: '' };
 
+    // Cek Stok Bahan Baku (Resep)
     if (inventorySettings.trackIngredients && product.recipe && product.recipe.length > 0) {
       for (const recipeItem of product.recipe) {
         if (recipeItem.itemType === 'product' && recipeItem.productId) {
+            // Nested Product
             const bundledProduct = products.find(p => p.id === recipeItem.productId);
-            if (!bundledProduct) return { available: false, reason: 'Produk Komponen Hilang' };
+            if (!bundledProduct) return { available: false, reason: 'Komponen Hilang' };
             if (bundledProduct.trackStock && (bundledProduct.stock ?? 0) < recipeItem.quantity) {
-                 return { available: false, reason: `Stok ${bundledProduct.name} Kurang` };
+                 return { available: false, reason: `${bundledProduct.name} Kurang` };
             }
+            // Recursive check if bundled product also has recipe
             if (!bundledProduct.trackStock && bundledProduct.recipe?.length) {
                  const result = isProductAvailable(bundledProduct);
                  if(!result.available) return { available: false, reason: `Komponen ${bundledProduct.name} Habis` };
             }
         } else {
+            // Raw Material
             const materialId = recipeItem.rawMaterialId;
             const material = rawMaterials.find(m => m.id === materialId);
-            if (!material || material.stock < recipeItem.quantity) {
-              return { available: false, reason: `Bahan ${material?.name || 'Baku'} Habis` };
+            if (!material) return { available: false, reason: 'Bahan Hilang' };
+            
+            if (material.stock < recipeItem.quantity) {
+              return { available: false, reason: `${material.name} Habis` };
             }
         }
       }
       return { available: true, reason: '' };
     }
 
+    // Cek Stok Produk Langsung
     if (product.trackStock) {
       if ((product.stock ?? 0) <= 0) {
         return { available: false, reason: 'Stok Habis' };
@@ -342,10 +344,8 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       });
   }, [setData]);
 
-  // Process Incoming Transfers (Cabang)
   const processIncomingTransfers = useCallback((transfers: StockTransferPayload[]) => {
       if (transfers.length === 0) return;
-
       let totalAdded = 0;
       
       setData(prev => {
@@ -412,7 +412,6 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       }
   }, [setData, logAudit, currentUser, triggerAutoSync]);
 
-  // NEW: Process Outgoing Transfer (Gudang) - Deduct Stock & Log
   const processOutgoingTransfer = useCallback((targetStoreId: string, items: StockTransferPayload['items'], notes: string) => {
       setData(prev => {
           let updatedProducts = [...prev.products];
@@ -426,14 +425,14 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
                   const pIdx = updatedProducts.findIndex(p => p.id === item.id);
                   if (pIdx > -1 && updatedProducts[pIdx].trackStock) {
                       const oldStock = updatedProducts[pIdx].stock || 0;
-                      const newStock = oldStock - item.qty; // DEDUCT
+                      const newStock = oldStock - item.qty; 
                       updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: newStock };
                       
                       newAdjustments.push({
                           id: `TRANS-OUT-${Date.now()}-${idx}`,
                           productId: item.id,
                           productName: item.name,
-                          change: -item.qty, // NEGATIVE
+                          change: -item.qty, 
                           newStock: newStock,
                           notes: `${notePrefix} - ${notes}`,
                           createdAt: now
@@ -443,14 +442,14 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
                   const mIdx = updatedMaterials.findIndex(m => m.id === item.id);
                   if (mIdx > -1) {
                       const oldStock = updatedMaterials[mIdx].stock || 0;
-                      const newStock = oldStock - item.qty; // DEDUCT
+                      const newStock = oldStock - item.qty; 
                       updatedMaterials[mIdx] = { ...updatedMaterials[mIdx], stock: newStock };
 
                       newAdjustments.push({
                           id: `TRANS-OUT-${Date.now()}-${idx}`,
                           productId: item.id,
                           productName: item.name,
-                          change: -item.qty, // NEGATIVE
+                          change: -item.qty, 
                           newStock: newStock,
                           notes: `${notePrefix} - ${notes}`,
                           createdAt: now
@@ -496,7 +495,7 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       isProductAvailable,
       importStockAdjustments,
       processIncomingTransfers,
-      processOutgoingTransfer // EXPORT
+      processOutgoingTransfer
     }}>
       {children}
     </ProductContext.Provider>

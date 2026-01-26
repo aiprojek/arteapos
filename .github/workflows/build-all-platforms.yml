@@ -18,7 +18,6 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-          # cache: 'npm' <-- Dihapus sementara karena package-lock.json tidak ada di repo
       
       - name: Install Dependencies
         run: npm install
@@ -43,7 +42,6 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-          # cache: 'npm' <-- Dihapus sementara
       
       # Setup Gradle dengan Action Resmi
       - uses: gradle/actions/setup-gradle@v3
@@ -60,29 +58,25 @@ jobs:
       - name: Setup Capacitor Assets & Android
         run: |
           # CEK KEUTUHAN FOLDER ANDROID
-          if [ -d "android" ] && [ ! -f "android/build.gradle" ]; then
-            echo "Folder android terdeteksi rusak (missing build.gradle). Menghapus..."
-            rm -rf android
-          fi
-
-          # Buat baru jika tidak ada
-          if [ ! -d "android" ]; then
-            echo "Folder android tidak ditemukan. Membuat baru..."
-            npx cap add android
-          else
-            echo "Folder android ditemukan dan valid."
-          fi
-
-          # Generate Icon & Splash
-          npm run resources
+          # PENTING: Karena kita pakai Custom Plugin (BluetoothPrinterPlugin.java),
+          # folder 'android' HARUS ada di git repository.
           
-          # Sync kode web
+          if [ ! -d "android" ]; then
+            echo "🔴 ERROR CRITICAL: Folder 'android/' tidak ditemukan di repository GitHub!"
+            echo "Karena aplikasi ini menggunakan Custom Native Plugin, Anda WAJIB meng-commit folder android."
+            echo "SOLUSI: Cek file .gitignore Anda, hapus baris '/android', lalu commit & push folder android ke GitHub."
+            exit 1
+          fi
+
+          # Update aset web ke folder android yang sudah ada
           npx cap sync
+          
+          # Generate Icon & Splash (Opsional, timpa resource yang ada)
+          npm run resources || true
       
       - name: Build APK
         run: |
           cd android
-          # Pastikan gradlew executable
           chmod +x gradlew
           ./gradlew assembleDebug
           
@@ -101,7 +95,6 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-          # cache: 'npm' <-- Dihapus sementara
       
       - uses: actions/download-artifact@v4
         with:
@@ -131,7 +124,6 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-          # cache: 'npm' <-- Dihapus sementara
       
       - uses: actions/download-artifact@v4
         with:

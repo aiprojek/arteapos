@@ -3,9 +3,10 @@ import React, { useState, useEffect } from 'react';
 import type { AuditLog } from '../../types';
 import Icon from '../Icon';
 import VirtualizedTable from '../VirtualizedTable';
-import { useAudit } from '../../context/AuditContext'; // Use new context
+import { useAudit } from '../../context/AuditContext'; 
 import { dropboxService } from '../../services/dropboxService';
 import { useUI } from '../../context/UIContext';
+import Modal from '../Modal'; // Import Modal
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
     <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
@@ -20,18 +21,20 @@ const SettingsCard: React.FC<{ title: string; description?: string; children: Re
 );
 
 const AuditTab: React.FC = () => {
-    const { auditLogs: localLogs, isLoadingLogs } = useAudit(); // Use hook
+    const { auditLogs: localLogs, isLoadingLogs } = useAudit();
     const { showAlert } = useUI();
     const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
     const [cloudLogs, setCloudLogs] = useState<AuditLog[]>([]);
     const [isCloudLoading, setIsCloudLoading] = useState(false);
+    
+    // View Image State
+    const [viewImage, setViewImage] = useState<string | null>(null);
 
     useEffect(() => {
         const loadCloudData = async () => {
             if (dataSource === 'local') return;
 
             if (dataSource === 'dropbox') {
-                // SECURE CHECK
                 if (!dropboxService.isConfigured()) {
                     showAlert({ type: 'alert', title: 'Dropbox Belum Dikonfigurasi', message: 'Silakan hubungkan akun Dropbox di menu Data & Cloud.' });
                     setDataSource('local');
@@ -71,14 +74,29 @@ const AuditTab: React.FC = () => {
     const isLoading = dataSource === 'local' ? isLoadingLogs : isCloudLoading;
 
     const columns = [
-        { label: 'Waktu', width: '1.5fr', render: (l: AuditLog) => <span className="text-slate-400 text-xs">{new Date(l.timestamp).toLocaleString()}</span> },
-        { label: 'User', width: '1fr', render: (l: AuditLog) => <span className="text-white text-xs">{l.userName}</span> },
+        { label: 'Waktu', width: '1.2fr', render: (l: AuditLog) => <span className="text-slate-400 text-xs">{new Date(l.timestamp).toLocaleString()}</span> },
+        { label: 'User', width: '1fr', render: (l: AuditLog) => (
+            <div className="flex items-center gap-2">
+                {l.evidenceImageUrl ? (
+                    <button 
+                        onClick={() => setViewImage(l.evidenceImageUrl || null)} 
+                        className="p-1 bg-slate-700 hover:bg-blue-600 rounded text-sky-400 hover:text-white transition-colors"
+                        title="Lihat Foto Wajah"
+                    >
+                        <Icon name="eye" className="w-3 h-3" />
+                    </button>
+                ) : (
+                    <span className="w-5 h-5"></span> // Spacer
+                )}
+                <span className="text-white text-xs">{l.userName}</span>
+            </div>
+        ) },
         ...(dataSource !== 'local' ? [{ 
             label: 'Cabang', 
             width: '0.8fr', 
             render: (l: any) => <span className="text-[10px] bg-slate-700 px-1 rounded text-slate-300">{l.storeId || '-'}</span> 
         }] : []),
-        { label: 'Aksi', width: '1fr', render: (l: AuditLog) => <span className="font-bold text-xs text-yellow-400">{l.action.replace(/_/g, ' ')}</span> },
+        { label: 'Aksi', width: '1fr', render: (l: AuditLog) => <span className={`font-bold text-xs ${l.action === 'LOGIN' ? 'text-green-400' : 'text-yellow-400'}`}>{l.action.replace(/_/g, ' ')}</span> },
         { label: 'Detail', width: '3fr', render: (l: AuditLog) => <span className="text-slate-300 text-xs">{l.details}</span> },
     ];
 
@@ -106,10 +124,12 @@ const AuditTab: React.FC = () => {
 
                 <div className="bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r mb-4">
                     <h4 className="font-bold text-red-300 text-sm mb-1 flex items-center gap-2">
-                        <Icon name="warning" className="w-4 h-4"/> Sistem Pencatatan Aktif
+                        <Icon name="warning" className="w-4 h-4"/> Sistem Pencatatan Aktif (Anti-Fraud)
                     </h4>
                     <p className="text-xs text-slate-300 leading-relaxed">
-                        Setiap tindakan sensitif (Hapus produk, Ubah harga, Refund, Edit Stok) yang dilakukan oleh user manapun akan <strong>terekam permanen</strong> di sini beserta waktu kejadiannya.
+                        Setiap tindakan sensitif (Login, Hapus produk, Ubah harga, Refund) akan <strong>terekam permanen</strong>.
+                        <br/>
+                        <span className="text-yellow-400 font-bold">*Fitur Baru:</span> Klik ikon <Icon name="eye" className="w-3 h-3 inline"/> pada kolom User untuk melihat <strong>Foto Wajah</strong> saat login dilakukan. Ini mencegah penggunaan akun oleh orang lain.
                     </p>
                 </div>
 
@@ -123,6 +143,20 @@ const AuditTab: React.FC = () => {
                     )}
                 </div>
             </SettingsCard>
+
+            {/* Modal View Image */}
+            <Modal isOpen={!!viewImage} onClose={() => setViewImage(null)} title="Bukti Foto Login">
+                <div className="flex justify-center p-4 bg-slate-900 rounded-lg">
+                    {viewImage ? (
+                        <img src={viewImage} alt="Bukti Login" className="rounded-lg shadow-lg border border-slate-700 max-h-[60vh] object-contain" />
+                    ) : (
+                        <p className="text-slate-500">Gambar tidak tersedia.</p>
+                    )}
+                </div>
+                <div className="text-center mt-2 text-xs text-slate-400">
+                    Foto ini diambil otomatis saat tombol PIN ditekan.
+                </div>
+            </Modal>
         </div>
     );
 };

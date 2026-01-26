@@ -592,8 +592,8 @@ const ProductForm = React.forwardRef<HTMLFormElement, ProductFormProps>(({
     product, onSave, onCancel, onOpenCamera, isCameraAvailable, capturedImage 
 }, ref) => {
     const { currentUser } = useAuth();
-    // PENTING: Ambil inventorySettings dari context agar bisa cek status Resep & Stok
-    const { inventorySettings } = useProduct(); 
+    // PENTING: Ambil inventorySettings & rawMaterials dari context agar bisa cek status Resep & Stok
+    const { inventorySettings, rawMaterials, products } = useProduct(); 
     const isStaff = currentUser?.role === 'staff'; 
 
     const [form, setForm] = useState<Partial<Product>>({
@@ -622,6 +622,30 @@ const ProductForm = React.forwardRef<HTMLFormElement, ProductFormProps>(({
             setImagePreview(capturedImage);
         }
     }, [capturedImage]);
+
+    const calculateAutoHPP = () => {
+        if (!form.recipe || form.recipe.length === 0) {
+            alert("Resep masih kosong.");
+            return;
+        }
+
+        let totalCost = 0;
+        form.recipe.forEach(item => {
+            let itemCost = 0;
+            if (item.itemType === 'raw_material') {
+                const mat = rawMaterials.find(m => m.id === item.rawMaterialId);
+                if (mat) itemCost = (mat.costPerUnit || 0);
+            } else if (item.itemType === 'product') {
+                const prod = products.find(p => p.id === item.productId);
+                if (prod) itemCost = (prod.costPrice || 0);
+            }
+            totalCost += itemCost * item.quantity;
+        });
+
+        // Round up to nearest integer
+        const finalCost = Math.ceil(totalCost);
+        setForm(prev => ({ ...prev, costPrice: finalCost }));
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -683,7 +707,29 @@ const ProductForm = React.forwardRef<HTMLFormElement, ProductFormProps>(({
                 
                 {/* HIDE COST PRICE FOR STAFF */}
                 {!isStaff && (
-                    <InputField name="costPrice" label="Harga Modal (HPP)" type="number" value={form.costPrice || ''} onChange={e => setForm({...form, costPrice: parseFloat(e.target.value)})} />
+                    <div>
+                        <div className="flex justify-between items-center mb-1">
+                             <label htmlFor="costPrice" className="block text-sm font-medium text-slate-300">Harga Modal (HPP)</label>
+                             {inventorySettings.trackIngredients && (
+                                <button 
+                                    type="button" 
+                                    onClick={calculateAutoHPP}
+                                    className="text-[10px] text-sky-400 hover:text-white underline"
+                                    title="Hitung HPP berdasarkan total harga bahan baku di Resep"
+                                >
+                                    Hitung Otomatis
+                                </button>
+                             )}
+                        </div>
+                        <input
+                            type="number"
+                            id="costPrice"
+                            name="costPrice"
+                            value={form.costPrice || ''}
+                            onChange={e => setForm({...form, costPrice: parseFloat(e.target.value)})}
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                        />
+                    </div>
                 )}
             </div>
 
@@ -948,9 +994,12 @@ const ProductsView: React.FC = () => {
                 onClose={() => setIsTransferModalOpen(false)}
             />
 
+            {/* Pass filterType="product" so it only shows products if needed, or leave blank to show all. 
+                However, usually 'Stok Manual' in Products View implies managing Product Stock. */}
             <StaffRestockModal
                 isOpen={isRestockModalOpen}
                 onClose={() => setIsRestockModalOpen(false)}
+                filterType="product"
             />
         </div>
     );

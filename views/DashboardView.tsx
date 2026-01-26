@@ -11,11 +11,16 @@ import { dropboxService } from '../services/dropboxService';
 import { mockDataService } from '../services/mockData';
 import { useUI } from '../context/UIContext';
 
-const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'products' | 'reports' | 'finance'; iconClass: string; children?: React.ReactNode }> = ({ title, value, icon, iconClass, children }) => (
-    <div className="bg-slate-800 p-6 rounded-xl shadow-lg flex flex-col h-full border border-slate-700">
+const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'products' | 'reports' | 'finance'; iconClass: string; children?: React.ReactNode; tooltip?: string }> = ({ title, value, icon, iconClass, children, tooltip }) => (
+    <div className="bg-slate-800 p-6 rounded-xl shadow-lg flex flex-col h-full border border-slate-700 relative group">
         <div className="flex justify-between items-start">
             <div>
-                <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider">{title}</h3>
+                <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider flex items-center gap-1">
+                    {title}
+                    {tooltip && (
+                        <span className="text-[10px] text-slate-500 bg-slate-900 rounded-full w-4 h-4 inline-flex items-center justify-center cursor-help" title={tooltip}>?</span>
+                    )}
+                </h3>
                 <p className="text-3xl font-bold text-white mt-1">{value}</p>
             </div>
             <div className={`rounded-full p-3 ${iconClass}`}>
@@ -27,13 +32,13 @@ const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'product
 );
 
 const DashboardView: React.FC = () => {
-    const { transactions: localTransactions, importTransactions } = useFinance(); // Add importTransactions
-    const { products, inventorySettings, importStockAdjustments } = useProduct(); // Add importStockAdjustments
+    const { transactions: localTransactions, importTransactions, expenses: localExpenses } = useFinance(); // ADD localExpenses
+    const { products, inventorySettings, importStockAdjustments } = useProduct();
     const { showAlert } = useUI();
 
     const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
-    // Updated state to hold stockLogs as well
-    const [cloudData, setCloudData] = useState<{ transactions: any[], inventory: any[], stockLogs: any[] }>({ transactions: [], inventory: [], stockLogs: [] });
+    // Updated state to hold stockLogs and expenses
+    const [cloudData, setCloudData] = useState<{ transactions: any[], inventory: any[], stockLogs: any[], expenses: any[] }>({ transactions: [], inventory: [], stockLogs: [], expenses: [] });
     const [isCloudLoading, setIsCloudLoading] = useState(false);
     const [selectedBranch, setSelectedBranch] = useState('ALL');
     const [isDemoMode, setIsDemoMode] = useState(false);
@@ -55,7 +60,8 @@ const DashboardView: React.FC = () => {
              setCloudData({ 
                  transactions: mock.transactions, 
                  inventory: mock.inventory,
-                 stockLogs: mock.stockAdjustments 
+                 stockLogs: mock.stockAdjustments,
+                 expenses: mock.expenses
              });
              setIsDemoMode(true);
              setLastUpdated(new Date());
@@ -70,6 +76,7 @@ const DashboardView: React.FC = () => {
             let allTxns: any[] = [];
             let allInv: any[] = [];
             let allLogs: any[] = [];
+            let allExps: any[] = [];
 
             allBranchesData.forEach(branch => {
                 if (branch.transactionRecords) {
@@ -84,9 +91,13 @@ const DashboardView: React.FC = () => {
                     const logs = branch.stockAdjustments.map((s: any) => ({ ...s, storeId: branch.storeId }));
                     allLogs = [...allLogs, ...logs];
                 }
+                if (branch.expenses) {
+                    const exps = branch.expenses.map((e: any) => ({ ...e, storeId: branch.storeId }));
+                    allExps = [...allExps, ...exps];
+                }
             });
 
-            setCloudData({ transactions: allTxns, inventory: allInv, stockLogs: allLogs });
+            setCloudData({ transactions: allTxns, inventory: allInv, stockLogs: allLogs, expenses: allExps });
             setLastUpdated(new Date());
 
         } catch (error: any) {
@@ -114,9 +125,10 @@ const DashboardView: React.FC = () => {
                     <ul className="list-disc pl-5 mt-2 text-slate-300">
                         <li>{cloudData.transactions.length} Transaksi</li>
                         <li>{cloudData.stockLogs.length} Riwayat Stok</li>
+                        <li>{cloudData.expenses.length} Pengeluaran</li>
                     </ul>
                     <p className="mt-2 text-yellow-300 bg-yellow-900/30 p-2 rounded border border-yellow-700">
-                        Data akan digabungkan (Merge). Transaksi dengan ID yang sama tidak akan diduplikasi.
+                        Data akan digabungkan (Merge). Data dengan ID yang sama tidak akan diduplikasi.
                     </p>
                 </div>
             ),
@@ -148,15 +160,19 @@ const DashboardView: React.FC = () => {
 
     // Derived Data Calculation
     const dashboardData = useMemo(() => {
+        // Prepare Source Data
         let sourceTransactions = dataSource === 'local' ? localTransactions : cloudData.transactions.map(t => ({
-            ...t,
-            createdAt: t.created_at || t.createdAt, 
-            storeId: t.storeId // Use consistent key
+            ...t, createdAt: t.created_at || t.createdAt, storeId: t.storeId
+        }));
+        
+        let sourceExpenses = dataSource === 'local' ? localExpenses : cloudData.expenses.map(e => ({
+            ...e, storeId: e.storeId
         }));
 
         // Apply Branch Filter
         if (dataSource !== 'local' && selectedBranch !== 'ALL') {
             sourceTransactions = sourceTransactions.filter((t: any) => t.storeId === selectedBranch);
+            sourceExpenses = sourceExpenses.filter((e: any) => e.storeId === selectedBranch);
         }
 
         const now = new Date();
@@ -171,6 +187,22 @@ const DashboardView: React.FC = () => {
 
         const todaySales = todayTransactions.reduce((sum: number, t: any) => sum + (t.total || 0), 0);
         const transactionCount = todayTransactions.length;
+
+        // --- PROFIT CALCULATION (NET) ---
+        // 1. Calculate COGS (HPP) for Today's Sales
+        const todayCOGS = todayTransactions.reduce((sum: number, t: any) => {
+            const items = t.items || [];
+            const txnCost = items.reduce((is: number, i: any) => is + ((i.costPrice || 0) * i.quantity), 0);
+            return sum + txnCost;
+        }, 0);
+
+        // 2. Calculate Today's Expenses
+        const todayExpensesTotal = sourceExpenses
+            .filter((e: any) => new Date(e.date).getTime() >= todayStart)
+            .reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+
+        // 3. Net Profit = Sales - COGS - Expenses
+        const todayNetProfit = todaySales - todayCOGS - todayExpensesTotal;
 
         // Inventory Logic
         let lowStockProducts: any[] = [];
@@ -239,6 +271,8 @@ const DashboardView: React.FC = () => {
 
         return {
             todaySales,
+            todayNetProfit, // NEW
+            todayExpensesTotal, // NEW (Optional to show?)
             transactionCount,
             lowStockProducts,
             outstandingReceivables,
@@ -247,9 +281,9 @@ const DashboardView: React.FC = () => {
             branchPerformance,
             recentTransactions: sourceTransactions.slice(0, 5)
         };
-    }, [dataSource, localTransactions, cloudData, products, inventorySettings, selectedBranch]);
+    }, [dataSource, localTransactions, localExpenses, cloudData, products, inventorySettings, selectedBranch]);
     
-    // AI Logic
+    // ... AI Logic (getAIInsight) remains similar but uses new Profit Data ...
     const getAIInsight = useCallback(async (question: string) => {
         setIsLoadingAI(true);
         setAiResponse('');
@@ -262,7 +296,11 @@ const DashboardView: React.FC = () => {
 
             const salesContext = dashboardData.salesTrend;
             const topProducts = dashboardData.topProducts;
-            // Limit branch info to avoid huge payload
+            const profitInfo = {
+                revenue: dashboardData.todaySales,
+                expenses: dashboardData.todayExpensesTotal,
+                netProfit: dashboardData.todayNetProfit
+            };
             const branchInfo = dataSource !== 'local' ? dashboardData.branchPerformance.slice(0, 10) : "Data cabang tidak tersedia (Mode Lokal)";
             
             const systemInstruction = `You are "Artea AI", a smart business consultant. 
@@ -272,6 +310,7 @@ const DashboardView: React.FC = () => {
             const userContent = `
             Context: ${dataSource} mode
             Selected Branch Filter: ${selectedBranch}
+            Profitabilitas Hari Ini: ${JSON.stringify(profitInfo)}
             Tren Penjualan 7 Hari: ${JSON.stringify(salesContext)}
             Produk Terlaris: ${JSON.stringify(topProducts)}
             Performa Cabang (Top 10): ${JSON.stringify(branchInfo)}
@@ -289,9 +328,7 @@ const DashboardView: React.FC = () => {
                 }),
             });
 
-            if (!response.ok) {
-                throw new Error(`Server AI merespon dengan status: ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`Server AI merespon dengan status: ${response.status}`);
             
             const text = await response.text();
             setAiResponse(text);
@@ -299,14 +336,11 @@ const DashboardView: React.FC = () => {
         } catch (err: any) {
             console.error("AI Error:", err);
             let msg = "Maaf, layanan AI sedang sibuk. Coba lagi nanti.";
-            
-            // Handle Network Errors specifically
             if (err.message && (err.message.includes('NetworkError') || err.message.includes('Failed to fetch'))) {
-                msg = "Gagal terhubung ke server AI. Periksa koneksi internet Anda atau coba matikan AdBlock/DNS Filter.";
+                msg = "Gagal terhubung ke server AI. Periksa koneksi internet Anda.";
             } else if (err.message) {
                 msg = err.message;
             }
-            
             setAiError(msg);
         } finally {
             setIsLoadingAI(false);
@@ -362,7 +396,6 @@ const DashboardView: React.FC = () => {
                                 <Icon name="reset" className={`w-4 h-4 ${isCloudLoading ? 'animate-spin' : ''}`} />
                                 {isCloudLoading ? 'Syncing...' : 'Refresh Data'}
                             </Button>
-                            {/* Merge Button Added Here */}
                             <Button
                                 size="sm"
                                 onClick={handleMergeToLocal}
@@ -418,7 +451,7 @@ const DashboardView: React.FC = () => {
                             {isDemoMode 
                                 ? "Dropbox belum dikonfigurasi. Menampilkan data simulasi agar Anda bisa melihat potensi fitur Multi-Cabang." 
                                 : (selectedBranch === 'ALL' 
-                                    ? 'Menampilkan data gabungan dari semua cabang. Tekan "Simpan ke Lokal" untuk mengarsipkan data ini secara permanen.' 
+                                    ? 'Menampilkan data gabungan dari semua cabang.' 
                                     : `Menampilkan data spesifik untuk cabang: ${selectedBranch}`)}
                         </p>
                     </div>
@@ -428,8 +461,12 @@ const DashboardView: React.FC = () => {
             {/* Top Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fade-in">
                 <StatCard title="Penjualan Hari Ini" value={CURRENCY_FORMATTER.format(dashboardData.todaySales)} icon="cash" iconClass="bg-green-500" />
+                <StatCard title="Net Profit Hari Ini" value={CURRENCY_FORMATTER.format(dashboardData.todayNetProfit)} icon="finance" iconClass="bg-emerald-600" tooltip="Omzet - Modal Barang (HPP) - Pengeluaran Operasional Hari Ini">
+                    <div className="text-[10px] text-slate-400 mt-1">
+                         Pengeluaran: {CURRENCY_FORMATTER.format(dashboardData.todayExpensesTotal)}
+                    </div>
+                </StatCard>
                 <StatCard title="Transaksi Hari Ini" value={dashboardData.transactionCount.toString()} icon="reports" iconClass="bg-sky-500" />
-                <StatCard title="Piutang (Semua)" value={CURRENCY_FORMATTER.format(dashboardData.outstandingReceivables)} icon="finance" iconClass="bg-yellow-500" />
                 <StatCard title="Stok Menipis" value={dashboardData.lowStockProducts.length.toString()} icon="products" iconClass="bg-red-500">
                     {dashboardData.lowStockProducts.length > 0 && (
                         <div className="text-xs text-slate-400 space-y-1 overflow-y-auto max-h-20 pr-2 mt-2">
@@ -449,7 +486,7 @@ const DashboardView: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
                 {/* Left Column: Charts */}
                 <div className="lg:col-span-2 space-y-6">
-                    {/* Branch Performance (Only in Cloud/Dropbox Mode + ALL branches selected) */}
+                    {/* Branch Performance */}
                     {dataSource !== 'local' && selectedBranch === 'ALL' && dashboardData.branchPerformance.length > 0 && (
                         <div className="bg-slate-800 p-4 sm:p-6 rounded-xl shadow-lg border border-slate-700">
                             <h3 className="flex items-center gap-2 text-lg font-semibold text-white mb-4">
@@ -493,7 +530,7 @@ const DashboardView: React.FC = () => {
                         </h3>
                         <div className="space-y-3">
                              <div className="flex flex-wrap gap-2">
-                                {["Analisis tren penjualan.", "Strategi meningkatkan omzet.", "Evaluasi performa cabang."].map(q => (
+                                {["Analisis profitabilitas.", "Strategi meningkatkan omzet.", "Evaluasi stok & pengeluaran."].map(q => (
                                     <button key={q} onClick={() => handleAIPrompt(q)} className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-full transition-colors border border-slate-600 text-slate-300">{q}</button>
                                 ))}
                             </div>

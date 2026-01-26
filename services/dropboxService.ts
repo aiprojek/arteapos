@@ -14,6 +14,7 @@ const KEY_APP_KEY = 'ARTEA_DBX_KEY';
 const KEY_APP_SECRET = 'ARTEA_DBX_SECRET';
 const KEY_REFRESH_TOKEN = 'ARTEA_DBX_REFRESH_TOKEN';
 const KEY_MASTER_REV = 'ARTEA_DBX_MASTER_REV'; // NEW: Store file revision ID
+const KEY_PROCESSED_TRANSFERS = 'ARTEA_PROCESSED_TRANSFERS'; // NEW: For Idempotency
 
 // Retry Helper
 const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
@@ -508,9 +509,30 @@ export const dropboxService = {
             if (files.length === 0) return [];
 
             const transfers: StockTransferPayload[] = [];
+            
+            // IDEMPOTENCY CHECK: Load processed IDs
+            let processedIds: string[] = [];
+            try {
+                const stored = safeStorage.getItem(KEY_PROCESSED_TRANSFERS);
+                if (stored) processedIds = JSON.parse(stored);
+            } catch (e) {
+                console.warn("Failed to load processed transfers");
+            }
+            
+            // Limit stored IDs to avoid overflow (keep last 100)
+            if (processedIds.length > 100) processedIds = processedIds.slice(-100);
 
             // Process each file
             for (const file of files) {
+                // Check if already processed (Idempotency)
+                if (processedIds.includes(file.name)) {
+                    // Try to delete orphan file and skip
+                    try {
+                        await retryOperation(() => dbx.filesDeleteV2({ path: file.path_lower! }));
+                    } catch(e) {}
+                    continue;
+                }
+
                 try {
                     // 1. Download
                     const dl = await retryOperation<any>(() => dbx.filesDownload({ path: file.path_lower! }));
@@ -521,7 +543,12 @@ export const dropboxService = {
                     // Basic validation
                     if (data.items && Array.isArray(data.items)) {
                         transfers.push(data);
-                        // 2. Delete from Dropbox (so it's not processed again)
+                        
+                        // 2. Mark as processed locally first
+                        processedIds.push(file.name);
+                        safeStorage.setItem(KEY_PROCESSED_TRANSFERS, JSON.stringify(processedIds));
+
+                        // 3. Delete from Dropbox (so it's not processed again)
                         await retryOperation(() => dbx.filesDeleteV2({ path: file.path_lower! }));
                     }
                 } catch (err) {

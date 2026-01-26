@@ -143,17 +143,34 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
   }, [setData]);
 
   const deleteRawMaterial = useCallback((materialId: string) => {
+    // 1. DATA INTEGRITY CHECK: Cek apakah bahan baku dipakai di resep produk
+    const usedInProducts = products.filter(p => 
+        p.recipe && p.recipe.some(r => r.rawMaterialId === materialId)
+    );
+
+    if (usedInProducts.length > 0) {
+        const productNames = usedInProducts.map(p => p.name).slice(0, 3).join(', ');
+        const moreCount = usedInProducts.length > 3 ? ` dan ${usedInProducts.length - 3} lainnya` : '';
+        
+        showAlert({
+            type: 'alert',
+            title: 'Gagal Menghapus',
+            message: `Bahan baku ini sedang digunakan dalam resep produk: ${productNames}${moreCount}. Hapus resep produk tersebut terlebih dahulu.`
+        });
+        return;
+    }
+
     showAlert({
         type: 'confirm',
         title: 'Hapus Bahan Baku?',
-        message: 'Apakah Anda yakin ingin menghapus bahan baku ini? Ini mungkin mempengaruhi resep produk.',
+        message: 'Apakah Anda yakin ingin menghapus bahan baku ini?',
         onConfirm: () => {
             setData(prev => ({ ...prev, rawMaterials: prev.rawMaterials.filter(m => m.id !== materialId) }));
         },
         confirmVariant: 'danger',
         confirmText: 'Ya, Hapus'
     });
-  }, [setData, showAlert]);
+  }, [setData, showAlert, products]);
   
   const updateInventorySettings = useCallback((settings: InventorySettings) => {
     setData(prev => ({ ...prev, inventorySettings: settings }));
@@ -201,7 +218,7 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
                 newStock,
                 notes,
                 createdAt: new Date().toISOString(),
-            };
+             };
             return {
                 ...prev,
                 rawMaterials: updatedMaterials,

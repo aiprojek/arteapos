@@ -115,7 +115,7 @@ const AppContent = () => {
   }
 
   const renderView = () => {
-    if (isViewer && ['pos', 'products', 'raw-materials', 'finance', 'settings'].includes(activeView)) {
+    if (isViewer && ['pos', 'products', 'raw-materials'].includes(activeView)) {
         return <DashboardView />;
     }
     const views = {
@@ -170,8 +170,10 @@ const AppContent = () => {
              )}
              <div className="my-4 border-t border-slate-700/50 mx-2"></div>
              <p className="px-3 text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Sistem</p>
-             {!isViewer && <NavButton view="finance" icon="finance" label="Keuangan" />}
-             {isManagement && <NavButton view="settings" icon="settings" label="Pengaturan" />}
+             {/* Viewer dan Staff butuh akses Keuangan (Staff lokal only, Viewer read-only) */}
+             <NavButton view="finance" icon="finance" label="Keuangan" />
+             {/* Viewer bisa akses settings untuk Audit Log */}
+             {(isManagement || isViewer) && <NavButton view="settings" icon="settings" label="Pengaturan" />}
              <NavButton view="help" icon="help" label="Bantuan" />
          </div>
       </nav>

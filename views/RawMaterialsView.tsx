@@ -599,8 +599,12 @@ const RawMaterialsView: React.FC = () => {
 
             <BulkRawMaterialModal isOpen={isBulkModalOpen} onClose={() => setBulkModalOpen(false)} onSave={handleBulkSave} />
             
-            {/* NEW: StaffRestockModal added here for managing raw material stock */}
-            <StaffRestockModal isOpen={isRestockOpen} onClose={() => setIsRestockOpen(false)} />
+            {/* Pass filterType="raw_material" to only show raw materials in restock modal */}
+            <StaffRestockModal 
+                isOpen={isRestockOpen} 
+                onClose={() => setIsRestockOpen(false)} 
+                filterType="raw_material"
+            />
         </div>
     );
 };

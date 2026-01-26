@@ -28,6 +28,7 @@ const SettingsView: React.FC = () => {
     const { showAlert } = useUI();
     
     const isAdmin = currentUser?.role === 'admin';
+    const isViewer = currentUser?.role === 'viewer'; // Check for Viewer
 
     // Form States
     const [receiptForm, setReceiptForm] = useState<ReceiptSettings>(originalReceiptSettings);
@@ -37,7 +38,10 @@ const SettingsView: React.FC = () => {
     const [membershipForm, setMembershipForm] = useState<MembershipSettings>(originalMembershipSettings);
     const [isDirty, setIsDirty] = useState(false);
 
-    const [activeTab, setActiveTab] = useState<'general' | 'features' | 'inventory' | 'auth' | 'data' | 'audit' | 'hardware'>('general');
+    // Default tab for Viewer is 'audit', for others 'general'
+    const [activeTab, setActiveTab] = useState<'general' | 'features' | 'inventory' | 'auth' | 'data' | 'audit' | 'hardware'>(
+        isViewer ? 'audit' : 'general'
+    );
 
     // Sync state
     useEffect(() => setReceiptForm(originalReceiptSettings), [originalReceiptSettings]);
@@ -82,14 +86,18 @@ const SettingsView: React.FC = () => {
             {/* Tabs */}
             <div className="flex flex-nowrap overflow-x-auto gap-2 border-b border-slate-700 pb-2">
                 {[
-                    { id: 'general', label: 'Toko & Struk', icon: 'settings', restricted: false },
-                    { id: 'hardware', label: 'Perangkat Keras', icon: 'bluetooth', restricted: false },
-                    { id: 'features', label: 'Fitur Kasir', icon: 'star', restricted: false },
-                    { id: 'inventory', label: 'Inventaris', icon: 'boxes', restricted: false },
-                    { id: 'auth', label: 'Keamanan', icon: 'lock', restricted: true }, 
-                    { id: 'data', label: 'Data & Cloud', icon: 'database', restricted: true },
-                    { id: 'audit', label: 'Audit Log', icon: 'file-lock', restricted: false },
-                ].filter(tab => !tab.restricted || isAdmin).map(tab => (
+                    { id: 'general', label: 'Toko & Struk', icon: 'settings', restricted: false, hideForViewer: true },
+                    { id: 'hardware', label: 'Perangkat Keras', icon: 'bluetooth', restricted: false, hideForViewer: true },
+                    { id: 'features', label: 'Fitur Kasir', icon: 'star', restricted: false, hideForViewer: true },
+                    { id: 'inventory', label: 'Inventaris', icon: 'boxes', restricted: false, hideForViewer: true },
+                    { id: 'auth', label: 'Keamanan', icon: 'lock', restricted: true, hideForViewer: true }, 
+                    { id: 'data', label: 'Data & Cloud', icon: 'database', restricted: true, hideForViewer: true },
+                    { id: 'audit', label: 'Audit Log', icon: 'file-lock', restricted: false, hideForViewer: false },
+                ].filter(tab => {
+                    if (isViewer && tab.hideForViewer) return false;
+                    if (tab.restricted && !isAdmin) return false;
+                    return true;
+                }).map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as any)}
@@ -102,7 +110,7 @@ const SettingsView: React.FC = () => {
             </div>
 
             {/* Content Area */}
-            {activeTab === 'general' && (
+            {activeTab === 'general' && !isViewer && (
                 <GeneralTab 
                     form={receiptForm} 
                     onChange={setReceiptForm}
@@ -111,9 +119,9 @@ const SettingsView: React.FC = () => {
                 />
             )}
             
-            {activeTab === 'hardware' && <HardwareTab />}
+            {activeTab === 'hardware' && !isViewer && <HardwareTab />}
 
-            {activeTab === 'features' && (
+            {activeTab === 'features' && !isViewer && (
                 <FeaturesTab 
                     sessionForm={sessionForm} 
                     onSessionChange={setSessionForm}
@@ -125,16 +133,16 @@ const SettingsView: React.FC = () => {
                 />
             )}
 
-            {activeTab === 'inventory' && <InventoryTab form={inventoryForm} onChange={setInventoryForm} />}
+            {activeTab === 'inventory' && !isViewer && <InventoryTab form={inventoryForm} onChange={setInventoryForm} />}
             
-            {activeTab === 'auth' && <AuthTab form={authForm} onChange={setAuthForm} />}
+            {activeTab === 'auth' && !isViewer && <AuthTab form={authForm} onChange={setAuthForm} />}
             
-            {activeTab === 'data' && <DataTab />}
+            {activeTab === 'data' && !isViewer && <DataTab />}
             
             {activeTab === 'audit' && <AuditTab />}
 
-            {/* Floating Save/Cancel Bar */}
-            {isDirty && (
+            {/* Floating Save/Cancel Bar (Hidden for Viewer since they can't edit) */}
+            {isDirty && !isViewer && (
                 <div className="fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-sm border-t border-slate-700 p-4 z-50 animate-fade-in">
                     <div className="max-w-7xl mx-auto flex justify-between items-center">
                         <p className="text-yellow-400 text-sm">Anda memiliki perubahan yang belum disimpan.</p>

@@ -1,15 +1,16 @@
-
 package com.arteapos.app;
 
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.util.Base64;
 import android.util.Log;
 
-// PENTING: Gunakan import ini untuk Capacitor 3/4/5/6
+import androidx.core.app.ActivityCompat;
+
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -17,6 +18,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -29,6 +31,7 @@ import java.util.UUID;
         @Permission(
             alias = "bluetooth",
             strings = {
+                // Capacitor akan otomatis memilih permission yang sesuai berdasarkan versi Android
                 Manifest.permission.BLUETOOTH_CONNECT,
                 Manifest.permission.BLUETOOTH_SCAN
             }
@@ -38,6 +41,7 @@ import java.util.UUID;
 public class BluetoothPrinterPlugin extends Plugin {
 
     private static final String TAG = "BluetoothPrinter";
+    // Standard SPP UUID untuk printer thermal
     private static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb");
     
     private BluetoothAdapter bluetoothAdapter;
@@ -46,16 +50,12 @@ public class BluetoothPrinterPlugin extends Plugin {
 
     @Override
     public void load() {
-        try {
-            bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-            Log.d(TAG, "BluetoothPrinterPlugin loaded. Adapter found: " + (bluetoothAdapter != null));
-        } catch (Exception e) {
-            Log.e(TAG, "Error initializing Bluetooth adapter", e);
-        }
+        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
     }
 
     @PluginMethod
     public void listPairedDevices(PluginCall call) {
+        // Cek permission Android 12+
         if (Build.VERSION.SDK_INT >= 31) {
             if (getPermissionState("bluetooth") != com.getcapacitor.PermissionState.GRANTED) {
                 requestPermissionForAlias("bluetooth", call, "listPairedDevicesCallback");
@@ -65,12 +65,12 @@ public class BluetoothPrinterPlugin extends Plugin {
         doListDevices(call);
     }
 
-    @PluginMethod
-    public void listPairedDevicesCallback(PluginCall call) {
+    @PermissionCallback
+    private void listPairedDevicesCallback(PluginCall call) {
         if (getPermissionState("bluetooth") == com.getcapacitor.PermissionState.GRANTED) {
             doListDevices(call);
         } else {
-            call.reject("Izin Bluetooth ditolak. Mohon izinkan 'Nearby Devices' di pengaturan.");
+            call.reject("Izin Bluetooth (Nearby Devices) ditolak.");
         }
     }
 
@@ -83,6 +83,12 @@ public class BluetoothPrinterPlugin extends Plugin {
         if (!bluetoothAdapter.isEnabled()) {
             call.reject("Bluetooth mati. Mohon nyalakan Bluetooth.");
             return;
+        }
+
+        // Double check permission for legacy android just in case
+        if (Build.VERSION.SDK_INT >= 31 && ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+             call.reject("Permission Error: BLUETOOTH_CONNECT not granted.");
+             return;
         }
 
         try {
@@ -101,23 +107,24 @@ public class BluetoothPrinterPlugin extends Plugin {
             JSObject ret = new JSObject();
             ret.put("devices", devicesArray);
             call.resolve(ret);
-        } catch (SecurityException e) {
-            call.reject("Security Exception: " + e.getMessage());
         } catch (Exception e) {
-            call.reject("Error listing devices: " + e.getMessage());
+            Log.e(TAG, "List Devices Error", e);
+            call.reject("Gagal mengambil daftar perangkat: " + e.getMessage());
         }
     }
 
     @PluginMethod
     public void connect(PluginCall call) {
-        String address = call.getString("address");
-        if (address == null) {
-            call.reject("Alamat MAC address kosong.");
-            return;
+        if (Build.VERSION.SDK_INT >= 31) {
+             if (getPermissionState("bluetooth") != com.getcapacitor.PermissionState.GRANTED) {
+                 call.reject("Izin Bluetooth belum diberikan.");
+                 return;
+             }
         }
 
-        if (bluetoothAdapter == null) {
-            call.reject("Bluetooth Adapter error.");
+        String address = call.getString("address");
+        if (address == null) {
+            call.reject("MAC Address kosong.");
             return;
         }
 
@@ -125,17 +132,26 @@ public class BluetoothPrinterPlugin extends Plugin {
 
         try {
             BluetoothDevice device = bluetoothAdapter.getRemoteDevice(address);
+            // Secure connection preferred, fallback handling happens in try-catch
             socket = device.createRfcommSocketToServiceRecord(SPP_UUID);
             socket.connect();
             outputStream = socket.getOutputStream();
             call.resolve();
         } catch (IOException e) {
+            Log.e(TAG, "Connect Error", e);
             disconnectInternal();
-            call.reject("Gagal terhubung ke printer. Pastikan printer nyala dan dekat.");
-        } catch (SecurityException e) {
-            call.reject("Izin Bluetooth ditolak saat koneksi.");
+            // Try insecure fallback if standard SPP fails (kadang membantu untuk printer china murah)
+            try {
+                BluetoothDevice device = bluetoothAdapter.getRemoteDevice(address);
+                socket = device.createInsecureRfcommSocketToServiceRecord(SPP_UUID);
+                socket.connect();
+                outputStream = socket.getOutputStream();
+                call.resolve();
+            } catch (IOException e2) {
+                 call.reject("Gagal terhubung: " + e.getMessage());
+            }
         } catch (Exception e) {
-            call.reject("Error koneksi: " + e.getMessage());
+            call.reject("Error: " + e.getMessage());
         }
     }
 
@@ -150,7 +166,7 @@ public class BluetoothPrinterPlugin extends Plugin {
         String type = call.getString("type", "text"); 
 
         if (data == null) {
-            call.reject("Data cetak kosong.");
+            call.reject("Data kosong.");
             return;
         }
 
@@ -166,6 +182,7 @@ public class BluetoothPrinterPlugin extends Plugin {
             outputStream.flush();
             call.resolve();
         } catch (Exception e) {
+            Log.e(TAG, "Print Error", e);
             call.reject("Gagal mencetak: " + e.getMessage());
             disconnectInternal();
         }

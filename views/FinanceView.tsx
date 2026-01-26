@@ -29,7 +29,10 @@ const FinanceView: React.FC = () => {
     const { transactions: localTransactions, expenses: localExpenses, purchases: localPurchases, otherIncomes: localIncomes, importFinanceData } = useFinance();
     const { customers: localCustomers } = useCustomer(); // Get local customers
     const { showAlert } = useUI();
-    const isManagement = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+    
+    const isStaff = currentUser?.role === 'staff';
+    const isViewer = currentUser?.role === 'viewer';
+    const isManagement = currentUser?.role === 'admin' || currentUser?.role === 'manager' || isViewer;
     
     // Tab State
     const [mainView, setMainView] = useState<'finance' | 'customers'>('finance');
@@ -68,8 +71,17 @@ const FinanceView: React.FC = () => {
         };
     }, []);
 
+    // Enforce Local Mode for Staff if they somehow switch (security fallback)
+    useEffect(() => {
+        if (isStaff && dataSource !== 'local') {
+            setDataSource('local');
+        }
+    }, [isStaff, dataSource]);
+
     // Refactored Load Data to be callable via Refresh Button
     const loadCloudData = useCallback(async () => {
+        if (isStaff) return; // Block staff from loading cloud data
+        
         setIsCloudLoading(true);
         setIsDemoMode(false);
 
@@ -117,7 +129,7 @@ const FinanceView: React.FC = () => {
         } finally {
             setIsCloudLoading(false);
         }
-    }, [showAlert]);
+    }, [showAlert, isStaff]);
 
     // Effect to trigger load when switching to dropbox
     useEffect(() => {
@@ -186,10 +198,6 @@ const FinanceView: React.FC = () => {
         </button>
     );
 
-    // ... (prepareTableData and handleExportPDF/Spreadsheet remains unchanged, implicitly uses cloudData/filteredCloudData if we pass filteredCloudData to tabs) ...
-    // Note: To keep export consistent with view, we should use `filteredCloudData` in `prepareTableData` logic as well if refactoring deeply,
-    // but typically `activeTransactions` inside child components handle display. For export button here in parent:
-    
     // --- DATA PREPARATION FOR EXPORT (SHARED) ---
     const prepareTableData = () => {
         // USE FILTERED DATA HERE
@@ -206,7 +214,7 @@ const FinanceView: React.FC = () => {
             purch: filteredCloudData.purchases,
             cust: filteredCloudData.customers
         };
-        // ... rest of prepareTableData logic (unchanged) ...
+
         // Helper sort
         const sortByBranchAndDate = (a: any, b: any) => {
             if (dataSource !== 'local') {
@@ -389,16 +397,18 @@ const FinanceView: React.FC = () => {
                                     <Icon name="reset" className={`w-4 h-4 ${isCloudLoading ? 'animate-spin' : ''}`} />
                                     <span className="hidden sm:inline">Refresh</span>
                                 </Button>
-                                {/* NEW: Merge to Local Button */}
-                                <Button
-                                    size="sm"
-                                    onClick={handleMergeToLocal}
-                                    className="bg-green-600 hover:bg-green-500 text-white border-none whitespace-nowrap"
-                                    title="Simpan data cloud ke lokal"
-                                >
-                                    <Icon name="download" className="w-4 h-4" /> 
-                                    <span className="hidden sm:inline">Simpan</span>
-                                </Button>
+                                {/* NEW: Merge to Local Button - Not available for Viewer */}
+                                {!isViewer && (
+                                    <Button
+                                        size="sm"
+                                        onClick={handleMergeToLocal}
+                                        className="bg-green-600 hover:bg-green-500 text-white border-none whitespace-nowrap"
+                                        title="Simpan data cloud ke lokal"
+                                    >
+                                        <Icon name="download" className="w-4 h-4" /> 
+                                        <span className="hidden sm:inline">Simpan</span>
+                                    </Button>
+                                )}
                             </>
                         )}
 
@@ -433,24 +443,26 @@ const FinanceView: React.FC = () => {
 
                     {/* Toggle Group: Source & View */}
                     <div className="flex items-center gap-2 flex-wrap">
-                        {/* Data Source Toggle */}
-                        <div className="bg-slate-700 p-1 rounded-lg flex items-center border border-slate-600">
-                            <button
-                                onClick={() => setDataSource('local')}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                                title="Data Lokal"
-                            >
-                                Lokal
-                            </button>
-                            <button
-                                onClick={() => setDataSource('dropbox')}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                                title="Data Gabungan dari Dropbox"
-                            >
-                                <span className="hidden sm:inline flex items-center gap-2"><Icon name="share" className="w-4 h-4" /> Data Cloud</span>
-                                <span className="sm:hidden flex items-center gap-2"><Icon name="share" className="w-4 h-4" /> Cloud</span>
-                            </button>
-                        </div>
+                        {/* Data Source Toggle - HIDDEN FOR STAFF */}
+                        {!isStaff && (
+                            <div className="bg-slate-700 p-1 rounded-lg flex items-center border border-slate-600">
+                                <button
+                                    onClick={() => setDataSource('local')}
+                                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                                    title="Data Lokal"
+                                >
+                                    Lokal
+                                </button>
+                                <button
+                                    onClick={() => setDataSource('dropbox')}
+                                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                                    title="Data Gabungan dari Dropbox"
+                                >
+                                    <span className="hidden sm:inline flex items-center gap-2"><Icon name="share" className="w-4 h-4" /> Data Cloud</span>
+                                    <span className="sm:hidden flex items-center gap-2"><Icon name="share" className="w-4 h-4" /> Cloud</span>
+                                </button>
+                            </div>
+                        )}
 
                         {/* View Switcher */}
                         <div className="bg-slate-700 p-1 rounded-lg flex border border-slate-600">

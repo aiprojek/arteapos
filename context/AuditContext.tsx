@@ -5,7 +5,7 @@ import { db } from '../services/db';
 
 interface AuditContextType {
     auditLogs: AuditLog[];
-    logAudit: (user: User | null, action: AuditAction, details: string, targetId?: string) => Promise<void>;
+    logAudit: (user: User | null, action: AuditAction, details: string, targetId?: string, evidenceImageUrl?: string) => Promise<void>;
     isLoadingLogs: boolean;
 }
 
@@ -30,7 +30,7 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         loadLogs();
     }, []);
 
-    const logAudit = useCallback(async (user: User | null, action: AuditAction, details: string, targetId?: string) => {
+    const logAudit = useCallback(async (user: User | null, action: AuditAction, details: string, targetId?: string, evidenceImageUrl?: string) => {
         const newLog: AuditLog = {
             id: Date.now().toString(),
             timestamp: new Date().toISOString(),
@@ -38,7 +38,8 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             userName: user?.name || 'System/Guest',
             action,
             details,
-            targetId
+            targetId,
+            evidenceImageUrl
         };
 
         try {

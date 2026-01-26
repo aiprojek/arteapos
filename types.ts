@@ -128,8 +128,8 @@ export interface Transaction {
   tax?: number;
   serviceCharge?: number;
   orderType?: OrderType;
-  tableNumber?: string; // NEW
-  paxCount?: number;    // NEW
+  tableNumber?: string; 
+  paxCount?: number;    
   paymentStatus: PaymentStatus;
   payments: Payment[];
   createdAt: string;
@@ -188,7 +188,7 @@ export interface SessionSettings {
   enableCartHolding?: boolean; 
   enableBlindAudit?: boolean; 
   enableTableManagement?: boolean; 
-  requireTableInfo?: boolean; // NEW: Mandatory Table/Pax check
+  requireTableInfo?: boolean; 
 }
 
 export interface CashMovement {
@@ -354,8 +354,8 @@ export interface HeldCart {
     name: string;
     items: CartItem[];
     orderType?: OrderType;
-    tableNumber?: string; // NEW
-    paxCount?: number;    // NEW
+    tableNumber?: string; 
+    paxCount?: number;    
 }
 
 export interface StockTransferPayload {
@@ -394,6 +394,7 @@ export interface AuditLog {
     details: string;
     targetId?: string; 
     storeId?: string;
+    evidenceImageUrl?: string; // NEW FIELD: Foto Wajah / Bukti
 }
 
 export interface CustomerDisplayPayload {
@@ -417,8 +418,8 @@ export interface KitchenDisplayPayload {
     items: CartItem[];
     timestamp: string;
     isPaid: boolean;
-    tableNumber?: string; // NEW
-    paxCount?: number;    // NEW
+    tableNumber?: string; 
+    paxCount?: number;    
 }
 
 export interface AppData {

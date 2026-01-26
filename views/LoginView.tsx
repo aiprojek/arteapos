@@ -1,15 +1,16 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { useSettings } from '../context/SettingsContext';
 import { useData } from '../context/DataContext';
 import { dataService } from '../services/dataService';
 import { db } from '../services/db';
+import { useAudit } from '../context/AuditContext'; // IMPORT AUDIT
 import Icon from '../components/Icon';
 import Modal from '../components/Modal';
 import Button from '../components/Button';
-import ShowcaseModal from '../components/ShowcaseModal'; // IMPORT SHARED COMPONENT
+import ShowcaseModal from '../components/ShowcaseModal'; 
 import type { User } from '../types';
 
 const LoginView: React.FC = () => {
@@ -17,10 +18,15 @@ const LoginView: React.FC = () => {
     const { restoreData } = useData();
     const { showAlert, hideAlert } = useUI();
     const { receiptSettings } = useSettings();
+    const { logAudit } = useAudit(); 
+
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [pin, setPin] = useState('');
     const [error, setError] = useState('');
     
+    // Security: Randomized Keypad State
+    const [keypadLayout, setKeypadLayout] = useState<string[]>(['1','2','3','4','5','6','7','8','9','0']);
+
     // Emergency & Security Challenge State
     const [isEmergencyModalOpen, setEmergencyModalOpen] = useState(false);
     const [isChallengeModalOpen, setChallengeModalOpen] = useState(false); 
@@ -35,10 +41,90 @@ const LoginView: React.FC = () => {
     // Showcase State
     const [isShowcaseOpen, setShowcaseOpen] = useState(false);
 
+    // CCTV / Camera State
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const [isCameraActive, setIsCameraActive] = useState(false);
+    const [cameraError, setCameraError] = useState(false); // Track if camera failed
+
     const fileInputRef = useRef<HTMLInputElement>(null);
-    
     const logoClickCount = useRef(0);
     const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // --- RANDOMIZER LOGIC ---
+    const shuffleKeypad = () => {
+        const keys = ['1','2','3','4','5','6','7','8','9','0'];
+        for (let i = keys.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [keys[i], keys[j]] = [keys[j], keys[i]];
+        }
+        setKeypadLayout(keys);
+    };
+
+    // --- CAMERA INIT ---
+    const startCamera = useCallback(async () => {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setCameraError(true);
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { width: 300, height: 300, facingMode: 'user' }, 
+                audio: false 
+            });
+            streamRef.current = stream;
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                setIsCameraActive(true);
+                setCameraError(false);
+            }
+        } catch (e) {
+            console.warn("Camera failed/denied in LoginView", e);
+            setCameraError(true);
+            setIsCameraActive(false);
+        }
+    }, []);
+
+    const stopCamera = useCallback(() => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+            setIsCameraActive(false);
+        }
+    }, []);
+
+    // Start camera AND shuffle keys when entering PIN screen
+    useEffect(() => {
+        if (selectedUser) {
+            startCamera();
+            shuffleKeypad(); // SHUFFLE KEYS EVERY TIME USER IS SELECTED
+        } else {
+            stopCamera();
+            setPin('');
+            setError('');
+        }
+        return () => stopCamera();
+    }, [selectedUser, startCamera, stopCamera]);
+
+    const captureEvidence = (): string | undefined => {
+        if (videoRef.current && canvasRef.current && isCameraActive) {
+            try {
+                const video = videoRef.current;
+                const canvas = canvasRef.current;
+                const context = canvas.getContext('2d');
+                if (context) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    return canvas.toDataURL('image/jpeg', 0.5); 
+                }
+            } catch (e) {
+                console.error("Failed to capture login evidence", e);
+            }
+        }
+        return undefined;
+    };
 
     const handleKeyPress = (key: string) => {
         setError('');
@@ -49,22 +135,59 @@ const LoginView: React.FC = () => {
     
     const handleLogin = async (user: User, currentPin: string) => {
         if (!user) return;
+
+        // --- SECURITY CHECK: BRANCH VALIDATION ---
+        const currentStoreId = receiptSettings.storeId || '';
+        if (user.role !== 'admin' && user.assignedBranch && user.assignedBranch !== 'all') {
+            const assigned = user.assignedBranch.trim().toUpperCase();
+            const current = currentStoreId.trim().toUpperCase();
+            
+            if (assigned !== current) {
+                setError(`Akses Ditolak. Akun ini hanya untuk cabang ${user.assignedBranch}.`);
+                setTimeout(() => setPin(''), 500);
+                return;
+            }
+        }
+        
         const success = await login(user, currentPin);
         if (success) {
-            // Show Security Audit Alert upon successful login
+            // --- SECURITY CHECK: CAPTURE PHOTO OR METADATA ---
+            const evidence = captureEvidence();
+            
+            let auditDetail = 'Login sukses ke sistem';
+            if (evidence) {
+                auditDetail += ' (Disertai Foto)';
+            } else {
+                // If no camera, record Device Info instead
+                const ua = navigator.userAgent;
+                const platform = navigator.platform;
+                auditDetail += ` (No Camera - Device: ${platform})`;
+            }
+
+            // Log ke Audit
+            logAudit(user, 'LOGIN', auditDetail, undefined, evidence);
+
             showAlert({
                 type: 'alert',
                 title: 'Login Berhasil',
                 message: (
                     <div className="text-left space-y-2">
                         <p>Selamat datang, <strong>{user.name}</strong>.</p>
-                        <div className="bg-yellow-900/20 border-l-4 border-yellow-500 p-2 rounded text-xs text-yellow-200">
-                            <strong>⚠️ Peringatan Keamanan:</strong><br/>
-                            Segala aktivitas sensitif (Perubahan Harga, Stok, Refund, Hapus Data) pada sesi ini akan <strong>direkam secara otomatis</strong> ke dalam Audit Log sistem.
-                        </div>
+                        {evidence ? (
+                            <div className="bg-green-900/20 border-l-4 border-green-500 p-2 rounded text-xs text-green-200">
+                                <strong>📷 CCTV Aktif:</strong><br/>
+                                Wajah Anda telah direkam untuk keamanan akun ini. Selamat bekerja!
+                            </div>
+                        ) : (
+                             <div className="bg-yellow-900/20 border-l-4 border-yellow-500 p-2 rounded text-xs text-yellow-200">
+                                <strong>🛡️ Mode Keamanan Perangkat:</strong><br/>
+                                Kamera tidak terdeteksi. Sistem menggunakan Keypad Acak & Identifikasi Perangkat untuk mencegah akses ilegal.
+                            </div>
+                        )}
                     </div>
                 )
             });
+            stopCamera();
         } else {
             setError('PIN salah. Silakan coba lagi.');
             setTimeout(() => setPin(''), 500);
@@ -96,8 +219,6 @@ const LoginView: React.FC = () => {
         if (logoClickCount.current === 5) {
             logoClickCount.current = 0;
             if (logoClickTimer.current) clearTimeout(logoClickTimer.current);
-            
-            // Open Security Challenge FIRST
             setChallengeError('');
             setChallengeAnswer('');
             setNewAdminPin('');
@@ -107,11 +228,11 @@ const LoginView: React.FC = () => {
     }
 
     const verifySecurityChallenge = () => {
-        const expectedAnswer = authSettings.securityAnswer || 'artea'; // Default if not set
+        const expectedAnswer = authSettings.securityAnswer || 'artea'; 
         
         if (challengeAnswer.trim().toLowerCase() === expectedAnswer.toLowerCase()) {
             setChallengeModalOpen(false);
-            setEmergencyModalOpen(true); // Open Recovery Menu
+            setEmergencyModalOpen(true); 
         } else {
             setChallengeError('Jawaban salah. Akses ditolak.');
         }
@@ -198,9 +319,8 @@ const LoginView: React.FC = () => {
         if (resetConfirmation !== 'RESET') return;
         
         try {
-            // Cast db to any to avoid TS error
-            await (db as any).delete(); // Delete the entire Dexie DB
-            window.location.reload(); // Reload to re-initialize with default data
+            await (db as any).delete(); 
+            window.location.reload(); 
         } catch (e) {
             console.error("Factory Reset Failed", e);
             alert("Gagal melakukan reset. Coba hapus cache browser secara manual.");
@@ -222,7 +342,6 @@ const LoginView: React.FC = () => {
     };
 
     const handleEnterDisplayMode = () => {
-        // Redirect to Display View without logging in
         window.location.search = '?view=customer-display';
     };
 
@@ -245,7 +364,6 @@ const LoginView: React.FC = () => {
                 <Icon name="logo" className="w-16 h-16 text-[#52a37c] mx-auto" />
             </div>
             
-            {/* SHOWCASE BUTTON */}
             <button 
                 onClick={() => setShowcaseOpen(true)}
                 className="mx-auto mt-2 mb-6 text-xs text-[#52a37c] bg-[#52a37c]/10 px-3 py-1.5 rounded-full hover:bg-[#52a37c]/20 transition-colors flex items-center gap-1"
@@ -264,11 +382,13 @@ const LoginView: React.FC = () => {
                         </div>
                         <p className="font-bold text-white truncate w-full">{user.name}</p>
                         <p className="text-xs text-slate-400 capitalize group-hover:text-green-100">{user.role}</p>
+                        {user.assignedBranch && user.assignedBranch !== 'all' && (
+                             <span className="text-[10px] bg-black/30 px-2 py-0.5 rounded text-slate-300">{user.assignedBranch}</span>
+                        )}
                     </button>
                 ))}
             </div>
 
-            {/* CUSTOMER & KITCHEN DISPLAY SHORTCUTS */}
             <div className="border-t border-slate-800 pt-6 flex gap-4 justify-center">
                 <button 
                     onClick={handleEnterDisplayMode}
@@ -293,11 +413,28 @@ const LoginView: React.FC = () => {
                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                  Ganti Pengguna
             </button>
-            <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mx-auto">
-                <Icon name="users" className="w-8 h-8 text-slate-400" />
+            
+            {/* CAMERA / SECURITY PREVIEW */}
+            <div className="w-24 h-24 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-slate-700 overflow-hidden relative">
+                {isCameraActive ? (
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform -scale-x-100" />
+                ) : (
+                    <Icon name="lock" className="w-10 h-10 text-slate-500" />
+                )}
+                <canvas ref={canvasRef} className="hidden" />
+                
+                {/* Status Indicator */}
+                {isCameraActive && (
+                    <div className="absolute bottom-1 right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse border border-white" title="Merekam"></div>
+                )}
             </div>
-            <h1 className="text-2xl font-bold text-white mb-2 mt-4">Halo, {selectedUser?.name}</h1>
-            <p className="text-slate-400 mb-4">Masukkan PIN Anda untuk melanjutkan</p>
+
+            <h1 className="text-2xl font-bold text-white mb-1">Halo, {selectedUser?.name}</h1>
+            
+            {/* Security Notice */}
+            <p className={`text-xs mb-4 uppercase tracking-widest font-bold ${cameraError ? 'text-yellow-500 animate-pulse' : 'text-slate-500'}`}>
+                {isCameraActive ? 'KAMERA PENGAWAS AKTIF' : '⚠️ Anti-Spy Keypad Aktif'}
+            </p>
 
             <div className="flex justify-center items-center gap-3 h-12 mb-2">
                 {Array(4).fill(0).map((_, i) => (
@@ -318,12 +455,19 @@ const LoginView: React.FC = () => {
                 )}
             </div>
 
+            {/* RANDOMIZED KEYPAD GRID */}
             <div className="grid grid-cols-3 gap-4">
-                {'123456789'.split('').map(num => (
+                {/* Render digits 0-8 from shuffled array */}
+                {keypadLayout.slice(0, 9).map(num => (
                     <KeypadButton key={num} value={num} onClick={() => handleKeyPress(num)} />
                 ))}
+                
+                {/* Empty slot */}
                 <div className="w-20 h-20"></div> 
-                <KeypadButton value="0" onClick={() => handleKeyPress('0')} />
+                
+                {/* Last digit (index 9) */}
+                <KeypadButton value={keypadLayout[9]} onClick={() => handleKeyPress(keypadLayout[9])} />
+                
                 <KeypadButton value="⌫" onClick={handleBackspace}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="w-7 h-7" viewBox="0 0 16 16">
                       <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
@@ -331,6 +475,12 @@ const LoginView: React.FC = () => {
                     </svg>
                 </KeypadButton>
             </div>
+            
+            {cameraError && (
+                 <p className="text-[10px] text-slate-500 mt-4 max-w-[200px] mx-auto italic">
+                    Posisi angka diacak untuk mencegah intip PIN. Harap perhatikan layar.
+                </p>
+            )}
         </div>
     );
     
@@ -338,10 +488,8 @@ const LoginView: React.FC = () => {
         <div className="h-screen w-screen flex items-center justify-center bg-slate-900 p-4">
             {selectedUser ? <PinEntryScreen /> : <ProfileSelectionScreen />}
             
-            {/* Showcase Modal Shared */}
             <ShowcaseModal isOpen={isShowcaseOpen} onClose={() => setShowcaseOpen(false)} />
 
-            {/* Security Challenge Modal */}
             <Modal isOpen={isChallengeModalOpen} onClose={() => setChallengeModalOpen(false)} title="Tantangan Keamanan">
                 <div className="space-y-4">
                     <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
@@ -370,11 +518,8 @@ const LoginView: React.FC = () => {
                 </div>
             </Modal>
 
-            {/* Recovery Modal (Modified to include PIN Reset) */}
             <Modal isOpen={isEmergencyModalOpen} onClose={() => { setEmergencyModalOpen(false); setResetConfirmation(''); }} title="Pemulihan Akun & Data">
                 <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
-                    
-                    {/* Primary Option: Reset PIN */}
                     <div className="bg-green-900/20 border border-green-800 p-4 rounded-lg">
                         <h4 className="font-bold text-green-400 text-sm flex items-center gap-2 mb-2">
                             <Icon name="lock" className="w-5 h-5"/> Atur PIN Admin Baru
@@ -406,7 +551,6 @@ const LoginView: React.FC = () => {
                     <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Opsi Lanjutan (Hati-hati)</p>
 
                     <div className="space-y-3">
-                        {/* Option 1: Restore Backup */}
                         <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
                             <h5 className="font-bold text-white text-sm mb-1">Restore Backup</h5>
                             <p className="text-xs text-slate-400 mb-3">
@@ -418,7 +562,6 @@ const LoginView: React.FC = () => {
                             <input type="file" ref={fileInputRef} onChange={handleEmergencyRestore} className="hidden" accept=".json" />
                         </div>
 
-                        {/* Option 2: Factory Reset */}
                         <div className="bg-slate-800 p-3 rounded-lg border border-red-900/50">
                             <h5 className="font-bold text-white text-sm mb-1">Factory Reset (Hapus Data)</h5>
                             <p className="text-xs text-slate-400 mb-3">

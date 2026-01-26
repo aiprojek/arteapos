@@ -15,12 +15,12 @@ import Modal from '../components/Modal';
 import ReceiptModal from '../components/ReceiptModal';
 import { generateSalesReportPDF } from '../utils/pdfGenerator';
 import { dataService } from '../services/dataService';
-import type { Transaction, StockAdjustment, Product } from '../types';
+import type { Transaction, StockAdjustment, Product, Expense } from '../types';
 import { Capacitor } from '@capacitor/core';
 import { saveBinaryFileNative } from '../utils/nativeHelper';
 
 const ReportsView: React.FC = () => {
-    const { transactions: localTransactions, refundTransaction } = useFinance();
+    const { transactions: localTransactions, refundTransaction, expenses: localExpenses } = useFinance(); // ADD expenses
     const { stockAdjustments: localStockAdjustments, products: localProducts } = useProduct();
     const { receiptSettings } = useSettings();
     const { showAlert } = useUI();
@@ -33,13 +33,12 @@ const ReportsView: React.FC = () => {
     // BRANCH FILTER
     const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
 
-    const [cloudData, setCloudData] = useState<{ transactions: Transaction[], stockAdjustments: StockAdjustment[], inventory: any[] }>({ transactions: [], stockAdjustments: [], inventory: [] });
+    const [cloudData, setCloudData] = useState<{ transactions: Transaction[], stockAdjustments: StockAdjustment[], inventory: any[], expenses: Expense[] }>({ transactions: [], stockAdjustments: [], inventory: [], expenses: [] });
     const [isLoading, setIsLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'transactions' | 'products' | 'stock' | 'inventory'>('transactions');
     
     // Receipt & Evidence State
     const [receiptTransaction, setReceiptTransaction] = useState<Transaction | null>(null);
-    // UPDATED: Evidence State now holds URL and Filename
     const [evidenceData, setEvidenceData] = useState<{ url: string; filename: string } | null>(null);
     const [zoomLevel, setZoomLevel] = useState(1); // ZOOM STATE
 
@@ -55,7 +54,8 @@ const ReportsView: React.FC = () => {
              setCloudData({
                  transactions: mock.transactions,
                  stockAdjustments: mock.stockAdjustments,
-                 inventory: mock.inventory
+                 inventory: mock.inventory,
+                 expenses: mock.expenses
              });
              setIsLoading(false);
              return;
@@ -66,13 +66,15 @@ const ReportsView: React.FC = () => {
             let txns: any[] = [];
             let adjs: any[] = [];
             let invs: any[] = [];
+            let exps: any[] = [];
 
             allBranches.forEach(branch => {
                 if (branch.transactionRecords) txns.push(...branch.transactionRecords.map((t:any) => ({...t, storeId: branch.storeId})));
                 if (branch.stockAdjustments) adjs.push(...branch.stockAdjustments.map((a:any) => ({...a, storeId: branch.storeId})));
                 if (branch.currentStock) invs.push(...branch.currentStock.map((i:any) => ({...i, storeId: branch.storeId})));
+                if (branch.expenses) exps.push(...branch.expenses.map((e:any) => ({...e, storeId: branch.storeId})));
             });
-            setCloudData({ transactions: txns, stockAdjustments: adjs, inventory: invs });
+            setCloudData({ transactions: txns, stockAdjustments: adjs, inventory: invs, expenses: exps });
         } catch (e: any) {
             showAlert({ type: 'alert', title: 'Gagal', message: e.message });
             setDataSource('local');
@@ -89,6 +91,7 @@ const ReportsView: React.FC = () => {
 
     const activeTransactions = dataSource === 'local' ? localTransactions : cloudData.transactions;
     const activeStockAdjustments = dataSource === 'local' ? localStockAdjustments : cloudData.stockAdjustments;
+    const activeExpenses = dataSource === 'local' ? localExpenses : cloudData.expenses;
     
     // Inventory Data Source
     const activeInventory = useMemo(() => {
@@ -152,6 +155,7 @@ const ReportsView: React.FC = () => {
 
         const txns = activeTransactions.filter(t => filterFn(t.createdAt, t.storeId)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         const stock = activeStockAdjustments.filter(s => filterFn(s.createdAt, (s as any).storeId)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const exps = activeExpenses.filter(e => filterFn(e.date, (e as any).storeId));
         
         // Inventory Filter (No Date, Only Branch)
         const inventory = activeInventory.filter(i => {
@@ -161,23 +165,30 @@ const ReportsView: React.FC = () => {
             return true;
         }).sort((a,b) => a.stock - b.stock); // Sort by lowest stock
 
-        return { txns, stock, inventory };
-    }, [filter, activeTransactions, activeStockAdjustments, activeInventory, selectedBranch, dataSource, customStartDate, customEndDate]);
+        return { txns, stock, inventory, exps };
+    }, [filter, activeTransactions, activeStockAdjustments, activeInventory, activeExpenses, selectedBranch, dataSource, customStartDate, customEndDate]);
 
-    // --- AGGREGATION LOGIC ---
+    // --- AGGREGATION LOGIC (UPDATED FOR NET PROFIT) ---
 
     const summary = useMemo(() => {
         const validTxns = filteredData.txns.filter(t => t.paymentStatus !== 'refunded');
         const totalSales = validTxns.reduce((sum, t) => sum + t.total, 0);
         
-        // Estimate Profit (Simplified: Total - Cost of Items)
-        const totalCost = validTxns.reduce((sum, t) => {
+        // Calculate HPP (Cost of Goods Sold)
+        const totalCOGS = validTxns.reduce((sum, t) => {
             return sum + (t.items || []).reduce((is, i) => is + ((i.costPrice || 0) * i.quantity), 0);
         }, 0);
         
+        // Calculate Operational Expenses
+        const totalOpEx = filteredData.exps.reduce((sum, e) => sum + e.amount, 0);
+        
+        // Net Profit Calculation
+        const netProfit = totalSales - totalCOGS - totalOpEx;
+        
         return {
             totalSales,
-            totalProfit: totalSales - totalCost,
+            totalProfit: netProfit, // NET PROFIT
+            totalOpEx,
             transactionCount: validTxns.length
         };
     }, [filteredData]);
@@ -256,7 +267,8 @@ const ReportsView: React.FC = () => {
         dataService.exportAllReportsCSV({ 
             transactionRecords: filteredData.txns, 
             stockAdjustments: filteredData.stock,
-            products: [], rawMaterials: [], users: [], expenses: [], otherIncomes: [], suppliers: [], purchases: [], customers: [], discountDefinitions: [], heldCarts: [], sessionHistory: [], auditLogs: [],
+            expenses: filteredData.exps, // Export filtered expenses too
+            products: [], rawMaterials: [], users: [], otherIncomes: [], suppliers: [], purchases: [], customers: [], discountDefinitions: [], heldCarts: [], sessionHistory: [], auditLogs: [],
             receiptSettings: receiptSettings as any, inventorySettings: {} as any, authSettings: {} as any, sessionSettings: {} as any, membershipSettings: {} as any, categories: [], balanceLogs: []
         });
     };
@@ -508,9 +520,13 @@ const ReportsView: React.FC = () => {
                         <p className="text-slate-400 text-sm uppercase">Total Transaksi</p>
                         <p className="text-2xl font-bold text-white">{summary.transactionCount}</p>
                     </div>
-                    <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-yellow-500 shadow-md">
-                        <p className="text-slate-400 text-sm uppercase">Estimasi Profit</p>
+                    <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-emerald-600 shadow-md">
+                        <div className="flex justify-between items-center">
+                            <p className="text-slate-400 text-sm uppercase">Net Profit (Est.)</p>
+                            <span className="text-[10px] text-slate-500 bg-slate-900 rounded-full w-4 h-4 inline-flex items-center justify-center cursor-help" title="Omzet - Modal Barang (HPP) - Pengeluaran Operasional">?</span>
+                        </div>
                         <p className="text-2xl font-bold text-white">{CURRENCY_FORMATTER.format(summary.totalProfit)}</p>
+                         <p className="text-[10px] text-slate-400 mt-1">Dikurangi Pengeluaran: {CURRENCY_FORMATTER.format(summary.totalOpEx)}</p>
                     </div>
                 </div>
             )}

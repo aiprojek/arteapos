@@ -11,7 +11,7 @@ export type IconName =
   | 'chevron-down' | 'chevron-up' | 'keyboard' | 'play' | 'wifi' | 'database' 
   | 'warning' | 'question' | 'bluetooth' | 'lock' | 'clipboard' | 'boxes' | 'file-lock' 
   | 'clock-history' | 'eye' | 'cloud' | 'shop' | 'tools' | 'money' | 'lightbulb' | 'cast'
-  | 'zoom-in' | 'zoom-out' | 'dash'; // Added new icons
+  | 'zoom-in' | 'zoom-out' | 'dash' | 'sync'; // Added new icons
 
 interface IconProps {
   name: IconName;
@@ -100,7 +100,8 @@ const Icon: React.FC<IconProps> = ({ name, className = 'w-6 h-6', title, style }
     cast: 'bi-cast',
     'zoom-in': 'bi-zoom-in',
     'zoom-out': 'bi-zoom-out',
-    dash: 'bi-dash'
+    dash: 'bi-dash',
+    sync: 'bi-arrow-repeat'
   };
 
   const biClass = iconMap[name] || 'bi-question-square';

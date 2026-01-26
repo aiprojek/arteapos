@@ -95,6 +95,25 @@ npm run build
 
 ---
 
+## ⚠️ PENTING: Troubleshooting Build APK (GitHub Actions)
+
+Jika Anda mendapatkan error **"Plugin Bluetooth belum terinstall"** saat menjalankan APK, itu karena folder `android` tidak terbawa ke GitHub.
+
+**SOLUSI:**
+1.  Buka file `.gitignore` di root project.
+2.  Cari baris `/android` atau `android/` dan hapus baris tersebut.
+3.  Lakukan commit dan push folder `android` ke GitHub.
+    ```bash
+    git add android/
+    git commit -m "Add android folder for custom native plugins"
+    git push
+    ```
+4.  Jalankan ulang Workflow GitHub Actions.
+
+Hal ini diperlukan karena aplikasi ini menggunakan **Custom Native Code** (`BluetoothPrinterPlugin.java`) yang terletak di dalam folder `android/app/src/main/java`.
+
+---
+
 ## 📖 Skenario Penggunaan
 
 ### A. Toko Tunggal (Single Store)

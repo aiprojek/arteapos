@@ -201,7 +201,7 @@ export const bluetoothPrinterService = {
             console.error("List Native Devices Failed:", e);
             // Jika errornya "not implemented", berarti plugin Native belum ter-bridge
             if (e.message && e.message.includes('not implemented')) {
-                throw new Error("Plugin Bluetooth belum terinstall di APK ini. Pastikan Anda sudah build ulang APK.");
+                throw new Error("ERR_PLUGIN_MISSING: Folder 'android/' tidak terdeteksi di repository GitHub Anda. Mohon cek file .gitignore dan pastikan folder android di-commit agar file 'BluetoothPrinterPlugin.java' terbawa saat build.");
             }
             throw e;
         }
@@ -290,7 +290,7 @@ export const bluetoothPrinterService = {
                 console.error("Native Print Error:", e);
                 // Fallback message if plugin not found
                 if (e.message && e.message.includes('not implemented')) {
-                    alert("Gagal: Plugin Bluetooth belum terdeteksi. Silakan build ulang APK.");
+                    alert("Gagal: Folder 'android' tidak ditemukan di Git saat build. Silakan commit folder 'android' dan build ulang.");
                 } else {
                     alert("Gagal mencetak: " + e.message);
                 }

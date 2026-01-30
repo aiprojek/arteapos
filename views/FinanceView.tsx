@@ -1,64 +1,64 @@
 
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useFinance } from '../context/FinanceContext';
-import { useSettings } from '../context/SettingsContext';
-import { useCustomer } from '../context/CustomerContext'; // Import Customer Context
-import Button from '../components/Button';
-import Icon from '../components/Icon';
-import { dropboxService } from '../services/dropboxService';
-import { mockDataService } from '../services/mockData';
-import { useUI } from '../context/UIContext';
-import { generateTablePDF } from '../utils/pdfGenerator';
-import { dataService } from '../services/dataService'; // NEW Import
-import { CURRENCY_FORMATTER } from '../constants';
-
-// Modular Imports
+import React, { useState, useEffect, useRef } from 'react';
 import CashFlowTab from '../components/finance/CashFlowTab';
 import ExpensesTab from '../components/finance/ExpensesTab';
 import IncomeTab from '../components/finance/IncomeTab';
 import PurchasingTab from '../components/finance/PurchasingTab';
 import DebtsTab from '../components/finance/DebtsTab';
 import CustomersTab from '../components/finance/CustomersTab';
+import Icon from '../components/Icon';
+import Button from '../components/Button';
+import { useAuth } from '../context/AuthContext';
+import { useUI } from '../context/UIContext';
+import { useFinance } from '../context/FinanceContext'; 
+import { useSettings } from '../context/SettingsContext'; 
+import { dropboxService } from '../services/dropboxService';
+import { mockDataService } from '../services/mockData';
+import { dataService } from '../services/dataService';
+import { generateTablePDF } from '../utils/pdfGenerator';
+import { CURRENCY_FORMATTER } from '../constants';
+import type { Transaction, Expense, OtherIncome, Purchase } from '../types';
 
-import type { Expense, OtherIncome, Transaction as TransactionType, Purchase, Customer } from '../types';
+type FinanceTab = 'cashflow' | 'expenses' | 'income' | 'purchasing' | 'debts' | 'customers';
 
 const FinanceView: React.FC = () => {
     const { currentUser } = useAuth();
-    const { receiptSettings } = useSettings();
-    const { transactions: localTransactions, expenses: localExpenses, purchases: localPurchases, otherIncomes: localIncomes, importFinanceData } = useFinance();
-    const { customers: localCustomers } = useCustomer(); // Get local customers
     const { showAlert } = useUI();
+    const { receiptSettings } = useSettings();
     
-    const isStaff = currentUser?.role === 'staff';
-    const isViewer = currentUser?.role === 'viewer';
-    const isManagement = currentUser?.role === 'admin' || currentUser?.role === 'manager' || isViewer;
-    
-    // Tab State
-    const [mainView, setMainView] = useState<'finance' | 'customers'>('finance');
-    const [activeTab, setActiveTab] = useState<string>(isManagement ? 'cashflow' : 'expenses');
+    // Local Data Hooks
+    const { transactions: localTransactions, expenses: localExpenses, otherIncomes: localIncomes, purchases: localPurchases } = useFinance();
 
-    // Cloud Aggregation State
+    const [activeTab, setActiveTab] = useState<FinanceTab>('cashflow');
+    
+    // Cloud State
     const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
     const [cloudData, setCloudData] = useState<{ 
-        transactions: TransactionType[], 
+        transactions: Transaction[], 
         expenses: Expense[], 
         otherIncomes: OtherIncome[],
-        purchases: Purchase[],
-        customers: Customer[] // Added Customers
-    }>({ transactions: [], expenses: [], otherIncomes: [], purchases: [], customers: [] });
-    
-    // BRANCH FILTER STATE
-    const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
-
-    const [isCloudLoading, setIsCloudLoading] = useState(false);
-    const [isDemoMode, setIsDemoMode] = useState(false);
+        purchases: Purchase[] 
+    }>({ transactions: [], expenses: [], otherIncomes: [], purchases: [] });
+    const [isLoadingCloud, setIsLoadingCloud] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-    // Dropdown State
+    // Export State
     const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
     const exportDropdownRef = useRef<HTMLDivElement>(null);
 
+    // Permission Check
+    const isStaff = currentUser?.role === 'staff';
+
+    const tabs: { id: FinanceTab, label: string, icon: any }[] = [
+        { id: 'cashflow', label: 'Arus Kas', icon: 'trending-up' },
+        { id: 'expenses', label: 'Pengeluaran', icon: 'finance' },
+        { id: 'income', label: 'Pemasukan Lain', icon: 'money' },
+        { id: 'purchasing', label: 'Pembelian', icon: 'boxes' },
+        { id: 'debts', label: 'Utang Piutang', icon: 'book' },
+        { id: 'customers', label: 'Pelanggan', icon: 'users' },
+    ];
+
+    // Close dropdown on outside click
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
@@ -66,459 +66,287 @@ const FinanceView: React.FC = () => {
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Enforce Local Mode for Staff if they somehow switch (security fallback)
-    useEffect(() => {
-        if (isStaff && dataSource !== 'local') {
-            setDataSource('local');
-        }
-    }, [isStaff, dataSource]);
+    // Load Cloud Data Logic
+    const loadCloudData = async () => {
+        setIsLoadingCloud(true);
 
-    // Refactored Load Data to be callable via Refresh Button
-    const loadCloudData = useCallback(async () => {
-        if (isStaff) return; // Block staff from loading cloud data
-        
-        setIsCloudLoading(true);
-        setIsDemoMode(false);
-
-        // 1. Pre-check credentials - SECURE CHECK
         if (!dropboxService.isConfigured()) {
+             // Fallback Demo Data
              const mock = mockDataService.getMockDashboardData();
              setCloudData({
                  transactions: mock.transactions,
                  expenses: mock.expenses,
                  otherIncomes: mock.otherIncomes,
-                 purchases: [],
-                 customers: [] // Mock customers usually empty in basic mock
+                 purchases: [] 
              });
-             setIsDemoMode(true);
              setLastUpdated(new Date());
-             setIsCloudLoading(false);
+             setIsLoadingCloud(false);
              return;
         }
 
         try {
-            // Dropbox Logic
             const allBranches = await dropboxService.fetchAllBranchData();
-            let txns: any[] = [], exps: any[] = [], incs: any[] = [], custs: any[] = [];
+            let txns: any[] = [];
+            let exps: any[] = [];
+            let incs: any[] = [];
+            let purs: any[] = [];
 
             allBranches.forEach(branch => {
-                // STANDARDIZED: Ensure we use 'storeId' (camelCase)
                 if (branch.transactionRecords) txns.push(...branch.transactionRecords.map((t:any) => ({...t, storeId: branch.storeId})));
                 if (branch.expenses) exps.push(...branch.expenses.map((e:any) => ({...e, storeId: branch.storeId})));
                 if (branch.otherIncomes) incs.push(...branch.otherIncomes.map((i:any) => ({...i, storeId: branch.storeId})));
-                if (branch.customers) custs.push(...branch.customers.map((c:any) => ({...c, storeId: branch.storeId})));
+                // Purchase sync logic would go here if added to branch payload
             });
-
-            setCloudData({
-                transactions: txns,
-                expenses: exps,
-                otherIncomes: incs,
-                purchases: [], // Placeholder until dropbox service syncs purchases
-                customers: custs
+            
+            setCloudData({ 
+                transactions: txns, 
+                expenses: exps, 
+                otherIncomes: incs, 
+                purchases: purs 
             });
             setLastUpdated(new Date());
-        } catch (error: any) {
-            console.error("Finance Load Error:", error);
-            showAlert({ type: 'alert', title: 'Gagal Memuat Data', message: error.message });
+        } catch (e: any) {
+            showAlert({ type: 'alert', title: 'Gagal Sync', message: e.message });
             setDataSource('local');
         } finally {
-            setIsCloudLoading(false);
+            setIsLoadingCloud(false);
         }
-    }, [showAlert, isStaff]);
+    };
 
-    // Effect to trigger load when switching to dropbox
     useEffect(() => {
         if (dataSource === 'dropbox') {
             loadCloudData();
         }
-    }, [dataSource, loadCloudData]);
+    }, [dataSource]);
 
-    // CALCULATE AVAILABLE BRANCHES
-    const availableBranches = useMemo(() => {
-        if (dataSource === 'local') return [];
-        const branches = new Set<string>();
-        // Check all sources for store IDs
-        [...cloudData.transactions, ...cloudData.expenses, ...cloudData.otherIncomes].forEach((item: any) => {
-            if (item.storeId) branches.add(item.storeId);
-        });
-        return Array.from(branches).sort();
-    }, [cloudData, dataSource]);
+    // --- EXPORT LOGIC ---
+    const handleExport = (format: 'xlsx' | 'csv' | 'ods' | 'pdf') => {
+        const timestamp = new Date().toISOString().slice(0, 10);
+        let headers: string[] = [];
+        let rows: (string | number)[][] = [];
+        let fileName = `Laporan_${activeTab}_${timestamp}`;
+        let title = '';
 
-    // APPLY BRANCH FILTER TO CLOUD DATA
-    const filteredCloudData = useMemo(() => {
-        if (selectedBranch === 'ALL') return cloudData;
-        return {
-            transactions: cloudData.transactions.filter((t:any) => t.storeId === selectedBranch),
-            expenses: cloudData.expenses.filter((e:any) => e.storeId === selectedBranch),
-            otherIncomes: cloudData.otherIncomes.filter((i:any) => i.storeId === selectedBranch),
-            purchases: cloudData.purchases.filter((p:any) => (p as any).storeId === selectedBranch),
-            customers: cloudData.customers.filter((c:any) => (c as any).storeId === selectedBranch)
-        };
-    }, [cloudData, selectedBranch]);
+        // Determine Active Data
+        const currentTransactions = dataSource === 'local' ? localTransactions : cloudData.transactions;
+        const currentExpenses = dataSource === 'local' ? localExpenses : cloudData.expenses;
+        const currentIncomes = dataSource === 'local' ? localIncomes : cloudData.otherIncomes;
+        const currentPurchases = dataSource === 'local' ? localPurchases : cloudData.purchases;
 
-    // NEW: Merge Cloud to Local Logic for Finance
-    const handleMergeToLocal = () => {
-        if (cloudData.expenses.length === 0 && cloudData.otherIncomes.length === 0) {
-            showAlert({ type: 'alert', title: 'Data Kosong', message: 'Tidak ada data keuangan cloud untuk disimpan.' });
+        if (activeTab === 'expenses') {
+            title = 'Laporan Pengeluaran';
+            headers = ['Tanggal', 'Kategori', 'Deskripsi', 'Jumlah', 'Metode', 'Cabang'];
+            rows = currentExpenses.map(e => [
+                new Date(e.date).toLocaleDateString('id-ID'),
+                e.category,
+                e.description,
+                e.amount,
+                e.paymentMethod || 'cash',
+                (e as any).storeId || 'LOKAL'
+            ]);
+        } else if (activeTab === 'income') {
+            title = 'Laporan Pemasukan Lain';
+            headers = ['Tanggal', 'Kategori', 'Deskripsi', 'Jumlah', 'Metode', 'Cabang'];
+            rows = currentIncomes.map(i => [
+                new Date(i.date).toLocaleDateString('id-ID'),
+                i.category,
+                i.description,
+                i.amount,
+                i.paymentMethod || 'cash',
+                (i as any).storeId || 'LOKAL'
+            ]);
+        } else if (activeTab === 'purchasing') {
+            title = 'Laporan Pembelian';
+            headers = ['Tanggal', 'Supplier', 'Status', 'Total', 'Item', 'Cabang'];
+            rows = currentPurchases.map(p => [
+                new Date(p.date).toLocaleDateString('id-ID'),
+                p.supplierName,
+                p.status,
+                p.totalAmount,
+                (p.items || []).length + ' items',
+                (p as any).storeId || 'LOKAL'
+            ]);
+        } else if (activeTab === 'debts') {
+            title = 'Laporan Piutang (Belum Lunas)';
+            headers = ['Tanggal', 'ID', 'Pelanggan', 'Total', 'Terbayar', 'Sisa', 'Cabang'];
+            rows = currentTransactions
+                .filter(t => t.paymentStatus !== 'paid' && t.paymentStatus !== 'refunded')
+                .map(t => [
+                    new Date(t.createdAt).toLocaleDateString('id-ID'),
+                    t.id.slice(-6),
+                    t.customerName || 'Umum',
+                    t.total,
+                    t.amountPaid,
+                    t.total - t.amountPaid,
+                    t.storeId || 'LOKAL'
+                ]);
+        } else if (activeTab === 'cashflow') {
+             title = 'Laporan Arus Kas Gabungan';
+             // Generate simplified flow for export
+             headers = ['Tanggal', 'Tipe', 'Deskripsi', 'Masuk', 'Keluar', 'Cabang'];
+             const flow = [
+                 ...currentTransactions.filter(t => t.paymentStatus !== 'refunded').map(t => ({ date: t.createdAt, type: 'Penjualan', desc: `Trx #${t.id.slice(-4)}`, in: t.total, out: 0, store: t.storeId })),
+                 ...currentIncomes.map(i => ({ date: i.date, type: 'Pemasukan', desc: i.description, in: i.amount, out: 0, store: (i as any).storeId })),
+                 ...currentExpenses.map(e => ({ date: e.date, type: 'Pengeluaran', desc: e.description, in: 0, out: e.amount, store: (e as any).storeId })),
+                 ...currentPurchases.map(p => ({ date: p.date, type: 'Pembelian', desc: p.supplierName, in: 0, out: p.totalAmount, store: (p as any).storeId }))
+             ].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+             
+             rows = flow.map(f => [
+                 new Date(f.date).toLocaleDateString('id-ID'), f.type, f.desc, f.in, f.out, f.store || 'LOKAL'
+             ]);
+        } else {
+            showAlert({ type: 'alert', title: 'Info', message: 'Fitur export untuk tab ini belum tersedia atau gunakan menu Laporan.' });
+            setIsExportDropdownOpen(false);
             return;
         }
 
-        showAlert({
-            type: 'confirm',
-            title: 'Simpan Permanen?',
-            message: (
-                <div className="text-left text-sm">
-                    <p>Gabungkan data keuangan berikut ke database lokal perangkat ini?</p>
-                    <ul className="list-disc pl-5 mt-2 text-slate-300">
-                        <li>{cloudData.expenses.length} Pengeluaran</li>
-                        <li>{cloudData.otherIncomes.length} Pemasukan Lain</li>
-                    </ul>
-                    <p className="mt-2 text-yellow-300 bg-yellow-900/30 p-2 rounded border border-yellow-700">
-                        Pastikan data valid. Duplikasi akan dicegah berdasarkan ID.
-                    </p>
-                </div>
-            ),
-            confirmText: 'Ya, Simpan',
-            onConfirm: () => {
-                importFinanceData(cloudData.expenses, cloudData.otherIncomes, cloudData.purchases);
-                showAlert({ type: 'alert', title: 'Berhasil', message: 'Data keuangan berhasil digabungkan.' });
-                setDataSource('local'); // Switch back
-            }
-        });
-    };
-
-    const renderSubTabButton = (tab: string, label: string) => (
-        <button onClick={() => setActiveTab(tab)} className={`whitespace-nowrap px-4 py-2 text-sm font-medium rounded-t-lg transition-colors border-b-2 ${activeTab === tab ? 'text-[#52a37c] border-[#52a37c]' : 'text-slate-400 border-transparent hover:text-white'}`}>
-            {label}
-        </button>
-    );
-
-    // --- DATA PREPARATION FOR EXPORT (SHARED) ---
-    const prepareTableData = () => {
-        // USE FILTERED DATA HERE
-        const source = dataSource === 'local' ? {
-            tx: localTransactions,
-            exp: localExpenses,
-            inc: localIncomes,
-            purch: localPurchases,
-            cust: localCustomers
-        } : {
-            tx: filteredCloudData.transactions,
-            exp: filteredCloudData.expenses,
-            inc: filteredCloudData.otherIncomes,
-            purch: filteredCloudData.purchases,
-            cust: filteredCloudData.customers
-        };
-
-        // Helper sort
-        const sortByBranchAndDate = (a: any, b: any) => {
-            if (dataSource !== 'local') {
-                const storeA = a.storeId || a.store_id || '';
-                const storeB = b.storeId || b.store_id || '';
-                if (storeA !== storeB) return storeA.localeCompare(storeB);
-            }
-            const dateA = new Date(a.date || a.createdAt || a.created_at || 0).getTime();
-            const dateB = new Date(b.date || b.createdAt || b.created_at || 0).getTime();
-            return dateB - dateA;
-        };
-
-        const mode = mainView === 'finance' ? activeTab : 'customers';
-        const isCloud = dataSource !== 'local';
-        let headers: string[] = [];
-        let rows: any[][] = [];
-        let fileNameBase = '';
-
-        if (mode === 'cashflow') {
-            const flows = [
-                ...source.tx.filter(t => t.paymentStatus !== 'refunded').map(t => ({ date: t.createdAt, desc: `Penjualan #${t.id.slice(-4)}`, amount: t.total, type: 'Penjualan', storeId: t.storeId })),
-                ...source.inc.map(i => ({ date: i.date, desc: i.description, amount: i.amount, type: 'Pemasukan Lain', storeId: (i as any).storeId })),
-                ...source.exp.map(e => ({ date: e.date, desc: e.description, amount: -e.amount, type: 'Pengeluaran', storeId: (e as any).storeId })),
-                ...source.purch.map(p => ({ date: p.date, desc: `Pembelian dari ${p.supplierName}`, amount: -p.totalAmount, type: 'Pembelian', storeId: (p as any).storeId }))
-            ].sort((a,b) => {
-                if(isCloud && (a.storeId !== b.storeId)) return (a.storeId || '').localeCompare(b.storeId || '');
-                return new Date(b.date).getTime() - new Date(a.date).getTime();
-            });
-
-            headers = isCloud ? ['Tanggal', 'Cabang', 'Tipe', 'Keterangan', 'Jumlah'] : ['Tanggal', 'Tipe', 'Keterangan', 'Jumlah'];
-            rows = flows.map(f => {
-                const date = new Date(f.date).toLocaleDateString('id-ID');
-                const amt = f.amount; 
-                return isCloud ? [date, f.storeId || '-', f.type, f.desc, amt] : [date, f.type, f.desc, amt];
-            });
-            fileNameBase = 'Laporan_Arus_Kas';
-        }
-        else if (mode === 'expenses') {
-            const exp = [...source.exp].sort(sortByBranchAndDate);
-            headers = isCloud ? ['Tanggal', 'Cabang', 'Keterangan', 'Kategori', 'Jumlah'] : ['Tanggal', 'Keterangan', 'Kategori', 'Jumlah'];
-            rows = exp.map(e => {
-                const date = new Date(e.date).toLocaleDateString('id-ID');
-                return isCloud ? [date, (e as any).storeId, e.description, e.category, e.amount] : [date, e.description, e.category, e.amount];
-            });
-            fileNameBase = 'Laporan_Pengeluaran';
-        }
-        else if (mode === 'other_income') {
-            const inc = [...source.inc].sort(sortByBranchAndDate);
-            headers = isCloud ? ['Tanggal', 'Cabang', 'Keterangan', 'Kategori', 'Jumlah'] : ['Tanggal', 'Keterangan', 'Kategori', 'Jumlah'];
-            rows = inc.map(i => {
-                const date = new Date(i.date).toLocaleDateString('id-ID');
-                return isCloud ? [date, (i as any).storeId, i.description, i.category, i.amount] : [date, i.description, i.category, i.amount];
-            });
-            fileNameBase = 'Laporan_Pemasukan_Lain';
-        }
-        else if (mode === 'purchasing') {
-            const purch = [...source.purch].sort(sortByBranchAndDate);
-            headers = isCloud ? ['Tanggal', 'Cabang', 'Supplier', 'Status', 'Total'] : ['Tanggal', 'Supplier', 'Status', 'Total'];
-            rows = purch.map(p => {
-                const date = new Date(p.date).toLocaleDateString('id-ID');
-                return isCloud ? [date, (p as any).storeId, p.supplierName, p.status, p.totalAmount] : [date, p.supplierName, p.status, p.totalAmount];
-            });
-            fileNameBase = 'Riwayat_Pembelian';
-        }
-        else if (mode === 'debt-receivables') {
-            const unpaid = source.tx.filter(t => t.paymentStatus === 'unpaid' || t.paymentStatus === 'partial').sort(sortByBranchAndDate);
-            headers = isCloud ? ['Tanggal', 'Cabang', 'Pelanggan', 'Total Tagihan', 'Sisa Utang'] : ['Tanggal', 'Pelanggan', 'Total Tagihan', 'Sisa Utang'];
-            rows = unpaid.map(t => {
-                const date = new Date(t.createdAt).toLocaleDateString('id-ID');
-                return isCloud ? [date, t.storeId || '-', t.customerName || 'Umum', t.total, t.total - t.amountPaid] : [date, t.customerName || 'Umum', t.total, t.total - t.amountPaid];
-            });
-            fileNameBase = 'Laporan_Piutang';
-        }
-        else if (mode === 'customers') {
-            const cust = [...source.cust].sort((a,b) => (a.name || '').localeCompare(b.name || ''));
-            headers = isCloud ? ['Bergabung', 'Cabang', 'ID Member', 'Nama', 'Poin'] : ['Bergabung', 'ID Member', 'Nama', 'Poin'];
-            rows = cust.map(c => {
-                const date = new Date(c.createdAt).toLocaleDateString('id-ID');
-                return isCloud ? [date, (c as any).storeId, c.memberId, c.name, c.points] : [date, c.memberId, c.name, c.points];
-            });
-            fileNameBase = 'Data_Pelanggan';
+        if (rows.length === 0) {
+            showAlert({ type: 'alert', title: 'Data Kosong', message: 'Tidak ada data untuk diexport pada tab ini.' });
+            setIsExportDropdownOpen(false);
+            return;
         }
 
-        return { headers, rows, fileNameBase };
-    };
-
-    const handleExportPDF = () => {
-        const { headers, rows, fileNameBase } = prepareTableData();
-        const mode = mainView === 'finance' ? activeTab : 'customers';
-        const isCloud = dataSource !== 'local';
+        if (format === 'pdf') {
+            const pdfRows = rows.map(row => row.map(cell => typeof cell === 'number' ? CURRENCY_FORMATTER.format(cell) : cell));
+            generateTablePDF(title, headers, pdfRows, receiptSettings);
+        } else {
+            dataService.exportToSpreadsheet(headers, rows, fileName, format);
+        }
         
-        let pdfHeaders = [...headers];
-        let pdfRows = [...rows];
-        let imageColIndex = -1;
-
-        if (mode === 'expenses' || mode === 'other_income' || mode === 'purchasing') {
-            pdfHeaders.push('Bukti');
-            imageColIndex = pdfHeaders.length - 1;
-
-            // Use FILTERED Data for source list
-            const sourceList = dataSource === 'local' 
-                ? (mode === 'expenses' ? localExpenses : mode === 'other_income' ? localIncomes : localPurchases)
-                : (mode === 'expenses' ? filteredCloudData.expenses : mode === 'other_income' ? filteredCloudData.otherIncomes : filteredCloudData.purchases);
-            
-            const sortedList = [...sourceList].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            
-            pdfRows = sortedList.map(item => {
-               const date = new Date(item.date).toLocaleDateString('id-ID');
-               const baseRow = mode === 'purchasing' 
-                    ? (isCloud ? [date, (item as any).storeId, (item as any).supplierName, (item as any).status, (item as any).totalAmount] : [date, (item as any).supplierName, (item as any).status, (item as any).totalAmount])
-                    : (isCloud ? [date, (item as any).storeId, item.description, item.category, item.amount] : [date, item.description, item.category, item.amount]);
-               
-               return [...baseRow, item.evidenceImageUrl || ''];
-            });
-        }
-
-        const formattedRows = pdfRows.map(row => row.map(cell => typeof cell === 'number' ? CURRENCY_FORMATTER.format(cell) : cell));
-        generateTablePDF(fileNameBase.replace(/_/g, ' '), pdfHeaders, formattedRows, receiptSettings, 'p', imageColIndex);
-        setIsExportDropdownOpen(false);
-    };
-
-    const handleExportSpreadsheet = (format: 'xlsx' | 'ods' | 'csv') => {
-        const { headers, rows, fileNameBase } = prepareTableData();
-        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-        dataService.exportToSpreadsheet(headers, rows, `${fileNameBase}_${timestamp}`, format);
         setIsExportDropdownOpen(false);
     };
 
     return (
-        <div className="flex flex-col h-full">
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
-                {/* Title Section */}
-                <div>
-                    <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                        Keuangan & Pelanggan
-                        {dataSource !== 'local' && (
-                            <span className="text-xs px-2 py-1 rounded font-normal text-white bg-blue-600 border border-blue-500 shadow-sm">
-                                Mode Dropbox
-                            </span>
-                        )}
-                    </h1>
-                    {dataSource === 'dropbox' && lastUpdated && (
-                        <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                            <Icon name="clock-history" className="w-3 h-3" />
-                            Data per: {lastUpdated.toLocaleTimeString()}
-                        </p>
-                    )}
-                </div>
+        <div className="flex flex-col h-full space-y-4">
+            {/* Header Area */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <h1 className="text-2xl font-bold text-white">Keuangan</h1>
                 
-                {/* Controls Section */}
-                <div className="flex flex-col sm:flex-row gap-2 sm:items-center flex-wrap w-full lg:w-auto">
+                <div className="flex flex-wrap gap-2 items-center">
                     
-                    {/* Branch Filter (Only in Dropbox Mode) */}
-                    {dataSource === 'dropbox' && availableBranches.length > 0 && (
-                        <div className="bg-slate-800 p-1 rounded-lg border border-slate-700">
-                            <select 
-                                value={selectedBranch} 
-                                onChange={(e) => setSelectedBranch(e.target.value)}
-                                className="bg-transparent text-sm text-white px-3 py-1.5 outline-none cursor-pointer w-full sm:w-auto"
-                            >
-                                <option value="ALL" className="bg-slate-800">Semua Cabang</option>
-                                {availableBranches.map(b => (
-                                    <option key={b} value={b} className="bg-slate-800">{b}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-
-                    {/* Action Group: Sync & Export */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                        {dataSource === 'dropbox' && (
-                            <>
-                                <Button 
-                                    size="sm" 
-                                    onClick={loadCloudData} 
-                                    disabled={isCloudLoading} 
-                                    className="bg-blue-600 hover:bg-blue-500 text-white border-none whitespace-nowrap"
-                                    title="Tarik data terbaru"
-                                >
-                                    <Icon name="reset" className={`w-4 h-4 ${isCloudLoading ? 'animate-spin' : ''}`} />
-                                    <span className="hidden sm:inline">Refresh</span>
-                                </Button>
-                                {/* NEW: Merge to Local Button - Not available for Viewer */}
-                                {!isViewer && (
-                                    <Button
-                                        size="sm"
-                                        onClick={handleMergeToLocal}
-                                        className="bg-green-600 hover:bg-green-500 text-white border-none whitespace-nowrap"
-                                        title="Simpan data cloud ke lokal"
-                                    >
-                                        <Icon name="download" className="w-4 h-4" /> 
-                                        <span className="hidden sm:inline">Simpan</span>
-                                    </Button>
-                                )}
-                            </>
-                        )}
-
-                        {/* Export Dropdown */}
-                        <div className="relative" ref={exportDropdownRef}>
-                            <Button variant="secondary" size="sm" onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)} title="Export Data">
-                                <Icon name="download" className="w-4 h-4"/>
-                                <span className="hidden sm:inline ml-1">Export</span>
-                                <Icon name="chevron-down" className="w-3 h-3 ml-1"/>
-                            </Button>
-                            {isExportDropdownOpen && (
-                                <div className="absolute top-full right-0 mt-2 w-48 bg-slate-700 rounded-lg shadow-xl z-20 overflow-hidden border border-slate-600">
-                                    <button onClick={handleExportPDF} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2">
-                                        <Icon name="printer" className="w-4 h-4"/> PDF (Cetak)
-                                    </button>
-                                    <button onClick={() => handleExportSpreadsheet('xlsx')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2 border-t border-slate-600">
-                                        <Icon name="boxes" className="w-4 h-4"/> Excel (.xlsx)
-                                    </button>
-                                    <button onClick={() => handleExportSpreadsheet('ods')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2">
-                                        <Icon name="file-lock" className="w-4 h-4"/> OpenDoc (.ods)
-                                    </button>
-                                    <button onClick={() => handleExportSpreadsheet('csv')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-sm flex items-center gap-2 border-t border-slate-600">
-                                        <Icon name="database" className="w-4 h-4"/> CSV (Raw)
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Divider for larger screens */}
-                    <div className="hidden sm:block h-6 w-px bg-slate-700 mx-1"></div>
-
-                    {/* Toggle Group: Source & View */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                        {/* Data Source Toggle - HIDDEN FOR STAFF */}
-                        {!isStaff && (
-                            <div className="bg-slate-700 p-1 rounded-lg flex items-center border border-slate-600">
-                                <button
-                                    onClick={() => setDataSource('local')}
-                                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                                    title="Data Lokal"
-                                >
-                                    Lokal
+                    {/* EXPORT DROPDOWN */}
+                    <div className="relative" ref={exportDropdownRef}>
+                        <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                            className="bg-slate-800 border-slate-700 hover:bg-slate-700"
+                        >
+                            <Icon name="download" className="w-4 h-4" /> Export
+                            <Icon name="chevron-down" className="w-3 h-3 ml-1" />
+                        </Button>
+                        
+                        {isExportDropdownOpen && (
+                            <div className="absolute top-full right-0 mt-2 w-40 bg-slate-800 rounded-lg shadow-xl border border-slate-600 z-50 overflow-hidden animate-fade-in">
+                                <button onClick={() => handleExport('pdf')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
+                                    <Icon name="printer" className="w-3 h-3 text-red-400"/> PDF Document
                                 </button>
-                                <button
-                                    onClick={() => setDataSource('dropbox')}
-                                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                                    title="Data Gabungan dari Dropbox"
-                                >
-                                    <span className="hidden sm:inline flex items-center gap-2"><Icon name="share" className="w-4 h-4" /> Data Cloud</span>
-                                    <span className="sm:hidden flex items-center gap-2"><Icon name="share" className="w-4 h-4" /> Cloud</span>
+                                <button onClick={() => handleExport('xlsx')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
+                                    <Icon name="boxes" className="w-3 h-3 text-green-400"/> Excel (.xlsx)
+                                </button>
+                                <button onClick={() => handleExport('csv')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
+                                    <Icon name="tag" className="w-3 h-3 text-blue-400"/> CSV
+                                </button>
+                                <button onClick={() => handleExport('ods')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
+                                    <Icon name="file-lock" className="w-3 h-3 text-yellow-400"/> ODS (OpenDoc)
                                 </button>
                             </div>
                         )}
-
-                        {/* View Switcher */}
-                        <div className="bg-slate-700 p-1 rounded-lg flex border border-slate-600">
-                            <button onClick={() => setMainView('finance')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${mainView === 'finance' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Keuangan</button>
-                            <button onClick={() => setMainView('customers')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${mainView === 'customers' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Pelanggan</button>
-                        </div>
                     </div>
+
+                    {/* Cloud Toggle - Hidden for Staff */}
+                    {!isStaff && (
+                        <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700">
+                            <button 
+                                onClick={() => setDataSource('local')} 
+                                className={`px-4 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'local' ? 'bg-[#347758] text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                Lokal
+                            </button>
+                            <button 
+                                onClick={() => setDataSource('dropbox')} 
+                                className={`px-4 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                Cloud
+                            </button>
+                        </div>
+                    )}
+                    
+                    {dataSource === 'dropbox' && (
+                        <Button 
+                            size="sm" 
+                            variant="secondary" 
+                            onClick={loadCloudData} 
+                            disabled={isLoadingCloud}
+                            className="bg-slate-800 border-slate-700"
+                        >
+                            <Icon name="reset" className={`w-4 h-4 ${isLoadingCloud ? 'animate-spin' : ''}`}/>
+                        </Button>
+                    )}
                 </div>
             </div>
+            
+            {/* Tabs Navigation */}
+            <div className="flex overflow-x-auto space-x-2 border-b border-slate-700 pb-2 hide-scrollbar">
+                {tabs.map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-colors ${
+                            activeTab === tab.id 
+                                ? 'bg-[#347758] text-white font-medium' 
+                                : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+                        }`}
+                    >
+                        <Icon name={tab.icon} className="w-4 h-4" />
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
 
-            {/* Info Banner for Cloud Mode */}
-            {dataSource !== 'local' && (
-                <div className={`p-3 rounded-lg flex items-center gap-3 text-sm animate-fade-in ${isDemoMode ? 'bg-yellow-900/30 border border-yellow-700 text-yellow-200' : 'bg-blue-900/30 border border-blue-800 text-blue-200'}`}>
-                    <Icon name={isDemoMode ? "warning" : "info-circle"} className="w-5 h-5 flex-shrink-0" />
-                    <div className="flex-1">
-                        <p className="font-bold">{isDemoMode ? "Mode Demo (Data Dummy)" : "Mode Laporan Terpusat (Dropbox)"}</p>
-                        <p className="opacity-80">
-                            {isDemoMode 
-                                ? "Dropbox belum dikonfigurasi. Menampilkan data simulasi." 
-                                : (selectedBranch === 'ALL' 
-                                    ? 'Menampilkan data gabungan dari semua cabang.' 
-                                    : `Menampilkan data spesifik untuk cabang: ${selectedBranch}`)}
-                        </p>
-                    </div>
-                </div>
-            )}
-
+            {/* Content with Cloud Data Props */}
             <div className="flex-1 overflow-y-auto">
-                {isCloudLoading ? (
-                    <div className="w-full h-64 flex items-center justify-center text-slate-400 animate-pulse">
-                        Sedang mengambil data keuangan gabungan...
+                {dataSource === 'dropbox' && (
+                    <div className="bg-blue-900/20 border border-blue-800 p-2 rounded-lg mb-4 flex items-center gap-2 text-xs text-blue-200">
+                        <Icon name="cloud" className="w-4 h-4" />
+                        <span>Menampilkan data gabungan dari seluruh cabang (Cloud). {lastUpdated && `Update: ${lastUpdated.toLocaleTimeString()}`}</span>
                     </div>
-                ) : mainView === 'finance' ? (
-                    <div className="space-y-6">
-                        <div className="border-b border-slate-700 flex flex-nowrap overflow-x-auto -mb-px">
-                            {isManagement && renderSubTabButton('cashflow', 'Arus Kas')}
-                            {renderSubTabButton('other_income', 'Pemasukan Lain')}
-                            {renderSubTabButton('expenses', 'Pengeluaran')}
-                            {renderSubTabButton('purchasing', 'Pembelian & Pemasok')}
-                            {renderSubTabButton('debt-receivables', 'Utang & Piutang')}
-                        </div>
-                        
-                        {/* Pass filteredCloudData to children */}
-                        {isManagement && activeTab === 'cashflow' && <CashFlowTab dataSource={dataSource} cloudData={filteredCloudData} />}
-                        {activeTab === 'expenses' && <ExpensesTab dataSource={dataSource} cloudData={filteredCloudData.expenses} />}
-                        {activeTab === 'other_income' && <IncomeTab dataSource={dataSource} cloudData={filteredCloudData.otherIncomes} />}
-                        {activeTab === 'purchasing' && <PurchasingTab dataSource={dataSource} cloudData={filteredCloudData.purchases} />}
-                        {activeTab === 'debt-receivables' && <DebtsTab dataSource={dataSource} cloudData={filteredCloudData.transactions} />}
-                        
-                    </div>
-                ) : (
-                    // Customers View (Note: CustomersTab internally manages local vs prop data if updated, currently it uses context. 
-                    // To fully support cloud customers here, CustomersTab would need update like others. 
-                    // For now, it stays local unless we update CustomersTab to accept props)
-                    <CustomersTab />
                 )}
+
+                {activeTab === 'cashflow' && (
+                    <CashFlowTab 
+                        dataSource={dataSource} 
+                        cloudData={dataSource === 'dropbox' ? cloudData : undefined} 
+                    />
+                )}
+                {activeTab === 'expenses' && (
+                    <ExpensesTab 
+                        dataSource={dataSource} 
+                        cloudData={dataSource === 'dropbox' ? cloudData.expenses : undefined} 
+                    />
+                )}
+                {activeTab === 'income' && (
+                    <IncomeTab 
+                        dataSource={dataSource} 
+                        cloudData={dataSource === 'dropbox' ? cloudData.otherIncomes : undefined} 
+                    />
+                )}
+                {activeTab === 'purchasing' && (
+                    <PurchasingTab 
+                        dataSource={dataSource} 
+                        cloudData={dataSource === 'dropbox' ? cloudData.purchases : undefined} 
+                    />
+                )}
+                {activeTab === 'debts' && (
+                    <DebtsTab 
+                        dataSource={dataSource} 
+                        cloudData={dataSource === 'dropbox' ? cloudData.transactions : undefined} 
+                    />
+                )}
+                {activeTab === 'customers' && <CustomersTab />}
             </div>
         </div>
     );

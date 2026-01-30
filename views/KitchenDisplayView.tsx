@@ -1,215 +1,149 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCustomerDisplay } from '../context/CustomerDisplayContext';
+import { KitchenDisplayPayload } from '../types';
 import Icon from '../components/Icon';
-import type { KitchenDisplayPayload } from '../types';
+import Button from '../components/Button';
 
+// Mock Order Interface for local state (since we receive payloads)
 interface KitchenOrder extends KitchenDisplayPayload {
-    receivedAt: number; // local timestamp
     status: 'new' | 'cooking' | 'done';
 }
 
 const KitchenDisplayView: React.FC = () => {
     const { setupReceiver, receivedData, myPeerId } = useCustomerDisplay();
     const [orders, setOrders] = useState<KitchenOrder[]>([]);
-    const [isConnected, setIsConnected] = useState(false);
-    const [viewMode, setViewMode] = useState<'active' | 'history'>('active');
-
+    
+    // Setup receiver on mount
     useEffect(() => {
         setupReceiver();
     }, [setupReceiver]);
 
+    // Listen for new orders
     useEffect(() => {
         if (receivedData && receivedData.type === 'NEW_ORDER') {
-            setIsConnected(true);
-            const newOrder: KitchenOrder = {
-                ...receivedData,
-                receivedAt: Date.now(),
-                status: 'new'
-            };
-            // Add to top
-            setOrders(prev => [newOrder, ...prev]);
+            const newOrder = receivedData as KitchenDisplayPayload;
+            // Avoid duplicates
+            setOrders(prev => {
+                if (prev.find(o => o.orderId === newOrder.orderId)) return prev;
+                return [...prev, { ...newOrder, status: 'new' }];
+            });
+            
+            // Optional: Play Sound
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            audio.play().catch(e => console.log("Audio play failed", e));
         }
     }, [receivedData]);
 
-    const handleStatusChange = (orderId: string, status: 'cooking' | 'done' | 'new') => {
-        setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status: status as any } : o));
+    const updateStatus = (orderId: string, status: 'new' | 'cooking' | 'done') => {
+        setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status } : o));
     };
 
-    // Filter Logic
-    const activeOrders = orders.filter(o => o.status !== 'done');
-    const historyOrders = orders.filter(o => o.status === 'done');
+    const getElapsedTime = (timestamp: string) => {
+        const diff = Date.now() - new Date(timestamp).getTime();
+        const mins = Math.floor(diff / 60000);
+        return mins + 'm';
+    };
 
-    const visibleOrders = viewMode === 'active' ? activeOrders : historyOrders;
+    // Update times every minute
+    const [, setTick] = useState(0);
+    useEffect(() => {
+        const timer = setInterval(() => setTick(t => t + 1), 60000);
+        return () => clearInterval(timer);
+    }, []);
 
-    if (!isConnected && orders.length === 0) {
+    const renderColumn = (status: 'new' | 'cooking' | 'done', title: string, color: string) => {
+        const filtered = orders.filter(o => o.status === status);
+        
         return (
-            <div className="flex flex-col items-center justify-center h-screen bg-slate-900 text-white p-8 space-y-8">
-                <div className="text-center space-y-2">
-                    <Icon name="tools" className="w-24 h-24 text-orange-500 mx-auto animate-pulse" />
-                    <h1 className="text-4xl font-bold">Layar Dapur (KDS)</h1>
-                    <p className="text-slate-400">Menunggu pesanan dari kasir...</p>
+            <div className="flex-1 flex flex-col min-w-[300px] h-full bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+                <div className={`p-3 font-bold text-white text-center uppercase tracking-wider ${color}`}>
+                    {title} ({filtered.length})
                 </div>
+                <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                    {filtered.map(order => (
+                        <div key={order.orderId} className="bg-slate-800 p-4 rounded-lg border border-slate-600 shadow-sm animate-fade-in">
+                            <div className="flex justify-between items-start mb-2">
+                                <div>
+                                    <h4 className="font-bold text-lg text-white">{order.customerName}</h4>
+                                    <p className="text-xs text-slate-400">
+                                        #{order.orderId.slice(-4)} • {new Date(order.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    </p>
+                                    {(order.tableNumber || order.paxCount) && (
+                                        <p className="text-xs font-bold text-yellow-400 mt-1">
+                                            {order.tableNumber ? `Meja: ${order.tableNumber}` : ''} 
+                                            {order.tableNumber && order.paxCount ? ' | ' : ''}
+                                            {order.paxCount ? `Pax: ${order.paxCount}` : ''}
+                                        </p>
+                                    )}
+                                </div>
+                                <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-slate-300">
+                                    {getElapsedTime(order.timestamp)}
+                                </span>
+                            </div>
+                            
+                            <div className="space-y-1 mb-4">
+                                {order.items.map((item, idx) => (
+                                    <div key={idx} className="flex gap-2 text-sm">
+                                        <span className="font-bold text-white w-6">{item.quantity}x</span>
+                                        <div className="flex-1 text-slate-300">
+                                            {item.name}
+                                            {/* Modifiers */}
+                                            {((item.selectedAddons && item.selectedAddons.length > 0) || (item.selectedModifiers && item.selectedModifiers.length > 0)) && (
+                                                <div className="text-xs text-slate-500 pl-1 border-l-2 border-slate-600 mt-1">
+                                                    {[...(item.selectedAddons || []), ...(item.selectedModifiers || [])].map((mod, i) => (
+                                                        <span key={i} className="block">+ {mod.name}</span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
 
-                <div className="bg-white p-4 rounded-xl shadow-xl">
-                    <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${myPeerId}&color=000000&bgcolor=FFFFFF`}
-                        alt="Pairing QR"
-                        className="w-64 h-64"
-                    />
+                            <div className="flex gap-2">
+                                {status === 'new' && (
+                                    <Button onClick={() => updateStatus(order.orderId, 'cooking')} className="w-full bg-blue-600 hover:bg-blue-500 border-none">
+                                        Masak
+                                    </Button>
+                                )}
+                                {status === 'cooking' && (
+                                    <Button onClick={() => updateStatus(order.orderId, 'done')} className="w-full bg-green-600 hover:bg-green-500 border-none">
+                                        Selesai
+                                    </Button>
+                                )}
+                                {status === 'done' && (
+                                    <Button onClick={() => updateStatus(order.orderId, 'cooking')} variant="secondary" className="w-full">
+                                        Undo
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {filtered.length === 0 && <p className="text-center text-slate-600 text-sm italic mt-10">Kosong</p>}
                 </div>
-
-                <div className="text-center max-w-md text-sm text-slate-400 bg-slate-800 p-4 rounded-lg border border-slate-700">
-                    <p className="mb-2 font-bold text-white">Cara Sambung:</p>
-                    <ol className="list-decimal pl-5 space-y-1 text-left">
-                        <li>Buka menu Kasir di Tablet Utama.</li>
-                        <li>Klik ikon <strong>"Dual Screen"</strong> (Toko/Cast).</li>
-                        <li>Pilih tab <strong>"Layar Dapur"</strong> dan Scan QR ini.</li>
-                    </ol>
-                </div>
-                 <button onClick={() => window.location.reload()} className="text-xs text-slate-500 hover:text-white">
-                    Refresh ID: {myPeerId}
-                </button>
             </div>
         );
-    }
+    };
 
     return (
-        <div className="h-screen bg-slate-900 flex flex-col overflow-hidden text-slate-100">
-            {/* Header */}
-            <header className="p-4 bg-slate-800 shadow-md flex justify-between items-center z-10 shrink-0 border-b border-slate-700">
+        <div className="h-screen bg-slate-900 flex flex-col">
+            <header className="p-4 bg-slate-800 border-b border-slate-700 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                    <Icon name="tools" className="w-8 h-8 text-orange-500" />
-                    <h1 className="text-2xl font-bold text-white hidden sm:block">Dapur</h1>
+                    <Icon name="tools" className="w-6 h-6 text-orange-400" />
+                    <h1 className="text-xl font-bold text-white">Kitchen Display System</h1>
                 </div>
-                
-                {/* View Switcher */}
-                <div className="flex bg-slate-700 p-1 rounded-lg">
-                    <button 
-                        onClick={() => setViewMode('active')}
-                        className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${viewMode === 'active' ? 'bg-[#347758] text-white shadow' : 'text-slate-300 hover:text-white'}`}
-                    >
-                        Aktif ({activeOrders.length})
-                    </button>
-                    <button 
-                        onClick={() => setViewMode('history')}
-                        className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${viewMode === 'history' ? 'bg-slate-600 text-white shadow' : 'text-slate-300 hover:text-white'}`}
-                    >
-                        Selesai ({historyOrders.length})
-                    </button>
-                </div>
-
-                <div className="flex items-center gap-4">
-                     <span className="text-xl font-mono text-white font-bold">
-                        {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </span>
+                <div className="text-xs text-slate-400 font-mono bg-slate-900 px-3 py-1 rounded border border-slate-700">
+                    ID: {myPeerId || 'Connecting...'}
                 </div>
             </header>
-
-            {/* Orders Grid */}
-            <div className="flex-1 overflow-y-auto p-4 bg-slate-900">
-                {visibleOrders.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-500">
-                        <Icon name="check-circle-fill" className="w-16 h-16 mb-4 opacity-20"/>
-                        <p className="text-xl">Tidak ada pesanan {viewMode === 'active' ? 'aktif' : 'selesai'}.</p>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {visibleOrders.map(order => (
-                            <div 
-                                key={order.orderId} 
-                                className={`flex flex-col rounded-xl border-2 shadow-lg transition-all duration-300 ${
-                                    order.status === 'done' 
-                                        ? 'bg-slate-800/50 border-slate-700 opacity-75' 
-                                        : order.status === 'cooking' 
-                                            ? 'bg-slate-800 border-yellow-500' 
-                                            : 'bg-slate-800 border-green-500 animate-fade-in'
-                                }`}
-                            >
-                                {/* Card Header */}
-                                <div className={`p-3 border-b flex justify-between items-start ${
-                                    order.status === 'done' ? 'bg-slate-800 border-slate-700' :
-                                    order.status === 'cooking' ? 'bg-yellow-900/20 border-yellow-500/30' : 'bg-green-900/20 border-green-500/30'
-                                }`}>
-                                    <div>
-                                        <h3 className="font-bold text-lg text-white leading-tight">
-                                            {order.customerName || `Order #${order.orderId.slice(-4)}`}
-                                        </h3>
-                                        {order.tableNumber && (
-                                            <div className="inline-block bg-white text-black px-2 py-0.5 rounded font-black text-sm my-1 shadow-sm">
-                                                MEJA: {order.tableNumber} {order.paxCount ? `(${order.paxCount} Pax)` : ''}
-                                            </div>
-                                        )}
-                                        <p className="text-xs text-slate-300 font-mono uppercase mt-1">
-                                            {order.orderType} • {new Date(order.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                        </p>
-                                    </div>
-                                    <div className={`text-xs font-bold px-2 py-1 rounded ${order.status === 'done' ? 'bg-slate-700 text-slate-300' : 'bg-black/30 text-white'}`}>
-                                        {Math.floor((Date.now() - order.receivedAt) / 60000)}m
-                                    </div>
-                                </div>
-
-                                {/* Items List */}
-                                <div className="p-4 flex-1 space-y-3 overflow-y-auto max-h-[300px]">
-                                    {order.items.map((item, idx) => (
-                                        <div key={idx} className="flex gap-3 items-start">
-                                            <span className="font-bold text-lg w-8 text-center bg-slate-700 rounded text-white shrink-0 shadow-sm">
-                                                {item.quantity}
-                                            </span>
-                                            <div className="flex-1">
-                                                <p className={`font-bold text-base leading-tight ${order.status === 'done' ? 'text-slate-300 line-through' : 'text-white'}`}>
-                                                    {item.name}
-                                                </p>
-                                                {/* Modifiers */}
-                                                {(item.selectedAddons || []).concat(item.selectedModifiers || []).length > 0 && (
-                                                    <div className="text-sm text-yellow-400 mt-1 pl-1 border-l-2 border-yellow-500/50">
-                                                        {(item.selectedAddons || []).concat(item.selectedModifiers || []).map((mod, i) => (
-                                                            <span key={i} className="block">+ {mod.name}</span>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Actions */}
-                                <div className="p-3 border-t border-slate-700 flex gap-2">
-                                    {order.status === 'new' && (
-                                        <button 
-                                            onClick={() => handleStatusChange(order.orderId, 'cooking')}
-                                            className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-lg uppercase tracking-wide transition-colors shadow-lg active:scale-95"
-                                        >
-                                            Mulai Masak
-                                        </button>
-                                    )}
-                                    {order.status === 'cooking' && (
-                                        <button 
-                                            onClick={() => handleStatusChange(order.orderId, 'done')}
-                                            className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg uppercase tracking-wide transition-colors shadow-lg active:scale-95"
-                                        >
-                                            Selesai
-                                        </button>
-                                    )}
-                                    {order.status === 'done' && (
-                                        <div className="w-full flex gap-2">
-                                            <div className="flex-1 text-center text-green-400 font-bold py-2 flex items-center justify-center gap-2 bg-slate-800 rounded border border-slate-700">
-                                                <Icon name="check-circle-fill" className="w-5 h-5"/> SELESAI
-                                            </div>
-                                            <button 
-                                                onClick={() => handleStatusChange(order.orderId, 'cooking')}
-                                                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors text-xs font-bold uppercase"
-                                                title="Kembalikan ke proses masak"
-                                            >
-                                                Undo
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+            
+            <div className="flex-1 p-4 overflow-x-auto">
+                <div className="flex gap-4 h-full min-w-[1000px]">
+                    {renderColumn('new', 'Baru', 'bg-blue-900/50 text-blue-200')}
+                    {renderColumn('cooking', 'Sedang Dimasak', 'bg-orange-900/50 text-orange-200')}
+                    {renderColumn('done', 'Selesai / Diantar', 'bg-green-900/50 text-green-200')}
+                </div>
             </div>
         </div>
     );

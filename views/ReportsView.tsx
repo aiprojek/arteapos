@@ -1,9 +1,10 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useFinance } from '../context/FinanceContext';
 import { useProduct } from '../context/ProductContext';
 import { useSettings } from '../context/SettingsContext';
 import { useUI } from '../context/UIContext';
+import { useAuth } from '../context/AuthContext';
 import { dropboxService } from '../services/dropboxService';
 import { mockDataService } from '../services/mockData';
 import { CURRENCY_FORMATTER } from '../constants';
@@ -13,23 +14,34 @@ import VirtualizedTable from '../components/VirtualizedTable';
 import ReportCharts from '../components/reports/ReportCharts';
 import Modal from '../components/Modal';
 import ReceiptModal from '../components/ReceiptModal';
-import { generateSalesReportPDF } from '../utils/pdfGenerator';
+import { generateSalesReportPDF, generateTablePDF } from '../utils/pdfGenerator';
 import { dataService } from '../services/dataService';
-import type { Transaction, StockAdjustment, Product, Expense } from '../types';
+import type { Transaction, StockAdjustment, Expense } from '../types';
 import { Capacitor } from '@capacitor/core';
 import { saveBinaryFileNative } from '../utils/nativeHelper';
 
+type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
+
 const ReportsView: React.FC = () => {
-    const { transactions: localTransactions, refundTransaction, expenses: localExpenses } = useFinance(); // ADD expenses
+    const { transactions: localTransactions, refundTransaction, expenses: localExpenses } = useFinance(); 
     const { stockAdjustments: localStockAdjustments, products: localProducts } = useProduct();
     const { receiptSettings } = useSettings();
     const { showAlert } = useUI();
+    const { currentUser } = useAuth();
+
+    const isStaff = currentUser?.role === 'staff';
 
     const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
-    const [filter, setFilter] = useState<'today' | 'week' | 'month' | 'all' | 'custom'>('today'); // Add 'custom'
+    const [filter, setFilter] = useState<TimeFilter>('today'); 
     const [customStartDate, setCustomStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [customEndDate, setCustomEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
     
+    // Dropdown States
+    const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+    const filterDropdownRef = useRef<HTMLDivElement>(null);
+    const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+    const exportDropdownRef = useRef<HTMLDivElement>(null);
+
     // BRANCH FILTER
     const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
 
@@ -40,14 +52,30 @@ const ReportsView: React.FC = () => {
     // Receipt & Evidence State
     const [receiptTransaction, setReceiptTransaction] = useState<Transaction | null>(null);
     const [evidenceData, setEvidenceData] = useState<{ url: string; filename: string } | null>(null);
-    const [zoomLevel, setZoomLevel] = useState(1); // ZOOM STATE
+    const [zoomLevel, setZoomLevel] = useState(1); 
 
     // Refund State
     const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
     const [refundTarget, setRefundTarget] = useState<Transaction | null>(null);
     const [refundReason, setRefundReason] = useState('');
 
+    // --- CLOSE DROPDOWNS ON OUTSIDE CLICK ---
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+                setIsFilterDropdownOpen(false);
+            }
+            if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
+                setIsExportDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const loadCloudData = async () => {
+        if (isStaff) return; 
+
         setIsLoading(true);
         if (!dropboxService.isConfigured()) {
              const mock = mockDataService.getMockDashboardData();
@@ -117,7 +145,6 @@ const ReportsView: React.FC = () => {
         cloudData.stockAdjustments.forEach(s => {
             if ((s as any).storeId) branches.add((s as any).storeId);
         });
-        // Also check inventory for branches that might be idle but have stock
         cloudData.inventory.forEach(i => {
              if (i.storeId) branches.add(i.storeId);
         });
@@ -163,31 +190,27 @@ const ReportsView: React.FC = () => {
                 return i.storeId === selectedBranch;
             }
             return true;
-        }).sort((a,b) => a.stock - b.stock); // Sort by lowest stock
+        }).sort((a,b) => a.stock - b.stock); 
 
         return { txns, stock, inventory, exps };
     }, [filter, activeTransactions, activeStockAdjustments, activeInventory, activeExpenses, selectedBranch, dataSource, customStartDate, customEndDate]);
 
-    // --- AGGREGATION LOGIC (UPDATED FOR NET PROFIT) ---
+    // --- AGGREGATION LOGIC ---
 
     const summary = useMemo(() => {
         const validTxns = filteredData.txns.filter(t => t.paymentStatus !== 'refunded');
         const totalSales = validTxns.reduce((sum, t) => sum + t.total, 0);
         
-        // Calculate HPP (Cost of Goods Sold)
         const totalCOGS = validTxns.reduce((sum, t) => {
             return sum + (t.items || []).reduce((is, i) => is + ((i.costPrice || 0) * i.quantity), 0);
         }, 0);
         
-        // Calculate Operational Expenses
         const totalOpEx = filteredData.exps.reduce((sum, e) => sum + e.amount, 0);
-        
-        // Net Profit Calculation
         const netProfit = totalSales - totalCOGS - totalOpEx;
         
         return {
             totalSales,
-            totalProfit: netProfit, // NET PROFIT
+            totalProfit: netProfit,
             totalOpEx,
             transactionCount: validTxns.length
         };
@@ -199,10 +222,10 @@ const ReportsView: React.FC = () => {
         filteredData.txns.forEach(t => {
             if (t.paymentStatus === 'refunded') return;
             (t.items || []).forEach(item => {
-                if (item.isReward) return; // Skip rewards from recap
+                if (item.isReward) return; 
                 const key = item.id;
                 const existing = map.get(key);
-                const itemTotal = item.price * item.quantity; // Not accounting for item discounts in detail here for simplicity
+                const itemTotal = item.price * item.quantity; 
                 
                 if (existing) {
                     existing.quantity += item.quantity;
@@ -220,7 +243,6 @@ const ReportsView: React.FC = () => {
     const chartData = useMemo(() => {
         const validTxns = filteredData.txns.filter(t => t.paymentStatus !== 'refunded');
         
-        // Hourly Sales (Today/Average)
         const hourlyMap = new Array(24).fill(0).map((_, i) => ({ name: `${i}:00`, total: 0, count: 0 }));
         validTxns.forEach(t => {
             const h = new Date(t.createdAt).getHours();
@@ -228,7 +250,6 @@ const ReportsView: React.FC = () => {
             hourlyMap[h].count += 1;
         });
 
-        // Sales Over Time
         const salesMap = new Map<string, number>();
         validTxns.forEach(t => {
             const date = new Date(t.createdAt).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' });
@@ -236,7 +257,6 @@ const ReportsView: React.FC = () => {
         });
         const salesOverTime = Array.from(salesMap.entries()).map(([name, total]) => ({ name, total }));
 
-        // Category Sales
         const categoryMap = new Map<string, number>();
         validTxns.forEach(t => {
             (t.items || []).forEach(item => {
@@ -252,25 +272,74 @@ const ReportsView: React.FC = () => {
         return { hourly: hourlyMap, trend: salesOverTime, category: categorySales, products: productRecap.slice(0, 10) };
     }, [filteredData, productRecap]);
 
-    const handleExport = () => {
-        const periodLabel = filter === 'today' ? 'Hari Ini' : filter === 'week' ? 'Minggu Ini' : filter === 'month' ? 'Bulan Ini' : 'Semua Waktu';
-        // Only export valid transactions
-        const validTxns = filteredData.txns.filter(t => t.paymentStatus !== 'refunded');
-        generateSalesReportPDF(validTxns, receiptSettings, periodLabel, { 
-            totalSales: summary.totalSales, 
-            totalProfit: summary.totalProfit,
-            totalTransactions: summary.transactionCount 
-        });
-    };
+    // --- EXPORT LOGIC ---
+    const handleExportSpreadsheet = (format: 'xlsx' | 'csv' | 'ods' | 'pdf') => {
+        if (activeTab === 'inventory') {
+            showAlert({ type: 'alert', title: 'Info', message: 'Silakan gunakan tombol Export di menu Produk/Bahan Baku untuk laporan stok.' });
+            return;
+        }
 
-    const handleExportCSV = () => {
-        dataService.exportAllReportsCSV({ 
-            transactionRecords: filteredData.txns, 
-            stockAdjustments: filteredData.stock,
-            expenses: filteredData.exps, // Export filtered expenses too
-            products: [], rawMaterials: [], users: [], otherIncomes: [], suppliers: [], purchases: [], customers: [], discountDefinitions: [], heldCarts: [], sessionHistory: [], auditLogs: [],
-            receiptSettings: receiptSettings as any, inventorySettings: {} as any, authSettings: {} as any, sessionSettings: {} as any, membershipSettings: {} as any, categories: [], balanceLogs: []
-        });
+        const timestamp = new Date().toISOString().slice(0, 10);
+        let headers: string[] = [];
+        let rows: (string | number)[][] = [];
+        let title = '';
+
+        if (activeTab === 'transactions') {
+            title = 'Laporan Penjualan';
+            if (format === 'pdf') {
+                // Special PDF Layout (Structured Report)
+                const periodLabel = filter === 'today' ? 'Hari Ini' : filter === 'week' ? 'Minggu Ini' : filter === 'month' ? 'Bulan Ini' : 'Semua Waktu';
+                const validTxns = filteredData.txns.filter(t => t.paymentStatus !== 'refunded');
+                generateSalesReportPDF(validTxns, receiptSettings, periodLabel, { 
+                    totalSales: summary.totalSales, 
+                    totalProfit: summary.totalProfit,
+                    totalTransactions: summary.transactionCount 
+                });
+                setIsExportDropdownOpen(false);
+                return;
+            } else {
+                // Spreadsheet Layout
+                headers = ['ID', 'Waktu', 'Pelanggan', 'Item', 'Total', 'Status', 'Cabang'];
+                rows = filteredData.txns.map(t => [
+                    t.id, new Date(t.createdAt).toLocaleString('id-ID'),
+                    t.customerName || 'Umum',
+                    (t.items || []).map(i => `${i.name} (x${i.quantity})`).join(', '),
+                    t.total,
+                    t.paymentStatus,
+                    t.storeId || 'LOKAL'
+                ]);
+            }
+        } else if (activeTab === 'stock') {
+            title = 'Laporan Mutasi Stok';
+            headers = ['Waktu', 'Produk', 'Perubahan', 'Sisa Akhir', 'Catatan', 'Cabang'];
+            rows = filteredData.stock.map(s => [
+                new Date(s.createdAt).toLocaleString('id-ID'),
+                s.productName,
+                s.change,
+                s.newStock,
+                s.notes || '-',
+                (s as any).storeId || 'LOKAL'
+            ]);
+        } else if (activeTab === 'products') {
+            title = 'Rekap Produk Terjual';
+            headers = ['Nama Produk', 'Qty Terjual', 'Total Omzet'];
+            rows = productRecap.map(p => [p.name, p.quantity, p.total]);
+        }
+
+        if (rows.length === 0) {
+            showAlert({ type: 'alert', title: 'Data Kosong', message: 'Tidak ada data untuk diexport.' });
+            setIsExportDropdownOpen(false);
+            return;
+        }
+
+        if (format === 'pdf') {
+            const pdfRows = rows.map(r => r.map(c => typeof c === 'number' ? CURRENCY_FORMATTER.format(c) : c));
+            generateTablePDF(title, headers, pdfRows, receiptSettings);
+        } else {
+            dataService.exportToSpreadsheet(headers, rows, `Laporan_${activeTab}_${timestamp}`, format);
+        }
+        
+        setIsExportDropdownOpen(false);
     };
 
     const initiateRefund = (t: Transaction) => {
@@ -283,7 +352,7 @@ const ReportsView: React.FC = () => {
     const processRefund = () => {
         if (!refundTarget) return;
         
-        refundTransaction(refundTarget.id, refundReason); // Pass reason to context
+        refundTransaction(refundTarget.id, refundReason); 
         setIsRefundModalOpen(false);
         setRefundTarget(null);
         showAlert({ type: 'alert', title: 'Berhasil', message: 'Transaksi telah direfund.' });
@@ -292,9 +361,7 @@ const ReportsView: React.FC = () => {
     const handleDownloadEvidence = async () => {
         if (!evidenceData) return;
         try {
-            // Gunakan filename yang sudah disiapkan dari data transaksi
             const fileName = evidenceData.filename;
-            
             if (Capacitor.isNativePlatform()) {
                 await saveBinaryFileNative(fileName, evidenceData.url.split(',')[1]);
                 showAlert({ type: 'alert', title: 'Berhasil', message: `Gambar disimpan: ${fileName}` });
@@ -316,16 +383,12 @@ const ReportsView: React.FC = () => {
     const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.5, 1));
     const handleResetZoom = () => setZoomLevel(1);
 
-    // --- COLUMNS FOR TRANSACTION TABLE ---
+    // --- COLUMNS ---
     const transactionColumns = [
         { label: 'Waktu', width: '120px', render: (t: Transaction) => <span className="text-slate-400 text-xs">{new Date(t.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</span> },
         { label: 'ID', width: '80px', render: (t: Transaction) => <span className="font-mono text-xs text-slate-500">#{t.id.slice(-4)}</span> },
-        ...(dataSource !== 'local' ? [{ 
-            label: 'Cabang', width: '100px', 
-            render: (t: any) => <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{t.storeId || '-'}</span> 
-        }] : []),
+        ...(dataSource !== 'local' ? [{ label: 'Cabang', width: '100px', render: (t: any) => <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{t.storeId || '-'}</span> }] : []),
         { label: 'Pelanggan', width: '120px', render: (t: Transaction) => <span className="text-xs text-white">{t.customerName || 'Umum'}</span> },
-        { label: 'Kasir', width: '80px', render: (t: Transaction) => <span className="text-xs text-slate-400">{t.userName}</span> },
         { label: 'Item', width: '2fr', render: (t: Transaction) => (
             <span className="text-xs text-slate-300 block truncate" title={(t.items || []).map(i => i.name).join(', ')}>
                 {(t.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ')}
@@ -337,7 +400,6 @@ const ReportsView: React.FC = () => {
              return <span className={`text-xs font-bold uppercase ${color}`}>{t.paymentStatus}</span>
         }},
         { label: 'Bukti', width: '60px', render: (t: Transaction) => {
-             // Safe access for payments array
              const payments = t.payments || [];
              const hasEvidence = payments.some(p => p.evidenceImageUrl);
              if (hasEvidence) {
@@ -347,14 +409,10 @@ const ReportsView: React.FC = () => {
                             e.stopPropagation(); 
                             const img = payments.find(p => p.evidenceImageUrl)?.evidenceImageUrl;
                             if (img) {
-                                // Sanitasi ID untuk nama file
                                 const safeId = t.id.replace(/[^a-z0-9]/gi, '-');
                                 const dateStr = new Date(t.createdAt).toISOString().slice(0, 10);
-                                setEvidenceData({
-                                    url: img,
-                                    filename: `Bukti_Trx_${safeId}_${dateStr}.jpg`
-                                });
-                                setZoomLevel(1); // Reset zoom
+                                setEvidenceData({ url: img, filename: `Bukti_Trx_${safeId}_${dateStr}.jpg` });
+                                setZoomLevel(1); 
                             }
                         }}
                         className="text-blue-400 hover:text-blue-300 p-1"
@@ -368,33 +426,17 @@ const ReportsView: React.FC = () => {
         }},
         { label: 'Aksi', width: '140px', render: (t: Transaction) => (
             <div className="flex gap-2">
-                <button onClick={() => setReceiptTransaction(t)} className="text-sky-400 hover:text-white bg-slate-700/50 p-1.5 rounded" title="Lihat Struk">
-                    <Icon name="printer" className="w-4 h-4"/>
-                </button>
+                <button onClick={() => setReceiptTransaction(t)} className="text-sky-400 hover:text-white bg-slate-700/50 p-1.5 rounded" title="Lihat Struk"><Icon name="printer" className="w-4 h-4"/></button>
                 {dataSource === 'local' && t.paymentStatus !== 'refunded' && (
-                    <button onClick={() => initiateRefund(t)} className="text-red-400 hover:text-white bg-slate-700/50 p-1.5 rounded" title="Refund">
-                        <Icon name="reset" className="w-4 h-4"/>
-                    </button>
+                    <button onClick={() => initiateRefund(t)} className="text-red-400 hover:text-white bg-slate-700/50 p-1.5 rounded" title="Refund"><Icon name="reset" className="w-4 h-4"/></button>
                 )}
             </div>
         )}
     ];
 
-    // --- COLUMNS FOR PRODUCT RECAP TABLE ---
-    const productColumns = [
-        { label: 'Nama Produk', width: '3fr', render: (p: any) => <span className="font-bold text-white">{p.name}</span> },
-        { label: 'Terjual (Qty)', width: '1fr', render: (p: any) => <span className="text-slate-300">{p.quantity}</span> },
-        { label: 'Total Omzet', width: '1.5fr', render: (p: any) => <span className="text-green-400 font-bold">{CURRENCY_FORMATTER.format(p.total)}</span> }
-    ];
-
-    // --- COLUMNS FOR STOCK TABLE ---
     const stockColumns = useMemo(() => [
         { label: 'Waktu', width: '1.2fr', render: (s: StockAdjustment) => <span className="text-slate-400 whitespace-nowrap text-xs">{new Date(s.createdAt).toLocaleString('id-ID')}</span> },
-        ...(dataSource !== 'local' ? [{ 
-            label: 'Cabang', 
-            width: '0.8fr', 
-            render: (s: any) => <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{s.storeId || '-'}</span> 
-        }] : []),
+        ...(dataSource !== 'local' ? [{ label: 'Cabang', width: '0.8fr', render: (s: any) => <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{s.storeId || '-'}</span> }] : []),
         { label: 'Produk', width: '2fr', render: (s: StockAdjustment) => <span className="font-semibold text-white text-sm">{s.productName}</span> },
         { label: 'Tipe', width: '1fr', render: (s: StockAdjustment) => {
             const isOpname = s.notes?.toLowerCase().includes('opname');
@@ -403,46 +445,31 @@ const ReportsView: React.FC = () => {
             
             let badgeClass = 'bg-slate-700 text-slate-300';
             let label = 'UPDATE';
-
-            if (isOpname) {
-                badgeClass = 'bg-blue-500/20 text-blue-300';
-                label = 'OPNAME';
-            } else if (isTransfer) {
-                badgeClass = 'bg-purple-500/20 text-purple-300';
-                label = 'TRANSFER';
-            } else if (s.change > 0) {
-                badgeClass = 'bg-green-500/20 text-green-400';
-                label = 'MASUK';
-            } else if (isWaste) {
-                badgeClass = 'bg-red-500/20 text-red-400';
-                label = 'KELUAR';
-            }
-
-            return (
-                <span className={`px-2 py-1 text-[10px] font-bold rounded ${badgeClass}`}>
-                    {label}
-                </span>
-            );
+            if (isOpname) { badgeClass = 'bg-blue-500/20 text-blue-300'; label = 'OPNAME'; } 
+            else if (isTransfer) { badgeClass = 'bg-purple-500/20 text-purple-300'; label = 'TRANSFER'; } 
+            else if (s.change > 0) { badgeClass = 'bg-green-500/20 text-green-400'; label = 'MASUK'; } 
+            else if (isWaste) { badgeClass = 'bg-red-500/20 text-red-400'; label = 'KELUAR'; }
+            
+            return <span className={`px-2 py-1 text-[10px] font-bold rounded ${badgeClass}`}>{label}</span>;
         } },
-        { label: 'Jml', width: '0.8fr', render: (s: StockAdjustment) => (
-            <span className={`font-mono font-bold text-sm ${s.change > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {s.change > 0 ? '+' : ''}{s.change}
-            </span>
-        ) },
+        { label: 'Jml', width: '0.8fr', render: (s: StockAdjustment) => <span className={`font-mono font-bold text-sm ${s.change > 0 ? 'text-green-400' : 'text-red-400'}`}>{s.change > 0 ? '+' : ''}{s.change}</span> },
         { label: 'Sisa', width: '0.8fr', render: (s: StockAdjustment) => <span className="text-slate-300 text-sm">{s.newStock}</span> },
         { label: 'Catatan', width: '2.5fr', render: (s: StockAdjustment) => <span className="text-xs text-slate-400 italic">{s.notes || '-'}</span> },
     ], [dataSource]);
 
-    // --- COLUMNS FOR INVENTORY MONITORING (NEW TAB) ---
     const inventoryColumns = useMemo(() => [
         { label: 'Nama Produk / Bahan', width: '3fr', render: (i: any) => <span className="font-bold text-white">{i.name}</span> },
         { label: 'Sisa Stok', width: '1fr', render: (i: any) => <span className={`font-mono font-bold ${i.stock <= 5 ? 'text-red-400' : 'text-white'}`}>{i.stock}</span> },
-        ...(dataSource !== 'local' ? [{ 
-            label: 'Cabang', 
-            width: '1fr', 
-            render: (i: any) => <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{i.storeId || '-'}</span> 
-        }] : []),
+        ...(dataSource !== 'local' ? [{ label: 'Cabang', width: '1fr', render: (i: any) => <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{i.storeId || '-'}</span> }] : []),
     ], [dataSource]);
+
+    const productColumns = [
+        { label: 'Nama Produk', width: '3fr', render: (p: any) => <span className="font-bold text-white">{p.name}</span> },
+        { label: 'Terjual (Qty)', width: '1fr', render: (p: any) => <span className="text-slate-300">{p.quantity}</span> },
+        { label: 'Total Omzet', width: '1.5fr', render: (p: any) => <span className="text-green-400 font-bold">{CURRENCY_FORMATTER.format(p.total)}</span> }
+    ];
+
+    const filterLabels: Record<TimeFilter, string> = { today: 'Hari Ini', week: 'Minggu Ini', month: 'Bulan Ini', all: 'Semua', custom: 'Kustom' };
 
     return (
         <div className="space-y-6 pb-20">
@@ -468,25 +495,43 @@ const ReportsView: React.FC = () => {
                     )}
 
                     {/* Data Source Toggle */}
-                    <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700">
-                        <button onClick={() => setDataSource('local')} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'local' ? 'bg-[#347758] text-white' : 'text-slate-400'}`}>Lokal</button>
-                        <button onClick={() => setDataSource('dropbox')} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'dropbox' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Cloud</button>
-                    </div>
-
-                    {/* Time Filter - Hide for Inventory Tab */}
-                    {activeTab !== 'inventory' && (
-                        <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700 overflow-x-auto max-w-[200px] sm:max-w-none hide-scrollbar">
-                            {(['today', 'week', 'month', 'custom', 'all'] as const).map(f => (
-                                <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap ${filter === f ? 'bg-slate-600 text-white' : 'text-slate-400'}`}>
-                                    {f === 'today' ? 'Hari Ini' : f === 'week' ? 'Minggu Ini' : f === 'month' ? 'Bulan Ini' : f === 'custom' ? 'Kustom' : 'Semua'}
-                                </button>
-                            ))}
+                    {!isStaff && (
+                        <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700">
+                            <button onClick={() => setDataSource('local')} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'local' ? 'bg-[#347758] text-white' : 'text-slate-400'}`}>Lokal</button>
+                            <button onClick={() => setDataSource('dropbox')} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'dropbox' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Cloud</button>
                         </div>
                     )}
 
-                     {/* CUSTOM DATE UI */}
+                    {/* Time Filter Dropdown */}
+                    {activeTab !== 'inventory' && (
+                        <div className="relative" ref={filterDropdownRef}>
+                            <Button 
+                                variant="secondary" 
+                                size="sm" 
+                                onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+                                className="bg-slate-800 border-slate-700"
+                            >
+                                Filter: {filterLabels[filter]} <Icon name="chevron-down" className="w-3 h-3 ml-1" />
+                            </Button>
+                            {isFilterDropdownOpen && (
+                                <div className="absolute top-full right-0 mt-2 w-40 bg-slate-800 rounded-lg shadow-xl z-50 border border-slate-600 overflow-hidden">
+                                    {(['today', 'week', 'month', 'custom', 'all'] as const).map(f => (
+                                        <button 
+                                            key={f} 
+                                            onClick={() => { setFilter(f); setIsFilterDropdownOpen(false); }} 
+                                            className={`w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 transition-colors ${filter === f ? 'bg-[#347758]' : ''}`}
+                                        >
+                                            {filterLabels[f]}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                     {/* Custom Date UI */}
                      {filter === 'custom' && activeTab !== 'inventory' && (
-                        <div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-slate-700 animate-fade-in">
+                        <div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-slate-700">
                             <input 
                                 type="date" 
                                 value={customStartDate} 
@@ -503,13 +548,39 @@ const ReportsView: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Export - Disable for Inventory for now or handle separately */}
-                    <Button size="sm" onClick={handleExport} variant="secondary" disabled={activeTab === 'inventory'}><Icon name="printer" className="w-4 h-4" /> PDF</Button>
-                    <Button size="sm" onClick={handleExportCSV} variant="secondary" disabled={activeTab === 'inventory'}><Icon name="download" className="w-4 h-4" /> CSV</Button>
+                    {/* Export Dropdown */}
+                    {activeTab !== 'inventory' && (
+                        <div className="relative" ref={exportDropdownRef}>
+                            <Button 
+                                variant="secondary" 
+                                size="sm" 
+                                onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                                className="bg-slate-800 border-slate-700"
+                            >
+                                <Icon name="download" className="w-4 h-4" /> Export
+                            </Button>
+                            {isExportDropdownOpen && (
+                                <div className="absolute top-full right-0 mt-2 w-40 bg-slate-800 rounded-lg shadow-xl z-50 border border-slate-600 overflow-hidden">
+                                    <button onClick={() => handleExportSpreadsheet('pdf')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
+                                        <Icon name="printer" className="w-3 h-3 text-red-400"/> PDF Document
+                                    </button>
+                                    <button onClick={() => handleExportSpreadsheet('xlsx')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
+                                        <Icon name="boxes" className="w-3 h-3 text-green-400"/> Excel (.xlsx)
+                                    </button>
+                                    <button onClick={() => handleExportSpreadsheet('csv')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
+                                        <Icon name="tag" className="w-3 h-3 text-blue-400"/> CSV
+                                    </button>
+                                    <button onClick={() => handleExportSpreadsheet('ods')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
+                                        <Icon name="file-lock" className="w-3 h-3 text-yellow-400"/> ODS (OpenDoc)
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {/* Summary Cards (Only show for Transactions) */}
+            {/* Summary Cards */}
             {activeTab === 'transactions' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-[#347758] shadow-md">
@@ -628,33 +699,12 @@ const ReportsView: React.FC = () => {
                                 />
                             </div>
                             
-                            {/* Floating Zoom Controls */}
                             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-2 bg-slate-800/80 p-2 rounded-full backdrop-blur-sm border border-slate-600 shadow-lg z-10">
-                                <button 
-                                    onClick={handleZoomOut} 
-                                    className="p-1.5 hover:bg-slate-700 rounded-full text-white transition-colors"
-                                    title="Zoom Out"
-                                >
-                                    <Icon name="zoom-out" className="w-4 h-4" />
-                                </button>
-                                <span className="text-xs font-mono text-white min-w-[3rem] text-center">
-                                    {(zoomLevel * 100).toFixed(0)}%
-                                </span>
-                                <button 
-                                    onClick={handleZoomIn} 
-                                    className="p-1.5 hover:bg-slate-700 rounded-full text-white transition-colors"
-                                    title="Zoom In"
-                                >
-                                    <Icon name="zoom-in" className="w-4 h-4" />
-                                </button>
+                                <button onClick={handleZoomOut} className="p-1.5 hover:bg-slate-700 rounded-full text-white transition-colors"><Icon name="zoom-out" className="w-4 h-4" /></button>
+                                <span className="text-xs font-mono text-white min-w-[3rem] text-center">{(zoomLevel * 100).toFixed(0)}%</span>
+                                <button onClick={handleZoomIn} className="p-1.5 hover:bg-slate-700 rounded-full text-white transition-colors"><Icon name="zoom-in" className="w-4 h-4" /></button>
                                 <div className="w-px h-4 bg-slate-600 mx-1"></div>
-                                <button 
-                                    onClick={handleResetZoom} 
-                                    className="text-xs text-sky-400 hover:text-white px-2 font-bold"
-                                    title="Reset Zoom"
-                                >
-                                    Reset
-                                </button>
+                                <button onClick={handleResetZoom} className="text-xs text-sky-400 hover:text-white px-2 font-bold">Reset</button>
                             </div>
                         </div>
 

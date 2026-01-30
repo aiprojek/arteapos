@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import Modal from './Modal';
 import Button from './Button';
-import Icon from './Icon';
+import Icon, { IconName } from './Icon';
 
 interface ShowcaseModalProps {
     isOpen: boolean;
@@ -12,7 +12,14 @@ interface ShowcaseModalProps {
 const ShowcaseModal: React.FC<ShowcaseModalProps> = ({ isOpen, onClose }) => {
     const [slideIndex, setSlideIndex] = useState(0);
 
-    const slides = [
+    const slides: {
+        title: string;
+        desc: string;
+        icon: IconName;
+        color: string;
+        bg: string;
+        glow: string;
+    }[] = [
         {
             title: "100% Offline & Cepat",
             desc: "Tidak perlu internet untuk jualan. Data tersimpan aman di perangkat Anda. Anti lemot, anti down, dan bebas biaya server bulanan.",
@@ -112,7 +119,6 @@ const ShowcaseModal: React.FC<ShowcaseModalProps> = ({ isOpen, onClose }) => {
                     
                     {/* Main Icon */}
                     <div key={slideIndex} className="relative z-10 animate-fade-in flex flex-col items-center">
-                         {/* @ts-ignore */}
                          <Icon 
                             name={slides[slideIndex].icon} 
                             // Gunakan text-[8rem] atau lebih besar untuk memaksa font icon membesar

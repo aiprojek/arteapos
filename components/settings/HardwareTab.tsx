@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import Button from '../Button';
 import Icon from '../Icon';
@@ -180,7 +181,7 @@ const HardwareTab: React.FC = () => {
                                 <li>Buka <strong>Pengaturan Bluetooth HP</strong> Anda, lalu Pairing (Pasangkan) dengan printer.</li>
                                 <li>Kembali ke sini, klik "Cari Perangkat" dan pilih printer Anda.</li>
                             </ol>
-                            {isNative && <p className="text-green-400 font-bold mt-2">✅ Support Android 12/13/14+ (Tanpa Izin Lokasi).</p>}
+                            {isNative && <p className="text-yellow-400 font-bold mt-2">⚠️ Info: Jika fitur Bluetooth Native bermasalah, silakan gunakan Browser Chrome/Edge.</p>}
                         </div>
                         
                         <div className="flex flex-col gap-4 bg-slate-900 p-4 rounded-lg border border-slate-600">
@@ -247,12 +248,12 @@ const HardwareTab: React.FC = () => {
                     </>
                 ) : (
                     <div className="space-y-3">
-                        <div className="bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r">
-                            <h4 className="font-bold text-red-300 text-sm flex items-center gap-2">
-                                <Icon name="warning" className="w-4 h-4"/> Browser Tidak Mendukung
+                        <div className="bg-yellow-900/20 border-l-4 border-yellow-500 p-4 rounded-r">
+                            <h4 className="font-bold text-yellow-300 text-sm flex items-center gap-2">
+                                <Icon name="info-circle" className="w-4 h-4"/> Mode Web Browser
                             </h4>
                             <p className="text-xs text-slate-300 mt-1">
-                                Jika di Laptop, gunakan Chrome/Edge. Jika di Android, instal aplikasi APK Artea POS.
+                                Jika fitur native bermasalah atau Anda menggunakan Aplikasi APK yang belum stabil, silakan buka <strong>Google Chrome</strong> atau <strong>Edge</strong> di HP Anda untuk menggunakan fitur cetak Bluetooth ini.
                             </p>
                         </div>
                     </div>

@@ -407,7 +407,7 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 content: `
                     <p class="mb-2">Masuk ke tab <strong>"Perangkat Keras"</strong> untuk mengatur alat:</p>
                     <ul class="list-disc pl-5 space-y-1 text-sm">
-                        <li><strong>Printer Bluetooth (Native App):</strong> Jika menggunakan aplikasi Android (APK), support printer bluetooth lebih stabil. Pastikan aktifkan Bluetooth dan pasangkan (pair) printer di pengaturan HP terlebih dahulu. Lalu di aplikasi Artea, klik "Cari Perangkat (Paired)".</li>
+                        <li><strong>Printer Bluetooth:</strong> Gunakan browser <strong>Google Chrome</strong> atau <strong>Edge</strong> (Android/Laptop) dan gunakan fitur "Cari Printer" di menu Hardware untuk koneksi Web Bluetooth. Jika menggunakan Aplikasi (APK), fitur Bluetooth saat ini sedang dalam perbaikan, harap gunakan opsi "System Printer" (RawBT).</li>
                         <li><strong>Printer USB/Kabel:</strong> Gunakan opsi "System Printer" untuk membuka dialog cetak bawaan Android/Windows (RawBT atau Print Service).</li>
                         <li><strong>Barcode Scanner:</strong> Mendukung scanner fisik (USB/Wireless) dan kamera HP.</li>
                     </ul>

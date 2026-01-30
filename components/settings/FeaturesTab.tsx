@@ -30,10 +30,10 @@ const SettingsCard: React.FC<{ title: string; description?: string; children: Re
 );
 
 const ToggleSwitch: React.FC<{ label: string; checked: boolean; onChange: (checked: boolean) => void; description?: string }> = ({ label, checked, onChange, description }) => (
-    <div className="flex items-center justify-between">
-        <div className="mr-4">
-            <span className="text-slate-200 font-medium">{label}</span>
-            {description && <p className="text-xs text-slate-400 mt-0.5">{description}</p>}
+    <div className="flex items-center justify-between gap-4">
+        <div className="flex-1 min-w-0 pr-2">
+            <span className="text-slate-200 font-medium block leading-snug">{label}</span>
+            {description && <p className="text-xs text-slate-400 mt-0.5 leading-normal">{description}</p>}
         </div>
         <button
             type="button"

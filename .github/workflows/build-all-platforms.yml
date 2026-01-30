@@ -43,7 +43,7 @@ jobs:
         with:
           node-version: 18
       
-      # Setup Gradle environment (menyediakan perintah 'gradle')
+      # Setup Gradle environment
       - uses: gradle/actions/setup-gradle@v3
       
       # Restore web build
@@ -57,26 +57,111 @@ jobs:
       
       - name: Setup Capacitor Assets & Android
         run: |
-          # 1. Cek keberadaan folder android
+          # 1. Self-Healing: Cek apakah folder android ada TAPI rusak (misal: settings.gradle hilang)
+          if [ -d "android" ] && [ ! -f "android/settings.gradle" ]; then
+            echo "⚠️ Folder 'android' terdeteksi rusak/tidak lengkap. Menghapus untuk regenerasi..."
+            rm -rf android
+          fi
+
+          # 2. Buat project Android baru jika belum ada
           if [ ! -d "android" ]; then
-            echo "⚠️ Folder 'android' tidak ditemukan. Membuat project Android baru..."
+            echo "Creating new Android project..."
             npx cap add android
           fi
 
-          # 2. Sync aset web
+          # 3. Sync aset web ke folder android
           npx cap sync
           
-          # 3. Generate Resource (Icon/Splash) jika belum ada
+          # 4. Generate Icon & Splash
           npm run resources || true
 
-      # INJEKSI CODE MANUAL (Self-Healing)
-      # Ini memastikan file Java & Manifest benar meskipun user lupa commit folder android
-      - name: Inject Native Plugins
+      # INJEKSI CODE MANUAL (Self-Healing & Configuration)
+      # Memastikan semua file native yang dibutuhkan tersedia dan terkonfigurasi dengan benar
+      - name: Inject Native Plugins & Config
         run: |
           # Pastikan direktori tujuan ada
           mkdir -p android/app/src/main/java/com/arteapos/app
           
-          # 1. BluetoothPrinterPlugin.java
+          # A. INJECT CONFIGURATION FILES (Agar versi SDK sesuai)
+          
+          # 1. variables.gradle
+          cat <<EOF > android/variables.gradle
+          ext {
+              minSdkVersion = 22
+              compileSdkVersion = 34
+              targetSdkVersion = 34
+              androidxActivityVersion = '1.8.0'
+              androidxAppCompatVersion = '1.6.1'
+              androidxCoordinatorLayoutVersion = '1.2.0'
+              androidxCoreVersion = '1.12.0'
+              androidxFragmentVersion = '1.6.2'
+              junitVersion = '4.13.2'
+              androidxJunitVersion = '1.1.5'
+              androidxEspressoCoreVersion = '3.5.1'
+              cordovaAndroidVersion = '10.1.1'
+          }
+          EOF
+
+          # 2. app/build.gradle
+          cat <<EOF > android/app/build.gradle
+          apply plugin: 'com.android.application'
+
+          android {
+              namespace "com.arteapos.app"
+              compileSdkVersion rootProject.ext.compileSdkVersion
+              defaultConfig {
+                  applicationId "com.arteapos.app"
+                  minSdkVersion rootProject.ext.minSdkVersion
+                  targetSdkVersion rootProject.ext.targetSdkVersion
+                  versionCode 1
+                  versionName "1.0"
+                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+                  aaptOptions {
+                       ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+                  }
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+                  }
+              }
+          }
+
+          repositories {
+              flatDir{
+                  dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+              }
+          }
+
+          dependencies {
+              implementation fileTree(include: ['*.jar'], dir: 'libs')
+              implementation "androidx.appcompat:appcompat:\$androidxAppCompatVersion"
+              implementation "androidx.coordinatorlayout:coordinatorlayout:\$androidxCoordinatorLayoutVersion"
+              implementation "androidx.core:core-ktx:\$androidxCoreVersion"
+              implementation "androidx.fragment:fragment:\$androidxFragmentVersion"
+              implementation project(':capacitor-android')
+              testImplementation "junit:junit:\$junitVersion"
+              androidTestImplementation "androidx.test.ext:junit:\$androidxJunitVersion"
+              androidTestImplementation "androidx.test.espresso:espresso-core:\$androidxEspressoCoreVersion"
+              implementation project(':capacitor-cordova-android-plugins')
+          }
+
+          apply from: 'capacitor.build.gradle'
+
+          try {
+              def servicesJSON = file('google-services.json')
+              if (servicesJSON.text) {
+                  apply plugin: 'com.google.gms.google-services'
+              }
+          } catch(Exception e) {
+              logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+          }
+          EOF
+
+          # B. INJECT JAVA PLUGINS
+          
+          # 3. BluetoothPrinterPlugin.java
           cat <<EOF > android/app/src/main/java/com/arteapos/app/BluetoothPrinterPlugin.java
           package com.arteapos.app;
 
@@ -279,7 +364,7 @@ jobs:
           }
           EOF
 
-          # 2. MainActivity.java
+          # 4. MainActivity.java
           cat <<EOF > android/app/src/main/java/com/arteapos/app/MainActivity.java
           package com.arteapos.app;
 
@@ -295,7 +380,7 @@ jobs:
           }
           EOF
 
-          # 3. AndroidManifest.xml (Overwrite untuk memastikan permission)
+          # 5. AndroidManifest.xml (Overwrite untuk memastikan permission)
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -353,7 +438,7 @@ jobs:
       - name: Build APK
         run: |
           cd android
-          # AUTO FIX: Jika gradlew tidak ada (karena user lupa commit), generate pakai gradle
+          # AUTO FIX: Jika gradlew tidak ada atau tidak executable
           if [ ! -f "gradlew" ]; then
             echo "⚠️ gradlew tidak ditemukan. Mengenerate Wrapper..."
             gradle wrapper

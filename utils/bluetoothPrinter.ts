@@ -1,41 +1,8 @@
 
 import type { Transaction, ReceiptSettings } from '../types';
-import { Capacitor, registerPlugin, WebPlugin } from '@capacitor/core';
+import { Capacitor } from '@capacitor/core';
 
-// --- DEFINISI INTERFACE PLUGIN ---
-interface BluetoothPrinterPlugin {
-    listPairedDevices(): Promise<{ devices: { name: string; address: string }[] }>;
-    connect(options: { address: string }): Promise<void>;
-    print(options: { data: string; type: 'text' | 'base64' }): Promise<void>;
-    disconnect(): Promise<void>;
-}
-
-// --- IMPLEMENTASI WEB (FALLBACK) ---
-// Ini penting agar jika Native gagal, aplikasi tidak crash dengan error "Not Implemented"
-class BluetoothPrinterWeb extends WebPlugin implements BluetoothPrinterPlugin {
-    async listPairedDevices() {
-        console.warn('BluetoothPrinter: Native plugin not detected. Using Web Fallback.');
-        return { devices: [] };
-    }
-    async connect(options: { address: string }) {
-        console.log('BluetoothPrinter (Web): Connected to', options.address);
-    }
-    async print(options: { data: string; type: 'text' | 'base64' }) {
-        console.log('BluetoothPrinter (Web): Printing...', options.data.substring(0, 50));
-    }
-    async disconnect() {
-        console.log('BluetoothPrinter (Web): Disconnected');
-    }
-}
-
-// Inisialisasi Plugin dengan Fallback Web
-const BluetoothPrinter = registerPlugin<BluetoothPrinterPlugin>('BluetoothPrinter', {
-    web: () => new BluetoothPrinterWeb()
-});
-
-// ----------------------------------------
-
-// Define Web Bluetooth types for TS
+// --- TYPE DEFINITIONS ---
 interface BluetoothRemoteGATTCharacteristic {
     writeValue(value: BufferSource): Promise<void>;
     properties: {
@@ -109,6 +76,13 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
     if (transaction.orderType) {
         const type = transaction.orderType.charAt(0).toUpperCase() + transaction.orderType.slice(1);
         data += `Tipe: ${type}` + LF;
+    }
+    
+    // Table Info
+    if (transaction.tableNumber) {
+        data += `Meja: ${transaction.tableNumber}`;
+        if (transaction.paxCount) data += ` (Pax: ${transaction.paxCount})`;
+        data += LF;
     }
 
     data += '--------------------------------' + LF;
@@ -189,46 +163,12 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
 let webPrinterCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
 
 export const bluetoothPrinterService = {
-    // --- NATIVE ANDROID METHODS (CUSTOM PLUGIN) ---
     
-    listNativeDevices: async (): Promise<any[]> => {
-        try {
-            // Capacitor.isNativePlatform() bisa true walaupun plugin belum terload.
-            // Kita try-catch call ini.
-            const result = await BluetoothPrinter.listPairedDevices();
-            return result.devices;
-        } catch (e: any) {
-            console.error("List Native Devices Failed:", e);
-            // Jika errornya "not implemented", berarti plugin Native belum ter-bridge
-            if (e.message && e.message.includes('not implemented')) {
-                throw new Error("ERR_PLUGIN_MISSING: Folder 'android/' tidak terdeteksi di repository GitHub Anda. Mohon cek file .gitignore dan pastikan folder android di-commit agar file 'BluetoothPrinterPlugin.java' terbawa saat build.");
-            }
-            throw e;
-        }
-    },
-
-    connectNative: async (macAddress: string): Promise<boolean> => {
-        try {
-            await BluetoothPrinter.connect({ address: macAddress });
-            return true;
-        } catch (e) {
-            console.error("Connect Failed", e);
-            throw e;
-        }
-    },
-
-    disconnectNative: async (): Promise<void> => {
-        try {
-            await BluetoothPrinter.disconnect();
-        } catch (e) {}
-    },
-
-    // --- WEB METHODS ---
+    // --- WEB METHODS (PC/LAPTOP) ---
 
     connectWeb: async (): Promise<boolean> => {
         if (!navigator.bluetooth) {
-            alert('Browser ini tidak mendukung Bluetooth Web API.');
-            return false;
+            throw new Error('Browser ini tidak mendukung Bluetooth Web API. Gunakan Chrome atau Edge.');
         }
 
         try {
@@ -249,35 +189,34 @@ export const bluetoothPrinterService = {
                 webPrinterCharacteristic = writeChar;
                 return true;
             } else {
-                alert('Printer tidak valid.');
-                return false;
+                throw new Error('Karakteristik Write tidak ditemukan pada printer ini.');
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Web Bluetooth Connection Error:', error);
-            return false;
+            // Re-throw so component can alert
+            throw error;
         }
     },
 
-    // --- MAIN PRINT FUNCTION (DIRECT) ---
+    // --- MAIN PRINT FUNCTION ---
 
-    printReceipt: async (transaction: Transaction, settings: ReceiptSettings) => {
+    printReceipt: async (transaction: Transaction, settings: ReceiptSettings): Promise<void> => {
         const rawData = generateReceiptData(transaction, settings);
 
-        // 0. KODULAR / APP INVENTOR BRIDGE
+        // 0. KODULAR / APP INVENTOR BRIDGE (Legacy)
         if (window.AppInventor) {
             window.AppInventor.setWebViewString(rawData);
             return;
         }
 
-        // 1. ANDROID NATIVE CAPACITOR (Custom Plugin)
-        if (Capacitor.isNativePlatform()) {
+        // 1. ANDROID NATIVE (RAWBT / RAW THERMAL INTENT SCHEME)
+        // Ini metode paling stabil dan tidak membutuhkan Plugin Native yang bikin error build.
+        if (Capacitor.isNativePlatform() || /Android/i.test(navigator.userAgent)) {
             try {
-                // Konversi string ke Base64 agar aman dikirim ke Java
+                // Encode ke Base64
                 const encoder = new TextEncoder();
                 const bytes = encoder.encode(rawData);
-                
-                // Manual byte to base64 conversion
                 let binary = '';
                 const len = bytes.byteLength;
                 for (let i = 0; i < len; i++) {
@@ -285,22 +224,22 @@ export const bluetoothPrinterService = {
                 }
                 const base64 = btoa(binary);
 
-                await BluetoothPrinter.print({ data: base64, type: 'base64' });
+                // Intent Scheme untuk RawBT / Raw Thermal
+                const scheme = `rawbt:base64,${base64}`;
+                
+                // Buka Intent
+                window.location.href = scheme;
+                return;
+                
             } catch (e: any) {
-                console.error("Native Print Error:", e);
-                // Fallback message if plugin not found
-                if (e.message && e.message.includes('not implemented')) {
-                    alert("Gagal: Folder 'android' tidak ditemukan di Git saat build. Silakan commit folder 'android' dan build ulang.");
-                } else {
-                    alert("Gagal mencetak: " + e.message);
-                }
+                console.error("Print Error:", e);
+                throw new Error("Gagal memproses data cetak: " + e.message);
             }
-            return;
         }
 
-        // 2. WEB BROWSER
+        // 2. DESKTOP / PC WEB BROWSER
         if (webPrinterCharacteristic) {
-             const encoder = new TextEncoder();
+            const encoder = new TextEncoder();
             try {
                 const encodedData = encoder.encode(rawData);
                 const CHUNK_SIZE = 100; 
@@ -309,40 +248,15 @@ export const bluetoothPrinterService = {
                     await webPrinterCharacteristic?.writeValue(chunk);
                     await new Promise(r => setTimeout(r, 20)); 
                 }
-            } catch (e) {
+            } catch (e: any) {
                 console.error('Failed to print via Web Bluetooth', e);
                 webPrinterCharacteristic = null; 
+                throw new Error('Koneksi printer terputus. Silakan hubungkan ulang.');
             }
             return;
         }
-
-        // 3. FALLBACK: RAWBT (Untuk Browser Android yang tidak support Web Bluetooth)
-        // Jika tidak ada koneksi Web Bluetooth dan tidak di Native App.
-        try {
-            const encoder = new TextEncoder();
-            const bytes = encoder.encode(rawData);
-            let binary = '';
-            const len = bytes.byteLength;
-            for (let i = 0; i < len; i++) {
-                binary += String.fromCharCode(bytes[i]);
-            }
-            const base64 = btoa(binary);
-
-            // Intent Scheme untuk RawBT
-            const scheme = `rawbt:base64,${base64}`;
-            
-            if (confirm("Browser ini tidak mendukung koneksi Bluetooth langsung. Cetak menggunakan aplikasi RawBT?")) {
-                window.location.href = scheme;
-            }
-        } catch (e) {
-             console.error("RawBT Fallback Error", e);
-        }
-    },
-
-    // --- OPTIONAL: RAWBT FALLBACK (Jika user tetap mau pakai) ---
-    printViaExternalApp: (base64Image: string) => {
-        const cleanBase64 = base64Image.replace(/^data:image\/(png|jpg|jpeg);base64,/, "");
-        const scheme = `rawbt:base64,${cleanBase64}`;
-        window.location.href = scheme;
+        
+        // Fallback if no method available
+        throw new Error("Printer belum terhubung.\n\nAndroid: Pastikan 'Raw Thermal' terinstall.\nPC: Klik 'Cari Printer' terlebih dahulu.");
     }
 };

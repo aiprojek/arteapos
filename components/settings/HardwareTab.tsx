@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Button from '../Button';
 import Icon from '../Icon';
 import { bluetoothPrinterService } from '../../utils/bluetoothPrinter';
@@ -29,29 +29,14 @@ const HardwareTab: React.FC = () => {
     const { showAlert } = useUI();
     const { receiptSettings } = useSettings();
     const isNative = Capacitor.isNativePlatform();
+    const isAndroid = /Android/i.test(navigator.userAgent) || isNative;
     
-    // Bluetooth State
-    const [isBleSupported, setIsBleSupported] = useState(false);
-    const [isBleConnected, setIsBleConnected] = useState(false);
-    const [isBleScanning, setIsBleScanning] = useState(false);
-    const [pairedDevices, setPairedDevices] = useState<any[]>([]);
-    const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
-
     // Scanner Tester State
     const [testBarcode, setTestBarcode] = useState('');
     const [scannerStatus, setScannerStatus] = useState<'idle' | 'success'>('idle');
-    const scannerInputRef = useRef<HTMLInputElement>(null);
-
+    
     // Camera Tester State
     const [isCameraTestOpen, setCameraTestOpen] = useState(false);
-
-    useEffect(() => {
-        if (isNative) {
-            setIsBleSupported(true);
-        } else if ((navigator as any).bluetooth) {
-            setIsBleSupported(true);
-        }
-    }, [isNative]);
 
     const openAppSettings = async () => {
         try {
@@ -61,76 +46,36 @@ const HardwareTab: React.FC = () => {
         }
     };
 
-    // --- BLUETOOTH HANDLERS ---
-    const handleListDevices = async () => {
-        setIsBleScanning(true);
-        
-        if (isNative) {
-            try {
-                // Menggunakan Plugin Custom "BluetoothPrinter"
-                // Fungsi ini akan otomatis meminta izin CONNECT jika belum ada
-                const devices = await bluetoothPrinterService.listNativeDevices();
-                setPairedDevices(devices);
-                if (devices.length === 0) {
-                    showAlert({type: 'alert', title: 'Kosong', message: 'Tidak ada perangkat Bluetooth yang terpasang (Paired). Silakan pasangkan printer di Pengaturan Bluetooth HP Android Anda terlebih dahulu.'});
-                }
-            } catch (e: any) {
-                console.error("Bluetooth Error:", e);
-                showAlert({type: 'alert', title: 'Gagal Memuat', message: e.message || 'Pastikan Bluetooth Aktif & Izin Diberikan.'});
-            } finally {
-                setIsBleScanning(false);
-            }
-        } else {
-            // WEB: Scan directly
-            try {
-                const result = await bluetoothPrinterService.connectWeb();
-                if (result) {
-                    setIsBleConnected(true);
-                    showAlert({ type: 'alert', title: 'Terhubung', message: 'Printer Bluetooth berhasil terhubung.' });
-                }
-            } catch (error) {
-                console.error(error);
-            } finally {
-                setIsBleScanning(false);
-            }
-        }
-    };
-
-    const handleNativePairSelection = async (macAddress: string) => {
-        setSelectedDeviceId(macAddress);
+    // --- PRINTER HANDLERS ---
+    
+    const handleConnectWebBluetooth = async () => {
         try {
-            await bluetoothPrinterService.connectNative(macAddress);
-            setIsBleConnected(true);
-            showAlert({ type: 'alert', title: 'Terhubung', message: 'Printer berhasil terhubung!' });
-            // Jangan kosongkan list device, biarkan user bisa ganti jika mau
+            const connected = await bluetoothPrinterService.connectWeb();
+            if (connected) {
+                showAlert({ type: 'alert', title: 'Terhubung', message: 'Printer siap digunakan.' });
+            }
         } catch (e: any) {
-            setIsBleConnected(false);
-            showAlert({ type: 'alert', title: 'Gagal', message: 'Gagal terhubung: ' + e.message });
+            showAlert({ type: 'alert', title: 'Gagal Koneksi', message: e.message });
         }
     };
 
-    const handleDisconnect = async () => {
-        if (isNative) {
-            await bluetoothPrinterService.disconnectNative();
-            setIsBleConnected(false);
-            setSelectedDeviceId(null);
+    const handleTestPrint = async () => {
+        try {
+            await bluetoothPrinterService.printReceipt(getDummyTransaction(), receiptSettings);
+        } catch (e: any) {
+            showAlert({ 
+                type: 'alert', 
+                title: 'Gagal Cetak', 
+                message: e.message 
+            });
         }
     };
 
-    const handleTestPrintBle = async () => {
-        if (!isBleConnected && !isNative) {
-            showAlert({ type: 'alert', title: 'Belum Terhubung', message: 'Silakan hubungkan printer terlebih dahulu.' });
-            return;
-        }
-        await bluetoothPrinterService.printReceipt(getDummyTransaction(), receiptSettings);
-    };
+    const handleDownloadRawThermal = () => {
+        window.open('https://github.com/syofyanzuhad/raw-thermal/releases/tag/v1.0.1', '_blank');
+    }
 
-    // --- SYSTEM PRINTER HANDLERS ---
-    const handleTestPrintSystem = () => {
-        window.print();
-    };
-
-    // --- PHYSICAL SCANNER HANDLERS ---
+    // --- SCANNER HANDLERS ---
     const handleScannerTestInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
             if (testBarcode.trim().length > 0) {
@@ -166,131 +111,65 @@ const HardwareTab: React.FC = () => {
     return (
         <div className="animate-fade-in space-y-6">
             
-            {/* 1. BLUETOOTH PRINTER SECTION */}
+            {/* 1. PRINTER SECTION */}
             <SettingsCard 
-                title="Printer Thermal (Bluetooth)" 
-                description="Koneksi langsung ke printer mobile/portable 58mm & 80mm."
-                icon={<Icon name="bluetooth" className="w-6 h-6"/>}
+                title="Printer Struk (Thermal)" 
+                description="Koneksi ke Printer Bluetooth 58mm / 80mm."
+                icon={<Icon name="printer" className="w-6 h-6"/>}
             >
-                {isBleSupported ? (
-                    <>
-                        <div className="bg-blue-900/20 border-l-4 border-blue-500 p-3 rounded-r text-xs text-slate-300 space-y-1">
-                            <p><strong>Cara Pakai:</strong></p>
-                            <ol className="list-decimal pl-4 space-y-1">
-                                <li>Nyalakan Printer & Bluetooth HP.</li>
-                                <li>Buka <strong>Pengaturan Bluetooth HP</strong> Anda, lalu Pairing (Pasangkan) dengan printer.</li>
-                                <li>Kembali ke sini, klik "Cari Perangkat" dan pilih printer Anda.</li>
+                {isAndroid ? (
+                    <div className="space-y-4">
+                        <div className="bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded-r text-sm text-slate-300">
+                            <p className="font-bold text-blue-300 mb-2">Wajib Install Driver: Raw Thermal</p>
+                            <p className="mb-2">Agar cetak struk stabil di semua HP Android, aplikasi ini menggunakan metode jembatan (Driver).</p>
+                            <ol className="list-decimal pl-5 mt-2 space-y-2 text-xs">
+                                <li>Download & Install aplikasi <strong>Raw Thermal</strong> (gratis).</li>
+                                <li>Buka Raw Thermal, hubungkan printer bluetooth Anda di sana (Pairing).</li>
+                                <li>Pastikan Raw Thermal berjalan di latar belakang.</li>
+                                <li>Kembali ke sini dan tekan tombol <strong>Tes Print</strong>.</li>
                             </ol>
-                            {isNative && <p className="text-yellow-400 font-bold mt-2">⚠️ Info: Jika fitur Bluetooth Native bermasalah, silakan gunakan Browser Chrome/Edge.</p>}
                         </div>
-                        
-                        <div className="flex flex-col gap-4 bg-slate-900 p-4 rounded-lg border border-slate-600">
-                            <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-full ${isBleConnected ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
-                                        <Icon name="printer" className="w-5 h-5" />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-white">Status: {isBleConnected ? 'Terhubung' : 'Terputus'}</p>
-                                        {isBleConnected && isNative && <p className="text-xs text-slate-400">ID: {selectedDeviceId}</p>}
-                                    </div>
-                                </div>
-                                
-                                {isBleConnected && isNative && (
-                                    <button onClick={handleDisconnect} className="text-red-400 text-xs underline">Putuskan</button>
-                                )}
-                            </div>
-
-                            {/* Native Device List */}
-                            {isNative && pairedDevices.length > 0 && (
-                                <div className="space-y-2 mt-2">
-                                    <p className="text-xs text-slate-400">Pilih printer:</p>
-                                    {pairedDevices.map((dev: any) => (
-                                        <button 
-                                            key={dev.address} 
-                                            onClick={() => handleNativePairSelection(dev.address)}
-                                            className={`w-full text-left p-3 border rounded flex justify-between items-center transition-colors
-                                                ${selectedDeviceId === dev.address 
-                                                    ? 'bg-[#347758]/20 border-[#347758] ring-1 ring-[#347758]' 
-                                                    : 'bg-slate-800 hover:bg-slate-700 border-slate-600'}`
-                                            }
-                                        >
-                                            <div>
-                                                <span className="font-bold text-white block">{dev.name || 'Unknown Device'}</span>
-                                                <span className="text-xs text-slate-500 font-mono">{dev.address}</span>
-                                            </div>
-                                            {selectedDeviceId === dev.address && <Icon name="check-circle-fill" className="w-4 h-4 text-green-400" />}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
-                            <div className="flex gap-2 w-full mt-2">
-                                <Button 
-                                    variant="secondary" 
-                                    onClick={handleListDevices} 
-                                    disabled={isBleScanning}
-                                    className="flex-1"
-                                    size="sm"
-                                >
-                                    {isBleScanning ? 'Memuat...' : (isNative ? 'Cari Perangkat (Paired)' : 'Cari Printer')}
-                                </Button>
-                                <Button 
-                                    variant="primary" 
-                                    onClick={handleTestPrintBle} 
-                                    className="flex-1"
-                                    size="sm"
-                                >
-                                    Tes Print
-                                </Button>
-                            </div>
+                        <div className="flex gap-3">
+                            <Button onClick={handleDownloadRawThermal} variant="secondary" className="flex-1 bg-slate-700">
+                                <Icon name="download" className="w-4 h-4"/> Unduh Raw Thermal
+                            </Button>
+                            <Button onClick={handleTestPrint} className="flex-[2] py-3">
+                                <Icon name="printer" className="w-5 h-5"/> Tes Print (via Driver)
+                            </Button>
                         </div>
-                    </>
+                    </div>
                 ) : (
-                    <div className="space-y-3">
-                        <div className="bg-yellow-900/20 border-l-4 border-yellow-500 p-4 rounded-r">
-                            <h4 className="font-bold text-yellow-300 text-sm flex items-center gap-2">
-                                <Icon name="info-circle" className="w-4 h-4"/> Mode Web Browser
-                            </h4>
-                            <p className="text-xs text-slate-300 mt-1">
-                                Jika fitur native bermasalah atau Anda menggunakan Aplikasi APK yang belum stabil, silakan buka <strong>Google Chrome</strong> atau <strong>Edge</strong> di HP Anda untuk menggunakan fitur cetak Bluetooth ini.
-                            </p>
+                    <div className="space-y-4">
+                        <div className="bg-yellow-900/20 border-l-4 border-yellow-500 p-3 rounded-r text-sm text-slate-300">
+                            <p className="font-bold text-yellow-300 mb-1">Mode PC/Laptop (Web Bluetooth)</p>
+                            <p>Gunakan Google Chrome atau Edge. Fitur ini mungkin tidak jalan di Firefox/Safari.</p>
+                        </div>
+                        <div className="flex gap-3">
+                            <Button onClick={handleConnectWebBluetooth} variant="secondary" className="flex-1">
+                                <Icon name="bluetooth" className="w-4 h-4"/> 1. Cari Printer
+                            </Button>
+                            <Button onClick={handleTestPrint} className="flex-1">
+                                <Icon name="printer" className="w-4 h-4"/> 2. Tes Print
+                            </Button>
                         </div>
                     </div>
                 )}
             </SettingsCard>
 
-            {/* 2. USB / SYSTEM PRINTER */}
-            <SettingsCard 
-                title="Printer Kabel (USB OTG / Windows)" 
-                description="Untuk printer USB di Android, gunakan kabel OTG dan pastikan printer terdeteksi sistem."
-                icon={<Icon name="printer" className="w-6 h-6"/>}
-            >
-                <div className="flex flex-col gap-3">
-                    <div className="text-xs text-slate-300 bg-slate-900 p-3 rounded">
-                        <p><strong>Android USB (OTG):</strong> Aplikasi ini belum mendukung <em>Direct USB</em>. Gunakan tombol di bawah untuk membuka dialog cetak sistem Android (via RawBT atau Print Service bawaan).</p>
-                    </div>
-                    <Button onClick={handleTestPrintSystem} variant="secondary" size="sm" className="w-full">
-                        <Icon name="printer" className="w-4 h-4"/> Buka Dialog Print Sistem
-                    </Button>
-                </div>
-            </SettingsCard>
-
-            {/* 3. PHYSICAL SCANNER SECTION */}
+            {/* 2. SCANNER SECTION */}
             <SettingsCard 
                 title="Barcode Scanner Fisik" 
-                description="Alat scanner USB atau Dongle Wireless."
+                description="Tes alat scanner USB atau Bluetooth."
                 icon={<Icon name="barcode" className="w-6 h-6"/>}
             >
                 <div className="space-y-3">
                     <p className="text-sm text-slate-300">
-                        Klik kolom di bawah lalu scan barcode untuk tes.
+                        Klik kolom di bawah, lalu scan barcode barang apapun untuk mengetes alat.
                     </p>
                     
                     <div className={`relative flex items-center p-3 rounded-lg border transition-colors ${scannerStatus === 'success' ? 'bg-green-900/20 border-green-500' : 'bg-slate-900 border-slate-600'}`}>
                         <Icon name="barcode" className={`w-6 h-6 mr-3 ${scannerStatus === 'success' ? 'text-green-400' : 'text-slate-500'}`} />
                         <input
-                            ref={scannerInputRef}
                             type="text"
                             value={testBarcode}
                             onChange={(e) => setTestBarcode(e.target.value)}
@@ -307,15 +186,15 @@ const HardwareTab: React.FC = () => {
                 </div>
             </SettingsCard>
 
-            {/* 4. CAMERA SECTION */}
+            {/* 3. CAMERA SECTION */}
             <SettingsCard 
-                title="Kamera & Izin" 
-                description="Menggunakan kamera HP sebagai scanner dan izin aplikasi."
+                title="Kamera HP" 
+                description="Izin kamera untuk scan barcode dan foto bukti."
                 icon={<Icon name="camera" className="w-6 h-6"/>}
             >
                 <div className="flex justify-between items-center gap-2 flex-wrap">
                     <div className="text-sm text-slate-300">
-                       Tes fungsi kamera dan minta izin jika belum.
+                       Pastikan izin kamera diberikan.
                     </div>
                     <div className="flex gap-2">
                         {isNative && (

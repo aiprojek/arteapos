@@ -1,3 +1,4 @@
+
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
@@ -33,6 +34,16 @@
     
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+
+    <!-- WAJIB: Izin untuk memanggil aplikasi RawBT / Raw Thermal via Intent -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="rawbt" />
+        </intent>
+        <package android:name="ru.a402d.rawbtprinter" />
+        <package android:name="com.rawthermal.printer" /> 
+    </queries>
 
     <application
         android:allowBackup="true"

@@ -89,7 +89,11 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
   };
 
   const handleBluetoothPrint = async () => {
-      await bluetoothPrinterService.printReceipt(transaction, receiptSettings);
+      try {
+          await bluetoothPrinterService.printReceipt(transaction, receiptSettings);
+      } catch (e: any) {
+          showAlert({ type: 'alert', title: 'Gagal Mencetak', message: e.message });
+      }
   };
 
   const handleConfirmRefund = () => {

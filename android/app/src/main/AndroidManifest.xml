@@ -9,13 +9,16 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- BLUETOOTH PERMISSIONS -->
-    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-    
-    <!-- Android 12+ Requirements -->
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <!-- IZIN UNTUK MEMANGGIL APLIKASI DRIVER (RAW THERMAL) -->
+    <!-- Ini wajib ada di Android 11+ agar tombol print bisa membuka aplikasi lain -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="rawbt" />
+        </intent>
+        <package android:name="ru.a402d.rawbtprinter" />
+        <package android:name="com.rawthermal.app" /> 
+    </queries>
 
     <application
         android:allowBackup="true"

@@ -1,8 +1,18 @@
 
 import type { Transaction, ReceiptSettings } from '../types';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 
-// --- TYPE DEFINITIONS ---
+// --- DEFINISI PLUGIN NATIVE ---
+interface BluetoothPrinterPlugin {
+    listPairedDevices(): Promise<{ devices: { name: string; address: string }[] }>;
+    connect(options: { address: string }): Promise<void>;
+    print(options: { data: string }): Promise<void>; // Data dalam Base64
+    disconnect(): Promise<void>;
+}
+
+const BluetoothPrinter = registerPlugin<BluetoothPrinterPlugin>('BluetoothPrinter');
+
+// --- TYPE DEFINITIONS (WEB) ---
 interface BluetoothRemoteGATTCharacteristic {
     writeValue(value: BufferSource): Promise<void>;
     properties: {
@@ -24,7 +34,6 @@ const ESC = '\x1B';
 const GS = '\x1D';
 const LF = '\x0A';
 
-// ESC/POS Commands
 const COMMANDS = {
     INIT: ESC + '@',
     ALIGN_LEFT: ESC + 'a' + '\x00',
@@ -72,10 +81,6 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
     }
     if (transaction.customerName) {
         data += `Plg: ${transaction.customerName}` + LF;
-    }
-    if (transaction.orderType) {
-        const type = transaction.orderType.charAt(0).toUpperCase() + transaction.orderType.slice(1);
-        data += `Tipe: ${type}` + LF;
     }
     
     // Table Info
@@ -141,9 +146,6 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
             const saldo = formatCurrencySafe(transaction.customerBalanceSnapshot);
             data += `Sisa Saldo: ${saldo}` + LF;
         }
-        if (transaction.customerPointsSnapshot !== undefined) {
-            data += `Sisa Poin : ${transaction.customerPointsSnapshot} pts` + LF;
-        }
     }
 
     data += COMMANDS.ALIGN_CENTER;
@@ -151,7 +153,6 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
     data += COMMANDS.FONT_B; 
     data += '--------------------------------' + LF;
     data += 'Powered by Artea POS' + LF;
-    data += 'aiprojek01.my.id' + LF; 
     
     data += LF + LF + LF; // Feed
 
@@ -159,16 +160,47 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
     return data.replace(/[^\x00-\x7F]/g, "");
 };
 
-// State untuk Web Bluetooth (Browser only fallback)
+// State untuk Web Bluetooth
 let webPrinterCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
+let connectedNativeAddress: string | null = null; // Menyimpan alamat MAC printer yang terkoneksi di Android
 
 export const bluetoothPrinterService = {
     
-    // --- WEB METHODS (PC/LAPTOP) ---
+    // --- CONNECT METHOD ---
+    // Di Android: Akan membuka list Paired Devices
+    // Di Web: Akan membuka dialog Browser Bluetooth
+    connect: async (): Promise<boolean> => {
+        // 1. NATIVE ANDROID
+        if (Capacitor.isNativePlatform()) {
+            try {
+                const result = await BluetoothPrinter.listPairedDevices();
+                const devices = result.devices;
+                
+                if (devices.length === 0) {
+                    throw new Error("Tidak ada perangkat Bluetooth yang dipairing. Silakan pairing printer di Pengaturan Bluetooth HP Anda terlebih dahulu.");
+                }
 
-    connectWeb: async (): Promise<boolean> => {
+                // Sederhana: Kita minta user pilih (logic UI pemilihan bisa ditambahkan nanti)
+                // Untuk sekarang, kita coba connect ke perangkat pertama yang namanya mengandung 'print' atau 'pos' atau ambil yang pertama
+                // IDEALNYA: UI menampilkan list. Untuk MVP, kita ambil yang pertama.
+                
+                // TODO: Di masa depan, tampilkan Modal List Device.
+                // Saat ini: Ambil device pertama.
+                const targetDevice = devices[0]; 
+                
+                await BluetoothPrinter.connect({ address: targetDevice.address });
+                connectedNativeAddress = targetDevice.address;
+                return true;
+                
+            } catch (e: any) {
+                console.error(e);
+                throw new Error("Gagal koneksi Native: " + e.message);
+            }
+        }
+
+        // 2. WEB BROWSER
         if (!navigator.bluetooth) {
-            throw new Error('Browser ini tidak mendukung Bluetooth Web API. Gunakan Chrome atau Edge.');
+            throw new Error('Web Bluetooth tidak didukung di browser ini.');
         }
 
         try {
@@ -189,32 +221,39 @@ export const bluetoothPrinterService = {
                 webPrinterCharacteristic = writeChar;
                 return true;
             } else {
-                throw new Error('Karakteristik Write tidak ditemukan pada printer ini.');
+                throw new Error('Karakteristik Write tidak ditemukan.');
             }
 
         } catch (error: any) {
-            console.error('Web Bluetooth Connection Error:', error);
-            // Re-throw so component can alert
+            console.error('Web Bluetooth Error:', error);
             throw error;
         }
     },
 
-    // --- MAIN PRINT FUNCTION ---
+    // --- CONNECT WEB (Legacy/Specific naming) ---
+    connectWeb: async (): Promise<boolean> => {
+        return bluetoothPrinterService.connect();
+    },
 
+    // --- PRINT FUNCTION ---
     printReceipt: async (transaction: Transaction, settings: ReceiptSettings): Promise<void> => {
         const rawData = generateReceiptData(transaction, settings);
 
-        // 0. KODULAR / APP INVENTOR BRIDGE (Legacy)
+        // 1. KODULAR / APP INVENTOR BRIDGE
         if (window.AppInventor) {
             window.AppInventor.setWebViewString(rawData);
             return;
         }
 
-        // 1. ANDROID NATIVE (RAWBT / RAW THERMAL INTENT SCHEME)
-        // Ini metode paling stabil dan tidak membutuhkan Plugin Native yang bikin error build.
-        if (Capacitor.isNativePlatform() || /Android/i.test(navigator.userAgent)) {
+        // 2. NATIVE ANDROID DIRECT (New Plugin)
+        if (Capacitor.isNativePlatform()) {
             try {
-                // Encode ke Base64
+                if (!connectedNativeAddress) {
+                    // Coba connect dulu jika belum
+                    await bluetoothPrinterService.connect();
+                }
+                
+                // Encode ke Base64 untuk dikirim ke Plugin
                 const encoder = new TextEncoder();
                 const bytes = encoder.encode(rawData);
                 let binary = '';
@@ -224,20 +263,36 @@ export const bluetoothPrinterService = {
                 }
                 const base64 = btoa(binary);
 
-                // Intent Scheme untuk RawBT / Raw Thermal
-                const scheme = `rawbt:base64,${base64}`;
-                
-                // Buka Intent
-                window.location.href = scheme;
+                await BluetoothPrinter.print({ data: base64 });
                 return;
-                
+
             } catch (e: any) {
-                console.error("Print Error:", e);
-                throw new Error("Gagal memproses data cetak: " + e.message);
+                console.error("Native Print Error:", e);
+                // Fallback ke Intent jika Native Gagal total
+                if (confirm("Gagal cetak langsung. Gunakan aplikasi driver eksternal (Raw Thermal)?")) {
+                     const encoder = new TextEncoder();
+                     const bytes = encoder.encode(rawData);
+                     let binary = '';
+                     const len = bytes.byteLength;
+                     for (let i = 0; i < len; i++) {
+                         binary += String.fromCharCode(bytes[i]);
+                     }
+                     const base64 = btoa(binary);
+                     const intentUrl = `intent:base64,${base64}#Intent;scheme=rawbt;end;`;
+                     const a = document.createElement('a');
+                     a.href = intentUrl;
+                     a.style.display = 'none';
+                     document.body.appendChild(a);
+                     a.click();
+                     setTimeout(() => document.body.removeChild(a), 1000);
+                } else {
+                    throw new Error("Gagal mencetak: " + e.message);
+                }
+                return;
             }
         }
 
-        // 2. DESKTOP / PC WEB BROWSER
+        // 3. WEB BROWSER
         if (webPrinterCharacteristic) {
             const encoder = new TextEncoder();
             try {
@@ -249,14 +304,13 @@ export const bluetoothPrinterService = {
                     await new Promise(r => setTimeout(r, 20)); 
                 }
             } catch (e: any) {
-                console.error('Failed to print via Web Bluetooth', e);
+                console.error('Web Print Error', e);
                 webPrinterCharacteristic = null; 
-                throw new Error('Koneksi printer terputus. Silakan hubungkan ulang.');
+                throw new Error('Koneksi terputus. Hubungkan ulang.');
             }
             return;
         }
         
-        // Fallback if no method available
-        throw new Error("Printer belum terhubung.\n\nAndroid: Pastikan 'Raw Thermal' terinstall.\nPC: Klik 'Cari Printer' terlebih dahulu.");
+        throw new Error("Printer belum terhubung. Klik 'Cari Printer' terlebih dahulu.");
     }
 };

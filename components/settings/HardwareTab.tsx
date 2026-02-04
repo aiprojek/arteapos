@@ -72,7 +72,8 @@ const HardwareTab: React.FC = () => {
     };
 
     const handleDownloadRawThermal = () => {
-        window.open('https://github.com/syofyanzuhad/raw-thermal/releases/tag/v1.0.1', '_blank');
+        // Link ke Raw Thermal Open Source
+        window.open('https://github.com/402d/RawBT_thermal_printer_driver_source', '_blank');
     }
 
     // --- SCANNER HANDLERS ---
@@ -120,10 +121,10 @@ const HardwareTab: React.FC = () => {
                 {isAndroid ? (
                     <div className="space-y-4">
                         <div className="bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded-r text-sm text-slate-300">
-                            <p className="font-bold text-blue-300 mb-2">Wajib Install Driver: Raw Thermal</p>
-                            <p className="mb-2">Agar cetak struk stabil di semua HP Android, aplikasi ini menggunakan metode jembatan (Driver).</p>
+                            <p className="font-bold text-blue-300 mb-2">Wajib Install Driver: Raw Thermal (Open Source)</p>
+                            <p className="mb-2">Agar cetak struk stabil di semua HP Android, aplikasi ini menggunakan metode Intent ke driver eksternal.</p>
                             <ol className="list-decimal pl-5 mt-2 space-y-2 text-xs">
-                                <li>Download & Install aplikasi <strong>Raw Thermal</strong> (gratis).</li>
+                                <li>Pastikan aplikasi <strong>Raw Thermal</strong> sudah terinstall.</li>
                                 <li>Buka Raw Thermal, hubungkan printer bluetooth Anda di sana (Pairing).</li>
                                 <li>Pastikan Raw Thermal berjalan di latar belakang.</li>
                                 <li>Kembali ke sini dan tekan tombol <strong>Tes Print</strong>.</li>
@@ -131,10 +132,10 @@ const HardwareTab: React.FC = () => {
                         </div>
                         <div className="flex gap-3">
                             <Button onClick={handleDownloadRawThermal} variant="secondary" className="flex-1 bg-slate-700">
-                                <Icon name="download" className="w-4 h-4"/> Unduh Raw Thermal
+                                <Icon name="github" className="w-4 h-4"/> Info Raw Thermal
                             </Button>
                             <Button onClick={handleTestPrint} className="flex-[2] py-3">
-                                <Icon name="printer" className="w-5 h-5"/> Tes Print (via Driver)
+                                <Icon name="printer" className="w-5 h-5"/> Tes Print
                             </Button>
                         </div>
                     </div>

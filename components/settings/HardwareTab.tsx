@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Button from '../Button';
 import Icon from '../Icon';
 import { bluetoothPrinterService } from '../../utils/bluetoothPrinter';
@@ -31,8 +31,11 @@ const HardwareTab: React.FC = () => {
     const isNative = Capacitor.isNativePlatform();
     const isAndroid = /Android/i.test(navigator.userAgent) || isNative;
     
+    // Scanner Tester State
     const [testBarcode, setTestBarcode] = useState('');
     const [scannerStatus, setScannerStatus] = useState<'idle' | 'success'>('idle');
+    
+    // Camera Tester State
     const [isCameraTestOpen, setCameraTestOpen] = useState(false);
 
     const openAppSettings = async () => {
@@ -43,6 +46,8 @@ const HardwareTab: React.FC = () => {
         }
     };
 
+    // --- PRINTER HANDLERS ---
+    
     const handleConnectWebBluetooth = async () => {
         try {
             const connected = await bluetoothPrinterService.connectWeb();
@@ -67,10 +72,11 @@ const HardwareTab: React.FC = () => {
     };
 
     const handleDownloadRawThermal = () => {
-        // Link ke Raw Thermal (Release Resmi dari AI Projek)
-        window.open('https://github.com/aiprojek/raw-thermal/releases', '_blank');
+        // Link ke Raw Thermal Open Source
+        window.open('https://github.com/402d/RawBT_thermal_printer_driver_source', '_blank');
     }
 
+    // --- SCANNER HANDLERS ---
     const handleScannerTestInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
             if (testBarcode.trim().length > 0) {
@@ -108,24 +114,25 @@ const HardwareTab: React.FC = () => {
             
             {/* 1. PRINTER SECTION */}
             <SettingsCard 
-                title="Printer Struk (Bluetooth)" 
-                description="Koneksi ke Printer Thermal 58mm / 80mm."
+                title="Printer Struk (Thermal)" 
+                description="Koneksi ke Printer Bluetooth 58mm / 80mm."
                 icon={<Icon name="printer" className="w-6 h-6"/>}
             >
                 {isAndroid ? (
                     <div className="space-y-4">
                         <div className="bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded-r text-sm text-slate-300">
-                            <p className="font-bold text-blue-300 mb-2">Driver Printer Eksternal (Wajib)</p>
-                            <p className="mb-2">Agar cetak struk stabil di semua versi Android, aplikasi ini menggunakan driver <strong>Raw Thermal</strong>.</p>
+                            <p className="font-bold text-blue-300 mb-2">Wajib Install Driver: Raw Thermal (Open Source)</p>
+                            <p className="mb-2">Agar cetak struk stabil di semua HP Android, aplikasi ini menggunakan metode Intent ke driver eksternal.</p>
                             <ol className="list-decimal pl-5 mt-2 space-y-2 text-xs">
-                                <li>Unduh & Install <strong>Raw Thermal</strong> (Gratis & Open Source).</li>
-                                <li>Buka Raw Thermal, hubungkan printer Anda di sana.</li>
+                                <li>Pastikan aplikasi <strong>Raw Thermal</strong> sudah terinstall.</li>
+                                <li>Buka Raw Thermal, hubungkan printer bluetooth Anda di sana (Pairing).</li>
+                                <li>Pastikan Raw Thermal berjalan di latar belakang.</li>
                                 <li>Kembali ke sini dan tekan tombol <strong>Tes Print</strong>.</li>
                             </ol>
                         </div>
                         <div className="flex gap-3">
                             <Button onClick={handleDownloadRawThermal} variant="secondary" className="flex-1 bg-slate-700">
-                                <Icon name="download" className="w-4 h-4"/> Download Driver
+                                <Icon name="github" className="w-4 h-4"/> Info Raw Thermal
                             </Button>
                             <Button onClick={handleTestPrint} className="flex-[2] py-3">
                                 <Icon name="printer" className="w-5 h-5"/> Tes Print
@@ -203,6 +210,7 @@ const HardwareTab: React.FC = () => {
                 </div>
             </SettingsCard>
 
+            {/* Camera Test Modal */}
             <BarcodeScannerModal 
                 isOpen={isCameraTestOpen} 
                 onClose={() => setCameraTestOpen(false)} 

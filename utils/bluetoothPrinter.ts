@@ -73,6 +73,10 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
     if (transaction.customerName) {
         data += `Plg: ${transaction.customerName}` + LF;
     }
+    if (transaction.orderType) {
+        const type = transaction.orderType.charAt(0).toUpperCase() + transaction.orderType.slice(1);
+        data += `Tipe: ${type}` + LF;
+    }
     
     // Table Info
     if (transaction.tableNumber) {
@@ -137,6 +141,9 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
             const saldo = formatCurrencySafe(transaction.customerBalanceSnapshot);
             data += `Sisa Saldo: ${saldo}` + LF;
         }
+        if (transaction.customerPointsSnapshot !== undefined) {
+            data += `Sisa Poin : ${transaction.customerPointsSnapshot} pts` + LF;
+        }
     }
 
     data += COMMANDS.ALIGN_CENTER;
@@ -144,6 +151,7 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
     data += COMMANDS.FONT_B; 
     data += '--------------------------------' + LF;
     data += 'Powered by Artea POS' + LF;
+    data += 'aiprojek01.my.id' + LF; 
     
     data += LF + LF + LF; // Feed
 
@@ -160,7 +168,8 @@ export const bluetoothPrinterService = {
 
     connectWeb: async (): Promise<boolean> => {
         if (!navigator.bluetooth) {
-            throw new Error('Fitur Web Bluetooth tidak didukung. Gunakan Android dengan Raw Thermal.');
+            // Updated Error Message to be generic
+            throw new Error('Fitur Web Bluetooth tidak didukung. Jika di Android, gunakan tombol "Tes Print" (via Driver).');
         }
 
         try {
@@ -186,6 +195,7 @@ export const bluetoothPrinterService = {
 
         } catch (error: any) {
             console.error('Web Bluetooth Connection Error:', error);
+            // Re-throw so component can alert
             throw error;
         }
     },
@@ -214,13 +224,31 @@ export const bluetoothPrinterService = {
                 }
                 const base64 = btoa(binary);
 
-                // GUNAKAN 'intent:' scheme agar lebih robust di Android modern
-                // Scheme 'rawbt' didukung oleh RawBT DAN Raw Thermal
-                const intentUrl = `intent:base64,${base64}#Intent;scheme=rawbt;end;`;
+                // Menggunakan scheme 'rawbt:' yang didukung oleh RawBT asli dan biasanya juga fork-nya.
+                // Parameter package=com.rawthermal.app ditambahkan untuk mencoba memaksa membuka app spesifik jika ada,
+                // tapi jika tidak ada, Android akan mencari aplikasi lain yang bisa menangani scheme 'rawbt'.
                 
-                // Trigger via anchor click instead of window.location for better compatibility
+                // Prioritas 1: Coba target 'com.rawthermal.app'
+                // Kita buat URL intent yang fleksibel
+                
+                const intentUrl = `intent:base64,${base64}#Intent;scheme=rawbt;package=com.rawthermal.app;end;`;
+                
+                // Fallback (jika user masih pakai RawBT Original):
+                // Jika ingin mendukung keduanya, kita bisa menghapus 'package=...' dari string intent
+                // dan membiarkan Android Picker muncul jika ada 2 aplikasi.
+                // NAMUN, karena Anda spesifik ingin menggunakan Raw Thermal custom, kita coba target itu.
+                // JIKA GAGAL (app tidak terinstall), tombol print tidak akan bereaksi.
+                // Maka lebih aman menggunakan Intent umum 'rawbt' jika kita ingin support keduanya,
+                // tapi karena kita sudah set <queries> di Manifest untuk 'com.rawthermal.app', 
+                // kita bisa coba menargetkannya.
+                
+                // KEPUTUSAN: Gunakan Intent umum tanpa package spesifik di URL string agar lebih robust.
+                // Android akan memilih aplikasi default (Raw Thermal) jika user sudah set, atau menampilkan pilihan.
+                const universalIntentUrl = `intent:base64,${base64}#Intent;scheme=rawbt;end;`;
+                
+                // Trigger via anchor click
                 const a = document.createElement('a');
-                a.href = intentUrl;
+                a.href = universalIntentUrl;
                 a.style.display = 'none';
                 document.body.appendChild(a);
                 a.click();
@@ -254,6 +282,6 @@ export const bluetoothPrinterService = {
         }
         
         // Fallback if no method available
-        throw new Error("Printer belum terhubung.\n\nAndroid: Pastikan aplikasi 'Raw Thermal' sudah terinstall dan berjalan di latar belakang.\nPC: Klik 'Cari Printer' terlebih dahulu.");
+        throw new Error("Printer belum terhubung.\n\nAndroid: Pastikan 'Raw Thermal' terinstall dan berjalan.\nPC: Klik 'Cari Printer' terlebih dahulu.");
     }
 };

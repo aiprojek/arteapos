@@ -5,18 +5,45 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FLASHLIGHT"/>
 
-    <!-- IZIN UNTUK MEMANGGIL APLIKASI DRIVER (RAW THERMAL) -->
-    <!-- Ini wajib ada di Android 11+ agar tombol print bisa membuka aplikasi lain -->
+    <!-- ============================================== -->
+    <!-- PERMISSION KHUSUS BLUETOOTH (ANDROID 12+)      -->
+    <!-- ============================================== -->
+    
+    <!-- Wajib untuk Android 12 (API 31) ke atas -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    
+    <!-- neverForLocation: Agar tidak perlu minta izin GPS saat scan bluetooth -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" 
+                     android:usesPermissionFlags="neverForLocation" 
+                     tools:targetApi="31" />
+
+    <!-- ============================================== -->
+    <!-- PERMISSION KHUSUS BLUETOOTH (LEGACY < Android 12) -->
+    <!-- ============================================== -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <!-- Android 11 ke bawah butuh Location untuk scan Bluetooth -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="30" />
+    
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+
+    <!-- WAJIB: Izin untuk memanggil aplikasi RawBT / Raw Thermal via Intent -->
     <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="rawbt" />
         </intent>
+        <!-- Aplikasi RawBT Asli (Play Store) -->
         <package android:name="ru.a402d.rawbtprinter" />
+        
+        <!-- Aplikasi Raw Thermal (Custom Fork) - Nama paket sesuai source code -->
         <package android:name="com.rawthermal.app" /> 
     </queries>
 

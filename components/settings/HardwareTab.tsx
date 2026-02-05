@@ -27,9 +27,8 @@ const SettingsCard: React.FC<{ title: string; description?: string; children: Re
 
 const HardwareTab: React.FC = () => {
     const { showAlert } = useUI();
-    const { receiptSettings } = useSettings();
+    const { receiptSettings, updateReceiptSettings } = useSettings();
     const isNative = Capacitor.isNativePlatform();
-    const isAndroid = /Android/i.test(navigator.userAgent) || isNative;
     
     // Scanner Tester State
     const [testBarcode, setTestBarcode] = useState('');
@@ -37,6 +36,10 @@ const HardwareTab: React.FC = () => {
     
     // Camera Tester State
     const [isCameraTestOpen, setCameraTestOpen] = useState(false);
+
+    // Native Bluetooth State
+    const [pairedDevices, setPairedDevices] = useState<{name: string, address: string}[]>([]);
+    const [isScanningBt, setIsScanningBt] = useState(false);
 
     const openAppSettings = async () => {
         try {
@@ -59,6 +62,30 @@ const HardwareTab: React.FC = () => {
         }
     };
 
+    const handleScanNativeDevices = async () => {
+        setIsScanningBt(true);
+        try {
+            const devices = await bluetoothPrinterService.listPairedDevicesNative();
+            setPairedDevices(devices);
+            if (devices.length === 0) {
+                showAlert({type: 'alert', title: 'Tidak Ditemukan', message: 'Tidak ada perangkat Bluetooth yang ter-pairing. Silakan pairing printer di Pengaturan Bluetooth HP terlebih dahulu.'});
+            }
+        } catch (e: any) {
+            showAlert({type: 'alert', title: 'Gagal Scan', message: e.message});
+        } finally {
+            setIsScanningBt(false);
+        }
+    };
+
+    const handleSelectNativeDevice = (device: {name: string, address: string}) => {
+        updateReceiptSettings({ ...receiptSettings, printerMacAddress: device.address });
+        showAlert({ type: 'alert', title: 'Disimpan', message: `Printer ${device.name} dipilih sebagai default.` });
+    };
+
+    const handleClearNativeDevice = () => {
+        updateReceiptSettings({ ...receiptSettings, printerMacAddress: undefined });
+    };
+
     const handleTestPrint = async () => {
         try {
             await bluetoothPrinterService.printReceipt(getDummyTransaction(), receiptSettings);
@@ -72,7 +99,6 @@ const HardwareTab: React.FC = () => {
     };
 
     const handleDownloadRawThermal = () => {
-        // Link ke Raw Thermal Open Source
         window.open('https://github.com/402d/RawBT_thermal_printer_driver_source', '_blank');
     }
 
@@ -118,24 +144,59 @@ const HardwareTab: React.FC = () => {
                 description="Koneksi ke Printer Bluetooth 58mm / 80mm."
                 icon={<Icon name="printer" className="w-6 h-6"/>}
             >
-                {isAndroid ? (
+                {isNative ? (
                     <div className="space-y-4">
-                        <div className="bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded-r text-sm text-slate-300">
-                            <p className="font-bold text-blue-300 mb-2">Wajib Install Driver: Raw Thermal (Open Source)</p>
-                            <p className="mb-2">Agar cetak struk stabil di semua HP Android, aplikasi ini menggunakan metode Intent ke driver eksternal.</p>
-                            <ol className="list-decimal pl-5 mt-2 space-y-2 text-xs">
-                                <li>Pastikan aplikasi <strong>Raw Thermal</strong> sudah terinstall.</li>
-                                <li>Buka Raw Thermal, hubungkan printer bluetooth Anda di sana (Pairing).</li>
-                                <li>Pastikan Raw Thermal berjalan di latar belakang.</li>
-                                <li>Kembali ke sini dan tekan tombol <strong>Tes Print</strong>.</li>
-                            </ol>
-                        </div>
-                        <div className="flex gap-3">
-                            <Button onClick={handleDownloadRawThermal} variant="secondary" className="flex-1 bg-slate-700">
-                                <Icon name="github" className="w-4 h-4"/> Info Raw Thermal
+                        <div className="bg-slate-900 p-3 rounded-lg border border-slate-600">
+                            <h4 className="text-sm font-bold text-white mb-2">Metode 1: Direct Connection (Recommended)</h4>
+                            <p className="text-xs text-slate-400 mb-3">
+                                Koneksi langsung ke printer tanpa aplikasi tambahan. Pastikan printer sudah di-pairing di menu Bluetooth HP.
+                            </p>
+                            
+                            {receiptSettings.printerMacAddress ? (
+                                <div className="flex items-center justify-between bg-green-900/20 border border-green-800 p-2 rounded mb-3">
+                                    <div>
+                                        <p className="text-xs text-green-300 font-bold">Terhubung ke:</p>
+                                        <p className="text-sm text-white font-mono">{receiptSettings.printerMacAddress}</p>
+                                    </div>
+                                    <button onClick={handleClearNativeDevice} className="text-red-400 text-xs underline">Hapus</button>
+                                </div>
+                            ) : (
+                                <div className="text-xs text-yellow-500 mb-3 italic">Belum ada printer dipilih.</div>
+                            )}
+
+                            <Button onClick={handleScanNativeDevices} disabled={isScanningBt} variant="secondary" className="w-full bg-slate-700">
+                                {isScanningBt ? 'Mencari...' : <><Icon name="search" className="w-4 h-4"/> Cari Perangkat Paired</>}
                             </Button>
-                            <Button onClick={handleTestPrint} className="flex-[2] py-3">
-                                <Icon name="printer" className="w-5 h-5"/> Tes Print
+
+                            {pairedDevices.length > 0 && (
+                                <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+                                    {pairedDevices.map(dev => (
+                                        <button 
+                                            key={dev.address} 
+                                            onClick={() => handleSelectNativeDevice(dev)}
+                                            className="w-full text-left p-2 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs flex justify-between"
+                                        >
+                                            <span className="font-bold text-white">{dev.name}</span>
+                                            <span className="text-slate-400 font-mono">{dev.address}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="bg-slate-900 p-3 rounded-lg border border-slate-600 opacity-80">
+                            <h4 className="text-sm font-bold text-white mb-2">Metode 2: Driver Eksternal (Raw Thermal)</h4>
+                            <p className="text-xs text-slate-400 mb-2">
+                                Gunakan ini jika Direct Connection gagal. Butuh install aplikasi 'Raw Thermal'.
+                            </p>
+                            <Button onClick={handleDownloadRawThermal} variant="secondary" size="sm" className="w-full bg-slate-700">
+                                <Icon name="download" className="w-4 h-4"/> Install Driver
+                            </Button>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-700">
+                            <Button onClick={handleTestPrint} className="w-full py-3">
+                                <Icon name="printer" className="w-5 h-5"/> Tes Print Struk
                             </Button>
                         </div>
                     </div>

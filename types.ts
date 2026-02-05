@@ -169,6 +169,7 @@ export interface ReceiptSettings {
   adminTelegram?: string;
   branches?: Branch[];
   orderTypes?: string[];
+  printerMacAddress?: string; // NEW FIELD: Alamat MAC Printer Bluetooth
 }
 
 export interface InventorySettings {

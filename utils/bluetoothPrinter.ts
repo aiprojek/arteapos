@@ -1,8 +1,19 @@
 
 import type { Transaction, ReceiptSettings } from '../types';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 
-// --- TYPE DEFINITIONS ---
+// --- NATIVE PLUGIN INTERFACE ---
+// Ini mendefinisikan apa yang ada di file Java (BluetoothPrinterPlugin.java)
+interface BluetoothPrinterPlugin {
+    listPairedDevices(): Promise<{ devices: { name: string; address: string }[] }>;
+    connect(options: { address: string }): Promise<void>;
+    disconnect(): Promise<void>;
+    print(options: { data: string }): Promise<void>;
+}
+
+const BluetoothPrinter = registerPlugin<BluetoothPrinterPlugin>('BluetoothPrinter');
+
+// --- WEB BLUETOOTH INTERFACE ---
 interface BluetoothRemoteGATTCharacteristic {
     writeValue(value: BufferSource): Promise<void>;
     properties: {
@@ -164,12 +175,18 @@ let webPrinterCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
 
 export const bluetoothPrinterService = {
     
+    // --- NATIVE METHODS (Android) ---
+    listPairedDevicesNative: async () => {
+        if (!Capacitor.isNativePlatform()) throw new Error("Fitur ini hanya untuk Android App.");
+        const result = await BluetoothPrinter.listPairedDevices();
+        return result.devices;
+    },
+
     // --- WEB METHODS (PC/LAPTOP) ---
 
     connectWeb: async (): Promise<boolean> => {
         if (!navigator.bluetooth) {
-            // Updated Error Message to be generic
-            throw new Error('Fitur Web Bluetooth tidak didukung. Jika di Android, gunakan tombol "Tes Print" (via Driver).');
+            throw new Error('Fitur Web Bluetooth tidak didukung. Gunakan Chrome/Edge.');
         }
 
         try {
@@ -195,7 +212,6 @@ export const bluetoothPrinterService = {
 
         } catch (error: any) {
             console.error('Web Bluetooth Connection Error:', error);
-            // Re-throw so component can alert
             throw error;
         }
     },
@@ -211,10 +227,38 @@ export const bluetoothPrinterService = {
             return;
         }
 
-        // 1. ANDROID NATIVE (RAWBT / RAW THERMAL INTENT SCHEME)
+        // 1. ANDROID NATIVE
         if (Capacitor.isNativePlatform() || /Android/i.test(navigator.userAgent)) {
+            
+            // OPS 1: DIRECT NATIVE CONNECTION (Jika Mac Address disetting)
+            if (settings.printerMacAddress) {
+                try {
+                    // Encode ke Base64 karena plugin Java butuh string
+                    const encoder = new TextEncoder();
+                    const bytes = encoder.encode(rawData);
+                    let binary = '';
+                    const len = bytes.byteLength;
+                    for (let i = 0; i < len; i++) {
+                        binary += String.fromCharCode(bytes[i]);
+                    }
+                    const base64Data = btoa(binary);
+
+                    // Connect & Print via Plugin
+                    await BluetoothPrinter.connect({ address: settings.printerMacAddress });
+                    await BluetoothPrinter.print({ data: base64Data });
+                    // Opsional: disconnect atau biarkan keep-alive. 
+                    // Printer thermal biasanya auto-close socket setelah idle.
+                    // await BluetoothPrinter.disconnect(); 
+                    return;
+                } catch (e: any) {
+                    console.error("Native Print Failed:", e);
+                    // Jika gagal, lanjut ke Fallback Intent
+                    alert(`Direct Print Gagal (${e.message}). Mengalihkan ke aplikasi eksternal...`);
+                }
+            }
+
+            // OPSI 2: FALLBACK INTENT (RawBT / Raw Thermal External App)
             try {
-                // Encode ke Base64
                 const encoder = new TextEncoder();
                 const bytes = encoder.encode(rawData);
                 let binary = '';
@@ -224,40 +268,13 @@ export const bluetoothPrinterService = {
                 }
                 const base64 = btoa(binary);
 
-                // Menggunakan scheme 'rawbt:' yang didukung oleh RawBT asli dan biasanya juga fork-nya.
-                // Parameter package=com.rawthermal.app ditambahkan untuk mencoba memaksa membuka app spesifik jika ada,
-                // tapi jika tidak ada, Android akan mencari aplikasi lain yang bisa menangani scheme 'rawbt'.
-                
-                // Prioritas 1: Coba target 'com.rawthermal.app'
-                // Kita buat URL intent yang fleksibel
-                
                 const intentUrl = `intent:base64,${base64}#Intent;scheme=rawbt;package=com.rawthermal.app;end;`;
-                
-                // Fallback (jika user masih pakai RawBT Original):
-                // Jika ingin mendukung keduanya, kita bisa menghapus 'package=...' dari string intent
-                // dan membiarkan Android Picker muncul jika ada 2 aplikasi.
-                // NAMUN, karena Anda spesifik ingin menggunakan Raw Thermal custom, kita coba target itu.
-                // JIKA GAGAL (app tidak terinstall), tombol print tidak akan bereaksi.
-                // Maka lebih aman menggunakan Intent umum 'rawbt' jika kita ingin support keduanya,
-                // tapi karena kita sudah set <queries> di Manifest untuk 'com.rawthermal.app', 
-                // kita bisa coba menargetkannya.
-                
-                // KEPUTUSAN: Gunakan Intent umum tanpa package spesifik di URL string agar lebih robust.
-                // Android akan memilih aplikasi default (Raw Thermal) jika user sudah set, atau menampilkan pilihan.
-                const universalIntentUrl = `intent:base64,${base64}#Intent;scheme=rawbt;end;`;
-                
-                // Trigger via anchor click
-                const a = document.createElement('a');
-                a.href = universalIntentUrl;
-                a.style.display = 'none';
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => document.body.removeChild(a), 1000);
+                window.location.href = intentUrl;
                 
                 return;
                 
             } catch (e: any) {
-                console.error("Print Error:", e);
+                console.error("Print Intent Error:", e);
                 throw new Error("Gagal memproses data cetak: " + e.message);
             }
         }
@@ -282,6 +299,6 @@ export const bluetoothPrinterService = {
         }
         
         // Fallback if no method available
-        throw new Error("Printer belum terhubung.\n\nAndroid: Pastikan 'Raw Thermal' terinstall dan berjalan.\nPC: Klik 'Cari Printer' terlebih dahulu.");
+        throw new Error("Printer belum terhubung.\n\nAndroid: Set Printer di Menu Hardware atau install Raw Thermal.\nPC: Klik 'Cari Printer' terlebih dahulu.");
     }
 };

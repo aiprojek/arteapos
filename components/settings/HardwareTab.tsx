@@ -99,7 +99,8 @@ const HardwareTab: React.FC = () => {
     };
 
     const handleDownloadRawThermal = () => {
-        window.open('https://github.com/402d/RawBT_thermal_printer_driver_source', '_blank');
+        // Link resmi Raw Thermal GitHub Release
+        window.open('https://github.com/aiprojek/raw-thermal/releases/tag/release', '_blank');
     }
 
     // --- SCANNER HANDLERS ---
@@ -190,7 +191,7 @@ const HardwareTab: React.FC = () => {
                                 Gunakan ini jika Direct Connection gagal. Butuh install aplikasi 'Raw Thermal'.
                             </p>
                             <Button onClick={handleDownloadRawThermal} variant="secondary" size="sm" className="w-full bg-slate-700">
-                                <Icon name="download" className="w-4 h-4"/> Install Driver
+                                <Icon name="download" className="w-4 h-4"/> Install Driver (GitHub)
                             </Button>
                         </div>
 

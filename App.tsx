@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import AppProviders from './context/AppProviders';
 import { useAuth } from './context/AuthContext';
@@ -143,12 +142,12 @@ const AppContent = () => {
   );
 
   return (
-    // TAMBAHKAN ID "main-app-layout" DISINI
-    <div id="main-app-layout" className="flex flex-col md:flex-row h-screen bg-slate-900 text-slate-100">
+    // Menggunakan h-[100dvh] untuk mobile browser support yang lebih baik
+    <div id="main-app-layout" className="flex flex-col md:flex-row h-screen supports-[height:100dvh]:h-[100dvh] bg-slate-900 text-slate-100 overflow-hidden">
       <OnboardingModals setActiveView={setActiveView} />
       {isSidebarOpen && <div onClick={() => setSidebarOpen(false)} className="fixed inset-0 bg-black/60 z-[90] md:hidden" />}
       
-      <nav className={`fixed md:relative h-full w-64 bg-slate-800 p-4 z-[100] transition-transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 border-r border-slate-700 overflow-y-auto`}>
+      <nav className={`fixed md:relative h-full w-64 bg-slate-800 p-4 z-[100] transition-transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 border-r border-slate-700 overflow-y-auto flex-shrink-0`}>
          <div className="flex items-center gap-2 mb-8 mt-2 px-2">
             <Icon name="logo" className="w-8 h-8 text-[#52a37c]" />
             <h1 className="text-xl font-bold tracking-tight">Artea POS</h1>
@@ -170,20 +169,16 @@ const AppContent = () => {
              )}
              <div className="my-4 border-t border-slate-700/50 mx-2"></div>
              <p className="px-3 text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Sistem</p>
-             {/* Viewer dan Staff butuh akses Keuangan (Staff lokal only, Viewer read-only) */}
              <NavButton view="finance" icon="finance" label="Keuangan" />
-             {/* Viewer bisa akses settings untuk Audit Log */}
              {(isManagement || isViewer) && <NavButton view="settings" icon="settings" label="Pengaturan" />}
              <NavButton view="help" icon="help" label="Bantuan" />
          </div>
       </nav>
 
-      <main className="flex-1 flex flex-col overflow-hidden relative z-0">
-        <div className="flex-1 flex flex-col min-h-0">
-            <Header activeView={activeView} setActiveView={setActiveView} onMenuClick={() => setSidebarOpen(true)} />
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-900">
-                {renderView()}
-            </div>
+      <main className="flex-1 flex flex-col min-w-0 h-full relative z-0">
+        <Header activeView={activeView} setActiveView={setActiveView} onMenuClick={() => setSidebarOpen(true)} />
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-900 scroll-smooth">
+            {renderView()}
         </div>
       </main>
     </div>

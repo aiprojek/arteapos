@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { useCustomerDisplay } from '../context/CustomerDisplayContext';
 import { CURRENCY_FORMATTER } from '../constants';
@@ -72,9 +71,6 @@ const CustomerDisplayView: React.FC = () => {
             canvas.height = maxWidth / ratio;
 
             // 2. Draw
-            // Optional: Flip horizontally if we want to save "mirror" image as seen? 
-            // Usually better to save normal image so text is readable. 
-            // But user sees mirror. Let's save normal image (readable text).
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
             // 3. Compress & Send
@@ -83,9 +79,7 @@ const CustomerDisplayView: React.FC = () => {
             // 4. Send back
             sendImageToCashier(dataUrl);
 
-            // 5. Cleanup UI (Wait a bit or stop immediately)
-            // Ideally we wait for next signal from cashier (e.g. Cart Update or Success)
-            // But for now let's stop camera locally to indicate success
+            // 5. Cleanup UI
             stopCamera();
         }
         setIsCapturing(false);
@@ -225,7 +219,8 @@ const CustomerDisplayView: React.FC = () => {
     }
 
     // --- WELCOME (CONNECTED BUT EMPTY) ---
-    if (receivedData.type === 'WELCOME' || (receivedData.cartItems && receivedData.cartItems.length === 0)) {
+    // Safe check: receivedData.cartItems might be undefined
+    if (receivedData.type === 'WELCOME' || (!receivedData.cartItems || receivedData.cartItems.length === 0)) {
         return (
             <div className="h-screen bg-slate-900 flex flex-col">
                 <header className="p-6 flex justify-between items-center border-b border-slate-800">
@@ -240,7 +235,6 @@ const CustomerDisplayView: React.FC = () => {
                 </header>
                 
                 <main className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-6">
-                    {/* CHANGED ICON HERE */}
                     <div className="w-64 h-64 bg-slate-800 rounded-full flex items-center justify-center animate-pulse">
                         <Icon name="logo" className="w-32 h-32 text-[#52a37c]" />
                     </div>
@@ -267,7 +261,7 @@ const CustomerDisplayView: React.FC = () => {
                 </div>
             </header>
 
-            {/* SECURITY BANNER - CHANGED TEXT HERE */}
+            {/* SECURITY BANNER */}
             <div className="bg-yellow-600 text-black font-bold text-center py-2 px-4 text-sm sm:text-base animate-pulse shadow-md z-20">
                 ⚠️ PASTIKAN ANDA MENERIMA STRUK/BUKTI TRANSAKSI SETELAH PEMBAYARAN
             </div>
@@ -275,7 +269,7 @@ const CustomerDisplayView: React.FC = () => {
             <div className="flex-1 flex overflow-hidden">
                 {/* Left: Item List */}
                 <div className="flex-1 p-4 overflow-y-auto space-y-3">
-                    {receivedData.cartItems.map((item, idx) => (
+                    {(receivedData.cartItems || []).map((item: any, idx: number) => (
                         <div key={`${item.cartItemId}-${idx}`} className="bg-slate-800 p-4 rounded-xl flex justify-between items-center border-l-4 border-[#347758] shadow-sm animate-fade-in">
                             <div className="flex items-center gap-4">
                                 <div className="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center font-bold text-xl text-white">
@@ -285,7 +279,7 @@ const CustomerDisplayView: React.FC = () => {
                                     <h3 className="text-xl font-semibold text-white">{item.name}</h3>
                                     {/* Addons / Modifiers */}
                                     <div className="text-sm text-slate-400">
-                                        {[...(item.selectedAddons || []), ...(item.selectedModifiers || [])].map((mod, i) => (
+                                        {[...(item.selectedAddons || []), ...(item.selectedModifiers || [])].map((mod: any, i: number) => (
                                             <span key={i} className="mr-2">+ {mod.name}</span>
                                         ))}
                                     </div>
@@ -296,8 +290,8 @@ const CustomerDisplayView: React.FC = () => {
                                 <p className="text-xl font-bold text-white">
                                     {CURRENCY_FORMATTER.format(
                                         (item.price + 
-                                        (item.selectedAddons?.reduce((s,a)=>s+a.price,0)||0) + 
-                                        (item.selectedModifiers?.reduce((s,m)=>s+m.price,0)||0)) * item.quantity
+                                        (item.selectedAddons?.reduce((s:number,a:any)=>s+a.price,0)||0) + 
+                                        (item.selectedModifiers?.reduce((s:number,m:any)=>s+m.price,0)||0)) * item.quantity
                                     )}
                                 </p>
                                 {item.discount && (
@@ -315,7 +309,7 @@ const CustomerDisplayView: React.FC = () => {
                     <div className="space-y-4 mb-8">
                         <div className="flex justify-between text-lg text-slate-400">
                             <span>Subtotal</span>
-                            <span>{CURRENCY_FORMATTER.format(receivedData.subtotal)}</span>
+                            <span>{CURRENCY_FORMATTER.format(receivedData.subtotal || 0)}</span>
                         </div>
                         {receivedData.discount > 0 && (
                             <div className="flex justify-between text-lg text-green-400 font-bold">
@@ -334,7 +328,7 @@ const CustomerDisplayView: React.FC = () => {
                     <div className="border-t-2 border-slate-600 pt-6">
                         <p className="text-sm text-slate-400 uppercase tracking-widest mb-2">Total Bayar</p>
                         <p className="text-5xl font-bold text-white break-words">
-                            {CURRENCY_FORMATTER.format(receivedData.total)}
+                            {CURRENCY_FORMATTER.format(receivedData.total || 0)}
                         </p>
                     </div>
 

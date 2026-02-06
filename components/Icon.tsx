@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { LOGO_PATH } from '../constants';
 
@@ -12,19 +11,17 @@ export type IconName =
   | 'chevron-down' | 'chevron-up' | 'keyboard' | 'play' | 'wifi' | 'database' 
   | 'warning' | 'question' | 'bluetooth' | 'lock' | 'clipboard' | 'boxes' | 'file-lock' 
   | 'clock-history' | 'eye' | 'cloud' | 'shop' | 'tools' | 'money' | 'lightbulb' | 'cast'
-  | 'zoom-in' | 'zoom-out' | 'dash' | 'sync'; // Added new icons
+  | 'zoom-in' | 'zoom-out' | 'dash' | 'sync'; 
 
 interface IconProps {
   name: IconName;
   className?: string;
   title?: string;
-  style?: React.CSSProperties; // Added style prop support
+  style?: React.CSSProperties;
 }
 
-const Icon: React.FC<IconProps> = ({ name, className = 'w-6 h-6', title, style }) => {
+const Icon: React.FC<IconProps> = ({ name, className = '', title, style }) => {
   
-  // Khusus Logo, tetap gunakan SVG custom untuk branding yang tajam
-  // Menggunakan LOGO_PATH dari constants.ts agar tidak duplikasi dan rusak
   if (name === 'logo') {
     return (
       <svg
@@ -41,7 +38,6 @@ const Icon: React.FC<IconProps> = ({ name, className = 'w-6 h-6', title, style }
     );
   }
 
-  // Mapping nama icon aplikasi ke class Bootstrap Icons
   const iconMap: Record<string, string> = {
     cash: 'bi-cash-coin',
     products: 'bi-box-seam',
@@ -108,9 +104,15 @@ const Icon: React.FC<IconProps> = ({ name, className = 'w-6 h-6', title, style }
 
   const biClass = iconMap[name] || 'bi-question-square';
 
-  // Smart Sizing Logic
+  // FIX: Logika ukuran font yang lebih pintar.
+  // Hanya tambahkan sizeClass default jika TIDAK ada class ukuran text (text-xs, text-sm, text-base, text-lg, text-xl, dll)
+  // Class warna (text-red-500) TIDAK boleh dianggap sebagai ukuran.
   let sizeClass = '';
-  if (!className.includes('text-')) {
+  
+  // Cek apakah ada class yang diawali 'text-' TAPI diikuti indikator ukuran
+  const hasTextSize = /\btext-(xs|sm|base|lg|xl|[2-9]xl|\[\d+)/.test(className);
+
+  if (!hasTextSize) {
       if (className.includes('w-3')) sizeClass = 'text-xs';
       else if (className.includes('w-4')) sizeClass = 'text-base'; // 16px
       else if (className.includes('w-5')) sizeClass = 'text-xl';   // 20px
@@ -122,12 +124,13 @@ const Icon: React.FC<IconProps> = ({ name, className = 'w-6 h-6', title, style }
       else if (className.includes('w-20')) sizeClass = 'text-7xl';
       else if (className.includes('w-24')) sizeClass = 'text-8xl';
       else if (className.includes('w-32')) sizeClass = 'text-9xl';
-      else sizeClass = 'text-xl'; // Default fallback
+      else sizeClass = 'text-xl'; // Default fallback agar ikon tidak terlalu kecil
   }
 
+  // Gabungkan kelas base 'bi' agar ikon bootstrap muncul, lalu kelas custom
   return (
     <i 
-      className={`bi ${biClass} ${className} ${sizeClass} inline-flex items-center justify-center leading-none shrink-0`} 
+      className={`bi ${biClass} ${sizeClass} ${className} inline-flex items-center justify-center leading-none shrink-0`} 
       title={title}
       style={style}
       aria-hidden="true"

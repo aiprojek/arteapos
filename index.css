@@ -1,9 +1,22 @@
+/* 
+   Karena kita menggunakan CDN di index.html untuk preview Google AI Studio, 
+   kita tidak menggunakan @tailwind directives di sini untuk menghindari error syntax di browser.
+*/
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Setup Root untuk Aplikasi Full Screen (SPA) */
+html, body, #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* Mencegah scroll pada body */
+    -webkit-tap-highlight-color: transparent;
+    background-color: #0f172a; /* Fallback bg-slate-900 */
+    color: #f1f5f9; /* Fallback text-slate-100 */
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
 
-/* Custom Scrollbar untuk tampilan lebih rapi di Desktop/Web */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -19,7 +32,7 @@
     background: #475569; 
 }
 
-/* Hide Scrollbar for specific class but allow scroll */
+/* Hide Scrollbar class */
 .scrollbar-hide::-webkit-scrollbar {
     display: none;
 }
@@ -46,20 +59,14 @@
     animation: shake 0.2s ease-in-out 0s 2;
 }
 
-/* --- BARCODE SCANNER NATIVE FIX --- */
-/* Saat class ini ditambahkan ke body, paksa semua background jadi transparan */
+/* Barcode Scanner Fixes */
 body.barcode-scanner-active {
     background-color: transparent !important;
     background: transparent !important;
 }
-
 body.barcode-scanner-active #root {
-    background-color: transparent !important;
-    background: transparent !important;
-    display: none; /* Opsional: Sembunyikan UI React sepenuhnya agar lebih ringan */
+    display: none;
 }
-
-/* Pastikan elemen html juga transparan */
 html.barcode-scanner-active {
     background-color: transparent !important;
 }

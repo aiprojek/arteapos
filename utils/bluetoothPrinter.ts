@@ -3,7 +3,7 @@ import type { Transaction, ReceiptSettings } from '../types';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
 // --- NATIVE PLUGIN INTERFACE ---
-// Ini mendefinisikan apa yang ada di file Java (BluetoothPrinterPlugin.java)
+// Definisi ini harus cocok 100% dengan metode di Java (BluetoothPrinterPlugin.java)
 interface BluetoothPrinterPlugin {
     listPairedDevices(): Promise<{ devices: { name: string; address: string }[] }>;
     connect(options: { address: string }): Promise<void>;
@@ -178,8 +178,17 @@ export const bluetoothPrinterService = {
     // --- NATIVE METHODS (Android) ---
     listPairedDevicesNative: async () => {
         if (!Capacitor.isNativePlatform()) throw new Error("Fitur ini hanya untuk Android App.");
-        const result = await BluetoothPrinter.listPairedDevices();
-        return result.devices;
+        
+        try {
+            const result = await BluetoothPrinter.listPairedDevices();
+            return result.devices;
+        } catch (e: any) {
+            // Deteksi pesan error 'not implemented' untuk memberi saran build ulang
+            if (e.message && (e.message.includes("not implemented") || e.message.includes("Plugin"))) {
+                 throw new Error("Plugin Bluetooth belum terinstall di APK ini. Mohon build ulang APK.");
+            }
+            throw e;
+        }
     },
 
     // --- WEB METHODS (PC/LAPTOP) ---
@@ -246,18 +255,15 @@ export const bluetoothPrinterService = {
                     // Connect & Print via Plugin
                     await BluetoothPrinter.connect({ address: settings.printerMacAddress });
                     await BluetoothPrinter.print({ data: base64Data });
-                    // Opsional: disconnect atau biarkan keep-alive. 
-                    // Printer thermal biasanya auto-close socket setelah idle.
-                    // await BluetoothPrinter.disconnect(); 
                     return;
                 } catch (e: any) {
                     console.error("Native Print Failed:", e);
-                    // Jika gagal, lanjut ke Fallback Intent
-                    alert(`Direct Print Gagal (${e.message}). Mengalihkan ke aplikasi eksternal...`);
+                    // Jika gagal native, fall through ke Raw Thermal
+                    // alert(`Direct Print Gagal (${e.message}). Mengalihkan ke Raw Thermal...`);
                 }
             }
 
-            // OPSI 2: FALLBACK INTENT (RawBT / Raw Thermal External App)
+            // OPSI 2: FALLBACK INTENT (Raw Thermal External App)
             try {
                 const encoder = new TextEncoder();
                 const bytes = encoder.encode(rawData);
@@ -268,6 +274,7 @@ export const bluetoothPrinterService = {
                 }
                 const base64 = btoa(binary);
 
+                // FIX: Targetkan package Raw Thermal (com.rawthermal.app)
                 const intentUrl = `intent:base64,${base64}#Intent;scheme=rawbt;package=com.rawthermal.app;end;`;
                 window.location.href = intentUrl;
                 

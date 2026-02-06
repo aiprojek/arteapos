@@ -43,7 +43,6 @@ import java.util.UUID;
 public class BluetoothPrinterPlugin extends Plugin {
 
     private static final String TAG = "BluetoothPrinter";
-    // UUID Standar untuk Printer Thermal (SPP)
     private static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
     private BluetoothAdapter bluetoothAdapter;
@@ -85,9 +84,9 @@ public class BluetoothPrinterPlugin extends Plugin {
         }
 
         try {
-            // Permission check double (untuk linter Android)
-            if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED && Build.VERSION.SDK_INT >= 31) {
-                 call.reject("Izin Connect belum diberikan.");
+            // Cek double permission sebelum akses API sensitif
+            if (Build.VERSION.SDK_INT >= 31 && ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                 call.reject("Izin Connect belum diberikan oleh sistem.");
                  return;
             }
 
@@ -106,6 +105,8 @@ public class BluetoothPrinterPlugin extends Plugin {
             JSObject ret = new JSObject();
             ret.put("devices", devices);
             call.resolve(ret);
+        } catch (SecurityException e) {
+            call.reject("Security Exception: " + e.getMessage());
         } catch (Exception e) {
             call.reject("Gagal scan perangkat: " + e.getMessage());
         }
@@ -137,26 +138,24 @@ public class BluetoothPrinterPlugin extends Plugin {
         }
 
         try {
-            // Tutup koneksi lama jika ada
-            closeSocket();
+            closeSocket(); // Bersihkan koneksi lama
 
             BluetoothDevice device = bluetoothAdapter.getRemoteDevice(address);
             
             // Cancel discovery agar koneksi lebih cepat
-            if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < 31) {
+            if (Build.VERSION.SDK_INT < 31 || ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED) {
                 bluetoothAdapter.cancelDiscovery();
             }
 
-            // Buat socket insecure (kadang lebih kompatibel dengan printer china murah)
+            // Coba koneksi insecure (lebih kompatibel dengan printer China)
             try {
                 bluetoothSocket = device.createRfcommSocketToServiceRecord(SPP_UUID);
             } catch (Exception e) {
-                 // Fallback method
                  bluetoothSocket = device.createInsecureRfcommSocketToServiceRecord(SPP_UUID);
             }
 
-            if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED && Build.VERSION.SDK_INT >= 31) {
-                 call.reject("Izin connect ditolak sistem.");
+            if (Build.VERSION.SDK_INT >= 31 && ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                 call.reject("Izin connect ditolak.");
                  return;
             }
             
@@ -166,9 +165,9 @@ public class BluetoothPrinterPlugin extends Plugin {
             call.resolve();
         } catch (IOException e) {
             closeSocket();
-            call.reject("Gagal Konek ke Printer: " + e.getMessage());
+            call.reject("Gagal Konek: Pastikan printer nyala & dekat. " + e.getMessage());
         } catch (Exception e) {
-            call.reject("Error tidak diketahui: " + e.getMessage());
+            call.reject("Error: " + e.getMessage());
         }
     }
 
@@ -192,7 +191,7 @@ public class BluetoothPrinterPlugin extends Plugin {
             call.resolve();
         } catch (IOException e) {
             closeSocket();
-            call.reject("Gagal kirim data (Koneksi putus): " + e.getMessage());
+            call.reject("Koneksi terputus saat mencetak: " + e.getMessage());
         }
     }
 
@@ -219,9 +218,9 @@ public class BluetoothPrinterPlugin extends Plugin {
 
     private boolean hasRequiredPermissions() {
         if (Build.VERSION.SDK_INT >= 31) {
+            // Android 12+ butuh izin Runtime 'bluetooth' yang sudah kita definisikan di atas (alias)
             return getPermissionState("bluetooth") == PermissionState.GRANTED;
         }
-        // Untuk Android 11 ke bawah, izin normal diurus oleh Manifest
         return true;
     }
 }

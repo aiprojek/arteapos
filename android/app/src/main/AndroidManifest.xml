@@ -11,27 +11,39 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FLASHLIGHT"/>
 
-    <!-- BLUETOOTH PERMISSIONS -->
-    <!-- Android 11 ke bawah -->
+    <!-- ============================================== -->
+    <!-- DIRECT BLUETOOTH CONNECTION PERMISSIONS        -->
+    <!-- ============================================== -->
+    
+    <!-- Legacy (Android 11 ke bawah) -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
 
-    <!-- Android 12+ (Target API 31+) -->
-    <!-- neverForLocation: Penting agar user tidak mengira kita melacak lokasi mereka hanya untuk scan printer -->
+    <!-- Modern (Android 12+ / API 31+) -->
+    <!-- 'neverForLocation' karena kita hanya scan printer, bukan melacak posisi user -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" tools:targetApi="31" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" tools:targetApi="31" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
-    <!-- Queries untuk mendeteksi aplikasi Raw Thermal -->
+    <!-- QUERIES: Izin untuk melihat aplikasi printer lain -->
     <queries>
+        <!-- Package Name Raw Thermal -->
         <package android:name="com.rawthermal.app" />
+        
+        <!-- Scheme Standar -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="rawbt" />
+        </intent>
+        
+        <!-- Scheme Alternatif (Jaga-jaga jika source code Raw Thermal diubah) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="rawthermal" />
         </intent>
     </queries>
 

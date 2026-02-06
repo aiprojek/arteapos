@@ -3,7 +3,6 @@ import type { Transaction, ReceiptSettings } from '../types';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
 // --- NATIVE PLUGIN INTERFACE ---
-// Definisi ini harus cocok 100% dengan metode di Java (BluetoothPrinterPlugin.java)
 interface BluetoothPrinterPlugin {
     listPairedDevices(): Promise<{ devices: { name: string; address: string }[] }>;
     connect(options: { address: string }): Promise<void>;
@@ -185,7 +184,7 @@ export const bluetoothPrinterService = {
         } catch (e: any) {
             // Deteksi pesan error 'not implemented' untuk memberi saran build ulang
             if (e.message && (e.message.includes("not implemented") || e.message.includes("Plugin"))) {
-                 throw new Error("Plugin Bluetooth belum terinstall di APK ini. Mohon build ulang APK.");
+                 throw new Error("Plugin Bluetooth belum terinstall di APK ini. Mohon build ulang APK agar plugin Java termuat.");
             }
             throw e;
         }
@@ -274,7 +273,10 @@ export const bluetoothPrinterService = {
                 }
                 const base64 = btoa(binary);
 
-                // FIX: Targetkan package Raw Thermal (com.rawthermal.app)
+                // FIX: Gunakan Scheme 'rawbt' karena itu standar protokol. 
+                // TAPI targetkan package khusus 'com.rawthermal.app'.
+                // Jika user mengubah source code Raw Thermal untuk listen 'rawthermal', 
+                // ini harus diubah manual, tapi defaultnya clone RawBT tetap pakai scheme rawbt.
                 const intentUrl = `intent:base64,${base64}#Intent;scheme=rawbt;package=com.rawthermal.app;end;`;
                 window.location.href = intentUrl;
                 

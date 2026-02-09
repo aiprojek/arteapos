@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { LOGO_PATH } from '../constants';
 
@@ -11,7 +12,7 @@ export type IconName =
   | 'chevron-down' | 'chevron-up' | 'keyboard' | 'play' | 'wifi' | 'database' 
   | 'warning' | 'question' | 'bluetooth' | 'lock' | 'clipboard' | 'boxes' | 'file-lock' 
   | 'clock-history' | 'eye' | 'cloud' | 'shop' | 'tools' | 'money' | 'lightbulb' | 'cast'
-  | 'zoom-in' | 'zoom-out' | 'dash' | 'sync'; 
+  | 'zoom-in' | 'zoom-out' | 'dash' | 'sync' | 'calculator'; 
 
 interface IconProps {
   name: IconName;
@@ -99,7 +100,8 @@ const Icon: React.FC<IconProps> = ({ name, className = '', title, style }) => {
     'zoom-in': 'bi-zoom-in',
     'zoom-out': 'bi-zoom-out',
     dash: 'bi-dash',
-    sync: 'bi-arrow-repeat'
+    sync: 'bi-arrow-repeat',
+    calculator: 'bi-calculator'
   };
 
   const biClass = iconMap[name] || 'bi-question-square';

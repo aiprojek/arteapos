@@ -1,40 +1,31 @@
 
 import type { Transaction, ReceiptSettings } from '../types';
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor } from '@capacitor/core';
 
-// --- NATIVE PLUGIN INTERFACE ---
-interface BluetoothPrinterPlugin {
-    listPairedDevices(): Promise<{ devices: { name: string; address: string }[] }>;
-    connect(options: { address: string }): Promise<void>;
-    disconnect(): Promise<void>;
-    print(options: { data: string }): Promise<void>;
-}
-
-const BluetoothPrinter = registerPlugin<BluetoothPrinterPlugin>('BluetoothPrinter');
-
-// --- WEB BLUETOOTH INTERFACE ---
-interface BluetoothRemoteGATTCharacteristic {
-    writeValue(value: BufferSource): Promise<void>;
-    properties: {
-        write: boolean;
-        writeWithoutResponse: boolean;
-    };
-}
-
+// --- DEFINISI GLOBAL UNTUK PLUGIN KOMUNITAS ---
 declare global {
-    interface Navigator {
-        bluetooth: any;
-    }
     interface Window {
-        AppInventor?: any;
+        bluetoothSerial?: {
+            isEnabled: (success: () => void, failure: (err: any) => void) => void;
+            enable: (success: () => void, failure: (err: any) => void) => void;
+            list: (success: (devices: any[]) => void, failure: (err: any) => void) => void;
+            connect: (macAddress: string, success: () => void, failure: (err: any) => void) => void;
+            disconnect: (success: () => void, failure: (err: any) => void) => void;
+            write: (data: any, success: () => void, failure: (err: any) => void) => void;
+            isConnected: (success: () => void, failure: () => void) => void;
+        };
+        AppInventor?: any; // Kodular Legacy
+    }
+    interface Navigator {
+        bluetooth: any; // Web Bluetooth
     }
 }
 
+// --- ESC/POS COMMANDS ---
 const ESC = '\x1B';
 const GS = '\x1D';
 const LF = '\x0A';
 
-// ESC/POS Commands
 const COMMANDS = {
     INIT: ESC + '@',
     ALIGN_LEFT: ESC + 'a' + '\x00',
@@ -45,8 +36,6 @@ const COMMANDS = {
     SIZE_NORMAL: GS + '!' + '\x00',
     SIZE_LARGE: GS + '!' + '\x11', 
     CUT: GS + 'V' + '\x41' + '\x00', 
-    FONT_B: ESC + 'M' + '\x01', 
-    FONT_A: ESC + 'M' + '\x00', 
 };
 
 const formatCurrencySafe = (amount: number): string => {
@@ -60,7 +49,7 @@ const formatNumberSafe = (amount: number): string => {
     return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
-// Generate ESC/POS Data String
+// Generate Struk String
 const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings): string => {
     let data = '';
 
@@ -76,17 +65,8 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
     data += COMMANDS.ALIGN_LEFT;
     data += `ID: ${transaction.id.slice(-6)}` + LF;
     data += `Tgl: ${new Date(transaction.createdAt).toLocaleString('id-ID')}` + LF;
-    
-    if (transaction.userName) {
-        data += `Kasir: ${transaction.userName}` + LF;
-    }
-    if (transaction.customerName) {
-        data += `Plg: ${transaction.customerName}` + LF;
-    }
-    if (transaction.orderType) {
-        const type = transaction.orderType.charAt(0).toUpperCase() + transaction.orderType.slice(1);
-        data += `Tipe: ${type}` + LF;
-    }
+    if (transaction.userName) data += `Kasir: ${transaction.userName}` + LF;
+    if (transaction.customerName) data += `Plg: ${transaction.customerName}` + LF;
     
     // Table Info
     if (transaction.tableNumber) {
@@ -124,13 +104,8 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
         data += `Diskon: -${discText}` + LF;
     }
     
-    if (transaction.serviceCharge > 0) {
-        data += `Service: ${formatCurrencySafe(transaction.serviceCharge)}` + LF;
-    }
-
-    if (transaction.tax > 0) {
-        data += `Pajak: ${formatCurrencySafe(transaction.tax)}` + LF;
-    }
+    if (transaction.serviceCharge > 0) data += `Service: ${formatCurrencySafe(transaction.serviceCharge)}` + LF;
+    if (transaction.tax > 0) data += `Pajak: ${formatCurrencySafe(transaction.tax)}` + LF;
     
     data += COMMANDS.BOLD_ON;
     data += `TOTAL: ${formatCurrencySafe(transaction.total)}` + LF;
@@ -138,27 +113,18 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
     data += `Bayar: ${formatCurrencySafe(transaction.amountPaid)}` + LF;
     
     const kembalian = transaction.amountPaid - transaction.total;
-    if(kembalian > 0) {
-         data += `Kembali: ${formatCurrencySafe(kembalian)}` + LF;
-    } else if (kembalian < 0) {
-         data += `Kurang: ${formatCurrencySafe(Math.abs(kembalian))}` + LF;
-    }
+    if(kembalian > 0) data += `Kembali: ${formatCurrencySafe(kembalian)}` + LF;
+    else if (kembalian < 0) data += `Kurang: ${formatCurrencySafe(Math.abs(kembalian))}` + LF;
 
     if (transaction.customerId) {
         data += '--------------------------------' + LF;
         data += COMMANDS.ALIGN_LEFT;
-        if (transaction.customerBalanceSnapshot !== undefined) {
-            const saldo = formatCurrencySafe(transaction.customerBalanceSnapshot);
-            data += `Sisa Saldo: ${saldo}` + LF;
-        }
-        if (transaction.customerPointsSnapshot !== undefined) {
-            data += `Sisa Poin : ${transaction.customerPointsSnapshot} pts` + LF;
-        }
+        if (transaction.customerBalanceSnapshot !== undefined) data += `Sisa Saldo: ${formatCurrencySafe(transaction.customerBalanceSnapshot)}` + LF;
+        if (transaction.customerPointsSnapshot !== undefined) data += `Sisa Poin : ${transaction.customerPointsSnapshot} pts` + LF;
     }
 
     data += COMMANDS.ALIGN_CENTER;
     data += LF + settings.footerMessage + LF;
-    data += COMMANDS.FONT_B; 
     data += '--------------------------------' + LF;
     data += 'Powered by Artea POS' + LF;
     data += 'aiprojek01.my.id' + LF; 
@@ -169,55 +135,64 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
     return data.replace(/[^\x00-\x7F]/g, "");
 };
 
-// State untuk Web Bluetooth (Browser only fallback)
-let webPrinterCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
+// State untuk Web Bluetooth
+let webPrinterCharacteristic: any | null = null;
+
+// Helper: Wrap BluetoothSerial callback style to Promise
+const btSerial = {
+    isEnabled: () => new Promise((resolve, reject) => window.bluetoothSerial?.isEnabled(() => resolve(undefined), reject)),
+    list: () => new Promise<any[]>((resolve, reject) => window.bluetoothSerial?.list(resolve, reject)),
+    connect: (mac: string) => new Promise<void>((resolve, reject) => window.bluetoothSerial?.connect(mac, () => resolve(), reject)),
+    write: (data: string) => new Promise<void>((resolve, reject) => window.bluetoothSerial?.write(data, () => resolve(), reject)),
+    isConnected: () => new Promise<void>((resolve, reject) => window.bluetoothSerial?.isConnected(() => resolve(), () => reject()))
+};
 
 export const bluetoothPrinterService = {
     
-    // --- NATIVE METHODS (Android) ---
+    // --- NATIVE METHODS (Menggunakan Plugin Komunitas) ---
     listPairedDevicesNative: async () => {
         if (!Capacitor.isNativePlatform()) throw new Error("Fitur ini hanya untuk Android App.");
         
+        if (!window.bluetoothSerial) {
+            throw new Error("Plugin 'bluetooth-serial' belum terinstall. Mohon jalankan 'npm install && npx cap sync'.");
+        }
+
         try {
-            const result = await BluetoothPrinter.listPairedDevices();
-            return result.devices;
+            await btSerial.isEnabled();
+        } catch (e) {
+            throw new Error("Bluetooth mati. Harap nyalakan Bluetooth.");
+        }
+
+        try {
+            const devices = await btSerial.list();
+            return devices.map(d => ({ name: d.name, address: d.address }));
         } catch (e: any) {
-            // Deteksi pesan error 'not implemented' untuk memberi saran build ulang
-            if (e.message && (e.message.includes("not implemented") || e.message.includes("Plugin"))) {
-                 throw new Error("Plugin Bluetooth belum terinstall di APK ini. Mohon build ulang APK agar plugin Java termuat.");
-            }
-            throw e;
+            throw new Error("Gagal mengambil daftar perangkat: " + e);
         }
     },
 
     // --- WEB METHODS (PC/LAPTOP) ---
-
     connectWeb: async (): Promise<boolean> => {
         if (!navigator.bluetooth) {
             throw new Error('Fitur Web Bluetooth tidak didukung. Gunakan Chrome/Edge.');
         }
-
         try {
             const device = await navigator.bluetooth.requestDevice({
                 filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }],
                 optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb'],
                 acceptAllDevices: false 
             });
-
             if (!device || !device.gatt) return false;
-
             const server = await device.gatt.connect();
             const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
             const characteristics = await service.getCharacteristics();
-            const writeChar = characteristics.find((c: BluetoothRemoteGATTCharacteristic) => c.properties.write || c.properties.writeWithoutResponse);
-
+            const writeChar = characteristics.find((c: any) => c.properties.write || c.properties.writeWithoutResponse);
             if (writeChar) {
                 webPrinterCharacteristic = writeChar;
                 return true;
             } else {
                 throw new Error('Karakteristik Write tidak ditemukan pada printer ini.');
             }
-
         } catch (error: any) {
             console.error('Web Bluetooth Connection Error:', error);
             throw error;
@@ -225,7 +200,6 @@ export const bluetoothPrinterService = {
     },
 
     // --- MAIN PRINT FUNCTION ---
-
     printReceipt: async (transaction: Transaction, settings: ReceiptSettings): Promise<void> => {
         const rawData = generateReceiptData(transaction, settings);
 
@@ -235,34 +209,30 @@ export const bluetoothPrinterService = {
             return;
         }
 
-        // 1. ANDROID NATIVE
+        // 1. ANDROID NATIVE (Plugin Komunitas)
         if (Capacitor.isNativePlatform() || /Android/i.test(navigator.userAgent)) {
             
-            // OPS 1: DIRECT NATIVE CONNECTION (Jika Mac Address disetting)
-            if (settings.printerMacAddress) {
+            // OPSI 1: Plugin Native (bluetooth-serial)
+            if (window.bluetoothSerial && settings.printerMacAddress) {
                 try {
-                    // Encode ke Base64 karena plugin Java butuh string
-                    const encoder = new TextEncoder();
-                    const bytes = encoder.encode(rawData);
-                    let binary = '';
-                    const len = bytes.byteLength;
-                    for (let i = 0; i < len; i++) {
-                        binary += String.fromCharCode(bytes[i]);
+                    // Cek koneksi, jika belum connect, connect dulu
+                    try {
+                        await btSerial.isConnected();
+                    } catch (e) {
+                        await btSerial.connect(settings.printerMacAddress);
                     }
-                    const base64Data = btoa(binary);
-
-                    // Connect & Print via Plugin
-                    await BluetoothPrinter.connect({ address: settings.printerMacAddress });
-                    await BluetoothPrinter.print({ data: base64Data });
+                    
+                    // Kirim data
+                    await btSerial.write(rawData);
                     return;
                 } catch (e: any) {
                     console.error("Native Print Failed:", e);
-                    // Jika gagal native, fall through ke Raw Thermal
-                    // alert(`Direct Print Gagal (${e.message}). Mengalihkan ke Raw Thermal...`);
+                    // Jika gagal, lanjut ke Fallback Intent
                 }
             }
 
-            // OPSI 2: FALLBACK INTENT (Raw Thermal External App)
+            // OPSI 2: FALLBACK INTENT (Raw Thermal)
+            // Ini opsi paling aman jika plugin gagal atau belum disetting
             try {
                 const encoder = new TextEncoder();
                 const bytes = encoder.encode(rawData);
@@ -273,18 +243,12 @@ export const bluetoothPrinterService = {
                 }
                 const base64 = btoa(binary);
 
-                // FIX: Gunakan Scheme 'rawbt' karena itu standar protokol. 
-                // TAPI targetkan package khusus 'com.rawthermal.app'.
-                // Jika user mengubah source code Raw Thermal untuk listen 'rawthermal', 
-                // ini harus diubah manual, tapi defaultnya clone RawBT tetap pakai scheme rawbt.
+                // Package Raw Thermal sesuai request
                 const intentUrl = `intent:base64,${base64}#Intent;scheme=rawbt;package=com.rawthermal.app;end;`;
                 window.location.href = intentUrl;
-                
                 return;
-                
             } catch (e: any) {
-                console.error("Print Intent Error:", e);
-                throw new Error("Gagal memproses data cetak: " + e.message);
+                throw new Error("Gagal memproses data cetak ke Raw Thermal: " + e.message);
             }
         }
 
@@ -300,14 +264,12 @@ export const bluetoothPrinterService = {
                     await new Promise(r => setTimeout(r, 20)); 
                 }
             } catch (e: any) {
-                console.error('Failed to print via Web Bluetooth', e);
                 webPrinterCharacteristic = null; 
                 throw new Error('Koneksi printer terputus. Silakan hubungkan ulang.');
             }
             return;
         }
         
-        // Fallback if no method available
-        throw new Error("Printer belum terhubung.\n\nAndroid: Set Printer di Menu Hardware atau install Raw Thermal.\nPC: Klik 'Cari Printer' terlebih dahulu.");
+        throw new Error("Printer belum terhubung. Silakan hubungkan di menu Pengaturan.");
     }
 };

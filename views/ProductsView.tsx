@@ -705,30 +705,39 @@ const ProductForm = React.forwardRef<HTMLFormElement, ProductFormProps>(({
             <div className="grid grid-cols-2 gap-4">
                 <InputField name="price" label="Harga Jual" type="number" required value={form.price || ''} onChange={e => setForm({...form, price: parseFloat(e.target.value)})} />
                 
-                {/* HIDE COST PRICE FOR STAFF */}
+                {/* MODIFIED: HPP INPUT + BUTTON CALCULATOR */}
                 {!isStaff && (
                     <div>
-                        <div className="flex justify-between items-center mb-1">
-                             <label htmlFor="costPrice" className="block text-sm font-medium text-slate-300">Harga Modal (HPP)</label>
-                             {inventorySettings.trackIngredients && (
-                                <button 
-                                    type="button" 
+                        <label htmlFor="costPrice" className="block text-sm font-medium text-slate-300 mb-1">
+                            Harga Modal (HPP)
+                        </label>
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <input
+                                    type="number"
+                                    id="costPrice"
+                                    name="costPrice"
+                                    value={form.costPrice || ''}
+                                    onChange={e => setForm({...form, costPrice: parseFloat(e.target.value)})}
+                                    className="w-full bg-slate-900 border border-slate-600 rounded-lg pl-3 pr-3 py-2 text-white focus:border-[#347758] outline-none"
+                                    placeholder="Manual"
+                                />
+                            </div>
+                            {inventorySettings.trackIngredients && (
+                                <Button
+                                    type="button"
                                     onClick={calculateAutoHPP}
-                                    className="text-[10px] text-sky-400 hover:text-white underline"
-                                    title="Hitung HPP berdasarkan total harga bahan baku di Resep"
+                                    variant="secondary"
+                                    className="px-3"
+                                    title="Hitung otomatis dari total harga bahan baku (Resep)"
                                 >
-                                    Hitung Otomatis
-                                </button>
-                             )}
+                                    <Icon name="calculator" className="w-4 h-4 text-sky-400" />
+                                </Button>
+                            )}
                         </div>
-                        <input
-                            type="number"
-                            id="costPrice"
-                            name="costPrice"
-                            value={form.costPrice || ''}
-                            onChange={e => setForm({...form, costPrice: parseFloat(e.target.value)})}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
-                        />
+                        <p className="text-[10px] text-slate-500 mt-1">
+                            *Isi manual atau gunakan tombol kalkulator untuk hitung dari resep.
+                        </p>
                     </div>
                 )}
             </div>

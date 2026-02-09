@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Button from '../Button';
 import Icon from '../Icon';
 import { bluetoothPrinterService } from '../../utils/bluetoothPrinter';
@@ -71,7 +71,7 @@ const HardwareTab: React.FC = () => {
                 showAlert({type: 'alert', title: 'Tidak Ditemukan', message: 'Tidak ada perangkat Bluetooth yang ter-pairing. Silakan pairing printer di Pengaturan Bluetooth HP terlebih dahulu.'});
             }
         } catch (e: any) {
-            showAlert({type: 'alert', title: 'Gagal Scan', message: e.message});
+            showAlert({type: 'alert', title: 'Gagal Scan', message: e.message + " (Pastikan Anda sudah menjalankan 'npx cap sync') "});
         } finally {
             setIsScanningBt(false);
         }
@@ -90,16 +90,20 @@ const HardwareTab: React.FC = () => {
         try {
             await bluetoothPrinterService.printReceipt(getDummyTransaction(), receiptSettings);
         } catch (e: any) {
+            // Error handling khusus agar tidak menakuti user
+            let msg = e.message;
+            if (msg.includes('socket closed') || msg.includes('read failed')) {
+                msg = "Koneksi terputus. Pastikan printer nyala dan dekat.";
+            }
             showAlert({ 
                 type: 'alert', 
                 title: 'Gagal Cetak', 
-                message: e.message 
+                message: msg 
             });
         }
     };
 
     const handleDownloadRawThermal = () => {
-        // Link resmi Raw Thermal GitHub Release
         window.open('https://github.com/aiprojek/raw-thermal/releases/tag/release', '_blank');
     }
 
@@ -148,9 +152,9 @@ const HardwareTab: React.FC = () => {
                 {isNative ? (
                     <div className="space-y-4">
                         <div className="bg-slate-900 p-3 rounded-lg border border-slate-600">
-                            <h4 className="text-sm font-bold text-white mb-2">Metode 1: Direct Connection (Recommended)</h4>
+                            <h4 className="text-sm font-bold text-white mb-2">Direct Connection (Plugin Komunitas)</h4>
                             <p className="text-xs text-slate-400 mb-3">
-                                Koneksi langsung ke printer tanpa aplikasi tambahan. Pastikan printer sudah di-pairing di menu Bluetooth HP.
+                                Metode ini menggunakan plugin standar 'bluetooth-serial'. Lebih stabil di berbagai merk HP.
                             </p>
                             
                             {receiptSettings.printerMacAddress ? (
@@ -186,9 +190,9 @@ const HardwareTab: React.FC = () => {
                         </div>
 
                         <div className="bg-slate-900 p-3 rounded-lg border border-slate-600 opacity-80">
-                            <h4 className="text-sm font-bold text-white mb-2">Metode 2: Driver Eksternal (Raw Thermal)</h4>
+                            <h4 className="text-sm font-bold text-white mb-2">Fallback Driver (Raw Thermal)</h4>
                             <p className="text-xs text-slate-400 mb-2">
-                                Gunakan ini jika Direct Connection gagal. Butuh install aplikasi 'Raw Thermal'.
+                                Jika Direct Connection masih gagal, gunakan aplikasi Raw Thermal.
                             </p>
                             <Button onClick={handleDownloadRawThermal} variant="secondary" size="sm" className="w-full bg-slate-700">
                                 <Icon name="download" className="w-4 h-4"/> Install Driver (GitHub)

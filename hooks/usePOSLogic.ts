@@ -176,7 +176,7 @@ export const usePOSLogic = () => {
         setStartingCashInput('');
     };
 
-    const handleSaveCustomer = (customerData: Omit<Customer, 'id' | 'memberId' | 'points' | 'createdAt'> | Customer) => {
+    const handleSaveCustomer = (customerData: Omit<Customer, 'id' | 'memberId' | 'points' | 'balance' | 'createdAt'> | Customer) => {
         addCustomer(customerData);
         setCustomerModalOpen(false);
         showAlert({ type: 'alert', title: 'Berhasil', message: 'Pelanggan berhasil ditambahkan.' });

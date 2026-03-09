@@ -2,12 +2,13 @@
 import { Dropbox, DropboxAuth } from 'dropbox';
 import { dataService } from './dataService';
 import { db } from './db'; 
-import type { AppData, ReceiptSettings, StockTransferPayload } from '../types';
+import type { AppData, ReceiptSettings, StockTransferPayload, PinResetTicket } from '../types';
 import { encryptStorage, decryptStorage } from '../utils/crypto'; // Import crypto
 
 const MASTER_DATA_FILENAME = '/artea_pos_master_config.json';
 const BRANCH_FOLDER = '/Cabang_Data'; 
 const TRANSFER_FOLDER = '/Transfer_Stok'; // NEW FOLDER
+const RECOVERY_FOLDER = '/Recovery_Tickets';
 
 // Key Constants
 const KEY_APP_KEY = 'ARTEA_DBX_KEY';
@@ -31,6 +32,12 @@ const retryOperation = async <T>(operation: () => Promise<T>, retries = 3, delay
         await wait(delay);
         return retryOperation(operation, retries - 1, delay * 1.5); // Exponential backoff-ish
     }
+};
+
+const sha256Hex = async (input: string): Promise<string> => {
+    const data = new TextEncoder().encode(input);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
 // Safe Local Storage Helper to prevent SecurityError in iframes/sandboxes
@@ -102,13 +109,14 @@ export const dropboxService = {
     
     getAuthUrl: async (clientId: string): Promise<string> => {
         const dbx = new DropboxAuth({ clientId });
-        return await dbx.getAuthenticationUrl('', undefined, 'code', 'offline', undefined, undefined, false);
+        const url = await dbx.getAuthenticationUrl('', undefined, 'code', 'offline', undefined, undefined, false);
+        return String(url);
     },
 
     exchangeCodeForToken: async (clientId: string, clientSecret: string, code: string): Promise<string> => {
         const dbx = new DropboxAuth({ clientId, clientSecret });
         const response = await dbx.getAccessTokenFromCode('', code);
-        const refreshToken = response.result.refresh_token;
+        const refreshToken = (response.result as any).refresh_token as string | undefined;
         if (!refreshToken) throw new Error("Gagal mendapatkan Refresh Token. Pastikan App Dropbox diatur permission-nya.");
         return refreshToken;
     },
@@ -133,7 +141,6 @@ export const dropboxService = {
         try {
             const settings = await db.settings.get('receiptSettings');
             const receiptSettings = settings?.value as ReceiptSettings;
-            const storeId = receiptSettings?.storeId ? receiptSettings.storeId.replace(/[^a-zA-Z0-9-_]/g, '') : 'MAIN';
             // Note: We use a fixed filename for Master Data to ensure single source of truth for branches
             return MASTER_DATA_FILENAME;
         } catch (e) {
@@ -561,6 +568,137 @@ export const dropboxService = {
         } catch (error: any) {
             console.error('Fetch Transfers Error:', error);
             throw new Error('Gagal mengecek transfer stok dari Dropbox.');
+        }
+    },
+
+    generatePinResetTicket: async (params: {
+        userId: string;
+        userName: string;
+        issuedByUserId: string;
+        issuedByName: string;
+        ttlMinutes?: number;
+    }): Promise<{ code: string; expiresAt: string; ticketId: string }> => {
+        try {
+            const dbx = dropboxService.getClient();
+            const safeUserId = params.userId.replace(/[^a-zA-Z0-9-_]/g, '');
+            const ticketId = `rst_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            const secret = Math.random().toString(36).slice(2, 8).toUpperCase();
+            const ttl = Math.min(Math.max(params.ttlMinutes || 10, 5), 30);
+            const now = new Date();
+            const expiresAt = new Date(now.getTime() + ttl * 60 * 1000).toISOString();
+            const secretHash = await sha256Hex(secret);
+
+            const ticket: PinResetTicket = {
+                ticketId,
+                userId: params.userId,
+                userName: params.userName,
+                issuedByUserId: params.issuedByUserId,
+                issuedByName: params.issuedByName,
+                createdAt: now.toISOString(),
+                expiresAt,
+                secretHash,
+                attempts: 0,
+                maxAttempts: 3,
+                status: 'active',
+            };
+
+            const path = `${RECOVERY_FOLDER}/${safeUserId}/${ticketId}.json`;
+            await retryOperation(() => dbx.filesUpload({
+                path,
+                contents: JSON.stringify(ticket),
+                mode: { '.tag': 'overwrite' }
+            }));
+
+            return {
+                code: `${ticketId}.${secret}`,
+                expiresAt,
+                ticketId
+            };
+        } catch (error: any) {
+            console.error('Generate Reset Ticket Error:', error);
+            throw new Error('Gagal membuat tiket reset PIN.');
+        }
+    },
+
+    redeemPinResetTicket: async (params: {
+        userId: string;
+        code: string;
+        consumedByUserId: string;
+        consumedByName: string;
+    }): Promise<void> => {
+        const raw = params.code.trim();
+        const [ticketId, secret] = raw.split('.');
+        if (!ticketId || !secret) throw new Error('Format kode tiket tidak valid.');
+
+        const safeUserId = params.userId.replace(/[^a-zA-Z0-9-_]/g, '');
+        const path = `${RECOVERY_FOLDER}/${safeUserId}/${ticketId}.json`;
+        const dbx = dropboxService.getClient();
+
+        try {
+            const dl = await retryOperation<any>(() => dbx.filesDownload({ path }));
+            // @ts-ignore
+            const text = await dl.result.fileBlob.text();
+            const ticket = JSON.parse(text) as PinResetTicket;
+
+            const now = new Date();
+            if (ticket.status !== 'active') throw new Error('Tiket sudah tidak aktif.');
+            if (new Date(ticket.expiresAt).getTime() <= now.getTime()) {
+                const expiredTicket: PinResetTicket = { ...ticket, status: 'expired' };
+                await retryOperation(() => dbx.filesUpload({
+                    path,
+                    contents: JSON.stringify(expiredTicket),
+                    mode: { '.tag': 'overwrite' }
+                }));
+                throw new Error('Tiket sudah kedaluwarsa.');
+            }
+
+            if (ticket.attempts >= ticket.maxAttempts) {
+                const lockedTicket: PinResetTicket = { ...ticket, status: 'locked' };
+                await retryOperation(() => dbx.filesUpload({
+                    path,
+                    contents: JSON.stringify(lockedTicket),
+                    mode: { '.tag': 'overwrite' }
+                }));
+                throw new Error('Tiket terkunci karena terlalu banyak percobaan.');
+            }
+
+            const inputHash = await sha256Hex(secret);
+            if (inputHash !== ticket.secretHash) {
+                const nextAttempts = ticket.attempts + 1;
+                const failedTicket: PinResetTicket = {
+                    ...ticket,
+                    attempts: nextAttempts,
+                    status: nextAttempts >= ticket.maxAttempts ? 'locked' : ticket.status
+                };
+                await retryOperation(() => dbx.filesUpload({
+                    path,
+                    contents: JSON.stringify(failedTicket),
+                    mode: { '.tag': 'overwrite' }
+                }));
+                throw new Error(nextAttempts >= ticket.maxAttempts
+                    ? 'Kode salah. Tiket telah dikunci.'
+                    : `Kode salah. Sisa percobaan: ${ticket.maxAttempts - nextAttempts}`);
+            }
+
+            const consumedTicket: PinResetTicket = {
+                ...ticket,
+                status: 'consumed',
+                consumedAt: now.toISOString(),
+                consumedByUserId: params.consumedByUserId,
+                consumedByName: params.consumedByName,
+                attempts: ticket.attempts + 1
+            };
+
+            await retryOperation(() => dbx.filesUpload({
+                path,
+                contents: JSON.stringify(consumedTicket),
+                mode: { '.tag': 'overwrite' }
+            }));
+        } catch (error: any) {
+            if (error?.status === 409 || error?.error?.error_summary?.includes('path/not_found')) {
+                throw new Error('Tiket tidak ditemukan.');
+            }
+            throw error;
         }
     }
 };

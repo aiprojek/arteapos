@@ -83,13 +83,16 @@ git clone https://github.com/aiprojek/arteapos.git
 # 2. Masuk ke direktori
 cd arteapos
 
-# 3. Instal dependensi
+# 3. Salin konfigurasi environment
+cp .env.example .env
+
+# 4. Instal dependensi
 npm install
 
-# 4. Jalankan mode pengembangan
+# 5. Jalankan mode pengembangan
 npm run dev
 
-# 5. Build untuk produksi
+# 6. Build untuk produksi
 npm run build
 ```
 

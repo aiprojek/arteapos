@@ -14,7 +14,7 @@ interface OnboardingModalsProps {
 }
 
 const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) => {
-    const { currentUser } = useAuth();
+    const { currentUser, users, authSettings } = useAuth();
     const [showManagementWelcome, setShowManagementWelcome] = useState(false);
     const [showStaffBriefing, setShowStaffBriefing] = useState(false);
     const [showLicenseModal, setShowLicenseModal] = useState(false);
@@ -88,6 +88,11 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
         });
     };
 
+    const isSingleAdminMissingRecovery =
+        currentUser?.role === 'admin' &&
+        users.filter(u => u.role === 'admin').length === 1 &&
+        !(authSettings.recoveryCodeHash && authSettings.recoveryCodeHash.trim().length > 0);
+
     // --- RENDER MANAGEMENT WELCOME (ADMIN & MANAGER & VIEWER) ---
     if (showManagementWelcome) {
         const roleLabel = 
@@ -121,12 +126,31 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
                                     💡 <strong>Tips:</strong> Atur "Store ID" di Pengaturan jika Anda mengelola banyak cabang.
                                 </p>
                             )}
+                            {isSingleAdminMissingRecovery && (
+                                <div className="bg-amber-900/20 border border-amber-700 p-3 rounded text-xs text-amber-200 mt-2 text-left">
+                                    <strong>Himbauan Keamanan (Admin Tunggal):</strong><br/>
+                                    Segera buat <strong>Recovery Code</strong> di menu Pengaturan {'>'} Otentikasi.
+                                    Kode ini dipakai jika Anda lupa PIN admin dan bersifat sekali pakai.
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex flex-col gap-3">
                             <Button onClick={() => setShowShowcase(true)} variant="secondary" className="w-full justify-center bg-blue-600/20 text-blue-200 border-blue-800 hover:bg-blue-600/40">
                                 <Icon name="star" className="w-5 h-5"/> Lihat Fitur Unggulan
                             </Button>
+
+                            {isSingleAdminMissingRecovery && (
+                                <Button
+                                    onClick={() => {
+                                        handleDismissManagement();
+                                        setActiveView('settings');
+                                    }}
+                                    className="w-full justify-center bg-amber-600 hover:bg-amber-500"
+                                >
+                                    Setup Recovery Code
+                                </Button>
+                            )}
                             
                             <div className="grid grid-cols-2 gap-2">
                                 <Button onClick={handleGoToHelp} variant="secondary" className="w-full justify-center">

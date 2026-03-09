@@ -12,9 +12,10 @@ import Modal from '../components/Modal';
 import Button from '../components/Button';
 import ShowcaseModal from '../components/ShowcaseModal'; 
 import type { User } from '../types';
+import { hashRecoveryCode } from '../utils/recoveryCode';
 
 const LoginView: React.FC = () => {
-    const { users, login, authSettings, overrideAdminPin } = useAuth(); 
+    const { users, login, authSettings, overrideAdminPin, resetPinWithTicket, updateAuthSettings } = useAuth(); 
     const { restoreData } = useData();
     const { showAlert, hideAlert } = useUI();
     const { receiptSettings } = useSettings();
@@ -37,6 +38,18 @@ const LoginView: React.FC = () => {
     // Reset PIN State
     const [newAdminPin, setNewAdminPin] = useState('');
     const [isResetSuccess, setIsResetSuccess] = useState(false);
+    const [isTicketModalOpen, setTicketModalOpen] = useState(false);
+    const [ticketCode, setTicketCode] = useState('');
+    const [ticketNewPin, setTicketNewPin] = useState('');
+    const [ticketConfirmPin, setTicketConfirmPin] = useState('');
+    const [ticketError, setTicketError] = useState('');
+    const [isForceChangeModalOpen, setForceChangeModalOpen] = useState(false);
+    const [forcedPin, setForcedPin] = useState('');
+    const [forcedPinConfirm, setForcedPinConfirm] = useState('');
+    const [forcedPinError, setForcedPinError] = useState('');
+    const [isRecoveryCodeModalOpen, setRecoveryCodeModalOpen] = useState(false);
+    const [recoveryCodeInput, setRecoveryCodeInput] = useState('');
+    const [recoveryCodeError, setRecoveryCodeError] = useState('');
     
     // Showcase State
     const [isShowcaseOpen, setShowcaseOpen] = useState(false);
@@ -149,8 +162,8 @@ const LoginView: React.FC = () => {
             }
         }
         
-        const success = await login(user, currentPin);
-        if (success) {
+        const loginResult = await login(user, currentPin);
+        if (loginResult.success) {
             // --- SECURITY CHECK: CAPTURE PHOTO OR METADATA ---
             const evidence = captureEvidence();
             
@@ -159,7 +172,6 @@ const LoginView: React.FC = () => {
                 auditDetail += ' (Disertai Foto)';
             } else {
                 // If no camera, record Device Info instead
-                const ua = navigator.userAgent;
                 const platform = navigator.platform;
                 auditDetail += ` (No Camera - Device: ${platform})`;
             }
@@ -189,7 +201,14 @@ const LoginView: React.FC = () => {
             });
             stopCamera();
         } else {
-            setError('PIN salah. Silakan coba lagi.');
+            if (loginResult.reason === 'FORCE_CHANGE_DEFAULT_PIN') {
+                setForcedPin('');
+                setForcedPinConfirm('');
+                setForcedPinError('');
+                setForceChangeModalOpen(true);
+            } else {
+                setError('PIN salah. Silakan coba lagi.');
+            }
             setTimeout(() => setPin(''), 500);
         }
     };
@@ -228,14 +247,66 @@ const LoginView: React.FC = () => {
     }
 
     const verifySecurityChallenge = () => {
-        const expectedAnswer = authSettings.securityAnswer || 'artea'; 
+        const expectedAnswer = authSettings.securityAnswer?.trim();
+        if (!expectedAnswer) {
+            setChallengeError('Pertanyaan/Jawaban keamanan belum diatur oleh admin.');
+            return;
+        }
         
         if (challengeAnswer.trim().toLowerCase() === expectedAnswer.toLowerCase()) {
+            const totalAdmin = users.filter(u => u.role === 'admin').length;
+            const isSingleAdmin = totalAdmin === 1;
             setChallengeModalOpen(false);
+
+            if (isSingleAdmin) {
+                if (!authSettings.recoveryCodeHash) {
+                    setChallengeError('Recovery Code belum dikonfigurasi. Gunakan restore backup.');
+                    setChallengeModalOpen(true);
+                    return;
+                }
+                setRecoveryCodeInput('');
+                setRecoveryCodeError('');
+                setRecoveryCodeModalOpen(true);
+                return;
+            }
+
             setEmergencyModalOpen(true); 
         } else {
             setChallengeError('Jawaban salah. Akses ditolak.');
         }
+    };
+
+    const verifyRecoveryCode = async () => {
+        if (!authSettings.recoveryCodeHash) {
+            setRecoveryCodeError('Recovery Code tidak tersedia.');
+            return;
+        }
+        if (!recoveryCodeInput.trim()) {
+            setRecoveryCodeError('Masukkan recovery code.');
+            return;
+        }
+
+        const inputHash = await hashRecoveryCode(recoveryCodeInput.trim());
+        if (inputHash !== authSettings.recoveryCodeHash) {
+            setRecoveryCodeError('Recovery code salah.');
+            return;
+        }
+
+        // Single-use: consume code immediately.
+        updateAuthSettings({
+            ...authSettings,
+            recoveryCodeHash: undefined,
+            recoveryCodeGeneratedAt: undefined
+        });
+        setRecoveryCodeModalOpen(false);
+        setRecoveryCodeInput('');
+        setRecoveryCodeError('');
+        setEmergencyModalOpen(true);
+        showAlert({
+            type: 'alert',
+            title: 'Recovery Code Valid',
+            message: 'Recovery code telah digunakan (sekali pakai). Buat kode baru setelah berhasil login.'
+        });
     };
 
     const handleForgotPin = () => {
@@ -313,6 +384,72 @@ const LoginView: React.FC = () => {
         } else {
             alert("Gagal mengubah PIN. Pastikan ada user Admin.");
         }
+    };
+
+    const handleTicketResetPin = async () => {
+        if (!selectedUser) {
+            setTicketError('Pilih pengguna terlebih dahulu.');
+            return;
+        }
+        if (!ticketCode.trim()) {
+            setTicketError('Masukkan kode tiket reset.');
+            return;
+        }
+        if (!/^\d{4}$/.test(ticketNewPin)) {
+            setTicketError('PIN baru harus 4 digit angka.');
+            return;
+        }
+        if (ticketNewPin !== ticketConfirmPin) {
+            setTicketError('Konfirmasi PIN tidak cocok.');
+            return;
+        }
+
+        const result = await resetPinWithTicket(selectedUser.id, ticketCode.trim(), ticketNewPin);
+        if (!result.success) {
+            setTicketError(result.message);
+            return;
+        }
+
+        setTicketModalOpen(false);
+        setTicketCode('');
+        setTicketNewPin('');
+        setTicketConfirmPin('');
+        setTicketError('');
+        setPin('');
+        setSelectedUser(null);
+        showAlert({ type: 'alert', title: 'Berhasil', message: 'PIN berhasil direset menggunakan tiket. Silakan login ulang.' });
+    };
+
+    const handleForceChangeDefaultPin = async () => {
+        if (!selectedUser || selectedUser.id !== 'admin_default') {
+            setForcedPinError('Akun default admin tidak ditemukan.');
+            return;
+        }
+        if (!/^\d{4}$/.test(forcedPin)) {
+            setForcedPinError('PIN baru harus 4 digit angka.');
+            return;
+        }
+        if (forcedPin !== forcedPinConfirm) {
+            setForcedPinError('Konfirmasi PIN tidak cocok.');
+            return;
+        }
+
+        const success = await overrideAdminPin(forcedPin);
+        if (!success) {
+            setForcedPinError('Gagal memperbarui PIN admin.');
+            return;
+        }
+
+        setForceChangeModalOpen(false);
+        setForcedPin('');
+        setForcedPinConfirm('');
+        setForcedPinError('');
+        setPin('');
+        showAlert({
+            type: 'alert',
+            title: 'PIN Diperbarui',
+            message: 'PIN default admin sudah diganti. Silakan login ulang dengan PIN baru.'
+        });
     };
 
     const handleFactoryReset = async () => {
@@ -446,12 +583,27 @@ const LoginView: React.FC = () => {
                 {error ? (
                     <p className="text-red-400 text-sm">{error}</p>
                 ) : (
-                    <button 
-                        onClick={handleForgotPin}
-                        className="text-xs text-slate-500 hover:text-slate-300 underline decoration-slate-600 underline-offset-2 transition-colors"
-                    >
-                        Lupa PIN?
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={handleForgotPin}
+                            className="text-xs text-slate-500 hover:text-slate-300 underline decoration-slate-600 underline-offset-2 transition-colors"
+                        >
+                            Lupa PIN?
+                        </button>
+                        <span className="text-slate-700">|</span>
+                        <button
+                            onClick={() => {
+                                setTicketCode('');
+                                setTicketNewPin('');
+                                setTicketConfirmPin('');
+                                setTicketError('');
+                                setTicketModalOpen(true);
+                            }}
+                            className="text-xs text-amber-400 hover:text-amber-300 underline decoration-amber-700 underline-offset-2 transition-colors"
+                        >
+                            Pakai Tiket Reset
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -591,6 +743,107 @@ const LoginView: React.FC = () => {
                     
                     <div className="text-center pt-2">
                         <button onClick={() => setEmergencyModalOpen(false)} className="text-slate-500 text-sm hover:text-white">Tutup</button>
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal isOpen={isTicketModalOpen} onClose={() => setTicketModalOpen(false)} title="Reset PIN via Tiket">
+                <div className="space-y-4">
+                    <div className="bg-slate-800 border border-slate-700 rounded p-3 text-sm text-slate-300">
+                        User: <span className="font-bold text-white">{selectedUser?.name || '-'}</span>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm text-slate-300 mb-1">Kode Tiket</label>
+                        <textarea
+                            value={ticketCode}
+                            onChange={(e) => setTicketCode(e.target.value)}
+                            className="w-full h-24 bg-slate-900 border border-slate-600 rounded p-2 text-white font-mono text-xs"
+                            placeholder="Tempel kode tiket dari Admin..."
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm text-slate-300 mb-1">PIN Baru (4 digit)</label>
+                        <input
+                            type="password"
+                            maxLength={4}
+                            value={ticketNewPin}
+                            onChange={(e) => setTicketNewPin(e.target.value.replace(/[^0-9]/g, ''))}
+                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white font-mono tracking-widest text-center"
+                            placeholder="****"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm text-slate-300 mb-1">Konfirmasi PIN Baru</label>
+                        <input
+                            type="password"
+                            maxLength={4}
+                            value={ticketConfirmPin}
+                            onChange={(e) => setTicketConfirmPin(e.target.value.replace(/[^0-9]/g, ''))}
+                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white font-mono tracking-widest text-center"
+                            placeholder="****"
+                        />
+                    </div>
+
+                    {ticketError && <p className="text-red-400 text-sm">{ticketError}</p>}
+
+                    <div className="flex gap-3">
+                        <Button variant="secondary" onClick={() => setTicketModalOpen(false)} className="flex-1">Batal</Button>
+                        <Button onClick={handleTicketResetPin} className="flex-1">Reset PIN</Button>
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal isOpen={isForceChangeModalOpen} onClose={() => setForceChangeModalOpen(false)} title="Wajib Ganti PIN Admin">
+                <div className="space-y-4">
+                    <div className="bg-amber-900/20 border border-amber-700 rounded p-3 text-sm text-amber-200">
+                        PIN bawaan `1111` tidak boleh dipakai. Ubah sekarang untuk melanjutkan.
+                    </div>
+                    <div>
+                        <label className="block text-sm text-slate-300 mb-1">PIN Baru (4 digit)</label>
+                        <input
+                            type="password"
+                            maxLength={4}
+                            value={forcedPin}
+                            onChange={(e) => setForcedPin(e.target.value.replace(/[^0-9]/g, ''))}
+                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white font-mono tracking-widest text-center"
+                            placeholder="****"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-slate-300 mb-1">Konfirmasi PIN Baru</label>
+                        <input
+                            type="password"
+                            maxLength={4}
+                            value={forcedPinConfirm}
+                            onChange={(e) => setForcedPinConfirm(e.target.value.replace(/[^0-9]/g, ''))}
+                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white font-mono tracking-widest text-center"
+                            placeholder="****"
+                        />
+                    </div>
+                    {forcedPinError && <p className="text-red-400 text-sm">{forcedPinError}</p>}
+                    <Button onClick={handleForceChangeDefaultPin} className="w-full">Simpan PIN Baru</Button>
+                </div>
+            </Modal>
+
+            <Modal isOpen={isRecoveryCodeModalOpen} onClose={() => setRecoveryCodeModalOpen(false)} title="Verifikasi Recovery Code">
+                <div className="space-y-4">
+                    <p className="text-sm text-slate-300">
+                        Mode Admin Tunggal aktif. Masukkan Recovery Code untuk membuka menu pemulihan.
+                    </p>
+                    <input
+                        type="text"
+                        value={recoveryCodeInput}
+                        onChange={(e) => setRecoveryCodeInput(e.target.value.toUpperCase())}
+                        className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white font-mono text-center tracking-widest"
+                        placeholder="XXXX-XXXX-XXXX"
+                    />
+                    {recoveryCodeError && <p className="text-red-400 text-sm">{recoveryCodeError}</p>}
+                    <div className="flex gap-3">
+                        <Button variant="secondary" onClick={() => setRecoveryCodeModalOpen(false)} className="flex-1">Batal</Button>
+                        <Button onClick={verifyRecoveryCode} className="flex-1">Verifikasi</Button>
                     </div>
                 </div>
             </Modal>

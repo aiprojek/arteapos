@@ -182,6 +182,8 @@ export interface AuthSettings {
   enabled: boolean;
   securityQuestion?: string;
   securityAnswer?: string;
+  recoveryCodeHash?: string;
+  recoveryCodeGeneratedAt?: string;
 }
 
 export interface SessionSettings {
@@ -396,6 +398,23 @@ export interface AuditLog {
     targetId?: string; 
     storeId?: string;
     evidenceImageUrl?: string; // NEW FIELD: Foto Wajah / Bukti
+}
+
+export interface PinResetTicket {
+    ticketId: string;
+    userId: string;
+    userName: string;
+    issuedByUserId: string;
+    issuedByName: string;
+    createdAt: string;
+    expiresAt: string;
+    secretHash: string;
+    attempts: number;
+    maxAttempts: number;
+    status: 'active' | 'consumed' | 'expired' | 'locked';
+    consumedAt?: string;
+    consumedByUserId?: string;
+    consumedByName?: string;
 }
 
 export interface CustomerDisplayPayload {

@@ -104,8 +104,8 @@ const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings
         data += `Diskon: -${discText}` + LF;
     }
     
-    if (transaction.serviceCharge > 0) data += `Service: ${formatCurrencySafe(transaction.serviceCharge)}` + LF;
-    if (transaction.tax > 0) data += `Pajak: ${formatCurrencySafe(transaction.tax)}` + LF;
+    if ((transaction.serviceCharge || 0) > 0) data += `Service: ${formatCurrencySafe(transaction.serviceCharge || 0)}` + LF;
+    if ((transaction.tax || 0) > 0) data += `Pajak: ${formatCurrencySafe(transaction.tax || 0)}` + LF;
     
     data += COMMANDS.BOLD_ON;
     data += `TOTAL: ${formatCurrencySafe(transaction.total)}` + LF;

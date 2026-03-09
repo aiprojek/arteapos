@@ -169,20 +169,21 @@ create table if not exists audit_logs (
   details text
 );
 
--- Policies (Allow Anon Access for BYOB)
-alter table transactions enable row level security; create policy "Public" on transactions for all using (true);
-alter table branch_inventory enable row level security; create policy "Public" on branch_inventory for all using (true);
-alter table stock_adjustments enable row level security; create policy "Public" on stock_adjustments for all using (true);
-alter table expenses enable row level security; create policy "Public" on expenses for all using (true);
-alter table other_incomes enable row level security; create policy "Public" on other_incomes for all using (true);
-alter table purchases enable row level security; create policy "Public" on purchases for all using (true);
-alter table master_products enable row level security; create policy "Public" on master_products for all using (true);
-alter table branch_product_prices enable row level security; create policy "Public" on branch_product_prices for all using (true);
-alter table master_customers enable row level security; create policy "Public" on master_customers for all using (true);
-alter table master_suppliers enable row level security; create policy "Public" on master_suppliers for all using (true);
-alter table master_discounts enable row level security; create policy "Public" on master_discounts for all using (true);
-alter table master_point_rules enable row level security; create policy "Public" on master_point_rules for all using (true);
-alter table audit_logs enable row level security; create policy "Public" on audit_logs for all using (true);
+-- Policies (Secure Default: authenticated only)
+-- Catatan: ini baseline aman. Untuk multi-cabang granular, tambahkan policy per store_id.
+alter table transactions enable row level security; create policy "AuthenticatedOnly" on transactions for all to authenticated using (true) with check (true);
+alter table branch_inventory enable row level security; create policy "AuthenticatedOnly" on branch_inventory for all to authenticated using (true) with check (true);
+alter table stock_adjustments enable row level security; create policy "AuthenticatedOnly" on stock_adjustments for all to authenticated using (true) with check (true);
+alter table expenses enable row level security; create policy "AuthenticatedOnly" on expenses for all to authenticated using (true) with check (true);
+alter table other_incomes enable row level security; create policy "AuthenticatedOnly" on other_incomes for all to authenticated using (true) with check (true);
+alter table purchases enable row level security; create policy "AuthenticatedOnly" on purchases for all to authenticated using (true) with check (true);
+alter table master_products enable row level security; create policy "AuthenticatedOnly" on master_products for all to authenticated using (true) with check (true);
+alter table branch_product_prices enable row level security; create policy "AuthenticatedOnly" on branch_product_prices for all to authenticated using (true) with check (true);
+alter table master_customers enable row level security; create policy "AuthenticatedOnly" on master_customers for all to authenticated using (true) with check (true);
+alter table master_suppliers enable row level security; create policy "AuthenticatedOnly" on master_suppliers for all to authenticated using (true) with check (true);
+alter table master_discounts enable row level security; create policy "AuthenticatedOnly" on master_discounts for all to authenticated using (true) with check (true);
+alter table master_point_rules enable row level security; create policy "AuthenticatedOnly" on master_point_rules for all to authenticated using (true) with check (true);
+alter table audit_logs enable row level security; create policy "AuthenticatedOnly" on audit_logs for all to authenticated using (true) with check (true);
 `;
 
 export const supabaseService = {
@@ -379,7 +380,7 @@ export const supabaseService = {
             const customers = await db.customers.toArray();
             if (customers.length > 0) {
                  const mappedCust = customers.map(c => ({
-                    id: c.id, member_id: c.member_id || c.memberId, name: c.name, contact: c.contact, points: c.points, updated_at: new Date().toISOString()
+                    id: c.id, member_id: c.memberId, name: c.name, contact: c.contact, points: c.points, updated_at: new Date().toISOString()
                  }));
                  await supabase.from(TABLE_CUSTOMERS).upsert(mappedCust);
             }

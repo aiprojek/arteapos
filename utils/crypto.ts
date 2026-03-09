@@ -1,9 +1,19 @@
 
 import CryptoJS from 'crypto-js';
 
-const SECRET_KEY = "ARTEA_POS_SECRET_KEY_v1"; // Kunci statis untuk data laporan
-const PAIRING_KEY_BASE = "ARTEA_PAIRING_SECURE_X99"; // Kunci dasar
-const STORAGE_KEY = "ARTEA_STORAGE_SECURE_K88"; 
+const LEGACY_SECRET_KEY = "ARTEA_POS_SECRET_KEY_v1";
+const LEGACY_PAIRING_KEY_BASE = "ARTEA_PAIRING_SECURE_X99";
+const LEGACY_STORAGE_KEY = "ARTEA_STORAGE_SECURE_K88";
+
+const getEnvKey = (key: string, fallback: string): string => {
+    const env = (import.meta as any)?.env;
+    const value = env?.[key];
+    return typeof value === 'string' && value.trim().length > 0 ? value : fallback;
+};
+
+const SECRET_KEY = getEnvKey('VITE_ARTEA_REPORT_KEY', LEGACY_SECRET_KEY);
+const PAIRING_KEY_BASE = getEnvKey('VITE_ARTEA_PAIRING_KEY', LEGACY_PAIRING_KEY_BASE);
+const STORAGE_KEY = getEnvKey('VITE_ARTEA_STORAGE_KEY', LEGACY_STORAGE_KEY);
 
 const PREFIX = "ARTEA_ENC::";
 const PAIRING_PREFIX = "ARTEA_PAIR_SECURE::";

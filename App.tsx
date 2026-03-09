@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import AppProviders from './context/AppProviders';
 import { useAuth } from './context/AuthContext';
-import { useData } from './context/DataContext';
 import { useUI } from './context/UIContext';
 import { useProduct } from './context/ProductContext';
 import { useCart } from './context/CartContext';
@@ -208,7 +207,7 @@ const RootNavigator = () => {
   return (
     <>
       {authSettings.enabled && !currentUser ? <LoginView /> : <AppContent />}
-      <AlertModal isOpen={alertState.isOpen} onClose={hideAlert} {...alertState} />
+      <AlertModal onClose={hideAlert} {...alertState} />
     </>
   );
 };

@@ -23,7 +23,7 @@ export const ocrService = {
             
             let maxAmount = 0;
             if (potentialAmounts) {
-                potentialAmounts.forEach(val => {
+                potentialAmounts.forEach((val: string) => {
                     // Normalize: Remove dots as thousand separators, replace comma with dot for decimal
                     // Case Indonesia: 10.000,00 -> 10000.00
                     let normalized = val;

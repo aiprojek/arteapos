@@ -61,7 +61,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ form, onChange }) => {
                             <ToggleSwitch 
                                 label="Mode Resep & Bahan Baku (Advanced)" 
                                 description="Stok produk berkurang berdasarkan bahan baku (Resep). Jika dimatikan, stok produk berkurang langsung."
-                                checked={form.trackIngredients} 
+                                checked={form.trackIngredients || false} 
                                 onChange={(val) => onChange({...form, trackIngredients: val})} 
                             />
                         </>

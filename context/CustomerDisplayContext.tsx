@@ -60,7 +60,7 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
                 cashierPeerRef.current = peer;
                 resolve(peer);
             });
-            peer.on('error', (err) => reject(err));
+            peer.on('error', (err: any) => reject(err));
         });
     }, []);
 
@@ -86,7 +86,7 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
                 setIsDisplayConnected(false);
                 customerConnectionRef.current = null;
             });
-            conn.on('error', (err) => reject(err));
+            conn.on('error', (err: any) => reject(err));
         });
     }, [ensureCashierPeer]);
 
@@ -105,7 +105,7 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
                 setIsKitchenConnected(false);
                 kitchenConnectionRef.current = null;
             });
-            conn.on('error', (err) => reject(err));
+            conn.on('error', (err: any) => reject(err));
         });
     }, [ensureCashierPeer]);
 
@@ -150,11 +150,11 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
         const peer = new Peer(); 
         receiverPeerRef.current = peer;
 
-        peer.on('open', (id) => {
+        peer.on('open', (id: string) => {
             setMyPeerId(id);
         });
 
-        peer.on('connection', (conn) => {
+        peer.on('connection', (conn: any) => {
             receiverConnectionRef.current = conn;
             
             conn.on('data', (data: any) => {
@@ -167,7 +167,7 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
             });
         });
 
-        peer.on('error', (err) => {
+        peer.on('error', (err: any) => {
             console.error('Receiver Peer Error:', err);
         });
     }, []);

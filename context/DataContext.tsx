@@ -80,7 +80,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Seed Categories jika kosong
             if (!categoriesObj) {
                 await db.appState.put({ key: 'categories', value: initialData.categories });
-                categoriesObj = { value: initialData.categories };
+                categoriesObj = { key: 'categories', value: initialData.categories };
             }
         }
         // -------------------------------------------------------
@@ -140,6 +140,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Cast db to any to avoid TS errors
         await (db as any).transaction('rw', (db as any).tables.map((t: any) => t.name), async () => {
           const promises: Promise<any>[] = [];
+
+          const syncTableById = async (tableName: string, rows: any[]) => {
+            const table = (db as any).table(tableName);
+            const nextRows = Array.isArray(rows) ? rows : [];
+            const nextIds = new Set(
+              nextRows
+                .map((r: any) => r?.id)
+                .filter((id: any) => id !== undefined && id !== null)
+            );
+
+            await table.bulkPut(nextRows);
+
+            const existingIds = await table.toCollection().primaryKeys();
+            const staleIds = existingIds.filter((id: any) => !nextIds.has(id));
+            if (staleIds.length > 0) {
+              await table.bulkDelete(staleIds);
+            }
+          };
           
           Object.keys(data).forEach(keyStr => {
               const key = keyStr as keyof AppData;
@@ -163,10 +181,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 case 'sessionHistory':
                 case 'auditLogs':
                 case 'balanceLogs':
-                  // Note: Full table replace on change is inefficient for large datasets, 
-                  // but retained here for consistency with original architecture until further refactor.
-                  // Cast db to any to avoid TS error
-                  promises.push((db as any).table(key).clear().then(() => (db as any).table(key).bulkAdd(value as any[])));
+                  // Granular persistence to reduce write amplification on large datasets.
+                  promises.push(syncTableById(key, value as any[]));
                   break;
                 case 'categories':
                   promises.push(db.appState.put({ key: 'categories', value }));

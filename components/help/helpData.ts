@@ -499,6 +499,27 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                         <li><strong>CCTV Selfie:</strong> Kamera akan memotret wajah pengguna saat login PIN untuk disimpan di Audit Log.</li>
                     </ul>
                 `
+            },
+            {
+                id: 'set_recovery', title: 'Reset PIN Aman (Tiket & Recovery Code)', icon: 'lock', colorClass: 'text-amber-400', badge: 'Wajib',
+                content: `
+                    <p>Mulai versi ini, reset PIN memakai metode aman berikut:</p>
+                    <ul class="list-disc pl-5 space-y-2 mt-2 text-sm">
+                        <li>
+                            <strong>Reset Staf via Tiket (Admin/Manager):</strong><br/>
+                            Masuk <strong>Pengaturan &rarr; Otentikasi</strong>, pada daftar user klik <strong>"Buat Tiket Reset"</strong>.<br/>
+                            Tiket berlaku singkat (default 10 menit), hanya bisa dipakai sekali.
+                        </li>
+                        <li>
+                            <strong>Admin Tunggal Lupa PIN:</strong><br/>
+                            Gunakan <strong>Recovery Code</strong> sekali pakai dari menu Otentikasi.<br/>
+                            Simpan kodenya di tempat offline (kertas/safe note), bukan hanya di HP yang sama.
+                        </li>
+                        <li>
+                            <strong>Penting:</strong> Sistem tidak lagi memakai reset PIN default <code>0000/1111</code>.
+                        </li>
+                    </ul>
+                `
             }
         ]
     },
@@ -523,6 +544,18 @@ export const FAQS: FaqItem[] = [
         category: 'Akun & Akses',
         title: 'Apa bedanya Admin, Staff, dan Viewer?',
         content: '<ul><li><strong>Admin:</strong> Bos. Akses penuh, bisa edit/hapus data & lihat semua cabang.</li><li><strong>Staff:</strong> Kasir. Hanya bisa jualan & stok opname di toko tempatnya bekerja. Tidak bisa lihat data cloud.</li><li><strong>Viewer (Baru):</strong> Investor/Owner Pasif. Hanya bisa MELIHAT (Read-only) Laporan, Dashboard, & Audit Log. Aman untuk dipinjamkan ke partner.</li></ul>'
+    },
+    {
+        id: 'faq_reset_staff_ticket',
+        category: 'Akun & Akses',
+        title: 'Bagaimana reset PIN staf sekarang?',
+        content: 'Reset PIN staf sekarang menggunakan <strong>Tiket Reset</strong> (sekali pakai), bukan PIN default. Admin/Manager membuat tiket di <strong>Pengaturan &rarr; Otentikasi</strong>, lalu staf memasukkan tiket di halaman Login (opsi <em>Pakai Tiket Reset</em>).'
+    },
+    {
+        id: 'faq_single_admin_recovery',
+        category: 'Akun & Akses',
+        title: 'Jika hanya ada 1 admin lalu lupa PIN, bagaimana?',
+        content: 'Gunakan <strong>Recovery Code</strong> sekali pakai. Kode ini harus dibuat sebelumnya di menu Otentikasi. Tanpa recovery code, pemulihan hanya bisa lewat restore backup yang masih valid.'
     },
     {
         id: 'faq_staff_cloud',

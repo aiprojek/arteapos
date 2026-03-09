@@ -7,6 +7,7 @@ import Modal from '../Modal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useSettings } from '../../context/SettingsContext';
+import { generateRecoveryCode, hashRecoveryCode } from '../../utils/recoveryCode';
 
 interface AuthTabProps {
     form: AuthSettings;
@@ -42,13 +43,20 @@ const ToggleSwitch: React.FC<{ label: string; checked: boolean; onChange: (check
 );
 
 const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
-    const { users, addUser, updateUser, deleteUser, resetUserPin } = useAuth();
+    const { users, addUser, updateUser, deleteUser, createPinResetTicket } = useAuth();
     const { receiptSettings } = useSettings();
     const { showAlert } = useUI();
     
     const [isUserModalOpen, setUserModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [userForm, setUserForm] = useState({ name: '', pin: '', role: 'staff' as User['role'], assignedBranch: 'all' });
+    const [isTicketModalOpen, setTicketModalOpen] = useState(false);
+    const [ticketTargetUser, setTicketTargetUser] = useState<User | null>(null);
+    const [ticketTtl, setTicketTtl] = useState(10);
+    const [generatedTicket, setGeneratedTicket] = useState('');
+    const [generatedTicketExpiry, setGeneratedTicketExpiry] = useState('');
+    const [isRecoveryCodeModalOpen, setRecoveryCodeModalOpen] = useState(false);
+    const [generatedRecoveryCode, setGeneratedRecoveryCode] = useState('');
 
     // Only show branch selection if branches are actually defined in General Settings
     const branches = receiptSettings.branches || [];
@@ -97,17 +105,47 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
         });
     };
 
-    const handleResetPin = (userId: string) => {
-        showAlert({
-            type: 'confirm',
-            title: 'Reset PIN?',
-            message: 'PIN pengguna ini akan diubah menjadi "0000".',
-            onConfirm: async () => {
-                await resetUserPin(userId);
-                showAlert({ type: 'alert', title: 'Berhasil', message: 'PIN berhasil direset ke 0000' });
-            }
+    const handleOpenTicketModal = (user: User) => {
+        setTicketTargetUser(user);
+        setTicketTtl(10);
+        setGeneratedTicket('');
+        setGeneratedTicketExpiry('');
+        setTicketModalOpen(true);
+    };
+
+    const handleGenerateTicket = async () => {
+        if (!ticketTargetUser) return;
+        try {
+            const ticket = await createPinResetTicket(ticketTargetUser.id, ticketTtl);
+            if (!ticket) throw new Error('Gagal membuat tiket.');
+            setGeneratedTicket(ticket.code);
+            setGeneratedTicketExpiry(ticket.expiresAt);
+        } catch (e: any) {
+            showAlert({ type: 'alert', title: 'Gagal', message: e.message || 'Tidak bisa membuat tiket reset.' });
+        }
+    };
+
+    const copyTicket = async () => {
+        if (!generatedTicket) return;
+        try {
+            await navigator.clipboard.writeText(generatedTicket);
+            showAlert({ type: 'alert', title: 'Disalin', message: 'Kode tiket berhasil disalin.' });
+        } catch (e) {
+            showAlert({ type: 'alert', title: 'Gagal', message: 'Tidak bisa menyalin kode tiket.' });
+        }
+    };
+
+    const handleGenerateRecoveryCode = async () => {
+        const code = generateRecoveryCode();
+        const codeHash = await hashRecoveryCode(code);
+        onChange({
+            ...form,
+            recoveryCodeHash: codeHash,
+            recoveryCodeGeneratedAt: new Date().toISOString()
         });
-    }
+        setGeneratedRecoveryCode(code);
+        setRecoveryCodeModalOpen(true);
+    };
 
     return (
         <div className="animate-fade-in">
@@ -143,6 +181,22 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                         />
                         <p className="text-xs text-slate-500 mt-1">Jawaban ini tidak akan ditampilkan lagi. Harap diingat baik-baik.</p>
                     </div>
+                    <div className="border-t border-slate-700 pt-3">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                            <p className="text-sm text-slate-300 font-medium">Recovery Code (Single Admin)</p>
+                            <Button size="sm" onClick={handleGenerateRecoveryCode}>
+                                {form.recoveryCodeHash ? 'Regenerate' : 'Generate'}
+                            </Button>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                            Kode ini dipakai saat admin tunggal lupa PIN. Kode bersifat sekali pakai.
+                        </p>
+                        {form.recoveryCodeGeneratedAt && (
+                            <p className="text-xs text-slate-400 mt-1">
+                                Terakhir dibuat: {new Date(form.recoveryCodeGeneratedAt).toLocaleString('id-ID')}
+                            </p>
+                        )}
+                    </div>
                 </div>
             </SettingsCard>
 
@@ -165,8 +219,8 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                                     </p>
                                 </div>
                                 <div className="flex gap-2">
-                                    <button onClick={() => handleResetPin(user.id)} className="text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-white" title="Reset PIN ke 0000">
-                                        Reset PIN
+                                    <button onClick={() => handleOpenTicketModal(user)} className="text-xs bg-amber-700 hover:bg-amber-600 px-2 py-1 rounded text-white" title="Buat tiket reset PIN sekali pakai">
+                                        Buat Tiket Reset
                                     </button>
                                     <button onClick={() => handleEditUser(user)} className="p-1 text-sky-400 hover:bg-slate-700 rounded">
                                         <Icon name="edit" className="w-4 h-4"/>
@@ -242,6 +296,65 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                         />
                     </div>
                     <Button onClick={handleSaveUser} disabled={!userForm.name || !userForm.pin} className="w-full">Simpan</Button>
+                </div>
+            </Modal>
+
+            <Modal isOpen={isTicketModalOpen} onClose={() => setTicketModalOpen(false)} title="Generate Tiket Reset PIN">
+                <div className="space-y-4">
+                    <div className="text-sm text-slate-300 bg-slate-900 border border-slate-700 rounded p-3">
+                        Target User: <span className="font-bold text-white">{ticketTargetUser?.name || '-'}</span>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm text-slate-300 mb-1">Masa Berlaku (menit)</label>
+                        <input
+                            type="number"
+                            min={5}
+                            max={30}
+                            value={ticketTtl}
+                            onChange={(e) => setTicketTtl(Math.max(5, Math.min(30, parseInt(e.target.value || '10', 10))))}
+                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                        />
+                        <p className="text-xs text-slate-500 mt-1">Range aman: 5-30 menit.</p>
+                    </div>
+
+                    <Button onClick={handleGenerateTicket} className="w-full">Generate Tiket</Button>
+
+                    {generatedTicket && (
+                        <div className="space-y-2 bg-green-900/20 border border-green-800 rounded p-3">
+                            <p className="text-xs text-green-300">Bagikan kode ini ke staf terkait. Kode hanya bisa dipakai sekali.</p>
+                            <textarea
+                                readOnly
+                                value={generatedTicket}
+                                className="w-full h-24 bg-slate-950 border border-slate-700 rounded p-2 text-green-300 font-mono text-xs"
+                            />
+                            <p className="text-xs text-slate-400">Expired: {new Date(generatedTicketExpiry).toLocaleString('id-ID')}</p>
+                            <Button onClick={copyTicket} variant="secondary" className="w-full">Salin Kode</Button>
+                        </div>
+                    )}
+                </div>
+            </Modal>
+
+            <Modal isOpen={isRecoveryCodeModalOpen} onClose={() => setRecoveryCodeModalOpen(false)} title="Recovery Code Baru">
+                <div className="space-y-4">
+                    <div className="bg-red-900/20 border border-red-700 rounded p-3 text-xs text-red-200">
+                        Simpan kode ini sekarang. Demi keamanan, kode tidak bisa ditampilkan lagi setelah modal ditutup.
+                    </div>
+                    <textarea
+                        readOnly
+                        value={generatedRecoveryCode}
+                        className="w-full h-20 bg-slate-950 border border-slate-700 rounded p-2 text-green-300 font-mono text-sm text-center"
+                    />
+                    <Button onClick={async () => {
+                        try {
+                            await navigator.clipboard.writeText(generatedRecoveryCode);
+                            showAlert({ type: 'alert', title: 'Disalin', message: 'Recovery code disalin.' });
+                        } catch {
+                            showAlert({ type: 'alert', title: 'Gagal', message: 'Tidak bisa menyalin recovery code.' });
+                        }
+                    }} variant="secondary" className="w-full">
+                        Salin Recovery Code
+                    </Button>
                 </div>
             </Modal>
         </div>

@@ -98,7 +98,7 @@ const HelpView: React.FC = () => {
             </div>
 
             {/* Navigation Tabs */}
-            <div className="sticky top-0 z-20 py-3 mb-8 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/50 transition-all">
+            <div className="sticky top-[-1rem] md:top-[-1.5rem] z-20 -mx-4 md:-mx-6 px-4 md:px-6 py-3 mb-8 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/50 transition-all">
                 <div className="overflow-x-auto hide-scrollbar flex md:justify-center">
                     <div className="bg-slate-800 p-1 rounded-xl flex gap-1 shadow-lg border border-slate-700 whitespace-nowrap min-w-max">
                         {tabs.map(tab => (

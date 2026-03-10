@@ -7,7 +7,8 @@ import Modal from '../Modal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useSettings } from '../../context/SettingsContext';
-import { generateRecoveryCode, hashRecoveryCode } from '../../utils/recoveryCode';
+import { generateRecoveryCode, hashRecoveryCode, saveLocalRecoveryCode } from '../../utils/recoveryCode';
+import { dropboxService } from '../../services/dropboxService';
 
 interface AuthTabProps {
     form: AuthSettings;
@@ -43,7 +44,7 @@ const ToggleSwitch: React.FC<{ label: string; checked: boolean; onChange: (check
 );
 
 const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
-    const { users, addUser, updateUser, deleteUser, createPinResetTicket } = useAuth();
+    const { currentUser, users, addUser, updateUser, deleteUser, createPinResetTicket } = useAuth();
     const { receiptSettings } = useSettings();
     const { showAlert } = useUI();
     
@@ -138,13 +139,49 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
     const handleGenerateRecoveryCode = async () => {
         const code = generateRecoveryCode();
         const codeHash = await hashRecoveryCode(code);
+        const generatedAt = new Date().toISOString();
         onChange({
             ...form,
             recoveryCodeHash: codeHash,
-            recoveryCodeGeneratedAt: new Date().toISOString()
+            recoveryCodeGeneratedAt: generatedAt
         });
+        saveLocalRecoveryCode(codeHash, generatedAt);
+        if (dropboxService.isConfigured()) {
+            dropboxService.backupRecoveryCode({
+                hash: codeHash,
+                generatedAt,
+                createdByUserId: currentUser?.id,
+                createdByName: currentUser?.name
+            }).catch((e: any) => {
+                showAlert({ type: 'alert', title: 'Info', message: e?.message || 'Backup recovery code ke Dropbox gagal. Kode tetap tersimpan lokal.' });
+            });
+        }
         setGeneratedRecoveryCode(code);
         setRecoveryCodeModalOpen(true);
+    };
+
+    const handleRestoreRecoveryCode = async () => {
+        if (!dropboxService.isConfigured()) {
+            showAlert({ type: 'alert', title: 'Gagal', message: 'Dropbox belum terhubung.' });
+            return;
+        }
+        try {
+            const backup = await dropboxService.getRecoveryCodeBackup();
+            if (!backup?.hash) {
+                showAlert({ type: 'alert', title: 'Info', message: 'Backup recovery code tidak ditemukan di Dropbox.' });
+                return;
+            }
+            const generatedAt = backup.generatedAt || new Date().toISOString();
+            onChange({
+                ...form,
+                recoveryCodeHash: backup.hash,
+                recoveryCodeGeneratedAt: backup.generatedAt || form.recoveryCodeGeneratedAt
+            });
+            saveLocalRecoveryCode(backup.hash, generatedAt);
+            showAlert({ type: 'alert', title: 'Berhasil', message: 'Recovery code berhasil direstore dari Dropbox dan disimpan lokal.' });
+        } catch (e: any) {
+            showAlert({ type: 'alert', title: 'Gagal', message: e?.message || 'Tidak bisa restore recovery code dari Dropbox.' });
+        }
     };
 
     return (
@@ -186,6 +223,12 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                             <p className="text-sm text-slate-300 font-medium">Recovery Code (Single Admin)</p>
                             <Button size="sm" onClick={handleGenerateRecoveryCode}>
                                 {form.recoveryCodeHash ? 'Regenerate' : 'Generate'}
+                            </Button>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                            <p className="text-xs text-slate-500">Restore dari Dropbox (opsional)</p>
+                            <Button size="sm" variant="secondary" onClick={handleRestoreRecoveryCode}>
+                                Restore
                             </Button>
                         </div>
                         <p className="text-xs text-slate-500">
@@ -339,6 +382,9 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                 <div className="space-y-4">
                     <div className="bg-red-900/20 border border-red-700 rounded p-3 text-xs text-red-200">
                         Simpan kode ini sekarang. Demi keamanan, kode tidak bisa ditampilkan lagi setelah modal ditutup.
+                    </div>
+                    <div className="bg-slate-900 border border-slate-700 rounded p-3 text-xs text-slate-300">
+                        Tersimpan lokal (offline). Backup Dropbox: {dropboxService.isConfigured() ? 'aktif' : 'belum terhubung'}.
                     </div>
                     <textarea
                         readOnly

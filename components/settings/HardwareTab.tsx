@@ -40,12 +40,43 @@ const HardwareTab: React.FC = () => {
     // Native Bluetooth State
     const [pairedDevices, setPairedDevices] = useState<{name: string, address: string}[]>([]);
     const [isScanningBt, setIsScanningBt] = useState(false);
+    const [isRequestingPermissions, setIsRequestingPermissions] = useState(false);
+    const [agentUrl, setAgentUrl] = useState(receiptSettings.printerAgentUrl || '');
 
     const openAppSettings = async () => {
         try {
             await BarcodeScanner.openAppSettings();
         } catch (e) {
             console.error("Failed to open settings", e);
+        }
+    };
+
+    const handleRequestDevicePermissions = async () => {
+        setIsRequestingPermissions(true);
+        try {
+            if (!isNative) {
+                showAlert({ type: 'alert', title: 'Info', message: 'Di web/desktop, izin muncul saat Anda klik "Cari Printer" atau "Tes Kamera".' });
+                return;
+            }
+
+            const results: string[] = [];
+            try {
+                const camStatus = await BarcodeScanner.checkPermission({ force: true });
+                results.push(`Kamera: ${camStatus?.granted ? 'diizinkan' : 'ditolak'}`);
+            } catch (e: any) {
+                results.push('Kamera: gagal meminta izin.');
+            }
+
+            try {
+                await bluetoothPrinterService.listPairedDevicesNative();
+                results.push('Bluetooth: siap digunakan.');
+            } catch (e: any) {
+                results.push(`Bluetooth: ${e.message || 'gagal meminta izin.'}`);
+            }
+
+            showAlert({ type: 'alert', title: 'Status Izin', message: results.join(' ') });
+        } finally {
+            setIsRequestingPermissions(false);
         }
     };
 
@@ -84,6 +115,15 @@ const HardwareTab: React.FC = () => {
 
     const handleClearNativeDevice = () => {
         updateReceiptSettings({ ...receiptSettings, printerMacAddress: undefined });
+    };
+
+    const handleSaveAgentSettings = () => {
+        updateReceiptSettings({ 
+            ...receiptSettings, 
+            printerAgentEnabled: receiptSettings.printerAgentEnabled || false,
+            printerAgentUrl: agentUrl.trim()
+        });
+        showAlert({ type: 'alert', title: 'Disimpan', message: 'Pengaturan Print Agent disimpan.' });
     };
 
     const handleTestPrint = async () => {
@@ -142,6 +182,29 @@ const HardwareTab: React.FC = () => {
 
     return (
         <div className="animate-fade-in space-y-6">
+
+            {/* 0. PERMISSIONS SECTION */}
+            <SettingsCard
+                title="Izin Perangkat"
+                description="Gunakan tombol ini untuk meminta ulang izin Bluetooth & Kamera tanpa restart aplikasi."
+                icon={<Icon name="lock" className="w-6 h-6"/>}
+            >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="text-sm text-slate-300">
+                        Jika izin pernah ditolak, tombol ini akan memicu ulang permintaan atau memberi arahan.
+                    </div>
+                    <div className="flex gap-2">
+                        {isNative && (
+                            <Button onClick={openAppSettings} variant="secondary" size="sm" className="shrink-0">
+                                <Icon name="settings" className="w-4 h-4"/> Buka Setting
+                            </Button>
+                        )}
+                        <Button onClick={handleRequestDevicePermissions} variant="secondary" size="sm" className="shrink-0" disabled={isRequestingPermissions}>
+                            <Icon name="bluetooth" className="w-4 h-4"/> Minta Izin Bluetooth & Kamera
+                        </Button>
+                    </div>
+                </div>
+            </SettingsCard>
             
             {/* 1. PRINTER SECTION */}
             <SettingsCard 
@@ -149,6 +212,35 @@ const HardwareTab: React.FC = () => {
                 description="Koneksi ke Printer Bluetooth 58mm / 80mm."
                 icon={<Icon name="printer" className="w-6 h-6"/>}
             >
+                <div className="bg-slate-900 p-3 rounded-lg border border-slate-600">
+                    <h4 className="text-sm font-bold text-white mb-2">USB via Print Agent (Endpoint Lokal)</h4>
+                    <p className="text-xs text-slate-400 mb-3">
+                        Gunakan utility/driver yang menyediakan endpoint lokal (mis. <code>http://127.0.0.1:9165/print</code>).
+                    </p>
+                    <div className="flex items-center gap-2 mb-2">
+                        <label className="text-xs text-slate-300">Aktifkan</label>
+                        <button
+                            type="button"
+                            onClick={() => updateReceiptSettings({ ...receiptSettings, printerAgentEnabled: !receiptSettings.printerAgentEnabled })}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${receiptSettings.printerAgentEnabled ? 'bg-[#347758]' : 'bg-slate-700'}`}
+                        >
+                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${receiptSettings.printerAgentEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                        </button>
+                    </div>
+                    <input
+                        type="text"
+                        value={agentUrl}
+                        onChange={(e) => setAgentUrl(e.target.value)}
+                        placeholder="http://127.0.0.1:9165/print"
+                        className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white text-sm"
+                    />
+                    <div className="pt-2">
+                        <Button onClick={handleSaveAgentSettings} variant="secondary" size="sm" className="w-full">
+                            <Icon name="check-circle-fill" className="w-4 h-4"/> Simpan Endpoint
+                        </Button>
+                    </div>
+                </div>
+
                 {isNative ? (
                     <div className="space-y-4">
                         <div className="bg-slate-900 p-3 rounded-lg border border-slate-600">

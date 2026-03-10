@@ -289,28 +289,28 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
     }
 
     return (
-        <header className="flex items-center justify-between p-4 bg-slate-800 border-b border-slate-700 flex-shrink-0">
-            <div className="flex items-center">
+        <header className="flex items-start md:items-center justify-between p-4 bg-slate-800 border-b border-slate-700 flex-shrink-0 gap-3">
+            <div className="flex items-start md:items-center min-w-0">
                 <button onClick={onMenuClick} className="p-1 mr-3 md:hidden text-slate-300 hover:text-white" aria-label="Buka menu">
                     <Icon name="menu" className="w-6 h-6" />
                 </button>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
-                    <h1 className="text-lg font-semibold text-white">{viewTitles[activeView]}</h1>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3 min-w-0">
+                    <h1 className="text-lg font-semibold text-white truncate max-w-[55vw] sm:max-w-none">{viewTitles[activeView]}</h1>
                     
                     {syncStatus === 'syncing' && (
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-900/30 border border-blue-800 animate-pulse">
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-900/30 border border-blue-800 animate-pulse shrink-0">
                             <div className="w-2 h-2 rounded-full bg-blue-400"></div>
                             <span className="text-[10px] text-blue-300 font-medium">Syncing...</span>
                         </div>
                     )}
                     {syncStatus === 'success' && (
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-900/30 border border-green-800 transition-opacity duration-1000">
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-900/30 border border-green-800 transition-opacity duration-1000 shrink-0">
                             <Icon name="check-circle-fill" className="w-3 h-3 text-green-400" />
                             <span className="text-[10px] text-green-300 font-medium">Tersimpan di Cloud</span>
                         </div>
                     )}
                     {syncStatus === 'error' && (
-                        <button onClick={handleSyncErrorClick} className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-900/30 border border-red-800 hover:bg-red-900/50 transition-colors">
+                        <button onClick={handleSyncErrorClick} className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-900/30 border border-red-800 hover:bg-red-900/50 transition-colors shrink-0">
                             <Icon name="warning" className="w-3 h-3 text-red-400" />
                             <span className="text-[10px] text-red-300 font-medium">
                                 {syncErrorMessage && syncErrorMessage.includes('QUOTA') ? 'Cloud Penuh' : 'Gagal Sync'}
@@ -321,7 +321,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                     {showMemoryWarning && (
                         <button 
                             onClick={() => setIsArchivingModalOpen(true)}
-                            className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-orange-900/30 border border-orange-800 hover:bg-orange-900/50 transition-colors animate-pulse"
+                            className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-orange-900/30 border border-orange-800 hover:bg-orange-900/50 transition-colors animate-pulse shrink-0"
                             title="Database penuh. Klik untuk bersihkan."
                         >
                             <Icon name="database" className="w-3 h-3 text-orange-400" />
@@ -330,7 +330,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                     )}
                 </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 shrink-0">
                  <Button
                     onClick={() => setDataModalOpen(true)}
                     variant="secondary"
@@ -394,15 +394,15 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                         {isAdmin && (
                             <div className="border-t border-sky-800/50 pt-2">
                                 <p className="text-[10px] text-yellow-500 font-bold mb-2 uppercase">Panel Admin Pusat (Hati-hati)</p>
-                                <div className="grid grid-cols-2 gap-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     <div>
-                                        <Button onClick={() => handleCloudPush(false)} disabled={isProcessing} variant="secondary" className="w-full text-xs h-9 border-sky-700 text-sky-200 hover:bg-sky-900/50">
+                                        <Button onClick={() => handleCloudPush(false)} disabled={isProcessing} variant="secondary" className="w-full text-xs h-9 border-sky-700 text-sky-200 hover:bg-sky-900/50 whitespace-nowrap">
                                             ⬆️ Kirim Master
                                         </Button>
                                         <p className="text-[9px] text-slate-500 mt-1 leading-tight">Update data di cabang.</p>
                                     </div>
                                     <div>
-                                        <Button onClick={handleCloudRestoreFull} disabled={isProcessing} variant="secondary" className="w-full text-xs h-9 border-red-800 text-red-300 hover:bg-red-900/30">
+                                        <Button onClick={handleCloudRestoreFull} disabled={isProcessing} variant="secondary" className="w-full text-xs h-9 border-red-800 text-red-300 hover:bg-red-900/30 whitespace-nowrap">
                                             ⚠️ Restore Total
                                         </Button>
                                         <p className="text-[9px] text-slate-500 mt-1 leading-tight">Ganti data lokal dengan Cloud.</p>

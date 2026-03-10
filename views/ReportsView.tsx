@@ -19,6 +19,7 @@ import { dataService } from '../services/dataService';
 import type { Transaction, StockAdjustment, Expense } from '../types';
 import { Capacitor } from '@capacitor/core';
 import { saveBinaryFileNative } from '../utils/nativeHelper';
+import OverflowMenu from '../components/OverflowMenu';
 
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
 
@@ -41,6 +42,9 @@ const ReportsView: React.FC = () => {
     const filterDropdownRef = useRef<HTMLDivElement>(null);
     const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
     const exportDropdownRef = useRef<HTMLDivElement>(null);
+    const exportButtonRef = useRef<HTMLDivElement>(null);
+    const exportMenuRef = useRef<HTMLDivElement>(null);
+    const [exportMenuStyles, setExportMenuStyles] = useState<React.CSSProperties>({});
 
     // BRANCH FILTER
     const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
@@ -72,6 +76,41 @@ const ReportsView: React.FC = () => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    useEffect(() => {
+        if (!isExportDropdownOpen) return;
+
+        const updatePosition = () => {
+            const button = exportButtonRef.current;
+            if (!button) return;
+            const rect = button.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const maxWidth = Math.max(0, viewportWidth - 16);
+            const width = Math.min(220, maxWidth);
+            const minWidth = Math.min(160, maxWidth);
+
+            let left = rect.right - width;
+            left = Math.min(Math.max(8, left), viewportWidth - width - 8);
+
+            const menuHeight = exportMenuRef.current?.getBoundingClientRect().height ?? 0;
+            let top = rect.bottom + 8;
+            if (menuHeight && top + menuHeight > viewportHeight - 8) {
+                top = Math.max(8, rect.top - menuHeight - 8);
+            }
+
+            setExportMenuStyles({ left, top, width, maxWidth, minWidth });
+        };
+
+        const frame = window.requestAnimationFrame(updatePosition);
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+        return () => {
+            window.cancelAnimationFrame(frame);
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [isExportDropdownOpen]);
 
     const loadCloudData = async () => {
         if (isStaff) return; 
@@ -474,26 +513,17 @@ const ReportsView: React.FC = () => {
     return (
         <div className="space-y-6 pb-20">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <h1 className="text-2xl font-bold text-white">Laporan</h1>
-                
-                <div className="flex flex-wrap gap-2 items-center w-full md:w-auto justify-end">
-                    
-                    {/* Branch Selector (Only if Cloud) */}
-                    {dataSource !== 'local' && availableBranches.length > 0 && (
-                        <div className="bg-slate-800 p-1 rounded-lg border border-slate-700">
-                            <select 
-                                value={selectedBranch} 
-                                onChange={(e) => setSelectedBranch(e.target.value)}
-                                className="bg-transparent text-sm text-white px-3 py-1.5 outline-none cursor-pointer"
-                            >
-                                <option value="ALL" className="bg-slate-800">Semua Cabang</option>
-                                {availableBranches.map(b => (
-                                    <option key={b} value={b} className="bg-slate-800">{b}</option>
-                                ))}
-                            </select>
+                <div className="flex flex-col gap-1">
+                    <h1 className="text-2xl font-bold text-white">Laporan</h1>
+                    {dataSource === 'dropbox' && (
+                        <div className="inline-flex items-center gap-2 text-[10px] text-blue-200 bg-blue-900/30 border border-blue-800 px-2 py-1 rounded-full w-fit">
+                            <Icon name="cloud" className="w-3 h-3" />
+                            Mode Cloud Aktif
                         </div>
                     )}
-
+                </div>
+                
+                <div className="flex flex-wrap gap-2 items-center w-full md:w-auto justify-start md:justify-end">
                     {/* Data Source Toggle */}
                     {!isStaff && (
                         <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700">
@@ -509,7 +539,7 @@ const ReportsView: React.FC = () => {
                                 variant="secondary" 
                                 size="sm" 
                                 onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
-                                className="bg-slate-800 border-slate-700"
+                                className="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100"
                             >
                                 Filter: {filterLabels[filter]} <Icon name="chevron-down" className="w-3 h-3 ml-1" />
                             </Button>
@@ -529,8 +559,9 @@ const ReportsView: React.FC = () => {
                         </div>
                     )}
 
-                     {/* Custom Date UI */}
-                     {filter === 'custom' && activeTab !== 'inventory' && (
+
+                    {/* Custom Date UI */}
+                    {filter === 'custom' && activeTab !== 'inventory' && (
                         <div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-slate-700">
                             <input 
                                 type="date" 
@@ -551,16 +582,22 @@ const ReportsView: React.FC = () => {
                     {/* Export Dropdown */}
                     {activeTab !== 'inventory' && (
                         <div className="relative" ref={exportDropdownRef}>
-                            <Button 
-                                variant="secondary" 
-                                size="sm" 
-                                onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-                                className="bg-slate-800 border-slate-700"
-                            >
-                                <Icon name="download" className="w-4 h-4" /> Export
-                            </Button>
+                            <div className="inline-flex" ref={exportButtonRef}>
+                                <Button 
+                                    variant="secondary" 
+                                    size="sm" 
+                                    onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                                    className="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100"
+                                >
+                                    <Icon name="download" className="w-4 h-4" /> Export
+                                </Button>
+                            </div>
                             {isExportDropdownOpen && (
-                                <div className="absolute top-full right-0 mt-2 w-40 bg-slate-800 rounded-lg shadow-xl z-50 border border-slate-600 overflow-hidden">
+                                <div
+                                    ref={exportMenuRef}
+                                    style={exportMenuStyles}
+                                    className="fixed max-h-[70vh] bg-slate-800 rounded-lg shadow-xl z-50 border border-slate-600 overflow-hidden overflow-y-auto animate-fade-in"
+                                >
                                     <button onClick={() => handleExportSpreadsheet('pdf')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
                                         <Icon name="printer" className="w-3 h-3 text-red-400"/> PDF Document
                                     </button>
@@ -579,6 +616,21 @@ const ReportsView: React.FC = () => {
                     )}
                 </div>
             </div>
+            {/* Branch Selector Row (Only if Cloud) */}
+            {dataSource !== 'local' && availableBranches.length > 0 && (
+                <div className="bg-slate-800 p-1 rounded-lg border border-slate-700 w-fit">
+                    <select 
+                        value={selectedBranch} 
+                        onChange={(e) => setSelectedBranch(e.target.value)}
+                        className="bg-transparent text-sm text-white px-3 py-1.5 outline-none cursor-pointer"
+                    >
+                        <option value="ALL" className="bg-slate-800">Semua Cabang</option>
+                        {availableBranches.map(b => (
+                            <option key={b} value={b} className="bg-slate-800">{b}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
 
             {/* Summary Cards */}
             {activeTab === 'transactions' && (

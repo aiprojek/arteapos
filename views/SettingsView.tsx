@@ -80,33 +80,43 @@ const SettingsView: React.FC = () => {
     };
 
     return (
-        <div className="space-y-6 pb-20">
-            <h1 className="text-3xl font-bold text-white">Pengaturan</h1>
-            
-            {/* Tabs */}
-            <div className="flex flex-nowrap overflow-x-auto gap-2 border-b border-slate-700 pb-2">
-                {[
-                    { id: 'general', label: 'Toko & Struk', icon: 'settings', restricted: false, hideForViewer: true },
-                    { id: 'hardware', label: 'Perangkat Keras', icon: 'bluetooth', restricted: false, hideForViewer: true },
-                    { id: 'features', label: 'Fitur Kasir', icon: 'star', restricted: false, hideForViewer: true },
-                    { id: 'inventory', label: 'Inventaris', icon: 'boxes', restricted: false, hideForViewer: true },
-                    { id: 'auth', label: 'Keamanan', icon: 'lock', restricted: true, hideForViewer: true }, 
-                    { id: 'data', label: 'Data & Cloud', icon: 'database', restricted: true, hideForViewer: true },
-                    { id: 'audit', label: 'Audit Log', icon: 'file-lock', restricted: false, hideForViewer: false },
-                ].filter(tab => {
-                    if (isViewer && tab.hideForViewer) return false;
-                    if (tab.restricted && !isAdmin) return false;
-                    return true;
-                }).map(tab => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id as any)}
-                        className={`flex-shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeTab === tab.id ? 'bg-[#347758] text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'}`}
-                    >
-                        <Icon name={tab.icon as any} className="w-4 h-4" />
-                        <span>{tab.label}</span>
-                    </button>
-                ))}
+        <div className={`space-y-6 ${isDirty && !isViewer ? 'pb-36' : 'pb-20'}`}>
+            <div className="space-y-0">
+                <h1 className="text-3xl font-bold text-white">Pengaturan</h1>
+                
+                {/* Tabs */}
+                <div className="sticky top-[-1rem] md:top-[-1.5rem] z-20 -mx-4 md:-mx-6 px-4 md:px-6 pt-0 pb-2 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/50 transition-all">
+                    <div className="relative">
+                        <div className="overflow-x-auto hide-scrollbar flex">
+                            <div className="bg-slate-800 p-1 rounded-xl flex gap-1 border border-slate-700 whitespace-nowrap min-w-max">
+                                {[
+                                    { id: 'general', label: 'Toko & Struk', icon: 'settings', restricted: false, hideForViewer: true },
+                                    { id: 'hardware', label: 'Perangkat Keras', icon: 'bluetooth', restricted: false, hideForViewer: true },
+                                    { id: 'features', label: 'Fitur Kasir', icon: 'star', restricted: false, hideForViewer: true },
+                                    { id: 'inventory', label: 'Inventaris', icon: 'boxes', restricted: false, hideForViewer: true },
+                                    { id: 'auth', label: 'Keamanan', icon: 'lock', restricted: true, hideForViewer: true }, 
+                                    { id: 'data', label: 'Data & Cloud', icon: 'database', restricted: true, hideForViewer: true },
+                                    { id: 'audit', label: 'Audit Log', icon: 'file-lock', restricted: false, hideForViewer: false },
+                                ].filter(tab => {
+                                    if (isViewer && tab.hideForViewer) return false;
+                                    if (tab.restricted && !isAdmin) return false;
+                                    return true;
+                                }).map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id as any)}
+                                        className={`flex-shrink-0 whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${activeTab === tab.id ? 'bg-[#347758] text-white shadow' : 'text-slate-400 hover:bg-slate-700 hover:text-white'}`}
+                                    >
+                                        <Icon name={tab.icon as any} className="w-4 h-4" />
+                                        <span>{tab.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="pointer-events-none absolute left-0 top-0 h-full w-6 bg-gradient-to-r from-slate-900/80 to-transparent md:hidden" />
+                        <div className="pointer-events-none absolute right-0 top-0 h-full w-6 bg-gradient-to-l from-slate-900/80 to-transparent md:hidden" />
+                    </div>
+                </div>
             </div>
 
             {/* Content Area */}
@@ -143,7 +153,7 @@ const SettingsView: React.FC = () => {
 
             {/* Floating Save/Cancel Bar (Hidden for Viewer since they can't edit) */}
             {isDirty && !isViewer && (
-                <div className="fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-sm border-t border-slate-700 p-4 z-50 animate-fade-in">
+                <div className="fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-sm border-t border-slate-700 p-4 z-50 animate-fade-in shadow-2xl">
                     <div className="max-w-7xl mx-auto flex justify-between items-center">
                         <p className="text-yellow-400 text-sm">Anda memiliki perubahan yang belum disimpan.</p>
                         <div className="flex gap-3">

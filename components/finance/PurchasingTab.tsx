@@ -265,12 +265,12 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
     return (
         <div className="space-y-4">
             <div className="flex justify-between items-center flex-wrap gap-2">
-                <div className="flex bg-slate-700 p-1 rounded-lg w-fit">
-                    <button onClick={() => setView('purchases')} className={`px-4 py-2 text-sm rounded transition-colors ${view === 'purchases' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Riwayat Pembelian</button>
-                    <button onClick={() => setView('suppliers')} className={`px-4 py-2 text-sm rounded transition-colors ${view === 'suppliers' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Daftar Supplier</button>
+                <div className="flex bg-slate-700 p-1 rounded-lg w-fit overflow-x-auto scrollbar-hide">
+                    <button onClick={() => setView('purchases')} className={`px-4 py-2 text-xs sm:text-sm rounded transition-colors whitespace-nowrap ${view === 'purchases' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Riwayat Pembelian</button>
+                    <button onClick={() => setView('suppliers')} className={`px-4 py-2 text-xs sm:text-sm rounded transition-colors whitespace-nowrap ${view === 'suppliers' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Daftar Supplier</button>
                 </div>
                 {dataSource === 'local' && view === 'purchases' && (
-                    <Button onClick={() => setPurchaseModalOpen(true)}>
+                    <Button onClick={() => setPurchaseModalOpen(true)} className="w-full sm:w-auto whitespace-nowrap">
                         <Icon name="plus" className="w-4 h-4" /> Catat Pembelian
                     </Button>
                 )}
@@ -282,7 +282,7 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {dataSource === 'local' && <Button onClick={() => setSupplierModalOpen(true)}>+ Tambah Supplier</Button>}
+                    {dataSource === 'local' && <Button onClick={() => setSupplierModalOpen(true)} className="w-full sm:w-auto whitespace-nowrap">+ Tambah Supplier</Button>}
                     <div className="h-[450px]">
                         <VirtualizedTable data={suppliers} columns={supplierColumns} rowHeight={50} />
                     </div>

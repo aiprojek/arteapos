@@ -8,6 +8,7 @@ import { APP_LICENSE_ID } from '../constants';
 import type { View } from '../types';
 import { dropboxService } from '../services/dropboxService';
 import ShowcaseModal from './ShowcaseModal'; // IMPORT NEW COMPONENT
+import { loadLocalRecoveryCode } from '../utils/recoveryCode';
 
 interface OnboardingModalsProps {
     setActiveView: (view: View) => void;
@@ -88,10 +89,12 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
         });
     };
 
+    const localRecovery = loadLocalRecoveryCode();
     const isSingleAdminMissingRecovery =
         currentUser?.role === 'admin' &&
         users.filter(u => u.role === 'admin').length === 1 &&
-        !(authSettings.recoveryCodeHash && authSettings.recoveryCodeHash.trim().length > 0);
+        !(authSettings.recoveryCodeHash && authSettings.recoveryCodeHash.trim().length > 0) &&
+        !(localRecovery?.hash && localRecovery.hash.trim().length > 0);
 
     // --- RENDER MANAGEMENT WELCOME (ADMIN & MANAGER & VIEWER) ---
     if (showManagementWelcome) {
@@ -129,7 +132,7 @@ const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) =>
                             {isSingleAdminMissingRecovery && (
                                 <div className="bg-amber-900/20 border border-amber-700 p-3 rounded text-xs text-amber-200 mt-2 text-left">
                                     <strong>Himbauan Keamanan (Admin Tunggal):</strong><br/>
-                                    Segera buat <strong>Recovery Code</strong> di menu Pengaturan {'>'} Otentikasi.
+                                    Segera buat <strong>Recovery Code</strong> di menu Pengaturan {'>'} Keamanan.
                                     Kode ini dipakai jika Anda lupa PIN admin dan bersifat sekali pakai.
                                 </div>
                             )}

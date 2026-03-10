@@ -9,6 +9,7 @@ const MASTER_DATA_FILENAME = '/artea_pos_master_config.json';
 const BRANCH_FOLDER = '/Cabang_Data'; 
 const TRANSFER_FOLDER = '/Transfer_Stok'; // NEW FOLDER
 const RECOVERY_FOLDER = '/Recovery_Tickets';
+const RECOVERY_CODE_PATH = '/Recovery_Code/admin_recovery.json';
 
 // Key Constants
 const KEY_APP_KEY = 'ARTEA_DBX_KEY';
@@ -193,6 +194,55 @@ export const dropboxService = {
                 throw new Error('QUOTA_EXCEEDED: Penyimpanan Dropbox Penuh.');
             }
             throw new Error(error.message || 'Gagal mengunggah ke Dropbox.');
+        }
+    },
+
+    backupRecoveryCode: async (payload: {
+        hash: string;
+        generatedAt: string;
+        createdByUserId?: string;
+        createdByName?: string;
+    }): Promise<void> => {
+        try {
+            const dbx = dropboxService.getClient();
+            const body = {
+                hash: payload.hash,
+                generatedAt: payload.generatedAt,
+                createdByUserId: payload.createdByUserId,
+                createdByName: payload.createdByName,
+                updatedAt: new Date().toISOString()
+            };
+
+            await retryOperation(() => dbx.filesUpload({
+                path: RECOVERY_CODE_PATH,
+                contents: JSON.stringify(body),
+                mode: { '.tag': 'overwrite' }
+            }));
+        } catch (error: any) {
+            console.error('Dropbox Recovery Code Backup Error:', error);
+            if (error.status === 401) throw new Error('Otorisasi Dropbox kadaluarsa. Silakan hubungkan ulang.');
+            if (error.status === 507 || (error.error && error.error.error_summary && error.error.error_summary.includes('insufficient_space'))) {
+                throw new Error('QUOTA_EXCEEDED: Penyimpanan Dropbox Penuh.');
+            }
+            throw new Error(error.message || 'Gagal backup recovery code ke Dropbox.');
+        }
+    },
+
+    getRecoveryCodeBackup: async (): Promise<{ hash: string; generatedAt?: string } | null> => {
+        try {
+            const dbx = dropboxService.getClient();
+            const dl = await retryOperation<any>(() => dbx.filesDownload({ path: RECOVERY_CODE_PATH }));
+            // @ts-ignore
+            const text = await dl.result.fileBlob.text();
+            const data = JSON.parse(text);
+            if (!data?.hash) return null;
+            return { hash: data.hash, generatedAt: data.generatedAt };
+        } catch (error: any) {
+            if (error?.status === 409 || error?.error?.error_summary?.includes('path/not_found')) {
+                return null;
+            }
+            console.error('Dropbox Recovery Code Restore Error:', error);
+            throw new Error('Gagal mengambil recovery code dari Dropbox.');
         }
     },
 

@@ -12,7 +12,7 @@ import Modal from '../components/Modal';
 import Button from '../components/Button';
 import ShowcaseModal from '../components/ShowcaseModal'; 
 import type { User } from '../types';
-import { hashRecoveryCode } from '../utils/recoveryCode';
+import { hashRecoveryCode, loadLocalRecoveryCode, clearLocalRecoveryCode } from '../utils/recoveryCode';
 
 const LoginView: React.FC = () => {
     const { users, login, authSettings, overrideAdminPin, resetPinWithTicket, updateAuthSettings } = useAuth(); 
@@ -119,6 +119,25 @@ const LoginView: React.FC = () => {
         }
         return () => stopCamera();
     }, [selectedUser, startCamera, stopCamera]);
+
+    // Support physical keyboard input on login keypad
+    useEffect(() => {
+        const handleKeypadInput = (e: KeyboardEvent) => {
+            if (!selectedUser) return;
+            if (isForceChangeModalOpen || isTicketModalOpen || isRecoveryCodeModalOpen || isEmergencyModalOpen || isChallengeModalOpen) return;
+            const target = e.target as HTMLElement | null;
+            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+
+            if (e.key >= '0' && e.key <= '9') {
+                setPin(prev => prev.length < 4 ? `${prev}${e.key}` : prev);
+            } else if (e.key === 'Backspace') {
+                setPin(prev => prev.slice(0, -1));
+            }
+        };
+
+        window.addEventListener('keydown', handleKeypadInput);
+        return () => window.removeEventListener('keydown', handleKeypadInput);
+    }, [selectedUser, isForceChangeModalOpen, isTicketModalOpen, isRecoveryCodeModalOpen, isEmergencyModalOpen, isChallengeModalOpen]);
 
     const captureEvidence = (): string | undefined => {
         if (videoRef.current && canvasRef.current && isCameraActive) {
@@ -259,7 +278,9 @@ const LoginView: React.FC = () => {
             setChallengeModalOpen(false);
 
             if (isSingleAdmin) {
-                if (!authSettings.recoveryCodeHash) {
+                const localRecovery = loadLocalRecoveryCode();
+                const recoveryHash = authSettings.recoveryCodeHash || localRecovery?.hash;
+                if (!recoveryHash) {
                     setChallengeError('Recovery Code belum dikonfigurasi. Gunakan restore backup.');
                     setChallengeModalOpen(true);
                     return;
@@ -277,7 +298,9 @@ const LoginView: React.FC = () => {
     };
 
     const verifyRecoveryCode = async () => {
-        if (!authSettings.recoveryCodeHash) {
+        const localRecovery = loadLocalRecoveryCode();
+        const recoveryHash = authSettings.recoveryCodeHash || localRecovery?.hash;
+        if (!recoveryHash) {
             setRecoveryCodeError('Recovery Code tidak tersedia.');
             return;
         }
@@ -287,7 +310,7 @@ const LoginView: React.FC = () => {
         }
 
         const inputHash = await hashRecoveryCode(recoveryCodeInput.trim());
-        if (inputHash !== authSettings.recoveryCodeHash) {
+        if (inputHash !== recoveryHash) {
             setRecoveryCodeError('Recovery code salah.');
             return;
         }
@@ -298,6 +321,7 @@ const LoginView: React.FC = () => {
             recoveryCodeHash: undefined,
             recoveryCodeGeneratedAt: undefined
         });
+        clearLocalRecoveryCode();
         setRecoveryCodeModalOpen(false);
         setRecoveryCodeInput('');
         setRecoveryCodeError('');
@@ -445,6 +469,7 @@ const LoginView: React.FC = () => {
         setForcedPinConfirm('');
         setForcedPinError('');
         setPin('');
+        setSelectedUser(null);
         showAlert({
             type: 'alert',
             title: 'PIN Diperbarui',

@@ -75,6 +75,21 @@ export const MANUAL_SECTIONS: HelpSection[] = [
         desc: 'Halaman utama untuk melakukan transaksi penjualan.',
         items: [
             {
+                id: 'pos_channel', title: 'Penjualan Channel Online (Shopee/Grab/GoFood)', icon: 'cloud', colorClass: 'text-amber-400', badge: 'Update',
+                content: `
+                    <p>Gunakan fitur ini jika Anda berjualan lewat platform online yang punya kasir sendiri, tapi Anda tetap ingin stok & bahan baku berkurang.</p>
+                    <ol class="list-decimal pl-5 space-y-1 text-sm">
+                        <li>Di halaman Kasir, klik tombol <strong>Channel Online</strong> (sejajar dengan Terima Barang, Stock Opname, Barcode).</li>
+                        <li>Pilih <strong>Nama Channel</strong> (mis. ShopeeFood/GrabFood/GoFood).</li>
+                        <li>Tambahkan produk yang terjual dan jumlahnya.</li>
+                        <li>Klik <strong>Catat</strong>.</li>
+                    </ol>
+                    <div class="bg-slate-900/50 border border-slate-700 rounded p-2 text-xs text-slate-300 mt-2">
+                        Catatan: Fitur ini <strong>tidak menambah omzet</strong> dan <strong>tidak membuat transaksi penjualan</strong>. Tujuannya hanya mengurangi stok & bahan baku agar akurat.
+                    </div>
+                `
+            },
+            {
                 id: 'pos_1', title: 'Alur Transaksi Dasar', icon: 'pay', colorClass: 'text-green-400',
                 content: `
                     <ol class="list-decimal pl-5 space-y-1 text-sm">
@@ -407,8 +422,9 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 content: `
                     <p class="mb-2">Masuk ke tab <strong>"Perangkat Keras"</strong> untuk mengatur alat:</p>
                     <ul class="list-disc pl-5 space-y-1 text-sm">
-                        <li><strong>Printer Bluetooth:</strong> Gunakan browser <strong>Google Chrome</strong> atau <strong>Edge</strong> (Android/Laptop) dan gunakan fitur "Cari Printer" di menu Hardware untuk koneksi Web Bluetooth. Jika menggunakan Aplikasi (APK), fitur Bluetooth saat ini sedang dalam perbaikan, harap gunakan opsi "System Printer" (RawBT).</li>
-                        <li><strong>Printer USB/Kabel:</strong> Gunakan opsi "System Printer" untuk membuka dialog cetak bawaan Android/Windows (RawBT atau Print Service).</li>
+                        <li><strong>Printer Bluetooth:</strong> Gunakan browser <strong>Google Chrome</strong> atau <strong>Edge</strong> (Android/Laptop) dan gunakan fitur "Cari Printer" di menu Hardware untuk koneksi Web Bluetooth. Jika menggunakan Aplikasi (APK), gunakan opsi <em>Direct Connection</em> (Cari Perangkat Paired) di menu Hardware.</li>
+                        <li><strong>Printer USB/Kabel:</strong> Gunakan <em>USB via Print Agent</em> (endpoint lokal) agar bisa cetak tanpa dialog. Alternatifnya, gunakan dialog cetak bawaan OS jika tersedia.</li>
+                        <li><strong>USB via Print Agent (Endpoint Lokal):</strong> Aktifkan <em>Print Agent</em> di menu Hardware, masukkan endpoint lokal (contoh: <code>http://127.0.0.1:9165/print</code>), lalu tes print.</li>
                         <li><strong>Barcode Scanner:</strong> Mendukung scanner fisik (USB/Wireless) dan kamera HP.</li>
                     </ul>
                 `
@@ -507,12 +523,12 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                     <ul class="list-disc pl-5 space-y-2 mt-2 text-sm">
                         <li>
                             <strong>Reset Staf via Tiket (Admin/Manager):</strong><br/>
-                            Masuk <strong>Pengaturan &rarr; Otentikasi</strong>, pada daftar user klik <strong>"Buat Tiket Reset"</strong>.<br/>
+                            Masuk <strong>Pengaturan &rarr; Keamanan</strong>, pada daftar user klik <strong>"Buat Tiket Reset"</strong>.<br/>
                             Tiket berlaku singkat (default 10 menit), hanya bisa dipakai sekali.
                         </li>
                         <li>
                             <strong>Admin Tunggal Lupa PIN:</strong><br/>
-                            Gunakan <strong>Recovery Code</strong> sekali pakai dari menu Otentikasi.<br/>
+                            Pastikan <strong>Pertanyaan Keamanan</strong> sudah diisi, lalu gunakan <strong>Recovery Code</strong> sekali pakai dari menu Keamanan.<br/>
                             Simpan kodenya di tempat offline (kertas/safe note), bukan hanya di HP yang sama.
                         </li>
                         <li>
@@ -549,13 +565,19 @@ export const FAQS: FaqItem[] = [
         id: 'faq_reset_staff_ticket',
         category: 'Akun & Akses',
         title: 'Bagaimana reset PIN staf sekarang?',
-        content: 'Reset PIN staf sekarang menggunakan <strong>Tiket Reset</strong> (sekali pakai), bukan PIN default. Admin/Manager membuat tiket di <strong>Pengaturan &rarr; Otentikasi</strong>, lalu staf memasukkan tiket di halaman Login (opsi <em>Pakai Tiket Reset</em>).'
+        content: 'Reset PIN staf sekarang menggunakan <strong>Tiket Reset</strong> (sekali pakai), bukan PIN default. Admin/Manager membuat tiket di <strong>Pengaturan &rarr; Keamanan</strong>, lalu staf memasukkan tiket di halaman Login (opsi <em>Pakai Tiket Reset</em>).'
     },
     {
         id: 'faq_single_admin_recovery',
         category: 'Akun & Akses',
         title: 'Jika hanya ada 1 admin lalu lupa PIN, bagaimana?',
-        content: 'Gunakan <strong>Recovery Code</strong> sekali pakai. Kode ini harus dibuat sebelumnya di menu Otentikasi. Tanpa recovery code, pemulihan hanya bisa lewat restore backup yang masih valid.'
+        content: 'Gunakan <strong>Recovery Code</strong> sekali pakai. Pastikan <strong>Pertanyaan Keamanan</strong> sudah diisi, lalu buat kode di menu Keamanan. Tanpa recovery code, pemulihan hanya bisa lewat restore backup yang masih valid.'
+    },
+    {
+        id: 'faq_channel_online_no_revenue',
+        category: 'Kasir',
+        title: 'Kenapa Channel Online tidak menambah omzet?',
+        content: 'Fitur <strong>Channel Online</strong> khusus untuk <strong>mengurangi stok & bahan baku</strong> dari pesanan marketplace (Shopee/Grab/GoFood) agar inventori akurat. Transaksi dan omzet sudah tercatat di platform tersebut, jadi aplikasi tidak menambah penjualan lagi agar tidak terjadi <em>double count</em>.'
     },
     {
         id: 'faq_staff_cloud',
@@ -592,6 +614,12 @@ export const FAQS: FaqItem[] = [
         category: 'Hardware',
         title: 'Printer Bluetooth tidak terdeteksi?',
         content: 'Pastikan: 1. Bluetooth HP nyala. 2. Printer sudah di-pairing di menu Bluetooth HP. 3. Jika pakai aplikasi Android, klik "Cari Perangkat (Paired)". Jika di web browser, gunakan browser Chrome/Edge yang support Web Bluetooth.'
+    },
+    {
+        id: 'faq_print_agent',
+        category: 'Hardware',
+        title: 'Bagaimana pakai printer kabel tanpa dialog cetak?',
+        content: 'Gunakan <strong>USB via Print Agent</strong>. Install utility/driver yang menyediakan endpoint lokal, aktifkan toggle Print Agent di menu Hardware, isi URL endpoint (mis. <code>http://127.0.0.1:9165/print</code>), lalu lakukan Tes Print.'
     },
     {
         id: 'faq_pay_blocked',

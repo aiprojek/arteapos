@@ -93,7 +93,9 @@ export const initialData: AppData = {
         footerMessage: 'Terima kasih telah berbelanja!',
         taxRate: 0,
         serviceChargeRate: 0,
-        orderTypes: ['Makan di Tempat', 'Bawa Pulang', 'Pesan Antar'] // DEFAULT VALUES ADDED HERE
+        orderTypes: ['Makan di Tempat', 'Bawa Pulang', 'Pesan Antar'], // DEFAULT VALUES ADDED HERE
+        printerAgentEnabled: false,
+        printerAgentUrl: ''
     },
     inventorySettings: {
         enabled: true,

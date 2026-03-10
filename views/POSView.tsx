@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePOSLogic } from '../hooks/usePOSLogic';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
@@ -12,6 +12,7 @@ import SendReportModal from '../components/SendReportModal';
 import CustomerFormModal from '../components/CustomerFormModal';
 import StaffRestockModal from '../components/StaffRestockModal';
 import StockOpnameModal from '../components/StockOpnameModal';
+import ChannelSalesModal from '../components/ChannelSalesModal';
 import { CURRENCY_FORMATTER } from '../constants';
 
 // Modular Components
@@ -236,6 +237,7 @@ const NameCartModal: React.FC<{isOpen: boolean, onClose: () => void, onSave: (n:
 const POSView: React.FC = () => {
     // Extracted Logic Hook
     const logic = usePOSLogic();
+    const [isChannelSalesOpen, setChannelSalesOpen] = useState(false);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -303,17 +305,17 @@ const POSView: React.FC = () => {
                         <>
                             {logic.receiptSettings.enableKitchenPrinter && logic.session && (
                                 <div className="flex items-center gap-2 mb-4 bg-slate-800 p-2 rounded-lg border border-slate-700 overflow-x-auto">
-                                    <Button variant="secondary" size="sm" onClick={() => logic.setHistoryModalOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
-                                        <Icon name="book" className="w-4 h-4" /> Riwayat
+                                    <Button variant="secondary" size="sm" onClick={() => logic.setHistoryModalOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600 whitespace-nowrap">
+                                        <Icon name="book" className="w-4 h-4" /> <span className="hidden sm:inline">Riwayat</span>
                                     </Button>
-                                    <Button variant="secondary" size="sm" onClick={() => logic.setCashMgmtOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
-                                        <Icon name="finance" className="w-4 h-4" /> Kas
+                                    <Button variant="secondary" size="sm" onClick={() => logic.setCashMgmtOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600 whitespace-nowrap">
+                                        <Icon name="finance" className="w-4 h-4" /> <span className="hidden sm:inline">Kas</span>
                                     </Button>
-                                    <Button variant="secondary" size="sm" onClick={() => logic.setSendReportModalOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600">
-                                        <Icon name="chat" className="w-4 h-4" /> Laporan
+                                    <Button variant="secondary" size="sm" onClick={() => logic.setSendReportModalOpen(true)} className="border-none bg-slate-700 hover:bg-slate-600 whitespace-nowrap">
+                                        <Icon name="chat" className="w-4 h-4" /> <span className="hidden sm:inline">Laporan</span>
                                     </Button>
-                                    <Button variant="danger" size="sm" onClick={() => logic.setEndSessionModalOpen(true)} className="border-none bg-red-900/30 hover:bg-red-900/50 text-red-300 ml-auto">
-                                        <Icon name="logout" className="w-4 h-4" /> Tutup
+                                    <Button variant="danger" size="sm" onClick={() => logic.setEndSessionModalOpen(true)} className="border-none bg-red-900/30 hover:bg-red-900/50 text-red-300 ml-auto whitespace-nowrap">
+                                        <Icon name="logout" className="w-4 h-4" /> <span className="hidden sm:inline">Tutup</span>
                                     </Button>
                                 </div>
                             )}
@@ -324,6 +326,7 @@ const POSView: React.FC = () => {
                                 onOpenScanner={() => logic.setBarcodeScannerOpen(true)}
                                 onOpenRestock={() => logic.setStaffRestockOpen(true)}
                                 onOpenOpname={() => logic.setIsOpnameOpen(true)}
+                                onOpenChannelSales={() => setChannelSalesOpen(true)}
                             />
                         </>
                     )}
@@ -434,6 +437,7 @@ const POSView: React.FC = () => {
             />
             <StaffRestockModal isOpen={logic.isStaffRestockOpen} onClose={() => logic.setStaffRestockOpen(false)} />
             <StockOpnameModal isOpen={logic.isOpnameOpen} onClose={() => logic.setIsOpnameOpen(false)} initialTab="product" />
+            <ChannelSalesModal isOpen={isChannelSalesOpen} onClose={() => setChannelSalesOpen(false)} />
 
             <Modal isOpen={logic.isStartSessionModalOpen} onClose={() => logic.setStartSessionModalOpen(false)} title="Mulai Sesi Penjualan">
                 <div className="space-y-4">

@@ -366,8 +366,14 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                                 <span>{CURRENCY_FORMATTER.format(finalTotal)}</span>
                             </div>
                         </div>
-                        
-                        <div className="grid grid-cols-4 gap-2">
+
+                        <div className="text-center pt-1">
+                          <CartActions />
+                        </div>
+                    </div>
+
+                    <div className="sticky bottom-0 -mx-4 px-4 pb-3 pt-3 bg-slate-800/95 backdrop-blur border-t border-slate-700 space-y-3 lg:static lg:border-0 lg:px-0 lg:mx-0 lg:pb-0 lg:pt-0 lg:bg-transparent lg:backdrop-blur-0">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             <Button
                                 variant="secondary"
                                 size="sm"
@@ -392,7 +398,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                             ))}
                         </div>
 
-
                         <div className="flex gap-3">
                             <Button variant="danger" className="flex-1" onClick={handleClearCart} disabled={cart.length === 0}>
                                 <Icon name="trash" className="w-4 h-4"/>
@@ -400,10 +405,6 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                             <Button variant="primary" className="flex-[3] text-lg py-3 shadow-lg shadow-[#347758]/20" onClick={onOpenPaymentModal} disabled={cart.length === 0} title="Shortcut: F2">
                                 Bayar
                             </Button>
-                        </div>
-                        
-                        <div className="text-center pt-1">
-                          <CartActions />
                         </div>
                     </div>
                 </>

@@ -16,10 +16,42 @@ android {
              ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    def keystoreProps = new Properties()
+    def keystorePropsFile = rootProject.file('keystore.properties')
+    if (keystorePropsFile.exists()) {
+        keystoreProps.load(new FileInputStream(keystorePropsFile))
+    }
+
+    def getProp = { key, envKey ->
+        def v = keystoreProps.getProperty(key)
+        if (v != null && v.trim().length() > 0) return v
+        def env = System.getenv(envKey)
+        return env
+    }
+
+    def storeFilePath = getProp('storeFile', 'ARTEA_KEYSTORE_PATH')
+    def storePassword = getProp('storePassword', 'ARTEA_KEYSTORE_PASSWORD')
+    def keyAlias = getProp('keyAlias', 'ARTEA_KEY_ALIAS')
+    def keyPassword = getProp('keyPassword', 'ARTEA_KEY_PASSWORD')
+    def hasSigning = storeFilePath && storePassword && keyAlias && keyPassword
+
+    if (hasSigning) {
+        signingConfigs {
+            release {
+                storeFile file(storeFilePath)
+                storePassword storePassword
+                keyAlias keyAlias
+                keyPassword keyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

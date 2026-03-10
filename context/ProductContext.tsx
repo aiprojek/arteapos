@@ -40,6 +40,7 @@ interface ProductContextType {
   importStockAdjustments: (adjustments: StockAdjustment[]) => void;
   processIncomingTransfers: (transfers: StockTransferPayload[]) => void;
   processOutgoingTransfer: (targetStoreId: string, items: StockTransferPayload['items'], notes: string) => void;
+  applyChannelSales: (items: { productId: string; quantity: number }[], channel: string, notes?: string) => boolean;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -230,6 +231,148 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
     });
     setTimeout(() => triggerAutoSync(getStaffName()), 500);
   }, [setData, triggerAutoSync, currentUser]);
+
+  const applyChannelSales = useCallback((items: { productId: string; quantity: number }[], channel: string, notes: string = ''): boolean => {
+    if (!items.length) return false;
+    const cleanItems = items.filter(i => i.productId && i.quantity > 0);
+    if (cleanItems.length === 0) return false;
+
+    // Pre-check if strict stock is enabled
+    if (inventorySettings.enabled && inventorySettings.preventNegativeStock) {
+      for (const item of cleanItems) {
+        const product = products.find(p => p.id === item.productId);
+        if (!product) continue;
+        const qty = item.quantity;
+
+        if (product.trackStock && (product.stock || 0) < qty) {
+          showAlert({ type: 'alert', title: 'Stok Tidak Cukup', message: `Produk "${product.name}" hanya tersedia ${(product.stock || 0)}.` });
+          return false;
+        }
+
+        if (inventorySettings.trackIngredients && product.recipe && product.recipe.length > 0) {
+          for (const recipeItem of product.recipe) {
+            const required = recipeItem.quantity * qty;
+            if (recipeItem.itemType === 'raw_material' && recipeItem.rawMaterialId) {
+              const material = rawMaterials.find(m => m.id === recipeItem.rawMaterialId);
+              if (material && (material.stock || 0) < required) {
+                showAlert({
+                  type: 'alert',
+                  title: 'Bahan Baku Tidak Cukup',
+                  message: `Bahan "${material.name}" hanya tersedia ${(material.stock || 0)}.`
+                });
+                return false;
+              }
+            }
+            if (recipeItem.itemType === 'product' && recipeItem.productId) {
+              const subProduct = products.find(p => p.id === recipeItem.productId);
+              if (subProduct && subProduct.trackStock && (subProduct.stock || 0) < required) {
+                showAlert({
+                  type: 'alert',
+                  title: 'Stok Tidak Cukup',
+                  message: `Produk "${subProduct.name}" hanya tersedia ${(subProduct.stock || 0)}.`
+                });
+                return false;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const now = new Date().toISOString();
+    const notePrefix = `Channel Online (${channel || 'Online'})`;
+    const finalNote = notes ? `${notePrefix} - ${notes}` : notePrefix;
+
+    logAudit(
+      currentUser,
+      'CHANNEL_SALE',
+      `Pengurangan stok channel online: ${cleanItems.length} item. ${finalNote}`,
+      'CHANNEL-SALE'
+    );
+
+    setData(prev => {
+      let updatedProducts = [...prev.products];
+      let updatedMaterials = [...prev.rawMaterials];
+      let updatedAdjustments = [...(prev.stockAdjustments || [])];
+
+      cleanItems.forEach((item, idx) => {
+        const productIndex = updatedProducts.findIndex(p => p.id === item.productId);
+        if (productIndex === -1) return;
+
+        const product = updatedProducts[productIndex];
+        const qty = item.quantity;
+        const logNotes = `${finalNote} (Item #${idx + 1})`;
+
+        if (inventorySettings.enabled && inventorySettings.trackIngredients && product.recipe && product.recipe.length > 0) {
+          product.recipe.forEach(recipeItem => {
+            const deductionAmount = recipeItem.quantity * qty;
+
+            if (recipeItem.itemType === 'raw_material' && recipeItem.rawMaterialId) {
+              const matIndex = updatedMaterials.findIndex(m => m.id === recipeItem.rawMaterialId);
+              if (matIndex > -1) {
+                const oldStock = updatedMaterials[matIndex].stock || 0;
+                const newStock = oldStock - deductionAmount;
+                updatedMaterials[matIndex] = { ...updatedMaterials[matIndex], stock: newStock };
+
+                updatedAdjustments.unshift({
+                  id: `CH-MAT-${Date.now()}-${recipeItem.rawMaterialId}`,
+                  productId: recipeItem.rawMaterialId,
+                  productName: updatedMaterials[matIndex].name,
+                  change: -deductionAmount,
+                  newStock,
+                  notes: logNotes,
+                  createdAt: now
+                });
+              }
+            } else if (recipeItem.itemType === 'product' && recipeItem.productId) {
+              const subIdx = updatedProducts.findIndex(p => p.id === recipeItem.productId);
+              if (subIdx > -1 && updatedProducts[subIdx].trackStock) {
+                const oldStock = updatedProducts[subIdx].stock || 0;
+                const newStock = oldStock - deductionAmount;
+                updatedProducts[subIdx] = { ...updatedProducts[subIdx], stock: newStock };
+
+                updatedAdjustments.unshift({
+                  id: `CH-SUB-${Date.now()}-${recipeItem.productId}`,
+                  productId: recipeItem.productId,
+                  productName: updatedProducts[subIdx].name,
+                  change: -deductionAmount,
+                  newStock,
+                  notes: logNotes,
+                  createdAt: now
+                });
+              }
+            }
+          });
+        }
+
+        if (inventorySettings.enabled && product.trackStock) {
+          const oldStock = product.stock || 0;
+          const newStock = oldStock - qty;
+          updatedProducts[productIndex] = { ...product, stock: newStock };
+
+          updatedAdjustments.unshift({
+            id: `CH-PROD-${Date.now()}-${product.id}`,
+            productId: product.id,
+            productName: product.name,
+            change: -qty,
+            newStock,
+            notes: logNotes,
+            createdAt: now
+          });
+        }
+      });
+
+      return {
+        ...prev,
+        products: updatedProducts,
+        rawMaterials: updatedMaterials,
+        stockAdjustments: updatedAdjustments
+      };
+    });
+
+    setTimeout(() => triggerAutoSync(getStaffName()), 500);
+    return true;
+  }, [inventorySettings.enabled, inventorySettings.preventNegativeStock, inventorySettings.trackIngredients, products, rawMaterials, setData, triggerAutoSync, currentUser, showAlert]);
 
   const performStockOpname = useCallback((items: OpnameItem[], notes: string = '') => {
       const count = items.filter(i => i.systemStock !== i.actualStock).length;
@@ -512,7 +655,8 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       isProductAvailable,
       importStockAdjustments,
       processIncomingTransfers,
-      processOutgoingTransfer
+      processOutgoingTransfer,
+      applyChannelSales
     }}>
       {children}
     </ProductContext.Provider>

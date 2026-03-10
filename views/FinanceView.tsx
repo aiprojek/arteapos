@@ -18,6 +18,7 @@ import { dataService } from '../services/dataService';
 import { generateTablePDF } from '../utils/pdfGenerator';
 import { CURRENCY_FORMATTER } from '../constants';
 import type { Transaction, Expense, OtherIncome, Purchase } from '../types';
+import OverflowMenu from '../components/OverflowMenu';
 
 type FinanceTab = 'cashflow' | 'expenses' | 'income' | 'purchasing' | 'debts' | 'customers';
 
@@ -45,6 +46,9 @@ const FinanceView: React.FC = () => {
     // Export State
     const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
     const exportDropdownRef = useRef<HTMLDivElement>(null);
+    const exportButtonRef = useRef<HTMLDivElement>(null);
+    const exportMenuRef = useRef<HTMLDivElement>(null);
+    const [exportMenuStyles, setExportMenuStyles] = useState<React.CSSProperties>({});
 
     // Permission Check
     const isStaff = currentUser?.role === 'staff';
@@ -68,6 +72,41 @@ const FinanceView: React.FC = () => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    useEffect(() => {
+        if (!isExportDropdownOpen) return;
+
+        const updatePosition = () => {
+            const button = exportButtonRef.current;
+            if (!button) return;
+            const rect = button.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const maxWidth = Math.max(0, viewportWidth - 16);
+            const width = Math.min(220, maxWidth);
+            const minWidth = Math.min(160, maxWidth);
+
+            let left = rect.right - width;
+            left = Math.min(Math.max(8, left), viewportWidth - width - 8);
+
+            const menuHeight = exportMenuRef.current?.getBoundingClientRect().height ?? 0;
+            let top = rect.bottom + 8;
+            if (menuHeight && top + menuHeight > viewportHeight - 8) {
+                top = Math.max(8, rect.top - menuHeight - 8);
+            }
+
+            setExportMenuStyles({ left, top, width, maxWidth, minWidth });
+        };
+
+        const frame = window.requestAnimationFrame(updatePosition);
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+        return () => {
+            window.cancelAnimationFrame(frame);
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [isExportDropdownOpen]);
 
     // Load Cloud Data Logic
     const loadCloudData = async () => {
@@ -223,24 +262,38 @@ const FinanceView: React.FC = () => {
         <div className="flex flex-col h-full space-y-4">
             {/* Header Area */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <h1 className="text-2xl font-bold text-white">Keuangan</h1>
+                <div className="flex flex-col gap-1">
+                    <h1 className="text-2xl font-bold text-white">Keuangan</h1>
+                    {dataSource === 'dropbox' && (
+                        <div className="inline-flex items-center gap-2 text-[10px] text-blue-200 bg-blue-900/30 border border-blue-800 px-2 py-1 rounded-full w-fit">
+                            <Icon name="cloud" className="w-3 h-3" />
+                            Mode Cloud Aktif
+                        </div>
+                    )}
+                </div>
                 
-                <div className="flex flex-wrap gap-2 items-center">
+                <div className="flex flex-wrap gap-2 items-center w-full md:w-auto">
                     
                     {/* EXPORT DROPDOWN */}
                     <div className="relative" ref={exportDropdownRef}>
+                        <div className="inline-flex" ref={exportButtonRef}>
                         <Button 
                             variant="secondary" 
                             size="sm" 
                             onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-                            className="bg-slate-800 border-slate-700 hover:bg-slate-700"
+                            className="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100"
                         >
-                            <Icon name="download" className="w-4 h-4" /> Export
-                            <Icon name="chevron-down" className="w-3 h-3 ml-1" />
-                        </Button>
+                                <Icon name="download" className="w-4 h-4" /> Export
+                                <Icon name="chevron-down" className="w-3 h-3 ml-1" />
+                            </Button>
+                        </div>
                         
                         {isExportDropdownOpen && (
-                            <div className="absolute top-full right-0 mt-2 w-40 bg-slate-800 rounded-lg shadow-xl border border-slate-600 z-50 overflow-hidden animate-fade-in">
+                            <div
+                                ref={exportMenuRef}
+                                style={exportMenuStyles}
+                                className="fixed max-h-[70vh] bg-slate-800 rounded-lg shadow-xl border border-slate-600 z-50 overflow-hidden overflow-y-auto animate-fade-in"
+                            >
                                 <button onClick={() => handleExport('pdf')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
                                     <Icon name="printer" className="w-3 h-3 text-red-400"/> PDF Document
                                 </button>
@@ -275,17 +328,19 @@ const FinanceView: React.FC = () => {
                         </div>
                     )}
                     
-                    {dataSource === 'dropbox' && (
-                        <Button 
-                            size="sm" 
-                            variant="secondary" 
-                            onClick={loadCloudData} 
-                            disabled={isLoadingCloud}
-                            className="bg-slate-800 border-slate-700"
-                        >
-                            <Icon name="reset" className={`w-4 h-4 ${isLoadingCloud ? 'animate-spin' : ''}`}/>
-                        </Button>
-                    )}
+                    <OverflowMenu
+                        size="sm"
+                        buttonClassName="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100"
+                        items={[
+                            ...(dataSource === 'dropbox' ? [{
+                                id: 'refresh',
+                                label: isLoadingCloud ? 'Memuat...' : 'Refresh Cloud',
+                                onClick: () => { void loadCloudData(); },
+                                icon: 'reset' as const,
+                                disabled: isLoadingCloud
+                            }] : [])
+                        ]}
+                    />
                 </div>
             </div>
             

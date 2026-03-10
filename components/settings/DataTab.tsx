@@ -728,11 +728,11 @@ const DataTab: React.FC = () => {
             {/* ... (Diagnosa Sistem Card - Unchanged) ... */}
             <SettingsCard title="Diagnosa Sistem" description="Cek kesehatan database lokal dan penyimpanan browser.">
                 <div className="space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                         <p className="text-sm text-slate-300">
                             Gunakan fitur ini jika aplikasi terasa lambat atau ada data yang tidak muncul.
                         </p>
-                        <Button onClick={runHealthCheck} disabled={isChecking} size="sm">
+                        <Button onClick={runHealthCheck} disabled={isChecking} size="sm" className="w-full sm:w-auto whitespace-nowrap">
                             {isChecking ? 'Mengecek...' : 'Cek Kesehatan Data'}
                         </Button>
                     </div>
@@ -831,7 +831,7 @@ const DataTab: React.FC = () => {
                             onClick={() => setCloudArchiveDropdownOpen(!isCloudArchiveDropdownOpen)} 
                             disabled={isArchivingCloud || !isConfigured} 
                             variant="secondary" 
-                            className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-900/30"
+                            className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-900/30 whitespace-nowrap"
                         >
                             {isArchivingCloud ? 'Mengunduh...' : <><Icon name="download" className="w-4 h-4"/> Unduh Arsip</>}
                             <Icon name="chevron-down" className="w-3 h-3 ml-1"/>
@@ -860,7 +860,7 @@ const DataTab: React.FC = () => {
                         onClick={handleCloudPurge} 
                         disabled={isCleaning || !isConfigured} 
                         variant="danger" 
-                        className="flex-1"
+                        className="flex-1 whitespace-nowrap"
                     >
                         {isCleaning ? 'Memproses...' : <><Icon name="trash" className="w-4 h-4"/> Hapus Laporan</>}
                     </Button>
@@ -873,11 +873,11 @@ const DataTab: React.FC = () => {
             {/* ... (Backup Restore Card - Unchanged) ... */}
             <SettingsCard title="Backup & Restore Lokal" description="Unduh file database (.json) ke perangkat ini atau pulihkan data dari file cadangan.">
                 <div className="flex flex-wrap gap-3">
-                    <Button onClick={dataService.exportData} variant="secondary">
+                    <Button onClick={dataService.exportData} variant="secondary" className="whitespace-nowrap">
                         <Icon name="download" className="w-4 h-4"/> Backup (JSON)
                     </Button>
                     
-                    <Button onClick={() => jsonInputRef.current?.click()} variant="danger" className="border border-red-700 bg-red-900/30 text-red-100 hover:bg-red-800">
+                    <Button onClick={() => jsonInputRef.current?.click()} variant="danger" className="border border-red-700 bg-red-900/30 text-red-100 hover:bg-red-800 whitespace-nowrap">
                         <Icon name="upload" className="w-4 h-4"/> Restore (JSON)
                     </Button>
                     <input type="file" ref={jsonInputRef} onChange={handleJSONRestore} className="hidden" accept=".json" />
@@ -973,21 +973,21 @@ const DataTab: React.FC = () => {
                                     <div className="text-xs text-yellow-500 bg-yellow-900/10 p-2 rounded border border-yellow-800">
                                         Belum Terhubung. Klik "Bantuan & Koneksi" atau "Input Kode".
                                     </div>
-                                    <div className="flex gap-2">
-                                        <Button onClick={() => setIsScanningPairing(true)} variant="secondary" className="flex-1 border-dashed border-2 border-slate-500">
-                                            <Icon name="camera" className="w-4 h-4" /> Scan QR
-                                        </Button>
-                                        <Button onClick={handleInputCodeInit} variant="secondary" className="flex-1 border-dashed border-2 border-slate-500">
-                                            <Icon name="keyboard" className="w-4 h-4" /> Input Kode
-                                        </Button>
-                                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                        <Button onClick={() => setIsScanningPairing(true)} variant="secondary" className="flex-1 border-dashed border-2 border-slate-500 whitespace-nowrap">
+                            <Icon name="camera" className="w-4 h-4" /> <span className="sm:inline">Scan QR</span>
+                        </Button>
+                        <Button onClick={handleInputCodeInit} variant="secondary" className="flex-1 border-dashed border-2 border-slate-500 whitespace-nowrap">
+                            <Icon name="keyboard" className="w-4 h-4" /> <span className="sm:inline">Input Kode</span>
+                        </Button>
+                    </div>
                                 </div>
                             )}
                         </div>
                     </div>
 
                     <div className="flex justify-end gap-2">
-                        <Button onClick={saveCloudSettings}>Simpan Konfigurasi</Button>
+                        <Button onClick={saveCloudSettings} className="w-full sm:w-auto whitespace-nowrap">Simpan Konfigurasi</Button>
                     </div>
                 </div>
             </SettingsCard>
@@ -1048,7 +1048,7 @@ const DataTab: React.FC = () => {
                                     <Button 
                                         onClick={() => copyToClipboard(pairingTextCode)}
                                         variant="secondary"
-                                        className="w-full mt-2"
+                                        className="w-full mt-2 whitespace-nowrap text-xs"
                                         size="sm"
                                     >
                                         <Icon name="clipboard" className="w-4 h-4"/> Salin & Kirim ke Staff

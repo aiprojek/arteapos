@@ -15,6 +15,8 @@ import VirtualizedTable from '../components/VirtualizedTable';
 import StockOpnameModal from '../components/StockOpnameModal';
 import StockTransferModal from '../components/StockTransferModal'; 
 import StaffRestockModal from '../components/StaffRestockModal';
+import ChannelSalesModal from '../components/ChannelSalesModal';
+import OverflowMenu from '../components/OverflowMenu';
 import { useSettings } from '../context/SettingsContext';
 import { compressImage } from '../utils/imageCompression'; 
 import { dataService } from '../services/dataService';
@@ -813,6 +815,7 @@ const ProductsView: React.FC = () => {
     const [isBulkModalOpen, setBulkModalOpen] = useState(false);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [isRestockModalOpen, setIsRestockModalOpen] = useState(false); 
+    const [isChannelSalesOpen, setIsChannelSalesOpen] = useState(false);
 
     const isAdmin = currentUser?.role === 'admin';
 
@@ -900,55 +903,71 @@ const ProductsView: React.FC = () => {
 
     return (
         <div className="flex flex-col h-full">
-            <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-                <h1 className="text-2xl font-bold text-white self-start sm:self-center">Produk</h1>
-                <div className="flex gap-2 flex-wrap justify-end self-stretch sm:self-center">
-                    <div className="relative flex-grow sm:flex-grow-0">
-                         <input
-                            type="text"
-                            placeholder="Cari produk..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-[#347758] focus:border-[#347758]"
-                        />
-                         <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <div className="flex flex-col gap-3 mb-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="flex flex-col gap-1">
+                        <h1 className="text-2xl font-bold text-white">Produk</h1>
                     </div>
-                    
-                    {/* TOMBOL TRANSFER STOK (GUDANG -> CABANG) */}
-                    {isAdmin && (
-                        <Button variant="secondary" onClick={() => setIsTransferModalOpen(true)} className="flex-shrink-0 bg-blue-600 hover:bg-blue-500 text-white border-none" title="Kirim Stok ke Cabang (Cloud)">
-                            <Icon name="share" className="w-5 h-5"/>
-                            <span className="hidden lg:inline">Transfer Stok</span>
+                    <div className="flex gap-2 flex-wrap">
+                        <Button variant="primary" onClick={() => { setEditingProduct(null); setFormOpen(true); }} className="flex-shrink-0">
+                            <Icon name="plus" className="w-5 h-5"/>
+                            <span className="hidden sm:inline">Tambah</span>
                         </Button>
-                    )}
-
-                    {/* TOMBOL MANUAL STOK (SUPPLIER -> GUDANG) */}
-                    <Button variant="secondary" onClick={() => setIsRestockModalOpen(true)} className="flex-shrink-0 bg-green-600 hover:bg-green-500 text-white border-none" title="Terima Barang dari Supplier / Koreksi Manual">
-                        <Icon name="download" className="w-5 h-5 rotate-180"/>
-                        <span className="hidden lg:inline">Stok Manual</span>
-                    </Button>
-
-                    <Button variant="secondary" onClick={handleExport} className="flex-shrink-0 bg-slate-700 border-slate-600 hover:bg-slate-600">
-                        <Icon name="download" className="w-5 h-5"/>
-                        <span className="hidden lg:inline">Export</span>
-                    </Button>
-
-                    <Button variant="secondary" onClick={() => setBulkModalOpen(true)} className="flex-shrink-0 bg-blue-900/30 text-blue-300 border-blue-800 hover:bg-blue-900/50">
-                        <Icon name="boxes" className="w-5 h-5"/>
-                        <span className="hidden lg:inline">Tambah Massal</span>
-                    </Button>
-                    <Button variant="secondary" onClick={() => setCategoryModalOpen(true)} className="flex-shrink-0">
-                        <Icon name="tag" className="w-5 h-5"/>
-                        <span className="hidden lg:inline">Kategori</span>
-                    </Button>
-                    <Button variant="secondary" onClick={() => setIsOpnameOpen(true)} className="flex-shrink-0">
-                        <Icon name="clipboard" className="w-5 h-5"/>
-                        <span className="hidden lg:inline">Opname</span>
-                    </Button>
-                    <Button variant="primary" onClick={() => { setEditingProduct(null); setFormOpen(true); }} className="flex-shrink-0">
-                        <Icon name="plus" className="w-5 h-5"/>
-                        <span className="hidden sm:inline">Tambah</span>
-                    </Button>
+                        <Button variant="secondary" onClick={() => setIsRestockModalOpen(true)} className="flex-shrink-0 bg-green-600 hover:bg-green-500 text-white border-none" title="Terima Barang dari Supplier / Koreksi Manual">
+                            <Icon name="download" className="w-5 h-5 rotate-180"/>
+                            <span className="hidden sm:inline">Stok Manual</span>
+                        </Button>
+                        <OverflowMenu
+                            items={[
+                                ...(isAdmin ? [{
+                                    id: 'transfer',
+                                    label: 'Transfer Stok',
+                                    onClick: () => setIsTransferModalOpen(true),
+                                    icon: 'share' as const
+                                }] : []),
+                                {
+                                    id: 'channel',
+                                    label: 'Channel Online',
+                                    onClick: () => setIsChannelSalesOpen(true),
+                                    icon: 'cloud' as const
+                                },
+                                {
+                                    id: 'export',
+                                    label: 'Export',
+                                    onClick: handleExport,
+                                    icon: 'download' as const
+                                },
+                                {
+                                    id: 'bulk',
+                                    label: 'Tambah Massal',
+                                    onClick: () => setBulkModalOpen(true),
+                                    icon: 'boxes' as const
+                                },
+                                {
+                                    id: 'category',
+                                    label: 'Kategori',
+                                    onClick: () => setCategoryModalOpen(true),
+                                    icon: 'tag' as const
+                                },
+                                {
+                                    id: 'opname',
+                                    label: 'Opname',
+                                    onClick: () => setIsOpnameOpen(true),
+                                    icon: 'clipboard' as const
+                                }
+                            ]}
+                        />
+                    </div>
+                </div>
+                <div className="relative w-full sm:max-w-md">
+                    <input
+                        type="text"
+                        placeholder="Cari produk..."
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-[#347758] focus:border-[#347758]"
+                    />
+                    <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 </div>
             </div>
 
@@ -1009,6 +1028,11 @@ const ProductsView: React.FC = () => {
                 isOpen={isRestockModalOpen}
                 onClose={() => setIsRestockModalOpen(false)}
                 filterType="product"
+            />
+
+            <ChannelSalesModal
+                isOpen={isChannelSalesOpen}
+                onClose={() => setIsChannelSalesOpen(false)}
             />
         </div>
     );

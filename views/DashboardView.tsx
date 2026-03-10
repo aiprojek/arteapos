@@ -10,6 +10,7 @@ import type { Transaction } from '../types';
 import { dropboxService } from '../services/dropboxService';
 import { mockDataService } from '../services/mockData';
 import { useUI } from '../context/UIContext';
+import OverflowMenu from '../components/OverflowMenu';
 
 const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'products' | 'reports' | 'finance'; iconClass: string; children?: React.ReactNode; tooltip?: string }> = ({ title, value, icon, iconClass, children, tooltip }) => (
     <div className="bg-slate-800 p-6 rounded-xl shadow-lg flex flex-col h-full border border-slate-700 relative group">
@@ -375,54 +376,17 @@ const DashboardView: React.FC = () => {
         <div className="space-y-6 max-w-7xl mx-auto">
             {/* Header & Controls */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+                <div className="flex flex-col gap-1">
+                    <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+                    {dataSource === 'dropbox' && (
+                        <div className="inline-flex items-center gap-2 text-[10px] text-blue-200 bg-blue-900/30 border border-blue-800 px-2 py-1 rounded-full w-fit">
+                            <Icon name="cloud" className="w-3 h-3" />
+                            Mode Cloud Aktif
+                        </div>
+                    )}
+                </div>
                 
                 <div className="flex flex-wrap gap-2 items-center">
-                    {/* Cloud Actions (Only in Cloud Mode) */}
-                    {dataSource === 'dropbox' && (
-                        <div className="flex items-center gap-2">
-                            {lastUpdated && (
-                                <span className="text-[10px] text-slate-400 hidden md:block">
-                                    Update: {lastUpdated.toLocaleTimeString()}
-                                </span>
-                            )}
-                            <Button 
-                                size="sm" 
-                                onClick={loadDropboxData} 
-                                disabled={isCloudLoading} 
-                                className="bg-blue-600 hover:bg-blue-500 text-white border-none"
-                                title="Tarik data terbaru dari cabang"
-                            >
-                                <Icon name="reset" className={`w-4 h-4 ${isCloudLoading ? 'animate-spin' : ''}`} />
-                                {isCloudLoading ? 'Syncing...' : 'Refresh Data'}
-                            </Button>
-                            <Button
-                                size="sm"
-                                onClick={handleMergeToLocal}
-                                className="bg-green-600 hover:bg-green-500 text-white border-none"
-                                title="Simpan data cloud ke lokal"
-                            >
-                                <Icon name="download" className="w-4 h-4" /> Simpan ke Lokal
-                            </Button>
-                        </div>
-                    )}
-
-                    {/* Branch Selector */}
-                    {dataSource !== 'local' && availableBranches.length > 0 && (
-                        <div className="bg-slate-800 p-1 rounded-lg border border-slate-700">
-                            <select 
-                                value={selectedBranch} 
-                                onChange={(e) => setSelectedBranch(e.target.value)}
-                                className="bg-transparent text-sm text-white px-3 py-1.5 outline-none cursor-pointer"
-                            >
-                                <option value="ALL" className="bg-slate-800">Semua Cabang</option>
-                                {availableBranches.map(b => (
-                                    <option key={b} value={b} className="bg-slate-800">{b}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-
                     {/* Data Source Toggle */}
                     <div className="bg-slate-800 p-1 rounded-lg flex items-center border border-slate-700">
                         <button
@@ -438,8 +402,44 @@ const DashboardView: React.FC = () => {
                             <span className="flex items-center gap-2"><Icon name="share" className="w-4 h-4" /> Cloud (Dropbox)</span>
                         </button>
                     </div>
+
+                    <OverflowMenu
+                        buttonClassName="text-sm"
+                        items={[
+                            ...(dataSource === 'dropbox' ? [
+                                {
+                                    id: 'refresh',
+                                    label: isCloudLoading ? 'Syncing...' : 'Refresh Data',
+                                    onClick: () => { void loadDropboxData(); },
+                                    icon: 'reset' as const,
+                                    disabled: isCloudLoading
+                                },
+                                {
+                                    id: 'merge',
+                                    label: 'Simpan ke Lokal',
+                                    onClick: handleMergeToLocal,
+                                    icon: 'download' as const
+                                }
+                            ] : [])
+                        ]}
+                    />
                 </div>
             </div>
+            {/* Branch Selector */}
+            {dataSource !== 'local' && availableBranches.length > 0 && (
+                <div className="bg-slate-800 p-1 rounded-lg border border-slate-700 w-fit">
+                    <select 
+                        value={selectedBranch} 
+                        onChange={(e) => setSelectedBranch(e.target.value)}
+                        className="bg-transparent text-sm text-white px-3 py-1.5 outline-none cursor-pointer"
+                    >
+                        <option value="ALL" className="bg-slate-800">Semua Cabang</option>
+                        {availableBranches.map(b => (
+                            <option key={b} value={b} className="bg-slate-800">{b}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
 
             {/* Info Banner for Cloud Mode */}
             {dataSource !== 'local' && (

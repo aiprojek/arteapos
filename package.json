@@ -22,7 +22,11 @@
     "cap:sync": "npx cap sync",
     "cap:open": "npx cap open android",
     "electron:dev": "concurrently \"vite\" \"electron .\"",
-    "electron:build": "vite build && electron-builder"
+    "electron:build": "node scripts/bump-version.mjs && vite build && electron-builder",
+    "android:build": "node scripts/bump-version.mjs && vite build && npx cap sync android && (cd android && ./gradlew assembleRelease)",
+    "release:desktop": "npm run electron:build && node scripts/github-draft.mjs",
+    "release:android": "npm run android:build && node scripts/github-draft.mjs",
+    "release:all": "node scripts/bump-version.mjs && vite build && electron-builder && npx cap sync android && (cd android && ./gradlew assembleRelease) && node scripts/github-draft.mjs"
   },
   "dependencies": {
     "@capacitor-community/barcode-scanner": "^4.0.1",

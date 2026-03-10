@@ -170,6 +170,8 @@ export interface ReceiptSettings {
   branches?: Branch[];
   orderTypes?: string[];
   printerMacAddress?: string; // NEW FIELD: Alamat MAC Printer Bluetooth
+  printerAgentEnabled?: boolean; // USB via Print Agent (Local Endpoint)
+  printerAgentUrl?: string; // Endpoint lokal untuk print agent
 }
 
 export interface InventorySettings {
@@ -385,6 +387,7 @@ export type AuditAction =
     | 'STOCK_OPNAME' 
     | 'STOCK_TRANSFER_IN' 
     | 'STOCK_TRANSFER_OUT'
+    | 'CHANNEL_SALE'
     | 'BALANCE_TOPUP'
     | 'OTHER';
 

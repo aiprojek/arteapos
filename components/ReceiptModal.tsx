@@ -158,22 +158,23 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
             
             <div className="flex flex-col gap-3 pt-6">
                 
-                <Button variant="primary" onClick={handleBluetoothPrint} className="w-full bg-blue-600 border-none">
-                    <Icon name="bluetooth" className="w-5 h-5"/> Cetak Bluetooth
+                <Button variant="primary" onClick={handleBluetoothPrint} className="w-full bg-blue-600 border-none whitespace-nowrap">
+                    <Icon name="bluetooth" className="w-5 h-5"/> <span className="hidden sm:inline">Cetak Bluetooth</span>
                 </Button>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <Button variant="secondary" onClick={handleShare} disabled={isProcessing}>
-                        <Icon name="share" className="w-5 h-5"/> Bagikan
+                    <Button variant="secondary" onClick={handleShare} disabled={isProcessing} className="whitespace-nowrap">
+                        <Icon name="share" className="w-5 h-5"/> <span className="hidden sm:inline">Bagikan</span>
                     </Button>
-                    <Button variant="secondary" onClick={() => window.print()}>
-                        <Icon name="printer" className="w-5 h-5"/> PDF
+                    <Button variant="secondary" onClick={() => window.print()} className="whitespace-nowrap">
+                        <Icon name="printer" className="w-5 h-5"/> <span className="hidden sm:inline">PDF</span>
                     </Button>
                 </div>
                 
                 {transaction.paymentStatus !== 'refunded' && (
-                    <Button variant="danger" onClick={() => setIsRefundView(true)} className="w-full mt-2">
-                        Refund Transaksi
+                    <Button variant="danger" onClick={() => setIsRefundView(true)} className="w-full mt-2 whitespace-nowrap">
+                        <span className="hidden sm:inline">Refund Transaksi</span>
+                        <span className="sm:hidden">Refund</span>
                     </Button>
                 )}
             </div>

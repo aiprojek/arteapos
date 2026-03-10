@@ -329,11 +329,11 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
                         <Icon name="chat" className="w-4 h-4 text-[#52a37c]"/> Ringkasan Cepat
                     </h4>
                     <div className="grid grid-cols-2 gap-3">
-                        <Button size="sm" onClick={() => handleSendSummary('whatsapp')} className="bg-[#25D366] hover:bg-[#1da851] text-white border-none">
-                            <Icon name="whatsapp" className="w-4 h-4" /> WhatsApp
+                        <Button size="sm" onClick={() => handleSendSummary('whatsapp')} className="bg-[#25D366] hover:bg-[#1da851] text-white border-none whitespace-nowrap">
+                            <Icon name="whatsapp" className="w-4 h-4" /> <span className="hidden sm:inline">WhatsApp</span>
                         </Button>
-                        <Button size="sm" onClick={() => handleSendSummary('telegram')} className="bg-[#0088cc] hover:bg-[#0077b5] text-white border-none">
-                            <Icon name="telegram" className="w-4 h-4" /> Telegram
+                        <Button size="sm" onClick={() => handleSendSummary('telegram')} className="bg-[#0088cc] hover:bg-[#0077b5] text-white border-none whitespace-nowrap">
+                            <Icon name="telegram" className="w-4 h-4" /> <span className="hidden sm:inline">Telegram</span>
                         </Button>
                     </div>
                 </div>
@@ -344,11 +344,11 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
                         <Icon name="lock" className="w-4 h-4 text-yellow-400"/> Laporan Aman (Anti-Edit)
                     </h4>
                     <div className="grid grid-cols-2 gap-3">
-                        <Button size="sm" onClick={() => handleSendEncrypted('whatsapp')} variant="secondary" className="border-slate-500">
-                            <Icon name="whatsapp" className="w-4 h-4" /> WhatsApp
+                        <Button size="sm" onClick={() => handleSendEncrypted('whatsapp')} variant="secondary" className="border-slate-500 whitespace-nowrap">
+                            <Icon name="whatsapp" className="w-4 h-4" /> <span className="hidden sm:inline">WhatsApp</span>
                         </Button>
-                        <Button size="sm" onClick={() => handleSendEncrypted('telegram')} variant="secondary" className="border-slate-500">
-                            <Icon name="telegram" className="w-4 h-4" /> Telegram
+                        <Button size="sm" onClick={() => handleSendEncrypted('telegram')} variant="secondary" className="border-slate-500 whitespace-nowrap">
+                            <Icon name="telegram" className="w-4 h-4" /> <span className="hidden sm:inline">Telegram</span>
                         </Button>
                     </div>
                 </div>
@@ -358,8 +358,8 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
                     <h4 className="text-white font-semibold text-sm mb-2 flex items-center gap-2">
                         <Icon name="database" className="w-4 h-4 text-blue-400"/> File CSV Detail
                     </h4>
-                    <Button onClick={handleShareFile} className="w-full" variant="secondary">
-                        <Icon name="share" className="w-4 h-4" /> Bagikan File
+                    <Button onClick={handleShareFile} className="w-full whitespace-nowrap" variant="secondary">
+                        <Icon name="share" className="w-4 h-4" /> <span className="hidden sm:inline">Bagikan File</span>
                     </Button>
                 </div>
 

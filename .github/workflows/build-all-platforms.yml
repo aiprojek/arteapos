@@ -10,14 +10,48 @@ permissions:
   contents: write
 
 jobs:
+  prepare-version:
+    name: Prepare Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Bump Version (YYYYMMDD.N)
+        id: version
+        run: |
+          VERSION=$(node scripts/bump-version.mjs)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "$VERSION" > version.txt
+      - name: Upload Versioned Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: versioned-files
+          path: |
+            package.json
+            android/app/build.gradle
+            version.txt
+
   build-web:
     name: Build Web Assets
+    needs: prepare-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
           node-version: 18
+      - uses: actions/download-artifact@v4
+        with:
+          name: versioned-files
+          path: .versioned
+      - name: Apply Versioned Files
+        run: |
+          cp .versioned/package.json package.json
+          cp .versioned/android/app/build.gradle android/app/build.gradle
       
       - name: Install Dependencies
         run: npm install
@@ -42,6 +76,14 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
+      - uses: actions/download-artifact@v4
+        with:
+          name: versioned-files
+          path: .versioned
+      - name: Apply Versioned Files
+        run: |
+          cp .versioned/package.json package.json
+          cp .versioned/android/app/build.gradle android/app/build.gradle
       
       # Setup Gradle environment
       - uses: gradle/actions/setup-gradle@v3
@@ -57,30 +99,43 @@ jobs:
       
       - name: Setup Capacitor Assets & Android
         run: |
-          # Fresh Start: Hapus folder android jika ada untuk menghindari konflik file lama
-          rm -rf android
-
-          # Buat project Android baru (Standard Capacitor)
-          npx cap add android
-
           # Sync aset web
           npx cap sync
           
           # Generate Icon & Splash
           npm run resources || true
+      
+      - name: Setup Android Keystore
+        env:
+          ARTEA_KEYSTORE_BASE64: ${{ secrets.ARTEA_KEYSTORE_BASE64 }}
+          ARTEA_KEYSTORE_PASSWORD: ${{ secrets.ARTEA_KEYSTORE_PASSWORD }}
+          ARTEA_KEY_ALIAS: ${{ secrets.ARTEA_KEY_ALIAS }}
+          ARTEA_KEY_PASSWORD: ${{ secrets.ARTEA_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ARTEA_KEYSTORE_BASE64" ]; then
+            echo "ARTEA_KEYSTORE_BASE64 secret belum di-set."
+            exit 1
+          fi
+          echo "$ARTEA_KEYSTORE_BASE64" | base64 -d > android/artea-release.keystore
+          cat > android/keystore.properties <<EOF
+          storeFile=$(pwd)/android/artea-release.keystore
+          storePassword=$ARTEA_KEYSTORE_PASSWORD
+          keyAlias=$ARTEA_KEY_ALIAS
+          keyPassword=$ARTEA_KEY_PASSWORD
+          EOF
 
       - name: Build APK
         run: |
           cd android
           # Pastikan gradlew executable
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
           
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ArteaPOS-Android
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
 
   build-desktop-linux:
     name: Build Desktop (Linux)
@@ -91,6 +146,14 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
+      - uses: actions/download-artifact@v4
+        with:
+          name: versioned-files
+          path: .versioned
+      - name: Apply Versioned Files
+        run: |
+          cp .versioned/package.json package.json
+          cp .versioned/android/app/build.gradle android/app/build.gradle
       
       - uses: actions/download-artifact@v4
         with:
@@ -120,6 +183,14 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
+      - uses: actions/download-artifact@v4
+        with:
+          name: versioned-files
+          path: .versioned
+      - name: Apply Versioned Files
+        run: |
+          copy .versioned\\package.json package.json
+          copy .versioned\\android\\app\\build.gradle android\\app\\build.gradle
       
       - uses: actions/download-artifact@v4
         with:
@@ -139,3 +210,28 @@ jobs:
         with:
           name: ArteaPOS-Windows
           path: release/*.exe
+
+  create-draft-release:
+    name: Create Draft Release
+    needs: [prepare-version, build-android, build-desktop-linux, build-desktop-win]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ArteaPOS-Android
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: ArteaPOS-Linux
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: ArteaPOS-Windows
+          path: release-assets
+      - name: Create Draft Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.prepare-version.outputs.version }}
+          name: v${{ needs.prepare-version.outputs.version }}
+          draft: true
+          files: release-assets/**

@@ -12,6 +12,7 @@ import { CURRENCY_FORMATTER } from '../constants';
 import VirtualizedTable from '../components/VirtualizedTable';
 import StockOpnameModal from '../components/StockOpnameModal';
 import StaffRestockModal from '../components/StaffRestockModal'; // IMPORT RESTOCK MODAL
+import OverflowMenu from '../components/OverflowMenu';
 import { useSettings } from '../context/SettingsContext';
 
 // --- HELPER FORMAT CURRENCY INPUT ---
@@ -539,41 +540,53 @@ const RawMaterialsView: React.FC = () => {
 
     return (
         <div className="flex flex-col h-full">
-             <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-                <h1 className="text-2xl font-bold text-white self-start sm:self-center">Bahan Baku</h1>
-                <div className="flex gap-2 flex-wrap justify-end self-stretch sm:self-center">
-                    <div className="relative flex-grow sm:flex-grow-0">
-                         <input
-                            type="text"
-                            placeholder="Cari bahan baku..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-[#347758] focus:border-[#347758]"
-                        />
-                         <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+             <div className="flex flex-col gap-3 mb-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="flex flex-col gap-1">
+                        <h1 className="text-2xl font-bold text-white">Bahan Baku</h1>
                     </div>
-                    {/* NEW: KELOLA STOK BUTTON */}
-                    <Button variant="secondary" onClick={() => setIsRestockOpen(true)} className="flex-shrink-0 bg-slate-700 border-slate-600 hover:bg-slate-600" title="Terima Barang / Catat Kerusakan">
-                        <Icon name="tag" className="w-5 h-5"/>
-                        <span className="hidden lg:inline">Kelola Stok</span>
-                    </Button>
-
-                    <Button variant="secondary" onClick={() => setBulkModalOpen(true)} className="flex-shrink-0 bg-blue-900/30 text-blue-300 border-blue-800 hover:bg-blue-900/50">
-                        <Icon name="boxes" className="w-5 h-5"/>
-                        <span className="hidden lg:inline">Tambah Massal</span>
-                    </Button>
-                    <Button variant="secondary" onClick={() => setIsOpnameOpen(true)} className="flex-shrink-0">
-                        <Icon name="database" className="w-5 h-5"/>
-                        <span className="hidden lg:inline">Stock Opname</span>
-                    </Button>
-                    <Button variant="secondary" onClick={handleExport} className="flex-shrink-0">
-                        <Icon name="download" className="w-5 h-5"/>
-                        <span className="hidden sm:inline">Export</span>
-                    </Button>
-                    <Button variant="primary" onClick={() => handleOpenModal()} className="flex-shrink-0">
-                        <Icon name="plus" className="w-5 h-5"/>
-                        <span className="hidden sm:inline">Tambah Bahan</span>
-                    </Button>
+                    <div className="flex gap-2 flex-wrap">
+                        <Button variant="primary" onClick={() => handleOpenModal()} className="flex-shrink-0">
+                            <Icon name="plus" className="w-5 h-5"/>
+                            <span className="hidden sm:inline">Tambah Bahan</span>
+                        </Button>
+                        <Button variant="secondary" onClick={() => setIsRestockOpen(true)} className="flex-shrink-0 bg-slate-700 border-slate-600 hover:bg-slate-600" title="Terima Barang / Catat Kerusakan">
+                            <Icon name="tag" className="w-5 h-5"/>
+                            <span className="hidden sm:inline">Kelola Stok</span>
+                        </Button>
+                        <OverflowMenu
+                            items={[
+                                {
+                                    id: 'bulk',
+                                    label: 'Tambah Massal',
+                                    onClick: () => setBulkModalOpen(true),
+                                    icon: 'boxes' as const
+                                },
+                                {
+                                    id: 'opname',
+                                    label: 'Stock Opname',
+                                    onClick: () => setIsOpnameOpen(true),
+                                    icon: 'database' as const
+                                },
+                                {
+                                    id: 'export',
+                                    label: 'Export',
+                                    onClick: handleExport,
+                                    icon: 'download' as const
+                                }
+                            ]}
+                        />
+                    </div>
+                </div>
+                <div className="relative w-full sm:max-w-md">
+                    <input
+                        type="text"
+                        placeholder="Cari bahan baku..."
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-[#347758] focus:border-[#347758]"
+                    />
+                    <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 </div>
             </div>
             

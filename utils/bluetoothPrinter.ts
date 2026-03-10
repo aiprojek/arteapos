@@ -49,6 +49,17 @@ const formatNumberSafe = (amount: number): string => {
     return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
+const toBase64 = (input: string): string => {
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(input);
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+};
+
 // Generate Struk String
 const generateReceiptData = (transaction: Transaction, settings: ReceiptSettings): string => {
     let data = '';
@@ -202,6 +213,29 @@ export const bluetoothPrinterService = {
     // --- MAIN PRINT FUNCTION ---
     printReceipt: async (transaction: Transaction, settings: ReceiptSettings): Promise<void> => {
         const rawData = generateReceiptData(transaction, settings);
+        const useAgent = settings.printerAgentEnabled && settings.printerAgentUrl && settings.printerAgentUrl.trim().length > 0;
+
+        if (useAgent) {
+            try {
+                const payload = {
+                    type: 'escpos',
+                    encoding: 'base64',
+                    data: toBase64(rawData)
+                };
+                const res = await fetch(settings.printerAgentUrl!, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    const text = await res.text().catch(() => '');
+                    throw new Error(text || 'Print agent tidak merespons.');
+                }
+                return;
+            } catch (e: any) {
+                throw new Error(e?.message || 'Gagal mengirim ke print agent.');
+            }
+        }
 
         // 0. KODULAR / APP INVENTOR BRIDGE (Legacy)
         if (window.AppInventor) {
@@ -234,14 +268,7 @@ export const bluetoothPrinterService = {
             // OPSI 2: FALLBACK INTENT (Raw Thermal)
             // Ini opsi paling aman jika plugin gagal atau belum disetting
             try {
-                const encoder = new TextEncoder();
-                const bytes = encoder.encode(rawData);
-                let binary = '';
-                const len = bytes.byteLength;
-                for (let i = 0; i < len; i++) {
-                    binary += String.fromCharCode(bytes[i]);
-                }
-                const base64 = btoa(binary);
+                const base64 = toBase64(rawData);
 
                 // Package Raw Thermal sesuai request
                 const intentUrl = `intent:base64,${base64}#Intent;scheme=rawbt;package=com.rawthermal.app;end;`;

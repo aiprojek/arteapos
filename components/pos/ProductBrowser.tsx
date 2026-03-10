@@ -14,6 +14,7 @@ interface ProductBrowserProps {
     onOpenScanner: () => void;
     onOpenRestock: () => void;
     onOpenOpname: () => void;
+    onOpenChannelSales: () => void;
 }
 
 const ProductBrowser: React.FC<ProductBrowserProps> = ({ 
@@ -21,7 +22,8 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
     isSessionLocked,
     onOpenScanner,
     onOpenRestock,
-    onOpenOpname
+    onOpenOpname,
+    onOpenChannelSales
 }) => {
     const { products, categories, isProductAvailable, inventorySettings } = useProduct();
     const { receiptSettings } = useSettings();
@@ -96,10 +98,10 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
                     />
                         <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
                     {/* Inventory Actions */}
                     {inventorySettings.enabled && (
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-shrink-0">
                             <Button 
                                 variant="secondary" 
                                 onClick={onOpenRestock}
@@ -126,9 +128,18 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
                         onClick={onOpenScanner}
                         disabled={isSessionLocked}
                         title="Pindai Barcode Produk"
-                        className="bg-slate-800 border border-slate-700"
+                        className="bg-slate-800 border border-slate-700 flex-shrink-0"
                     >
                         <Icon name="barcode" className="w-5 h-5" />
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        onClick={onOpenChannelSales}
+                        disabled={isSessionLocked}
+                        title="Catat Penjualan Channel Online"
+                        className="bg-slate-800 border border-slate-700 flex-shrink-0"
+                    >
+                        <Icon name="cloud" className="w-5 h-5" />
                     </Button>
                 </div>
             </div>

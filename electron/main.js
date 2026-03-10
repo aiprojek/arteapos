@@ -12,6 +12,9 @@ if (process.platform === 'linux') {
   app.disableHardwareAcceleration();
 }
 
+// Enable Web Bluetooth in Electron (Chromium)
+app.commandLine.appendSwitch('enable-web-bluetooth');
+
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1200,
@@ -35,6 +38,16 @@ function createWindow() {
     if (deviceList && deviceList.length > 0) {
       callback(deviceList[0].deviceId);
     }
+  });
+
+  const session = mainWindow.webContents.session;
+  session.setPermissionCheckHandler((_wc, permission) => {
+    if (permission === 'bluetooth' || permission === 'bluetoothScanning') return true;
+    return false;
+  });
+  session.setPermissionRequestHandler((_wc, permission, callback) => {
+    if (permission === 'bluetooth' || permission === 'bluetoothScanning') return callback(true);
+    callback(false);
   });
 
   // Load file hasil build React (dist/index.html)

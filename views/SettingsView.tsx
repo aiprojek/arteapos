@@ -85,7 +85,7 @@ const SettingsView: React.FC = () => {
                 <h1 className="text-3xl font-bold text-white">Pengaturan</h1>
                 
                 {/* Tabs */}
-                <div className="sticky top-[-1rem] md:top-[-1.5rem] z-20 -mx-4 md:-mx-6 px-4 md:px-6 pt-0 pb-2 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/50 transition-all">
+                <div className="sticky top-0 z-20 -mx-4 md:-mx-6 px-4 md:px-6 pt-0 pb-2 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/50 transition-all">
                     <div className="relative">
                         <div className="overflow-x-auto hide-scrollbar flex">
                             <div className="bg-slate-800 p-1 rounded-xl flex gap-1 border border-slate-700 whitespace-nowrap min-w-max">

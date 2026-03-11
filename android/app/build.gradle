@@ -29,19 +29,19 @@ android {
         return env
     }
 
-    def storeFilePath = getProp('storeFile', 'ARTEA_KEYSTORE_PATH')
-    def storePassword = getProp('storePassword', 'ARTEA_KEYSTORE_PASSWORD')
-    def keyAlias = getProp('keyAlias', 'ARTEA_KEY_ALIAS')
-    def keyPassword = getProp('keyPassword', 'ARTEA_KEY_PASSWORD')
-    def hasSigning = storeFilePath && storePassword && keyAlias && keyPassword
+    def vStoreFilePath = getProp('storeFile', 'ARTEA_KEYSTORE_PATH')
+    def vStorePassword = getProp('storePassword', 'ARTEA_KEYSTORE_PASSWORD')
+    def vKeyAlias = getProp('keyAlias', 'ARTEA_KEY_ALIAS')
+    def vKeyPassword = getProp('keyPassword', 'ARTEA_KEY_PASSWORD')
+    def hasSigning = vStoreFilePath && vStorePassword && vKeyAlias && vKeyPassword
 
     if (hasSigning) {
         signingConfigs {
             release {
-                storeFile file(storeFilePath)
-                storePassword storePassword
-                keyAlias keyAlias
-                keyPassword keyPassword
+                storeFile file(vStoreFilePath)
+                storePassword vStorePassword
+                keyAlias vKeyAlias
+                keyPassword vKeyPassword
             }
         }
     }

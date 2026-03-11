@@ -1,0 +1,11 @@
+Generated icons for ldpi (36x36)
+Generated icons for mdpi (48x48)
+Generated icons for hdpi (72x72)
+Generated icons for xhdpi (96x96)
+Generated icons for xxhdpi (144x144)
+Generated icons for xxxhdpi (192x192)
+Generated adaptive icons for mdpi
+Generated adaptive icons for hdpi
+Generated adaptive icons for xhdpi
+Generated adaptive icons for xxhdpi
+Generated adaptive icons for xxxhdpi

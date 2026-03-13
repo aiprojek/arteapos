@@ -142,11 +142,13 @@ export interface Transaction {
   customerPointsSnapshot?: number;
   customerBalanceSnapshot?: number;
   pointsEarned?: number;
-  rewardRedeemed?: {
-      rewardId: string;
-      pointsSpent: number;
-      description: string;
-  };
+  rewardsRedeemed?: RewardRedemption[];
+}
+
+export interface RewardRedemption {
+    rewardId: string;
+    pointsSpent: number;
+    description: string;
 }
 
 export interface User {
@@ -341,6 +343,7 @@ export interface MembershipSettings {
   enabled: boolean;
   pointRules: PointRule[];
   rewards: Reward[];
+  redemptionRate?: number; // Value in currency per 1 point
 }
 
 export interface DiscountDefinition {

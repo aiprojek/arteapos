@@ -418,6 +418,28 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 `
             },
             {
+                id: 'storage_safety', title: 'Keamanan Data (Web vs Native)', icon: 'lock', colorClass: 'text-amber-400', badge: 'PENTING',
+                content: `
+                    <p>Pahami perbedaan cara penyimpanan data agar data transaksi Anda tidak hilang secara tidak sengaja:</p>
+                    <ul class="list-disc pl-5 mt-2 space-y-2 text-sm text-slate-300">
+                        <li>
+                            <strong>Versi Web (Browser):</strong> Data disimpan di <em>Browser Cache</em>. Jika Anda mbersihkan histori browser (Clear Cache), data bisa hilang. 
+                            <br/><strong class="text-yellow-400">Saran:</strong> Segera "Install Aplikasi" agar data pindah ke penyimpanan yang lebih stabil.
+                        </li>
+                        <li>
+                            <strong>Versi Android (APK):</strong> Data disimpan di memori internal aplikasi.
+                            <br/><strong class="text-red-400">PERINGATAN:</strong> Jangan melakukan <u>"Hapus Data" (Clear Data)</u> pada pengaturan HP untuk aplikasi Artea POS, karena ini akan menghapus seluruh database transaksi lokal Anda. Gunakan menu "Hapus Cache" saja jika perlu.
+                        </li>
+                        <li>
+                            <strong>Versi PC (EXE/Linux):</strong> Penyimpanan paling stabil dan tidak terpengaruh oleh pembersihan browser.
+                        </li>
+                    </ul>
+                    <div class="mt-2 p-2 bg-slate-900/50 rounded border border-slate-700 text-xs text-[#52a37c]">
+                        <strong>Tips:</strong> Selalu lakukan Backup manual atau aktifkan Mode Cloud agar data Anda tetap aman jika perangkat hilang atau rusak.
+                    </div>
+                `
+            },
+            {
                 id: 'set_hw', title: 'Perangkat Keras (Printer & Scanner)', icon: 'bluetooth', colorClass: 'text-purple-400', badge: 'Penting',
                 content: `
                     <p class="mb-2">Masuk ke tab <strong>"Perangkat Keras"</strong> untuk mengatur alat:</p>
@@ -632,5 +654,11 @@ export const FAQS: FaqItem[] = [
         category: 'Teknis',
         title: 'Dropbox Penuh, Apa yang harus dilakukan?',
         content: 'Lakukan "Siklus Bulanan". Masuk ke Pengaturan > Data, klik "Download Arsip Cloud" (simpan di Laptop), lalu klik "Hapus Laporan" untuk membersihkan penyimpanan.'
+    },
+    {
+        id: 'faq_storage_native',
+        category: 'Teknis',
+        title: 'Di mana data disimpan pada versi Android/Desktop?',
+        content: '<p>Berbeda dengan versi web yang menggunakan cache browser, aplikasi <strong>Android & Desktop</strong> menyimpan data di ruang penyimpanan aplikasi yang lebih aman dan permanen.</p><ul class="list-disc pl-5 mt-2 space-y-1"><li><strong>Android:</strong> Data tersimpan di internal sistem. <strong>PENTING:</strong> Menghapus data melalui menu "Hapus Data" (Clear Data) di pengaturan Android akan menghapus seluruh data lokal Anda.</li><li><strong>Desktop:</strong> Data tersimpan di folder sistem aplikasi, tidak terpengaruh oleh pembersihan browser.</li><li><strong>Keamanan:</strong> Gunakan fitur "Backup" atau "Sinkronisasi Cloud" secara rutin untuk menjaga keamanan data Anda.</li></ul>'
     }
 ];

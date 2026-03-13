@@ -26,9 +26,9 @@ const PremiumTab: React.FC = () => {
             priceRange: 'Donasi Rp 100.000',
             description: 'Jalankan Artea POS layaknya software profesional tanpa browser. Lebih stabil, layar penuh, dan performa maksimal di PC/Laptop.',
             features: [
-                'Windows (.exe) - Portable & Cepat',
-                'Linux (.AppImage) - Sangat Stabil',
-                'Android (.apk) - Early Access',
+                'Windows (.exe) - Stabil',
+                'Linux (.AppImage) - Stabil',
+                'Android (.apk) - Stabil',
                 'Lisensi Lifetime (Sekali Bayar)'
             ],
             icon: 'download',

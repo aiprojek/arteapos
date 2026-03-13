@@ -320,8 +320,9 @@ export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ childr
                 const customerIndex = updatedCustomers.findIndex(c => c.id === targetTransaction.customerId);
                 if (customerIndex > -1) {
                     let pointsCorrection = -targetTransaction.pointsEarned;
-                    if (targetTransaction.rewardRedeemed) {
-                        pointsCorrection += targetTransaction.rewardRedeemed.pointsSpent;
+                    if (targetTransaction.rewardsRedeemed) {
+                        const pointsSpent = targetTransaction.rewardsRedeemed.reduce((sum, r) => sum + r.pointsSpent, 0);
+                        pointsCorrection += pointsSpent;
                     }
                     const newPoints = Math.max(0, updatedCustomers[customerIndex].points + pointsCorrection);
                     updatedCustomers[customerIndex] = { ...updatedCustomers[customerIndex], points: newPoints };

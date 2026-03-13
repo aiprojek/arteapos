@@ -73,23 +73,6 @@
     android:required="false"
   />
 
-    <!-- QUERIES: Izin untuk melihat aplikasi printer lain -->
-    <queries>
-        <!-- Package Name Raw Thermal -->
-        <package android:name="com.rawthermal.app" />
-        
-        <!-- Scheme Standar -->
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="rawbt" />
-        </intent>
-        
-        <!-- Scheme Alternatif (Jaga-jaga jika source code Raw Thermal diubah) -->
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="rawthermal" />
-        </intent>
-    </queries>
 
     <application
     android:allowBackup="true"

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { App as CapApp } from '@capacitor/app';
 import AppProviders from './context/AppProviders';
 import { useAuth } from './context/AuthContext';
 import { useUI } from './context/UIContext';
@@ -25,7 +26,7 @@ const AppContent = () => {
   const { currentUser } = useAuth();
   const { findProductByBarcode, inventorySettings } = useProduct();
   const { addToCart } = useCart();
-  const { showAlert } = useUI();
+  const { showAlert, alertState, hideAlert } = useUI();
   
   // ROLE CHECK
   const isViewer = currentUser?.role === 'viewer';
@@ -65,6 +66,26 @@ const AppContent = () => {
       window.addEventListener('native-scan-result', handleNativeScan);
       return () => window.removeEventListener('native-scan-result', handleNativeScan);
   }, [findProductByBarcode, addToCart, showAlert]);
+
+  // --- NATIVE BACK BUTTON HANDLER ---
+  useEffect(() => {
+    const backListener = CapApp.addListener('backButton', () => {
+      if (alertState.isOpen) {
+        hideAlert();
+      } else if (isSidebarOpen) {
+        setSidebarOpen(false);
+      } else if (activeView !== 'dashboard' && activeView !== 'pos') {
+        const defaultView = isStaff ? 'pos' : 'dashboard';
+        setActiveView(defaultView);
+      } else {
+        CapApp.exitApp();
+      }
+    });
+
+    return () => {
+      backListener.then(l => l.remove());
+    };
+  }, [alertState.isOpen, hideAlert, isSidebarOpen, activeView, isStaff]);
   
   // --- HARDWARE BARCODE SCANNER LOGIC ---
   useEffect(() => {

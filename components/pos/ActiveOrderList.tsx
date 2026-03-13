@@ -46,7 +46,7 @@ const ActiveOrderList: React.FC<ActiveOrderListProps> = ({ cart, onOpenDiscountM
     }, [selectedItemId, removeFromCart]);
 
     return (
-        <div className="flex-1 overflow-y-auto pr-1 -mr-1 space-y-2 pb-2">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1 space-y-1 pb-2 h-full">
             {cart.map(item => (
                 <div 
                     key={item.cartItemId} 

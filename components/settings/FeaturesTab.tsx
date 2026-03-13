@@ -5,7 +5,9 @@ import Button from '../Button';
 import Icon from '../Icon';
 import Modal from '../Modal';
 import { useDiscount } from '../../context/DiscountContext';
+import { useProduct } from '../../context/ProductContext';
 import { CURRENCY_FORMATTER } from '../../constants';
+import type { Reward, RewardType } from '../../types';
 
 interface FeaturesTabProps {
     sessionForm: SessionSettings;
@@ -54,6 +56,7 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
     onReceiptChange
 }) => {
     const { discountDefinitions, addDiscountDefinition, deleteDiscountDefinition } = useDiscount();
+    const { products } = useProduct();
     
     // Discount Modal State
     const [isDiscountModalOpen, setDiscountModalOpen] = useState(false);
@@ -65,6 +68,22 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
         spendAmount: '', 
         pointsEarned: '',
         type: 'spend' as 'spend'
+    });
+
+    // Reward State
+    const [isRewardModalOpen, setRewardModalOpen] = useState(false);
+    const [newReward, setNewReward] = useState<{
+        name: string;
+        type: RewardType;
+        pointsCost: string;
+        discountValue: string;
+        freeProductId: string;
+    }>({
+        name: '',
+        type: 'discount_amount',
+        pointsCost: '',
+        discountValue: '',
+        freeProductId: ''
     });
 
     const handleAddDiscount = () => {
@@ -107,6 +126,34 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
         onMembershipChange({
             ...membershipForm,
             pointRules: membershipForm.pointRules.filter(r => r.id !== id)
+        });
+    };
+
+    const handleAddReward = () => {
+        const cost = parseFloat(newReward.pointsCost);
+        if (newReward.name && cost > 0) {
+            const reward: Reward = {
+                id: Date.now().toString(),
+                name: newReward.name,
+                type: newReward.type,
+                pointsCost: cost,
+                discountValue: newReward.type === 'discount_amount' ? parseFloat(newReward.discountValue) : undefined,
+                freeProductId: newReward.type === 'free_product' ? newReward.freeProductId : undefined
+            };
+
+            onMembershipChange({
+                ...membershipForm,
+                rewards: [...(membershipForm.rewards || []), reward]
+            });
+            setRewardModalOpen(false);
+            setNewReward({ name: '', type: 'discount_amount', pointsCost: '', discountValue: '', freeProductId: '' });
+        }
+    };
+
+    const handleDeleteReward = (id: string) => {
+        onMembershipChange({
+            ...membershipForm,
+            rewards: (membershipForm.rewards || []).filter(r => r.id !== id)
         });
     };
 
@@ -211,7 +258,24 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
                 />
                 
                 {membershipForm?.enabled && (
-                    <div className="mt-4 pt-4 border-t border-slate-700">
+                    <div className="mt-4 space-y-4 pt-4 border-t border-slate-700">
+                        <div className="flex items-center justify-between p-3 bg-slate-900 border border-slate-700 rounded-lg">
+                            <div>
+                                <p className="text-white font-medium text-sm">Nilai Tukar Poin Manual</p>
+                                <p className="text-xs text-slate-400">Tentukan nilai Rp per 1 Poin untuk penukaran saldo fleksibel.</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-slate-500 text-xs">Rp</span>
+                                <input 
+                                    type="number"
+                                    placeholder="0"
+                                    value={membershipForm.redemptionRate || ''}
+                                    onChange={(e) => onMembershipChange({ ...membershipForm, redemptionRate: parseFloat(e.target.value) || 0 })}
+                                    className="w-24 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-right font-bold text-sm"
+                                />
+                            </div>
+                        </div>
+
                         <h4 className="font-bold text-white text-sm mb-2">Aturan Perolehan Poin</h4>
                         <div className="space-y-2 mb-3">
                             {(membershipForm.pointRules || []).map(rule => (
@@ -225,6 +289,26 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
                         </div>
                         <Button onClick={() => setRuleModalOpen(true)} variant="secondary" size="sm" className="w-full">
                             <Icon name="plus" className="w-4 h-4"/> Tambah Aturan Poin
+                        </Button>
+
+                        <h4 className="font-bold text-white text-sm mb-2 mt-6">Daftar Reward (Penukaran)</h4>
+                        <div className="space-y-2 mb-3">
+                            {(membershipForm.rewards || []).map(reward => (
+                                <div key={reward.id} className="flex justify-between items-center bg-slate-900 p-3 rounded-lg border border-slate-700">
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-semibold text-white">{reward.name}</span>
+                                        <span className="text-xs text-slate-400">
+                                            {reward.pointsCost} Pts • {reward.type === 'discount_amount' ? `Potongan ${CURRENCY_FORMATTER.format(reward.discountValue || 0)}` : 'Produk Gratis'}
+                                        </span>
+                                    </div>
+                                    <button onClick={() => handleDeleteReward(reward.id)} className="text-red-400 hover:text-white">
+                                        <Icon name="trash" className="w-4 h-4"/>
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        <Button onClick={() => setRewardModalOpen(true)} variant="secondary" size="sm" className="w-full">
+                            <Icon name="plus" className="w-4 h-4"/> Tambah Reward Baru
                         </Button>
                     </div>
                 )}
@@ -278,6 +362,80 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
                         />
                     </div>
                     <Button onClick={handleAddPointRule} className="w-full">Simpan Aturan</Button>
+                </div>
+            </Modal>
+
+            {/* Add Reward Modal */}
+            <Modal isOpen={isRewardModalOpen} onClose={() => setRewardModalOpen(false)} title="Tambah Reward Baru">
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs text-slate-300">Nama Reward</label>
+                        <input 
+                            type="text" 
+                            placeholder="cth: Gratis Matcha Latte / Voucher 10rb" 
+                            value={newReward.name}
+                            onChange={e => setNewReward({...newReward, name: e.target.value})}
+                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-xs text-slate-300">Biaya Poin</label>
+                        <input 
+                            type="number" 
+                            placeholder="cth: 50" 
+                            value={newReward.pointsCost}
+                            onChange={e => setNewReward({...newReward, pointsCost: e.target.value})}
+                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-xs text-slate-300">Tipe Reward</label>
+                        <div className="flex bg-slate-700 p-1 rounded-lg mt-1">
+                            <button 
+                                onClick={() => setNewReward({...newReward, type: 'discount_amount'})} 
+                                className={`flex-1 py-1 text-xs rounded transition-colors ${newReward.type === 'discount_amount' ? 'bg-[#347758] text-white shadow-sm' : 'text-slate-300'}`}
+                            >
+                                Potongan Harga
+                            </button>
+                            <button 
+                                onClick={() => setNewReward({...newReward, type: 'free_product'})} 
+                                className={`flex-1 py-1 text-xs rounded transition-colors ${newReward.type === 'free_product' ? 'bg-[#347758] text-white shadow-sm' : 'text-slate-300'}`}
+                            >
+                                Produk Gratis
+                            </button>
+                        </div>
+                    </div>
+
+                    {newReward.type === 'discount_amount' ? (
+                        <div>
+                            <label className="text-xs text-slate-300">Nilai Potongan (Rp)</label>
+                            <input 
+                                type="number" 
+                                placeholder="cth: 10000" 
+                                value={newReward.discountValue}
+                                onChange={e => setNewReward({...newReward, discountValue: e.target.value})}
+                                className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                            />
+                        </div>
+                    ) : (
+                        <div>
+                            <label className="text-xs text-slate-300">Pilih Produk Gratis</label>
+                            <select 
+                                value={newReward.freeProductId}
+                                onChange={e => setNewReward({...newReward, freeProductId: e.target.value})}
+                                className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                            >
+                                <option value="">-- Pilih Produk --</option>
+                                {products.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                    
+                    <Button onClick={handleAddReward} className="w-full pt-4">Simpan Reward</Button>
                 </div>
             </Modal>
         </div>

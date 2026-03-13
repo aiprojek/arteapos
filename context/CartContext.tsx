@@ -16,7 +16,7 @@ interface CartContextType {
     cartDiscount: Discount | null;
     heldCarts: HeldCart[];
     activeHeldCartId: string | null;
-    appliedReward: { reward: Reward, cartItem: CartItem } | null;
+    appliedRewards: { reward: Reward, cartItem: CartItem }[];
     orderType: OrderType;
     tableNumber: string;
     paxCount: number;
@@ -50,7 +50,8 @@ interface CartContextType {
         customerContact?: string;
         customerId?: string;
     }) => TransactionType;
-    applyRewardToCart: (reward: Reward, customer: Customer) => void;
+    applyRewardToCart: (reward: Reward, customer: Customer, silent?: boolean) => void;
+    applyManualReward: (pointsCost: number, discountAmount: number, customer: Customer) => void;
     removeRewardFromCart: () => void;
     splitCart: (itemsToKeep: string[]) => void;
 }
@@ -72,7 +73,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
     const [cart, setCart] = useState<CartItem[]>([]);
     const [cartDiscount, setCartDiscount] = useState<Discount | null>(null);
     const [activeHeldCartId, setActiveHeldCartId] = useState<string | null>(null);
-    const [appliedReward, setAppliedReward] = useState<{ reward: Reward, cartItem: CartItem } | null>(null);
+    const [appliedRewards, setAppliedRewards] = useState<{ reward: Reward, cartItem: CartItem }[]>([]);
     const [orderType, setOrderType] = useState<OrderType>(defaultOrderType);
     const [tableNumber, setTableNumber] = useState('');
     const [paxCount, setPaxCount] = useState(0);
@@ -95,12 +96,18 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
 
     const removeRewardFromCart = useCallback(() => {
         setCart(prev => prev.filter(item => !item.isReward));
-        setAppliedReward(null);
-    }, [setCart, setAppliedReward]);
+        setAppliedRewards([]);
+    }, [setCart, setAppliedRewards]);
 
-    const applyRewardToCart = useCallback((reward: Reward, customer: Customer) => {
-        if (customer.points < reward.pointsCost) {
-            showAlert({ type: 'alert', title: 'Poin Tidak Cukup', message: 'Poin pelanggan tidak cukup untuk menukarkan reward ini.' });
+    const applyRewardToCart = useCallback((reward: Reward, customer: Customer, silent: boolean = false) => {
+        // Calculate total points cost of existing rewards
+        const totalExistingCost = appliedRewards.reduce((sum, ar) => sum + ar.reward.pointsCost, 0);
+        const newTotalCost = totalExistingCost + reward.pointsCost;
+
+        if (customer.points < newTotalCost) {
+            if (!silent) {
+                showAlert({ type: 'alert', title: 'Poin Tidak Cukup', message: `Total poin (${newTotalCost}) melebihi poin pelanggan (${customer.points}).` });
+            }
             return;
         }
 
@@ -118,17 +125,50 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                     isReward: true, rewardId: reward.id, name: `${product.name} (Reward)`,
                 };
             } else {
-                showAlert({ type: 'alert', title: 'Produk Tidak Ditemukan', message: 'Produk untuk reward ini tidak dapat ditemukan.' });
+                if (!silent) {
+                    showAlert({ type: 'alert', title: 'Produk Tidak Ditemukan', message: 'Produk untuk reward ini tidak dapat ditemukan.' });
+                }
                 return;
             }
         }
 
         if (rewardCartItem) {
-            removeRewardFromCart();
             setCart(prev => [...prev, rewardCartItem!]);
-            setAppliedReward({ reward, cartItem: rewardCartItem });
+            setAppliedRewards(prev => [...prev, { reward, cartItem: rewardCartItem! }]);
         }
-    }, [products, showAlert, removeRewardFromCart, setAppliedReward]);
+    }, [products, showAlert, appliedRewards, setAppliedRewards]);
+
+    const applyManualReward = useCallback((pointsCost: number, discountAmount: number, customer: Customer) => {
+        const totalExistingCost = appliedRewards.reduce((sum, ar) => sum + ar.reward.pointsCost, 0);
+        const newTotalCost = totalExistingCost + pointsCost;
+
+        if (customer.points < newTotalCost) {
+            showAlert({ type: 'alert', title: 'Poin Tidak Cukup', message: `Total poin (${newTotalCost}) melebihi poin pelanggan (${customer.points}).` });
+            return;
+        }
+
+        const manualReward: Reward = {
+            id: `manual-${Date.now()}`,
+            name: `Potongan Poin (${pointsCost} Pts)`,
+            type: 'discount_amount',
+            pointsCost: pointsCost,
+            discountValue: discountAmount
+        };
+
+        const rewardCartItem: CartItem = {
+            id: manualReward.id,
+            cartItemId: `reward-${Date.now()}`,
+            name: manualReward.name,
+            price: -discountAmount,
+            quantity: 1,
+            isReward: true,
+            rewardId: manualReward.id,
+            category: [],
+        };
+
+        setCart(prev => [...prev, rewardCartItem]);
+        setAppliedRewards(prev => [...prev, { reward: manualReward, cartItem: rewardCartItem }]);
+    }, [appliedRewards, setAppliedRewards, showAlert]);
     
     const checkStockAvailability = useCallback((productId: string, currentCartQuantity: number, addedQuantity: number) => {
         if (!inventorySettings.enabled || !inventorySettings.preventNegativeStock) return true;
@@ -228,7 +268,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
 
     const clearCart = useCallback(() => {
         setCart([]);
-        setAppliedReward(null);
+        setAppliedRewards([]);
         setCartDiscount(null);
         setOrderType(defaultOrderType);
         setTableNumber(''); 
@@ -242,7 +282,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                 shopName: receiptSettings.shopName
             });
         }
-    }, [setAppliedReward, defaultOrderType, isDisplayConnected, sendDataToDisplay, receiptSettings]);
+    }, [setAppliedRewards, defaultOrderType, isDisplayConnected, sendDataToDisplay, receiptSettings]);
 
     const getCartTotals = useCallback(() => {
         return calculateCartTotals(cart, cartDiscount, receiptSettings);
@@ -559,16 +599,16 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                         });
                     }
 
-                    // Deduct Points if Reward Used
+                    // Deduct Points if Rewards Used
                     let pointsUsed = 0;
-                    if (appliedReward) {
-                        pointsUsed = appliedReward.reward.pointsCost;
+                    if (appliedRewards.length > 0) {
+                        pointsUsed = appliedRewards.reduce((sum, ar) => sum + ar.reward.pointsCost, 0);
                         // Attach usage info to transaction
-                        newTransaction.rewardRedeemed = {
-                            rewardId: appliedReward.reward.id,
-                            pointsSpent: pointsUsed,
-                            description: appliedReward.reward.name
-                        };
+                        newTransaction.rewardsRedeemed = appliedRewards.map(ar => ({
+                            rewardId: ar.reward.id,
+                            pointsSpent: ar.reward.pointsCost,
+                            description: ar.reward.name
+                        }));
                     }
 
                     const newPoints = (customer.points || 0) + pointsToAdd - pointsUsed;
@@ -604,17 +644,17 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         setTimeout(() => triggerAutoSync(currentUser.name), 500);
 
         return newTransaction;
-    }, [cart, getCartTotals, setData, currentUser, appliedReward, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, products, rawMaterials, orderType, tableNumber, paxCount, receiptSettings, triggerAutoSync, logAudit, data.customers, data.membershipSettings, isDisplayConnected, sendDataToDisplay, isKitchenConnected, sendOrderToKitchen]);
+    }, [cart, getCartTotals, setData, currentUser, appliedRewards, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, products, rawMaterials, orderType, tableNumber, paxCount, receiptSettings, triggerAutoSync, logAudit, data.customers, data.membershipSettings, isDisplayConnected, sendDataToDisplay, isKitchenConnected, sendOrderToKitchen]);
     
     return (
         <CartContext.Provider value={{
-            cart, cartDiscount, heldCarts, activeHeldCartId, appliedReward, 
+            cart, cartDiscount, heldCarts, activeHeldCartId, appliedRewards, 
             orderType, tableNumber, paxCount,
             setOrderType, setTableNumber, setPaxCount,
             addToCart, addConfiguredItemToCart, updateCartQuantity, removeFromCart, clearCart, getCartTotals,
             applyItemDiscount, removeItemDiscount, applyCartDiscount, removeCartDiscount,
             holdActiveCart, switchActiveCart, deleteHeldCart, updateHeldCartName, saveTransaction,
-            applyRewardToCart, removeRewardFromCart, splitCart
+            applyRewardToCart, applyManualReward, removeRewardFromCart, splitCart
         }}>
             {children}
         </CartContext.Provider>

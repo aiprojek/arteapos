@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type { 
     Product, CartItem as CartItemType, Transaction as TransactionType, 
     Customer, Payment, PaymentMethod, HeldCart, Addon, ProductVariant, 
@@ -12,12 +12,16 @@ import { useSettings } from '../context/SettingsContext';
 import { useCustomer } from '../context/CustomerContext';
 import { useProduct } from '../context/ProductContext';
 import { useUI } from '../context/UIContext';
+import { useData } from '../context/DataContext';
+import { haptics } from '../utils/haptics';
+import type { Reward } from '../types';
 
 export const usePOSLogic = () => {
+    const { data } = useData();
     const { findProductByBarcode } = useProduct();
     const {
         cart, addToCart, addConfiguredItemToCart, saveTransaction, 
-        appliedReward, removeRewardFromCart,
+        appliedRewards, applyRewardToCart, removeRewardFromCart,
         holdActiveCart, updateHeldCartName,
         applyItemDiscount, removeItemDiscount,
         cartDiscount, applyCartDiscount, removeCartDiscount,
@@ -78,6 +82,56 @@ export const usePOSLogic = () => {
         }
     }, [customers, selectedCustomer]);
 
+    // --- SMART LOYALTY: AUTO-SUGGESTION ---
+    const lastPromptedCustomerId = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!selectedCustomer || cart.length === 0) {
+            lastPromptedCustomerId.current = null;
+            return;
+        }
+
+        // Prevent re-prompting if we've already asked for this customer in this session
+        if (lastPromptedCustomerId.current === selectedCustomer.id) return;
+
+        const membershipSettings = data.membershipSettings;
+        if (!membershipSettings?.enabled) return;
+
+        // Calculate points already used by applied rewards
+        const usedPoints = appliedRewards.reduce((sum, ar) => sum + ar.reward.pointsCost, 0);
+        const availablePoints = selectedCustomer.points - usedPoints;
+
+        if (availablePoints <= 0) return;
+
+        // Check if any rewards are applicable
+        const hasApplicableRewards = membershipSettings.rewards.some((reward: Reward) => {
+            if (availablePoints < reward.pointsCost) return false;
+            if (appliedRewards.some(ar => ar.reward.id === reward.id)) return false;
+
+            if (reward.type === 'free_product') {
+                return cart.some(item => item.id === reward.freeProductId && !item.isReward);
+            }
+            return reward.type === 'discount_amount';
+        });
+
+        // Check if manual redemption is possible
+        const canRedeemManual = membershipSettings.redemptionRate && availablePoints > 0;
+
+        if (hasApplicableRewards || canRedeemManual) {
+            lastPromptedCustomerId.current = selectedCustomer.id;
+            
+            showAlert({
+                type: 'confirm',
+                title: 'Tukarkan Poin?',
+                message: `Member "${selectedCustomer.name}" memiliki ${availablePoints} poin yang bisa ditukarkan. Lihat pilihan penukaran?`,
+                onConfirm: () => {
+                    setRewardsModalOpen(true);
+                },
+                // If they cancel, we've already set lastPromptedCustomerId, so it won't bug them again
+            });
+        }
+    }, [selectedCustomer, cart, appliedRewards, data.membershipSettings, showAlert, setRewardsModalOpen]);
+
     // -- Handlers --
     
     // NEW: Validation Logic
@@ -134,6 +188,7 @@ export const usePOSLogic = () => {
             setAddonModalOpen(true);
             return;
         }
+        haptics.light();
         addToCart(product);
     };
 
@@ -249,6 +304,7 @@ export const usePOSLogic = () => {
                 message: `Berhasil login member: ${member.name} (${member.points} pts)` 
             });
             setBarcodeScannerOpen(false);
+            haptics.medium();
             return;
         }
 
@@ -258,7 +314,9 @@ export const usePOSLogic = () => {
             handleProductClick(product);
             // Optional: Close scanner after scan if preferred, or keep open for multiple scans
             // setBarcodeScannerOpen(false); 
+            haptics.medium();
         } else {
+            haptics.error();
             showAlert({type: 'alert', title: 'Tidak Ditemukan', message: `Kode "${cleanedBarcode}" tidak dikenali sebagai Produk atau Member.`});
         }
     }, [findProductByBarcode, showAlert, customers, handleProductClick]);
@@ -347,8 +405,8 @@ export const usePOSLogic = () => {
         isSessionLocked,
         session,
         receiptSettings,
-        cartDiscount,
         cart,
+        appliedRewards, 
 
         // Actions
         applyItemDiscount, removeItemDiscount,

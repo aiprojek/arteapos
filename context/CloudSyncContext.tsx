@@ -9,6 +9,7 @@ interface CloudSyncContextType {
     syncErrorMessage: string | null;
     triggerAutoSync: (staffName?: string) => Promise<void>;
     triggerMasterDataPush: () => Promise<void>;
+    triggerAutoPull: () => Promise<void>;
 }
 
 const CloudSyncContext = createContext<CloudSyncContextType | undefined>(undefined);
@@ -59,6 +60,35 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
     }, []);
 
+    // --- Automatic Background Pull (Smart Polling) ---
+    const triggerAutoPull = useCallback(async () => {
+        if (!dropboxService.isConfigured() || syncStatus === 'syncing') return;
+
+        console.log("Background Polling: Checking for updates...");
+        setSyncStatus('syncing');
+        try {
+            await dropboxService.downloadAndMergeMasterData();
+            setSyncStatus('success');
+            setTimeout(() => setSyncStatus('idle'), 3000);
+        } catch (error: any) {
+            console.warn("Background Polling Silent Failure:", error);
+            setSyncStatus('error');
+            setTimeout(() => setSyncStatus('idle'), 5000);
+        }
+    }, [syncStatus]);
+
+    // Background Timer for Polling
+    useEffect(() => {
+        if (!dropboxService.isConfigured()) return;
+
+        // Start polling every 5 minutes
+        const interval = setInterval(() => {
+            triggerAutoPull();
+        }, 5 * 60 * 1000);
+
+        return () => clearInterval(interval);
+    }, [triggerAutoPull]);
+
     // --- Watcher for Master Data Changes ---
     useEffect(() => {
         const prevData = prevDataRef.current;
@@ -85,7 +115,7 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, [data, triggerMasterDataPush]);
 
     return (
-        <CloudSyncContext.Provider value={{ syncStatus, syncErrorMessage, triggerAutoSync, triggerMasterDataPush }}>
+        <CloudSyncContext.Provider value={{ syncStatus, syncErrorMessage, triggerAutoSync, triggerMasterDataPush, triggerAutoPull }}>
             {children}
         </CloudSyncContext.Provider>
     );

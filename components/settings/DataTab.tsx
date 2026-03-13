@@ -13,6 +13,7 @@ import { db } from '../../services/db';
 import type { CartItem, Transaction as TransactionType } from '../../types';
 import BarcodeScannerModal from '../BarcodeScannerModal'; 
 import DataArchivingModal from '../DataArchivingModal'; 
+import Skeleton from '../Skeleton';
 import { generateTablePDF } from '../../utils/pdfGenerator';
 import { CURRENCY_FORMATTER } from '../../constants';
 import { Capacitor } from '@capacitor/core'; // Import Capacitor
@@ -799,7 +800,7 @@ const DataTab: React.FC = () => {
                                         Kuota Dropbox
                                     </span>
                                     {storageStats.dropboxChecking ? (
-                                        <span className="text-xs text-slate-500 animate-pulse">Memuat...</span>
+                                        <Skeleton variant="text" width={80} height={16} className="bg-slate-600" />
                                     ) : (
                                         <span className="text-white font-bold">
                                             {formatBytes(storageStats.dropboxUsed)} / {formatBytes(storageStats.dropboxTotal)}

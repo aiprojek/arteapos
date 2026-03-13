@@ -1,5 +1,6 @@
 
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useFinance } from '../context/FinanceContext';
 import { useProduct } from '../context/ProductContext';
 import { CURRENCY_FORMATTER } from '../constants';
@@ -13,7 +14,11 @@ import { useUI } from '../context/UIContext';
 import OverflowMenu from '../components/OverflowMenu';
 
 const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'products' | 'reports' | 'finance'; iconClass: string; children?: React.ReactNode; tooltip?: string }> = ({ title, value, icon, iconClass, children, tooltip }) => (
-    <div className="bg-slate-800 p-6 rounded-xl shadow-lg flex flex-col h-full border border-slate-700 relative group">
+    <motion.div 
+        whileHover={{ y: -5, backgroundColor: 'rgba(30, 41, 59, 0.7)' }}
+        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+        className="bg-slate-900/40 backdrop-blur-md p-6 rounded-xl shadow-lg flex flex-col h-full border border-slate-700/50 relative group"
+    >
         <div className="flex justify-between items-start">
             <div>
                 <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider flex items-center gap-1">
@@ -24,12 +29,12 @@ const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'product
                 </h3>
                 <p className="text-3xl font-bold text-white mt-1">{value}</p>
             </div>
-            <div className={`rounded-full p-3 ${iconClass}`}>
+            <div className={`rounded-full p-3 ${iconClass} shadow-lg shadow-${iconClass.split('-')[1]}/20`}>
                 <Icon name={icon} className="w-6 h-6 text-white" />
             </div>
         </div>
         {children && <div className="mt-4 pt-4 border-t border-slate-700/50 flex-grow">{children}</div>}
-    </div>
+    </motion.div>
 );
 
 const DashboardView: React.FC = () => {
@@ -372,8 +377,28 @@ const DashboardView: React.FC = () => {
         return { __html: html };
     };
 
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: {
+            opacity: 1,
+            transition: {
+                staggerChildren: 0.1
+            }
+        }
+    };
+
+    const itemVariants = {
+        hidden: { opacity: 0, y: 20 },
+        visible: { opacity: 1, y: 0 }
+    };
+
     return (
-        <div className="space-y-6 max-w-7xl mx-auto">
+        <motion.div 
+            initial="hidden"
+            animate="visible"
+            variants={containerVariants}
+            className="space-y-6 max-w-7xl mx-auto pb-10"
+        >
             {/* Header & Controls */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="flex flex-col gap-1">
@@ -459,7 +484,7 @@ const DashboardView: React.FC = () => {
             )}
 
             {/* Top Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fade-in">
+            <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard title="Penjualan Hari Ini" value={CURRENCY_FORMATTER.format(dashboardData.todaySales)} icon="cash" iconClass="bg-green-500" />
                 <StatCard title="Net Profit Hari Ini" value={CURRENCY_FORMATTER.format(dashboardData.todayNetProfit)} icon="finance" iconClass="bg-emerald-600" tooltip="Omzet - Modal Barang (HPP) - Pengeluaran Operasional Hari Ini">
                     <div className="text-[10px] text-slate-400 mt-1">
@@ -480,10 +505,10 @@ const DashboardView: React.FC = () => {
                         </div>
                     )}
                 </StatCard>
-            </div>
+            </motion.div>
             
             {/* Main Charts Area */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
+            <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left Column: Charts */}
                 <div className="lg:col-span-2 space-y-6">
                     {/* Branch Performance */}
@@ -591,8 +616,8 @@ const DashboardView: React.FC = () => {
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </motion.div>
+        </motion.div>
     );
 };
 

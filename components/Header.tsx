@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { View, Branch } from '../types';
 import Icon from './Icon';
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +16,7 @@ import { db } from '../services/db';
 import Modal from './Modal';
 import DataArchivingModal from './DataArchivingModal'; 
 import ConflictResolveModal from './ConflictResolveModal'; 
+import Skeleton from './Skeleton';
 
 interface HeaderProps {
     activeView: View;
@@ -289,7 +291,8 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
     }
 
     return (
-        <header className="flex items-start md:items-center justify-between p-4 bg-slate-800 border-b border-slate-700 flex-shrink-0 gap-3">
+        <>
+        <header className="sticky top-0 z-[60] flex items-start md:items-center justify-between p-4 bg-slate-900/80 backdrop-blur-xl border-b border-slate-700/50 flex-shrink-0 gap-3">
             <div className="flex items-start md:items-center min-w-0">
                 <button onClick={onMenuClick} className="p-1 mr-3 md:hidden text-slate-300 hover:text-white" aria-label="Buka menu">
                     <Icon name="menu" className="w-6 h-6" />
@@ -297,26 +300,46 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                 <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3 min-w-0">
                     <h1 className="text-lg font-semibold text-white truncate max-w-[55vw] sm:max-w-none">{viewTitles[activeView]}</h1>
                     
-                    {syncStatus === 'syncing' && (
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-900/30 border border-blue-800 animate-pulse shrink-0">
-                            <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-                            <span className="text-[10px] text-blue-300 font-medium">Syncing...</span>
-                        </div>
-                    )}
-                    {syncStatus === 'success' && (
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-900/30 border border-green-800 transition-opacity duration-1000 shrink-0">
-                            <Icon name="check-circle-fill" className="w-3 h-3 text-green-400" />
-                            <span className="text-[10px] text-green-300 font-medium">Tersimpan di Cloud</span>
-                        </div>
-                    )}
-                    {syncStatus === 'error' && (
-                        <button onClick={handleSyncErrorClick} className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-900/30 border border-red-800 hover:bg-red-900/50 transition-colors shrink-0">
-                            <Icon name="warning" className="w-3 h-3 text-red-400" />
-                            <span className="text-[10px] text-red-300 font-medium">
-                                {syncErrorMessage && syncErrorMessage.includes('QUOTA') ? 'Cloud Penuh' : 'Gagal Sync'}
-                            </span>
-                        </button>
-                    )}
+                    <AnimatePresence mode="wait">
+                        {syncStatus === 'syncing' && (
+                            <motion.div 
+                                key="syncing"
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                 exit={{ opacity: 0, scale: 0.9 }}
+                                 className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-900/30 border border-blue-800 shrink-0"
+                             >
+                                 <Skeleton variant="pill" width={8} height={8} className="bg-blue-400" />
+                                 <Skeleton variant="text" width={48} height={12} className="bg-blue-400/50" />
+                             </motion.div>
+                        )}
+                        {syncStatus === 'success' && (
+                            <motion.div 
+                                key="success"
+                                initial={{ opacity: 0, scale: 0.9, y: 5 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0 }}
+                                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-900/30 border border-green-800 shrink-0"
+                            >
+                                <Icon name="check-circle-fill" className="w-3 h-3 text-green-400" />
+                                <span className="text-[10px] text-green-300 font-medium">Tersimpan di Cloud</span>
+                            </motion.div>
+                        )}
+                        {syncStatus === 'error' && (
+                            <motion.button 
+                                key="error"
+                                initial={{ opacity: 0, x: 10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                onClick={handleSyncErrorClick} 
+                                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-900/30 border border-red-800 hover:bg-red-900/50 transition-colors shrink-0"
+                            >
+                                <Icon name="warning" className="w-3 h-3 text-red-400" />
+                                <span className="text-[10px] text-red-300 font-medium">
+                                    {syncErrorMessage && syncErrorMessage.includes('QUOTA') ? 'Cloud Penuh' : 'Gagal Sync'}
+                                </span>
+                            </motion.button>
+                        )}
+                    </AnimatePresence>
                     
                     {showMemoryWarning && (
                         <button 
@@ -366,176 +389,177 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                     </>
                 )}
             </div>
+        </header>
 
-            {/* Modal Manajemen Data */}
-            <Modal isOpen={isDataModalOpen} onClose={() => setDataModalOpen(false)} title="Menu Data & Sinkronisasi">
-                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+        {/* Modal Manajemen Data */}
+        <Modal isOpen={isDataModalOpen} onClose={() => setDataModalOpen(false)} title="Menu Data & Sinkronisasi">
+            <div className="space-y-4 pr-1">
+                
+                {/* SECTION: Cloud Sync (Dropbox) */}
+                <div className="bg-sky-900/20 border border-sky-800 p-3 rounded-lg space-y-3">
+                    <div className="flex items-center gap-2 mb-1">
+                        <Icon name="wifi" className="w-5 h-5 text-sky-400"/>
+                        <h4 className="font-bold text-white text-sm">Sinkronisasi Cloud (Dropbox)</h4>
+                    </div>
                     
-                    {/* SECTION: Cloud Sync (Dropbox) */}
-                    <div className="bg-sky-900/20 border border-sky-800 p-3 rounded-lg space-y-3">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Icon name="wifi" className="w-5 h-5 text-sky-400"/>
-                            <h4 className="font-bold text-white text-sm">Sinkronisasi Cloud (Dropbox)</h4>
-                        </div>
-                        
-                        <div className="bg-slate-800/50 p-2 rounded border border-sky-900/30">
-                            <p className="text-[10px] text-sky-200 mb-1 font-bold">OPERASIONAL CABANG (HARIAN)</p>
-                            <Button onClick={handleCloudPull} disabled={isProcessing} className="w-full bg-sky-600 hover:bg-sky-500 text-white border-none text-xs h-9">
-                                {isProcessing ? 'Memproses...' : '⬇️ Cek Update (Menu & Stok)'}
-                            </Button>
-                            <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
-                                <span className="text-green-400 font-bold">Info:</span> Tombol ini untuk:
-                                <br/>1. Mengambil Harga/Menu terbaru.
-                                <br/>2. Menerima stok kiriman dari Gudang.
-                            </p>
-                        </div>
-
-                        {/* ADMIN ONLY ACTIONS */}
-                        {isAdmin && (
-                            <div className="border-t border-sky-800/50 pt-2">
-                                <p className="text-[10px] text-yellow-500 font-bold mb-2 uppercase">Panel Admin Pusat (Hati-hati)</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    <div>
-                                        <Button onClick={() => handleCloudPush(false)} disabled={isProcessing} variant="secondary" className="w-full text-xs h-9 border-sky-700 text-sky-200 hover:bg-sky-900/50 whitespace-nowrap">
-                                            ⬆️ Kirim Master
-                                        </Button>
-                                        <p className="text-[9px] text-slate-500 mt-1 leading-tight">Update data di cabang.</p>
-                                    </div>
-                                    <div>
-                                        <Button onClick={handleCloudRestoreFull} disabled={isProcessing} variant="secondary" className="w-full text-xs h-9 border-red-800 text-red-300 hover:bg-red-900/30 whitespace-nowrap">
-                                            ⚠️ Restore Total
-                                        </Button>
-                                        <p className="text-[9px] text-slate-500 mt-1 leading-tight">Ganti data lokal dengan Cloud.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="border-t border-slate-700 my-1"></div>
-
-                    {/* SECTION: Local Backup/Restore */}
-                    <div className="bg-slate-700/30 p-3 rounded-lg space-y-3">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Icon name="database" className="w-5 h-5 text-green-400"/>
-                            <h4 className="font-bold text-white text-sm">Backup & Restore Lokal</h4>
-                        </div>
-                        
-                        <div>
-                            <Button onClick={handleLocalBackup} variant="secondary" className="w-full mb-1 text-xs">
-                                📥 Backup (.json)
-                            </Button>
-                            <p className="text-[10px] text-slate-400">
-                                Simpan salinan data lengkap ke penyimpanan perangkat ini (Download).
-                            </p>
-                        </div>
-
-                        {isAdmin && (
-                            <div className="border-t border-slate-600/50 pt-2">
-                                <p className="text-[10px] text-red-300 font-bold mb-1 uppercase">Zona Bahaya (Admin)</p>
-                                <Button onClick={handleLocalRestoreClick} variant="danger" className="w-full text-xs bg-slate-800 border-red-900/50 text-red-300 hover:bg-red-900/20">
-                                    ⚠️ Restore dari File
-                                </Button>
-                                <p className="text-[9px] text-slate-500 mt-1 leading-tight">
-                                    PERINGATAN: Tindakan ini akan <strong>menimpa/menghapus</strong> seluruh data saat ini dengan isi file backup yang dipilih.
-                                </p>
-                                <input 
-                                    type="file" 
-                                    ref={fileInputRef} 
-                                    onChange={handleFileChange} 
-                                    className="hidden" 
-                                    accept=".json" 
-                                />
-                            </div>
-                        )}
-                    </div>
-
-                    {/* SECTION: Archiving (Admin Only) */}
-                    {isAdmin && (
-                        <div className="bg-orange-900/10 border border-orange-800/50 p-3 rounded-lg mt-2 space-y-2">
-                            <div className="flex items-center gap-2">
-                                <Icon name="boxes" className="w-5 h-5 text-orange-400"/>
-                                <h4 className="font-bold text-white text-sm">Perawatan Database</h4>
-                            </div>
-                            <p className="text-[10px] text-slate-400 leading-tight">
-                                Aplikasi melambat? Gunakan fitur ini untuk menghapus transaksi lama yang sudah tidak dibutuhkan agar aplikasi tetap ringan.
-                            </p>
-                            <Button onClick={() => { setDataModalOpen(false); setIsArchivingModalOpen(true); }} variant="secondary" className="w-full text-orange-300 border-orange-800/50 hover:bg-orange-900/30 text-xs">
-                                🧹 Arsip & Bersihkan
-                            </Button>
-                        </div>
-                    )}
-                    
-                    <div className="pt-2 text-center">
-                        <button onClick={() => setDataModalOpen(false)} className="text-slate-400 text-sm hover:text-white">Tutup</button>
-                    </div>
-                </div>
-            </Modal>
-
-            {/* Modal Pilih Cabang */}
-            <Modal isOpen={isBranchModalOpen} onClose={() => {}} title="Pilih Identitas Cabang">
-                <div className="space-y-4">
-                    <div className="bg-green-900/20 p-3 rounded-lg border border-green-800">
-                        <p className="text-sm text-green-200 flex items-center gap-2">
-                            <Icon name="check-circle-fill" className="w-4 h-4"/>
-                            Data berhasil diperbarui dari Pusat.
+                    <div className="bg-slate-800/50 p-2 rounded border border-sky-900/30">
+                        <p className="text-[10px] text-sky-200 mb-1 font-bold">OPERASIONAL CABANG (HARIAN)</p>
+                        <Button onClick={handleCloudPull} disabled={isProcessing} className="w-full bg-sky-600 hover:bg-sky-500 text-white border-none text-xs h-9">
+                            {isProcessing ? 'Memproses...' : '⬇️ Cek Update (Menu & Stok)'}
+                        </Button>
+                        <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+                            <span className="text-green-400 font-bold">Info:</span> Tombol ini untuk:
+                            <br/>1. Mengambil Harga/Menu terbaru.
+                            <br/>2. Menerima stok kiriman dari Gudang.
                         </p>
                     </div>
-                    
-                    {isAdmin && (
-                        <button 
-                            onClick={handleSetAsCentral}
-                            className="w-full p-3 rounded-lg border border-purple-500 bg-purple-900/30 hover:bg-purple-900/50 text-purple-200 flex items-center justify-between mb-2"
-                        >
-                            <div className="text-left">
-                                <span className="font-bold block">Saya adalah Admin Pusat</span>
-                                <span className="text-xs opacity-75">Tidak menjual barang (Monitoring)</span>
-                            </div>
-                            <Icon name="settings" className="w-5 h-5"/>
-                        </button>
-                    )}
 
-                    <div>
-                        <p className="text-slate-300 text-sm mb-2">Atau pilih lokasi operasional:</p>
-                        <div className="space-y-2 max-h-60 overflow-y-auto">
-                            {availableBranches.map(branch => (
-                                <button
-                                    key={branch.id}
-                                    onClick={() => setSelectedBranchId(branch.id)}
-                                    className={`w-full text-left p-3 rounded-lg border transition-colors flex justify-between items-center
-                                        ${selectedBranchId === branch.id 
-                                            ? 'bg-[#347758] border-[#347758] text-white' 
-                                            : 'bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700'
-                                        }`}
-                                >
-                                    <div>
-                                        <div className="font-bold">{branch.name}</div>
-                                        <div className="text-xs opacity-75">{branch.id}</div>
-                                    </div>
-                                    {selectedBranchId === branch.id && <Icon name="check-circle-fill" className="w-5 h-5"/>}
-                                </button>
-                            ))}
+                    {/* ADMIN ONLY ACTIONS */}
+                    {isAdmin && (
+                        <div className="border-t border-sky-800/50 pt-2">
+                            <p className="text-[10px] text-yellow-500 font-bold mb-2 uppercase">Panel Admin Pusat (Hati-hati)</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div>
+                                    <Button onClick={() => handleCloudPush(false)} disabled={isProcessing} variant="secondary" className="w-full text-xs h-9 border-sky-700 text-sky-200 hover:bg-sky-900/50 whitespace-nowrap">
+                                        ⬆️ Kirim Master
+                                    </Button>
+                                    <p className="text-[9px] text-slate-500 mt-1 leading-tight">Update data di cabang.</p>
+                                </div>
+                                <div>
+                                    <Button onClick={handleCloudRestoreFull} disabled={isProcessing} variant="secondary" className="w-full text-xs h-9 border-red-800 text-red-300 hover:bg-red-900/30 whitespace-nowrap">
+                                        ⚠️ Restore Total
+                                    </Button>
+                                    <p className="text-[9px] text-slate-500 mt-1 leading-tight">Ganti data lokal dengan Cloud.</p>
+                                </div>
+                            </div>
                         </div>
+                    )}
+                </div>
+
+                <div className="border-t border-slate-700 my-1"></div>
+
+                {/* SECTION: Local Backup/Restore */}
+                <div className="bg-slate-700/30 p-3 rounded-lg space-y-3">
+                    <div className="flex items-center gap-2 mb-1">
+                        <Icon name="database" className="w-5 h-5 text-green-400"/>
+                        <h4 className="font-bold text-white text-sm">Backup & Restore Lokal</h4>
+                    </div>
+                    
+                    <div>
+                        <Button onClick={handleLocalBackup} variant="secondary" className="w-full mb-1 text-xs">
+                            📥 Backup (.json)
+                        </Button>
+                        <p className="text-[10px] text-slate-400">
+                            Simpan salinan data lengkap ke penyimpanan perangkat ini (Download).
+                        </p>
                     </div>
 
-                    <Button onClick={handleSaveBranchSelection} disabled={!selectedBranchId} className="w-full">
-                        Simpan & Mulai
-                    </Button>
+                    {isAdmin && (
+                        <div className="border-t border-slate-600/50 pt-2">
+                            <p className="text-[10px] text-red-300 font-bold mb-1 uppercase">Zona Bahaya (Admin)</p>
+                            <Button onClick={handleLocalRestoreClick} variant="danger" className="w-full text-xs bg-slate-800 border-red-900/50 text-red-300 hover:bg-red-900/20">
+                                ⚠️ Restore dari File
+                            </Button>
+                            <p className="text-[9px] text-slate-500 mt-1 leading-tight">
+                                PERINGATAN: Tindakan ini akan <strong>menimpa/menghapus</strong> seluruh data saat ini dengan isi file backup yang dipilih.
+                            </p>
+                            <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                onChange={handleFileChange} 
+                                className="hidden" 
+                                accept=".json" 
+                            />
+                        </div>
+                    )}
                 </div>
-            </Modal>
 
-            {/* Data Archiving Modal */}
-            <DataArchivingModal isOpen={isArchivingModalOpen} onClose={() => setIsArchivingModalOpen(false)} />
-            
-            {/* Conflict Resolve Modal */}
-            <ConflictResolveModal 
-                isOpen={isConflictModalOpen} 
-                onClose={() => setConflictModalOpen(false)} 
-                onMerge={handleConflictMerge}
-                onForceOverwrite={() => handleCloudPush(true)}
-                isProcessing={isProcessing}
-            />
-        </header>
+                {/* SECTION: Archiving (Admin Only) */}
+                {isAdmin && (
+                    <div className="bg-orange-900/10 border border-orange-800/50 p-3 rounded-lg mt-2 space-y-2">
+                        <div className="flex items-center gap-2">
+                            <Icon name="boxes" className="w-5 h-5 text-orange-400"/>
+                            <h4 className="font-bold text-white text-sm">Perawatan Database</h4>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-tight">
+                            Aplikasi melambat? Gunakan fitur ini untuk menghapus transaksi lama yang sudah tidak dibutuhkan agar aplikasi tetap ringan.
+                        </p>
+                        <Button onClick={() => { setDataModalOpen(false); setIsArchivingModalOpen(true); }} variant="secondary" className="w-full text-orange-300 border-orange-800/50 hover:bg-orange-900/30 text-xs">
+                            🧹 Arsip & Bersihkan
+                        </Button>
+                    </div>
+                )}
+                
+                <div className="pt-2 text-center">
+                    <button onClick={() => setDataModalOpen(false)} className="text-slate-400 text-sm hover:text-white">Tutup</button>
+                </div>
+            </div>
+        </Modal>
+
+        {/* Modal Pilih Cabang */}
+        <Modal isOpen={isBranchModalOpen} onClose={() => {}} title="Pilih Identitas Cabang">
+            <div className="space-y-4">
+                <div className="bg-green-900/20 p-3 rounded-lg border border-green-800">
+                    <p className="text-sm text-green-200 flex items-center gap-2">
+                        <Icon name="check-circle-fill" className="w-4 h-4"/>
+                        Data berhasil diperbarui dari Pusat.
+                    </p>
+                </div>
+                
+                {isAdmin && (
+                    <button 
+                        onClick={handleSetAsCentral}
+                        className="w-full p-3 rounded-lg border border-purple-500 bg-purple-900/30 hover:bg-purple-900/50 text-purple-200 flex items-center justify-between mb-2"
+                    >
+                        <div className="text-left">
+                            <span className="font-bold block">Saya adalah Admin Pusat</span>
+                            <span className="text-xs opacity-75">Tidak menjual barang (Monitoring)</span>
+                        </div>
+                        <Icon name="settings" className="w-5 h-5"/>
+                    </button>
+                )}
+
+                <div>
+                    <p className="text-slate-300 text-sm mb-2">Atau pilih lokasi operasional:</p>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {availableBranches.map(branch => (
+                            <button
+                                key={branch.id}
+                                onClick={() => setSelectedBranchId(branch.id)}
+                                className={`w-full text-left p-3 rounded-lg border transition-colors flex justify-between items-center
+                                    ${selectedBranchId === branch.id 
+                                        ? 'bg-[#347758] border-[#347758] text-white' 
+                                        : 'bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700'
+                                    }`}
+                            >
+                                <div>
+                                    <div className="font-bold">{branch.name}</div>
+                                    <div className="text-xs opacity-75">{branch.id}</div>
+                                </div>
+                                {selectedBranchId === branch.id && <Icon name="check-circle-fill" className="w-5 h-5"/>}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <Button onClick={handleSaveBranchSelection} disabled={!selectedBranchId} className="w-full">
+                    Simpan & Mulai
+                </Button>
+            </div>
+        </Modal>
+
+        {/* Data Archiving Modal */}
+        <DataArchivingModal isOpen={isArchivingModalOpen} onClose={() => setIsArchivingModalOpen(false)} />
+        
+        {/* Conflict Resolve Modal */}
+        <ConflictResolveModal 
+            isOpen={isConflictModalOpen} 
+            onClose={() => setConflictModalOpen(false)} 
+            onMerge={handleConflictMerge}
+            onForceOverwrite={() => handleCloudPush(true)}
+            isProcessing={isProcessing}
+        />
+        </>
     );
 };
 

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import Icon from './Icon';
+import Skeleton from './Skeleton';
 import { dataService } from '../services/dataService';
 import { generateTablePDF } from '../utils/pdfGenerator';
 import { useSettings } from '../context/SettingsContext';
@@ -186,7 +187,14 @@ const DataArchivingModal: React.FC<DataArchivingModalProps> = ({ isOpen, onClose
 
                 <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 text-center">
                     {loading ? (
-                        <p className="text-sm text-slate-400 animate-pulse">Menghitung data...</p>
+                        <div className="flex flex-col items-center space-y-2">
+                            <Skeleton variant="text" width={120} height={32} className="bg-slate-600" />
+                            <div className="flex gap-4">
+                                <Skeleton variant="text" width={60} height={12} className="bg-slate-700" />
+                                <Skeleton variant="text" width={60} height={12} className="bg-slate-700" />
+                                <Skeleton variant="text" width={60} height={12} className="bg-slate-700" />
+                            </div>
+                        </div>
                     ) : (
                         <>
                             <p className="text-slate-400 text-sm mb-1">Ditemukan Data Lama:</p>

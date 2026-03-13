@@ -143,9 +143,6 @@ const HardwareTab: React.FC = () => {
         }
     };
 
-    const handleDownloadRawThermal = () => {
-        window.open('https://github.com/aiprojek/raw-thermal/releases/tag/release', '_blank');
-    }
 
     // --- SCANNER HANDLERS ---
     const handleScannerTestInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -189,17 +186,17 @@ const HardwareTab: React.FC = () => {
                 description="Gunakan tombol ini untuk meminta ulang izin Bluetooth & Kamera tanpa restart aplikasi."
                 icon={<Icon name="lock" className="w-6 h-6"/>}
             >
-                <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="text-sm text-slate-300">
                         Jika izin pernah ditolak, tombol ini akan memicu ulang permintaan atau memberi arahan.
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                         {isNative && (
-                            <Button onClick={openAppSettings} variant="secondary" size="sm" className="shrink-0">
+                            <Button onClick={openAppSettings} variant="secondary" size="sm" className="w-full sm:w-auto">
                                 <Icon name="settings" className="w-4 h-4"/> Buka Setting
                             </Button>
                         )}
-                        <Button onClick={handleRequestDevicePermissions} variant="secondary" size="sm" className="shrink-0" disabled={isRequestingPermissions}>
+                        <Button onClick={handleRequestDevicePermissions} variant="secondary" size="sm" className="w-full sm:w-auto" disabled={isRequestingPermissions}>
                             <Icon name="bluetooth" className="w-4 h-4"/> Minta Izin Bluetooth & Kamera
                         </Button>
                     </div>
@@ -281,15 +278,6 @@ const HardwareTab: React.FC = () => {
                             )}
                         </div>
 
-                        <div className="bg-slate-900 p-3 rounded-lg border border-slate-600 opacity-80">
-                            <h4 className="text-sm font-bold text-white mb-2">Fallback Driver (Raw Thermal)</h4>
-                            <p className="text-xs text-slate-400 mb-2">
-                                Jika Direct Connection masih gagal, gunakan aplikasi Raw Thermal.
-                            </p>
-                            <Button onClick={handleDownloadRawThermal} variant="secondary" size="sm" className="w-full bg-slate-700">
-                                <Icon name="download" className="w-4 h-4"/> Install Driver (GitHub)
-                            </Button>
-                        </div>
 
                         <div className="pt-2 border-t border-slate-700">
                             <Button onClick={handleTestPrint} className="w-full py-3">
@@ -351,17 +339,17 @@ const HardwareTab: React.FC = () => {
                 description="Izin kamera untuk scan barcode dan foto bukti."
                 icon={<Icon name="camera" className="w-6 h-6"/>}
             >
-                <div className="flex justify-between items-center gap-2 flex-wrap">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="text-sm text-slate-300">
                        Pastikan izin kamera diberikan.
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                         {isNative && (
-                            <Button onClick={openAppSettings} variant="secondary" size="sm" className="shrink-0">
+                            <Button onClick={openAppSettings} variant="secondary" size="sm" className="w-full sm:w-auto">
                                 <Icon name="settings" className="w-4 h-4"/> Buka Setting
                             </Button>
                         )}
-                        <Button onClick={() => setCameraTestOpen(true)} variant="secondary" size="sm" className="shrink-0">
+                        <Button onClick={() => setCameraTestOpen(true)} variant="secondary" size="sm" className="w-full sm:w-auto">
                             <Icon name="camera" className="w-4 h-4"/> Tes Kamera
                         </Button>
                     </div>

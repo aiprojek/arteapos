@@ -122,10 +122,18 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(({ transaction, s
                             <span>- {CURRENCY_FORMATTER.format(transaction.subtotal - (transaction.total - (transaction.tax || 0) - (transaction.serviceCharge || 0)))}</span>
                         </div>
                     )}
-                    {transaction.rewardRedeemed && (
-                        <div className="flex justify-between">
-                            <span>Reward</span>
-                            <span>- {CURRENCY_FORMATTER.format(transaction.rewardRedeemed.pointsSpent > 0 ? (transaction.items.find(i => i.rewardId === transaction.rewardRedeemed?.rewardId)?.price || 0) * -1 : 0)}</span>
+                    {transaction.rewardsRedeemed && transaction.rewardsRedeemed.length > 0 && (
+                        <div className="space-y-0.5">
+                            {transaction.rewardsRedeemed.map((r, idx) => {
+                                const rewardItem = transaction.items.find(i => i.rewardId === r.rewardId);
+                                const discountValue = rewardItem && rewardItem.price < 0 ? Math.abs(rewardItem.price) : 0;
+                                return (
+                                    <div key={idx} className="flex justify-between text-[10px] italic">
+                                        <span>Reward: {r.description} ({r.pointsSpent} pts)</span>
+                                        {discountValue > 0 && <span>- {CURRENCY_FORMATTER.format(discountValue).replace('Rp', '')}</span>}
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                     {(transaction.serviceCharge || 0) > 0 && (

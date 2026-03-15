@@ -12,10 +12,39 @@ interface CartItemProps {
 
 const CartItem: React.FC<CartItemProps> = ({ item, onOpenDiscountModal }) => {
   const { updateCartQuantity, removeFromCart, removeRewardFromCart } = useCart();
+  const [inputValue, setInputValue] = React.useState(item.quantity.toString());
 
-  const handleQuantityChange = (delta: number) => {
-    updateCartQuantity(item.cartItemId, item.quantity + delta);
+  const handleQuantityChange = (newQuantity: number) => {
+    const quantity = Math.max(1, newQuantity);
+    updateCartQuantity(item.cartItemId, quantity);
   };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
+  };
+
+  const handleInputBlur = () => {
+    const newQuantity = parseInt(inputValue, 10);
+    if (!isNaN(newQuantity) && newQuantity > 0) {
+      handleQuantityChange(newQuantity);
+    } else {
+      setInputValue(item.quantity.toString());
+    }
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleInputBlur();
+      (e.target as HTMLInputElement).blur();
+    } else if (e.key === 'Escape') {
+      setInputValue(item.quantity.toString());
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
+  React.useEffect(() => {
+    setInputValue(item.quantity.toString());
+  }, [item.quantity]);
   
   const addonsTotal = item.selectedAddons?.reduce((sum, addon) => sum + addon.price, 0) || 0;
   const modifiersTotal = item.selectedModifiers?.reduce((sum, mod) => sum + mod.price, 0) || 0;
@@ -58,26 +87,54 @@ const CartItem: React.FC<CartItemProps> = ({ item, onOpenDiscountModal }) => {
 
   // --- STANDARD ITEM VIEW (Card Layout) ---
   return (
-    <div className="bg-slate-700/40 border border-slate-700 p-3 rounded-lg flex flex-col gap-2">
-      {/* Top Row: Name & Actions */}
-      <div className="flex justify-between items-start">
-        <div className="flex-1 mr-2 min-w-0">
-            <p className="font-semibold text-white leading-tight break-words">{item.name}</p>
-            {item.discount?.name && <p className="text-xs text-green-400 font-medium mt-0.5">{item.discount.name}</p>}
+    <div className="bg-slate-700/40 border border-slate-700 p-2 rounded-lg">
+      <div className="flex flex-col">
+        {/* Item Name */}
+        <div className="min-w-0">
+          <p className="font-semibold text-white break-words">{item.name}</p>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-            <button onClick={() => onOpenDiscountModal(item.cartItemId)} className={`p-1.5 rounded-lg transition-colors ${item.discount ? 'bg-green-500/20 text-green-300' : 'bg-slate-700 text-slate-400 hover:text-white'}`} title="Diskon Item">
-                <Icon name="tag" className="w-4 h-4" />
-            </button>
-            <button onClick={() => removeFromCart(item.cartItemId)} className="p-1.5 rounded-lg bg-slate-700 text-red-400 hover:bg-red-900/30 hover:text-red-300" title="Hapus">
-                <Icon name="trash" className="w-4 h-4" />
-            </button>
+
+        {/* Controls container */}
+        <div className="flex items-center gap-2 mt-2">
+          {/* Quantity Controls */}
+          <div className="flex items-center bg-slate-800 rounded-lg border border-slate-600 flex-shrink-0">
+            <button onClick={() => handleQuantityChange(item.quantity - 1)} className="w-7 h-7 flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-l-md text-white font-bold transition-colors">-</button>
+            <input
+              type="number"
+              className="w-8 text-center font-mono text-sm font-bold text-white bg-transparent no-spinners"
+              value={inputValue}
+              onChange={handleInputChange}
+              onBlur={handleInputBlur}
+              onKeyDown={handleInputKeyDown}
+              min="1"
+            />
+            <button onClick={() => handleQuantityChange(item.quantity + 1)} className="w-7 h-7 flex items-center justify-center bg-[#347758] hover:bg-[#2a6046] rounded-r-md text-white font-bold transition-colors">+</button>
+          </div>
+
+          {/* Price */}
+          <div className="flex-grow text-right">
+              <div className="flex flex-col items-end">
+                  {item.discount && <span className="text-xs text-slate-500 line-through decoration-slate-500">{CURRENCY_FORMATTER.format(originalPrice)}</span>}
+                  <span className="font-bold text-base text-white leading-none">{CURRENCY_FORMATTER.format(finalPrice)}</span>
+              </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center flex-shrink-0">
+              <button onClick={() => onOpenDiscountModal(item.cartItemId)} className={`p-1.5 rounded-lg transition-colors ${item.discount ? 'text-green-300' : 'text-slate-400 hover:text-white'}`} title="Diskon Item">
+                  <Icon name="tag" className="w-4 h-4" />
+              </button>
+              <button onClick={() => removeFromCart(item.cartItemId)} className="p-1.5 rounded-lg text-red-400 hover:text-red-300 transition-colors" title="Hapus">
+                  <Icon name="trash" className="w-4 h-4" />
+              </button>
+          </div>
         </div>
       </div>
 
-      {/* Details Row: Modifiers/Addons */}
-      {(item.selectedAddons?.length || 0) > 0 || (item.selectedModifiers?.length || 0) > 0 ? (
-          <div className="text-xs text-slate-400 bg-slate-800/50 p-2 rounded">
+      {/* Optional Details Row (for addons/modifiers/discount name) */}
+      {((item.selectedAddons?.length || 0) > 0 || (item.selectedModifiers?.length || 0) > 0 || item.discount?.name) && (
+          <div className="text-xs text-slate-400 bg-slate-800/50 p-2 rounded mt-2">
+              {item.discount?.name && <p className="font-semibold text-green-400">{item.discount.name}</p>}
               {item.selectedAddons?.map(addon => (
                   <div key={addon.id} className="flex justify-between">
                       <span>+ {addon.name}</span>
@@ -91,26 +148,7 @@ const CartItem: React.FC<CartItemProps> = ({ item, onOpenDiscountModal }) => {
                   </div>
               ))}
           </div>
-      ) : null}
-
-      {/* Bottom Row: Qty & Price */}
-      <div className="flex justify-between items-end mt-1">
-          <div className="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-600">
-            <button onClick={() => handleQuantityChange(-1)} className="w-8 h-8 flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded text-white font-bold transition-colors">-</button>
-            <span className="w-8 text-center font-mono font-bold text-white">{item.quantity}</span>
-            <button onClick={() => handleQuantityChange(1)} className="w-8 h-8 flex items-center justify-center bg-[#347758] hover:bg-[#2a6046] rounded text-white font-bold transition-colors">+</button>
-          </div>
-
-          <div className="text-right">
-              {item.discount && (
-                  <div className="text-[10px] text-green-400 mb-0.5">{discountDisplay}</div>
-              )}
-              <div className="flex flex-col items-end">
-                  {item.discount && <span className="text-xs text-slate-500 line-through decoration-slate-500">{CURRENCY_FORMATTER.format(originalPrice)}</span>}
-                  <span className="font-bold text-lg text-white leading-none">{CURRENCY_FORMATTER.format(finalPrice)}</span>
-              </div>
-          </div>
-      </div>
+      )}
     </div>
   );
 };

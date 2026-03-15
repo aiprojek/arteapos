@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { LOGO_PATH } from '../constants';
+import Receipt from './Receipt';
 
 // Daftar nama ikon yang digunakan dalam aplikasi
 export type IconName = 
@@ -101,7 +102,9 @@ const Icon: React.FC<IconProps> = ({ name, className = '', title, style }) => {
     'zoom-out': 'bi-zoom-out',
     dash: 'bi-dash',
     sync: 'bi-arrow-repeat',
-    calculator: 'bi-calculator'
+    calculator: 'bi-calculator',
+    save: 'bi-floppy',
+    cart: 'bi-cart',
   };
 
   const biClass = iconMap[name] || 'bi-question-square';

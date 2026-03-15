@@ -194,12 +194,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const { isDisplayConnected } = useCustomerDisplay(); 
 
     const { subtotal, itemDiscountAmount, cartDiscountAmount, taxAmount, serviceChargeAmount, finalTotal } = getCartTotals();
-    const quickPayAmounts = [20000, 50000, 100000];
-
+    
     const [isTopUpOpen, setIsTopUpOpen] = useState(false);
     const [topUpAmount, setTopUpAmount] = useState('');
     const [isMemberSearchOpen, setIsMemberSearchOpen] = useState(false);
     const [isDualScreenModalOpen, setDualScreenModalOpen] = useState(false);
+    const [isSavedCartsModalOpen, setIsSavedCartsModalOpen] = useState(false);
+    const [savedCartSearchTerm, setSavedCartSearchTerm] = useState('');
+
+    const filteredHeldCarts = heldCarts.filter(c => 
+        c.name.toLowerCase().includes(savedCartSearchTerm.toLowerCase())
+    );
 
     const handleSwitchCart = (cartId: string | null) => {
         switchActiveCart(cartId);
@@ -231,7 +236,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
         if (activeHeldCartId === null) {
             return (
                  <Button onClick={() => onOpenNameModal(null)} disabled={cart.length === 0} variant="secondary" className="flex-1 px-1 h-full flex flex-row items-center justify-center gap-1.5 text-[11px] font-bold" title="Simpan Pesanan">
-                    <Icon name="plus" className="w-4 h-4"/>
+                    <Icon name="save" className="w-4 h-4"/>
                     <span className="hidden sm:inline">Simpan</span>
                 </Button>
             );
@@ -265,14 +270,45 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 </div>
             )}
             
-            {(sessionSettings.enableCartHolding || heldCarts.length > 0) && <HeldCartsTabs onSwitch={handleSwitchCart} enableCartHolding={sessionSettings.enableCartHolding || false} />}
-            
-            <div className="flex justify-between items-center mb-2">
-                <h2 className="text-lg font-bold text-white hidden md:block leading-none">Keranjang</h2>
+            {/* Cart Header */}
+            <div className="flex items-center gap-2 mb-2">
+                <h2 className="text-lg font-bold text-white leading-none hidden md:block">Keranjang</h2>
+
+                {/* New Cart Button */}
+                {(sessionSettings.enableCartHolding) && (
+                    <button 
+                        onClick={() => handleSwitchCart(null)} 
+                        className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors border
+                            ${activeHeldCartId === null 
+                                ? 'bg-[#347758] text-white font-semibold border-[#347758]' 
+                                : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500'}`
+                        }
+                    >
+                        <Icon name="plus" className="w-4 h-4" />
+                        <span className="hidden sm:inline">Baru</span>
+                    </button>
+                )}
+
+                {/* Saved Carts Modal Trigger */}
+                {heldCarts.length > 0 && (
+                    <button 
+                        onClick={() => setIsSavedCartsModalOpen(true)}
+                        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors border bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500"
+                    >
+                        <Icon name="cart" className="w-4 h-4" />
+                        <span className="hidden sm:inline">Tersimpan</span>
+                        <span className="text-xs bg-slate-700 text-white rounded-full px-1.5 py-0.5">{heldCarts.length}</span>
+                    </button>
+                )}
+                
+                {/* Spacer */}
+                <div className="flex-grow"></div>
+
+                {/* Second Screen Button (far right) */}
                 <button 
                     onClick={() => setDualScreenModalOpen(true)}
-                    className={`p-1.5 rounded transition-colors ${isDisplayConnected ? 'bg-[#347758] text-white animate-pulse' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
-                    title="Layar Kedua (Pelanggan)"
+                    className={`flex-shrink-0 p-1.5 rounded transition-colors ${isDisplayConnected ? 'bg-[#347758] text-white animate-pulse' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
+                    title="Layar Kedua"
                 >
                     <Icon name="cast" className="w-4 h-4"/>
                 </button>
@@ -301,8 +337,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                         <button onClick={onOpenCartDiscountModal} className="flex-1 flex gap-1 items-center justify-center text-[10px] py-1 rounded border border-blue-700/50 hover:bg-blue-700/20 text-blue-400 transition-colors">
                             <Icon name="tag" className="w-3 h-3"/> Diskon
                         </button>
-                        {sessionSettings.enableCartHolding && onSplitBill && (
-                            <button onClick={onSplitBill} className="flex-1 flex gap-1 items-center justify-center text-[10px] py-1 rounded border border-purple-700/50 hover:bg-purple-700/20 text-purple-400 transition-colors" title="Pisah item">
+                        {onSplitBill && (
+                            <button onClick={onSplitBill} className="flex-1 flex gap-1 items-center justify-center text-[10px] py-1 rounded border border-purple-700/50 hover:bg-purple-700/20 text-purple-400 transition-colors">
                                 <Icon name="share" className="w-3 h-3"/> Split
                             </button>
                         )}
@@ -412,6 +448,40 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                     <div className="flex justify-end gap-3 pt-2">
                         <Button variant="secondary" onClick={() => setIsTopUpOpen(false)}>Batal</Button>
                         <Button onClick={handleConfirmTopUp} disabled={!topUpAmount || parseFloat(topUpAmount) <= 0}>Konfirmasi</Button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Saved Carts Modal */}
+            <Modal isOpen={isSavedCartsModalOpen} onClose={() => setIsSavedCartsModalOpen(false)} title="Pesanan Tersimpan">
+                <div className="flex flex-col h-full">
+                    <input 
+                        type="text"
+                        placeholder="Cari pesanan..."
+                        value={savedCartSearchTerm}
+                        onChange={(e) => {setSavedCartSearchTerm(e.target.value)}}
+                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white mb-4 flex-shrink-0"
+                    />
+
+                    <div className="flex-grow overflow-y-auto space-y-2 pr-1 -mr-3">
+                        {filteredHeldCarts.length > 0 ? filteredHeldCarts.map(cart => (
+                            <button 
+                                key={cart.id} 
+                                onClick={() => {
+                                    handleSwitchCart(cart.id);
+                                    setIsSavedCartsModalOpen(false);
+                                }}
+                                className="w-full text-left p-3 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                            >
+                                <p className="font-semibold text-white">{cart.name}</p>
+                                <p className="text-xs text-slate-400">{cart.items.length} item &bull; {CURRENCY_FORMATTER.format(cart.items.reduce((acc, item) => acc + item.price * item.quantity, 0))}</p>
+                            </button>
+                        )) : (
+                            <div className="text-center text-slate-500 py-8">
+                                <Icon name="search" className="w-10 h-10 mx-auto mb-2"/>
+                                <p>Tidak ada pesanan tersimpan yang cocok.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </Modal>

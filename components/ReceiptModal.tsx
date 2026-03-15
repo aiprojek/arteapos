@@ -159,15 +159,15 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
             <div className="flex flex-col gap-3 pt-6">
                 
                 <Button variant="primary" onClick={handleBluetoothPrint} className="w-full bg-blue-600 border-none whitespace-nowrap">
-                    <Icon name="bluetooth" className="w-5 h-5"/> <span className="hidden sm:inline">Cetak Bluetooth</span>
+                    <Icon name="bluetooth" className="w-5 h-5"/> <span>Cetak BT</span>
                 </Button>
 
                 <div className="grid grid-cols-2 gap-3">
                     <Button variant="secondary" onClick={handleShare} disabled={isProcessing} className="whitespace-nowrap">
-                        <Icon name="share" className="w-5 h-5"/> <span className="hidden sm:inline">Bagikan</span>
+                        <Icon name="share" className="w-5 h-5"/> <span>Bagikan</span>
                     </Button>
                     <Button variant="secondary" onClick={() => window.print()} className="whitespace-nowrap">
-                        <Icon name="printer" className="w-5 h-5"/> <span className="hidden sm:inline">PDF</span>
+                        <Icon name="printer" className="w-5 h-5"/> <span>Cetak</span>
                     </Button>
                 </div>
                 

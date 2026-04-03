@@ -32,7 +32,12 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, onClose, 
     }
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={customer ? "Edit Pelanggan" : "Tambah Pelanggan Baru"}>
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title={customer ? "Edit Pelanggan" : "Tambah Pelanggan Baru"}
+            mobileLayout="sheet"
+        >
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">Nama Pelanggan</label>

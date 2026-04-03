@@ -1,5 +1,5 @@
 import React, { createContext, useContext, ReactNode, useCallback } from 'react';
-import { useData } from './DataContext';
+import { useDataActions, useSettingsData } from './DataContext';
 import type { ReceiptSettings } from '../types';
 
 interface SettingsContextType {
@@ -10,8 +10,8 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { data, setData } = useData();
-    const { receiptSettings } = data;
+    const { setData } = useDataActions();
+    const { receiptSettings } = useSettingsData();
 
     const updateReceiptSettings = useCallback((settings: ReceiptSettings) => {
         setData(prev => ({ ...prev, receiptSettings: settings }));

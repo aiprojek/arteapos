@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import Button from '../Button';
 import Icon from '../Icon';
 import { bluetoothPrinterService } from '../../utils/bluetoothPrinter';
-import { useUI } from '../../context/UIContext';
+import { useUIActions } from '../../context/UIContext';
 import { useSettings } from '../../context/SettingsContext';
 import type { Transaction } from '../../types';
 import BarcodeScannerModal from '../BarcodeScannerModal';
@@ -26,7 +26,7 @@ const SettingsCard: React.FC<{ title: string; description?: string; children: Re
 );
 
 const HardwareTab: React.FC = () => {
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
     const { receiptSettings, updateReceiptSettings } = useSettings();
     const isNative = Capacitor.isNativePlatform();
     

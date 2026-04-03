@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import 'bootstrap-icons/font/bootstrap-icons.css';
 import { LOGO_PATH } from './constants';
 import { Capacitor } from '@capacitor/core';
 

@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
-import { useUI } from '../context/UIContext';
-import { useAuth } from '../context/AuthContext'; // Import Auth
+import { useUIActions } from '../context/UIContext';
+import { useAuthState } from '../context/AuthContext';
 import type { RawMaterial } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -104,7 +104,7 @@ const RawMaterialForm: React.FC<{
     onCancel: () => void 
 }> = ({ material, onSave, onCancel }) => {
     const { receiptSettings } = useSettings();
-    const { currentUser } = useAuth();
+    const { currentUser } = useAuthState();
     
     const isStaff = currentUser?.role === 'staff'; // Check Role
 
@@ -288,8 +288,8 @@ const BulkRawMaterialModal: React.FC<{
     onClose: () => void;
     onSave: (materials: RawMaterial[]) => void;
 }> = ({ isOpen, onClose, onSave }) => {
-    const { showAlert } = useUI();
-    const { currentUser } = useAuth();
+    const { showAlert } = useUIActions();
+    const { currentUser } = useAuthState();
     const isStaff = currentUser?.role === 'staff';
 
     const [mode, setMode] = useState<'manual' | 'import'>('manual');
@@ -458,8 +458,8 @@ const BulkRawMaterialModal: React.FC<{
 
 const RawMaterialsView: React.FC = () => {
     const { rawMaterials, addRawMaterial, updateRawMaterial, deleteRawMaterial, bulkAddRawMaterials } = useProduct();
-    const { showAlert } = useUI();
-    const { currentUser } = useAuth();
+    const { showAlert } = useUIActions();
+    const { currentUser } = useAuthState();
     
     // Check Role
     const isStaff = currentUser?.role === 'staff';

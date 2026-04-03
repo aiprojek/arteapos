@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import Icon from './Icon';
-import { useAuth } from '../context/AuthContext';
+import { useAuthState } from '../context/AuthContext';
 import { APP_LICENSE_ID } from '../constants';
 import type { View } from '../types';
 import { dropboxService } from '../services/dropboxService';
@@ -15,7 +15,7 @@ interface OnboardingModalsProps {
 }
 
 const OnboardingModals: React.FC<OnboardingModalsProps> = ({ setActiveView }) => {
-    const { currentUser, users, authSettings } = useAuth();
+    const { currentUser, users, authSettings } = useAuthState();
     const [showManagementWelcome, setShowManagementWelcome] = useState(false);
     const [showStaffBriefing, setShowStaffBriefing] = useState(false);
     const [showLicenseModal, setShowLicenseModal] = useState(false);

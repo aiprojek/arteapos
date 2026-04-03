@@ -8,8 +8,8 @@ import DebtsTab from '../components/finance/DebtsTab';
 import CustomersTab from '../components/finance/CustomersTab';
 import Icon from '../components/Icon';
 import Button from '../components/Button';
-import { useAuth } from '../context/AuthContext';
-import { useUI } from '../context/UIContext';
+import { useAuthState } from '../context/AuthContext';
+import { useUIActions } from '../context/UIContext';
 import { useFinance } from '../context/FinanceContext'; 
 import { useSettings } from '../context/SettingsContext'; 
 import { dropboxService } from '../services/dropboxService';
@@ -23,8 +23,8 @@ import OverflowMenu from '../components/OverflowMenu';
 type FinanceTab = 'cashflow' | 'expenses' | 'income' | 'purchasing' | 'debts' | 'customers';
 
 const FinanceView: React.FC = () => {
-    const { currentUser } = useAuth();
-    const { showAlert } = useUI();
+    const { currentUser } = useAuthState();
+    const { showAlert } = useUIActions();
     const { receiptSettings } = useSettings();
     
     // Local Data Hooks

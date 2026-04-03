@@ -2,10 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useProduct } from '../context/ProductContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuthActions, useAuthState } from '../context/AuthContext';
 import { useCustomer } from '../context/CustomerContext';
 import { useSession } from '../context/SessionContext';
-import { useUI } from '../context/UIContext';
+import { useUIActions } from '../context/UIContext';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
 import type { ReceiptSettings, InventorySettings, AuthSettings, SessionSettings, MembershipSettings } from '../types';
@@ -22,10 +22,11 @@ import HardwareTab from '../components/settings/HardwareTab';
 const SettingsView: React.FC = () => {
     const { receiptSettings: originalReceiptSettings, updateReceiptSettings } = useSettings();
     const { inventorySettings: originalInventorySettings, updateInventorySettings } = useProduct();
-    const { authSettings: originalAuthSettings, updateAuthSettings, currentUser } = useAuth();
+    const { authSettings: originalAuthSettings, currentUser } = useAuthState();
+    const { updateAuthSettings } = useAuthActions();
     const { sessionSettings: originalSessionSettings, updateSessionSettings } = useSession();
     const { membershipSettings: originalMembershipSettings, updateMembershipSettings } = useCustomer();
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
     
     const isAdmin = currentUser?.role === 'admin';
     const isViewer = currentUser?.role === 'viewer'; // Check for Viewer

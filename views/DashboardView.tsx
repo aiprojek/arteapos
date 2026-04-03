@@ -10,7 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import type { Transaction } from '../types';
 import { dropboxService } from '../services/dropboxService';
 import { mockDataService } from '../services/mockData';
-import { useUI } from '../context/UIContext';
+import { useUIActions } from '../context/UIContext';
 import OverflowMenu from '../components/OverflowMenu';
 
 const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'products' | 'reports' | 'finance'; iconClass: string; children?: React.ReactNode; tooltip?: string }> = ({ title, value, icon, iconClass, children, tooltip }) => (
@@ -40,7 +40,7 @@ const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'product
 const DashboardView: React.FC = () => {
     const { transactions: localTransactions, importTransactions, expenses: localExpenses } = useFinance(); // ADD localExpenses
     const { products, inventorySettings, importStockAdjustments } = useProduct();
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
 
     const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
     // Updated state to hold stockLogs and expenses

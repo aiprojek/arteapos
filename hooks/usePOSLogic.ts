@@ -11,13 +11,14 @@ import { useFinance } from '../context/FinanceContext';
 import { useSettings } from '../context/SettingsContext';
 import { useCustomer } from '../context/CustomerContext';
 import { useProduct } from '../context/ProductContext';
-import { useUI } from '../context/UIContext';
-import { useData } from '../context/DataContext';
+import { useUIActions } from '../context/UIContext';
+import { useDataState } from '../context/DataContext';
 import { haptics } from '../utils/haptics';
 import type { Reward } from '../types';
+import { useRenderProfiler } from '../utils/renderProfiler';
 
 export const usePOSLogic = () => {
-    const { data } = useData();
+    const { data } = useDataState();
     const { findProductByBarcode } = useProduct();
     const {
         cart, addToCart, addConfiguredItemToCart, saveTransaction, 
@@ -28,7 +29,7 @@ export const usePOSLogic = () => {
         getCartTotals, splitCart,
         orderType, tableNumber, paxCount // Import order related info
     } = useCart();
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
     const { sessionSettings, session, startSession } = useSession();
     const { transactions, refundTransaction } = useFinance();
     const { receiptSettings } = useSettings();
@@ -72,13 +73,47 @@ export const usePOSLogic = () => {
     const totalCartItems = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
     const { finalTotal } = getCartTotals();
 
+    useRenderProfiler('usePOSLogic', {
+        cartItems: totalCartItems,
+        cartLines: cart.length,
+        finalTotal,
+        selectedCustomerId: selectedCustomer?.id ?? null,
+        paymentOpen: isPaymentModalOpen,
+        receiptOpen: isReceiptModalOpen,
+        barcodeOpen: isBarcodeScannerOpen,
+        rewardsOpen: isRewardsModalOpen,
+        nameOpen: isNameModalOpen,
+        addonOpen: isAddonModalOpen,
+        variantOpen: isVariantModalOpen,
+        modifierOpen: isModifierModalOpen,
+        startSessionOpen: isStartSessionModalOpen,
+        endSessionOpen: isEndSessionModalOpen,
+        splitBillOpen: isSplitBillModalOpen,
+        memberSearchOpen: isMemberSearchOpen,
+        historyOpen: isHistoryModalOpen,
+        customerModalOpen: isCustomerModalOpen,
+    });
+
     // --- REAL-TIME CUSTOMER SYNC ---
     useEffect(() => {
-        if (selectedCustomer) {
-            const freshCustomerData = customers.find(c => c.id === selectedCustomer.id);
-            if (freshCustomerData && JSON.stringify(freshCustomerData) !== JSON.stringify(selectedCustomer)) {
-                setSelectedCustomer(freshCustomerData);
-            }
+        if (!selectedCustomer) {
+            return;
+        }
+
+        const freshCustomerData = customers.find((customer) => customer.id === selectedCustomer.id);
+        if (!freshCustomerData) {
+            return;
+        }
+
+        const hasCustomerChanged =
+            freshCustomerData.name !== selectedCustomer.name ||
+            freshCustomerData.contact !== selectedCustomer.contact ||
+            freshCustomerData.memberId !== selectedCustomer.memberId ||
+            freshCustomerData.points !== selectedCustomer.points ||
+            freshCustomerData.balance !== selectedCustomer.balance;
+
+        if (hasCustomerChanged) {
+            setSelectedCustomer(freshCustomerData);
         }
     }, [customers, selectedCustomer]);
 
@@ -165,13 +200,13 @@ export const usePOSLogic = () => {
         return true;
     }, [cart.length, orderType, sessionSettings, tableNumber, paxCount, showAlert]);
 
-    const handleOpenPayment = () => {
+    const handleOpenPayment = useCallback(() => {
         if (validateTransactionRequirements()) {
             setPaymentModalOpen(true);
         }
-    };
+    }, [validateTransactionRequirements]);
 
-    const handleProductClick = (product: Product) => {
+    const handleProductClick = useCallback((product: Product) => {
         if (product.modifierGroups && product.modifierGroups.length > 0) {
             setProductForModifier(product);
             setModifierModalOpen(true);
@@ -190,9 +225,9 @@ export const usePOSLogic = () => {
         }
         haptics.light();
         addToCart(product);
-    };
+    }, [addToCart]);
 
-    const handleVariantSelect = (variant: ProductVariant) => {
+    const handleVariantSelect = useCallback((variant: ProductVariant) => {
         setVariantModalOpen(false);
         if (productForVariant) {
             if (productForVariant.addons && productForVariant.addons.length > 0) {
@@ -204,9 +239,9 @@ export const usePOSLogic = () => {
                 setProductForVariant(null);
             }
         }
-    };
+    }, [addConfiguredItemToCart, productForVariant]);
 
-    const handleAddonConfirm = (selectedAddons: Addon[]) => {
+    const handleAddonConfirm = useCallback((selectedAddons: Addon[]) => {
         if (productForAddons) {
             addConfiguredItemToCart(productForAddons, selectedAddons, selectedVariantForAddons || undefined);
         }
@@ -214,30 +249,30 @@ export const usePOSLogic = () => {
         setProductForAddons(null);
         setSelectedVariantForAddons(null);
         setProductForVariant(null);
-    };
+    }, [addConfiguredItemToCart, productForAddons, selectedVariantForAddons]);
 
-    const handleModifierConfirm = (selectedModifiers: SelectedModifier[]) => {
+    const handleModifierConfirm = useCallback((selectedModifiers: SelectedModifier[]) => {
         if (productForModifier) {
             // @ts-ignore
             addConfiguredItemToCart(productForModifier, [], undefined, selectedModifiers); 
         }
         setModifierModalOpen(false);
         setProductForModifier(null);
-    };
+    }, [addConfiguredItemToCart, productForModifier]);
 
-    const handleStartSession = () => {
+    const handleStartSession = useCallback(() => {
         startSession(parseFloat(startingCashInput) || 0);
         setStartSessionModalOpen(false);
         setStartingCashInput('');
-    };
+    }, [startSession, startingCashInput]);
 
-    const handleSaveCustomer = (customerData: Omit<Customer, 'id' | 'memberId' | 'points' | 'balance' | 'createdAt'> | Customer) => {
+    const handleSaveCustomer = useCallback((customerData: Omit<Customer, 'id' | 'memberId' | 'points' | 'balance' | 'createdAt'> | Customer) => {
         addCustomer(customerData);
         setCustomerModalOpen(false);
         showAlert({ type: 'alert', title: 'Berhasil', message: 'Pelanggan berhasil ditambahkan.' });
-    };
+    }, [addCustomer, showAlert]);
 
-    const handleRefundTransaction = (transaction: TransactionType) => {
+    const handleRefundTransaction = useCallback((transaction: TransactionType) => {
         showAlert({
             type: 'confirm',
             title: 'Refund Transaksi?',
@@ -245,7 +280,7 @@ export const usePOSLogic = () => {
             confirmVariant: 'danger',
             onConfirm: () => refundTransaction(transaction.id)
         });
-    };
+    }, [refundTransaction, showAlert]);
 
     const handleSaveTransaction = useCallback((payments: Array<Omit<Payment, 'id' | 'createdAt'>>, customerDetails: { customerId?: string, customerName?: string, customerContact?: string }) => {
         try {
@@ -321,7 +356,7 @@ export const usePOSLogic = () => {
         }
     }, [findProductByBarcode, showAlert, customers, handleProductClick]);
 
-    const handleSaveName = (name: string) => {
+    const handleSaveName = useCallback((name: string) => {
         if (cartToRename) {
             updateHeldCartName(cartToRename.id, name);
             setCartToRename(null);
@@ -329,17 +364,17 @@ export const usePOSLogic = () => {
             holdActiveCart(name);
         }
         setNameModalOpen(false);
-    };
+    }, [cartToRename, holdActiveCart, updateHeldCartName]);
 
-    const handleOpenDiscountModal = (cartItemId: string) => {
+    const handleOpenDiscountModal = useCallback((cartItemId: string) => {
         const item = cart.find(i => i.cartItemId === cartItemId && !i.isReward);
         if (item) setDiscountingItem(item);
-    };
+    }, [cart]);
 
-    const handleSplitBill = (itemsToPay: string[]) => {
+    const handleSplitBill = useCallback((itemsToPay: string[]) => {
         splitCart(itemsToPay);
         setSplitBillModalOpen(false);
-    };
+    }, [splitCart]);
 
     const sessionSummary = useMemo(() => {
         if (!session) return { cashSales: 0, cashIn: 0, cashOut: 0 };
@@ -406,6 +441,7 @@ export const usePOSLogic = () => {
         session,
         receiptSettings,
         cart,
+        cartDiscount,
         appliedRewards, 
 
         // Actions

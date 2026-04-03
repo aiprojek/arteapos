@@ -20,7 +20,7 @@ const ScenariosTab: React.FC = () => {
                     desc="Cocok untuk pemilik toko yang menjaga kasir sendiri. Tidak butuh internet."
                     steps={[
                         "Input Produk langsung di menu 'Produk'.",
-                        "Jualan di menu 'Kasir'. Data tersimpan di browser.",
+                        "Jualan di menu 'Kasir'. Data tersimpan langsung di perangkat.",
                         "Lihat laporan harian di menu 'Laporan'.",
                         "Wajib: Lakukan 'Backup Lokal' (Settings &rarr; Data) seminggu sekali untuk keamanan."
                     ]}

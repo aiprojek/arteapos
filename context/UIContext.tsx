@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo } from 'react';
 import type { AlertType, AlertVariant } from '../components/AlertModal';
 
 interface AlertState {
@@ -18,7 +18,11 @@ interface UIContextType {
   hideAlert: () => void;
 }
 
-const UIContext = createContext<UIContextType | undefined>(undefined);
+type UIStateContextType = Pick<UIContextType, 'alertState'>;
+type UIActionsContextType = Pick<UIContextType, 'showAlert' | 'hideAlert'>;
+
+const UIStateContext = createContext<UIStateContextType | undefined>(undefined);
+const UIActionsContext = createContext<UIActionsContextType | undefined>(undefined);
 
 export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [alertState, setAlertState] = useState<AlertState>({
@@ -37,17 +41,29 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setAlertState(prev => ({ ...prev, isOpen: false }));
   }, []);
 
+  const stateValue = useMemo(() => ({ alertState }), [alertState]);
+  const actionsValue = useMemo(() => ({ showAlert, hideAlert }), [showAlert, hideAlert]);
   return (
-    <UIContext.Provider value={{ alertState, showAlert, hideAlert }}>
-      {children}
-    </UIContext.Provider>
+    <UIStateContext.Provider value={stateValue}>
+      <UIActionsContext.Provider value={actionsValue}>
+        {children}
+      </UIActionsContext.Provider>
+    </UIStateContext.Provider>
   );
 };
 
-export const useUI = () => {
-  const context = useContext(UIContext);
+export const useUIState = () => {
+  const context = useContext(UIStateContext);
   if (context === undefined) {
-    throw new Error('useUI must be used within an UIProvider');
+    throw new Error('useUIState must be used within an UIProvider');
+  }
+  return context;
+};
+
+export const useUIActions = () => {
+  const context = useContext(UIActionsContext);
+  if (context === undefined) {
+    throw new Error('useUIActions must be used within an UIProvider');
   }
   return context;
 };

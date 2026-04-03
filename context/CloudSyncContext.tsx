@@ -1,8 +1,8 @@
 
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
-import { useData } from './DataContext';
+import { useMasterData } from './DataContext';
 import { dropboxService } from '../services/dropboxService';
-import type { AppData } from '../types';
+import { subscribeAutoSyncEvents } from '../services/appEvents';
 
 interface CloudSyncContextType {
     syncStatus: 'idle' | 'syncing' | 'success' | 'error';
@@ -15,11 +15,11 @@ interface CloudSyncContextType {
 const CloudSyncContext = createContext<CloudSyncContextType | undefined>(undefined);
 
 export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { data } = useData();
+    const data = useMasterData();
     const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
     const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
     
-    const prevDataRef = useRef<AppData | null>(null);
+    const prevDataRef = useRef<typeof data | null>(null);
     const masterPushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // --- Automatic Cloud Sync (Operational Data) ---
@@ -99,7 +99,7 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         // We check if Master Data keys have changed to trigger auto-push
         // Note: Operational data (transactions) triggers sync explicitly via function call in FinanceContext
-        const masterKeys: (keyof AppData)[] = ['products', 'categories', 'discountDefinitions', 'membershipSettings', 'customers', 'suppliers'];
+        const masterKeys: Array<keyof typeof data> = ['products', 'categories', 'discountDefinitions', 'membershipSettings', 'customers', 'suppliers'];
         
         // Simple referential check is usually enough because setData creates new objects
         const hasMasterChanges = masterKeys.some(key => data[key] !== prevData[key]);
@@ -113,6 +113,12 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         prevDataRef.current = data;
     }, [data, triggerMasterDataPush]);
+
+    useEffect(() => {
+        return subscribeAutoSyncEvents(({ staffName }) => {
+            void triggerAutoSync(staffName);
+        });
+    }, [triggerAutoSync]);
 
     return (
         <CloudSyncContext.Provider value={{ syncStatus, syncErrorMessage, triggerAutoSync, triggerMasterDataPush, triggerAutoPull }}>

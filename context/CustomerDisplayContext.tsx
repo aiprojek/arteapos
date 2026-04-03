@@ -1,7 +1,8 @@
 
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { CustomerDisplayPayload, KitchenDisplayPayload } from '../types';
 import Peer from 'peerjs';
+import { requestCustomerCameraCapture, subscribeCustomerDisplayEvents, subscribeKitchenDisplayEvents } from '../services/appEvents';
 
 interface CustomerDisplayContextType {
     // CUSTOMER DISPLAY
@@ -29,6 +30,15 @@ interface CustomerDisplayContextType {
 }
 
 const CustomerDisplayContext = createContext<CustomerDisplayContextType | undefined>(undefined);
+type CustomerDisplayStatusContextType = Pick<CustomerDisplayContextType, 'isDisplayConnected' | 'isKitchenConnected'>;
+type CustomerDisplayConnectionsContextType = Pick<CustomerDisplayContextType, 'connectToDisplay' | 'disconnectDisplay' | 'connectToKitchen' | 'disconnectKitchen'>;
+type CustomerDisplayReceiverContextType = Pick<CustomerDisplayContextType, 'myPeerId' | 'setupReceiver' | 'receivedData' | 'sendImageToCashier'>;
+type CustomerDisplayCameraContextType = Pick<CustomerDisplayContextType, 'requestCustomerCamera' | 'customerImage' | 'clearCustomerImage'>;
+
+const CustomerDisplayStatusContext = createContext<CustomerDisplayStatusContextType | undefined>(undefined);
+const CustomerDisplayConnectionsContext = createContext<CustomerDisplayConnectionsContextType | undefined>(undefined);
+const CustomerDisplayReceiverContext = createContext<CustomerDisplayReceiverContextType | undefined>(undefined);
+const CustomerDisplayCameraContext = createContext<CustomerDisplayCameraContextType | undefined>(undefined);
 
 export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [myPeerId, setMyPeerId] = useState<string>('');
@@ -136,8 +146,8 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
     // Request Camera specific helper
     const requestCustomerCamera = useCallback(() => {
         setCustomerImage(null); 
-        sendDataToDisplay({ type: 'REQUEST_CAMERA' });
-    }, [sendDataToDisplay]);
+        void requestCustomerCameraCapture();
+    }, []);
 
     const clearCustomerImage = useCallback(() => {
         setCustomerImage(null);
@@ -185,32 +195,88 @@ export const CustomerDisplayProvider: React.FC<{ children: React.ReactNode }> = 
         };
     }, []);
 
-    return (
-        <CustomerDisplayContext.Provider value={{
-            // Customer
-            isDisplayConnected,
-            connectToDisplay,
-            disconnectDisplay,
-            sendDataToDisplay,
-            
-            // Kitchen
-            isKitchenConnected,
-            connectToKitchen,
-            disconnectKitchen,
-            sendOrderToKitchen,
+    useEffect(() => {
+        return subscribeCustomerDisplayEvents((payload) => {
+            sendDataToDisplay(payload);
+        });
+    }, [sendDataToDisplay]);
 
-            // Common
-            myPeerId,
-            setupReceiver,
-            receivedData,
-            
-            // Camera
-            requestCustomerCamera,
-            customerImage,
-            clearCustomerImage,
-            sendImageToCashier
-        }}>
-            {children}
+    useEffect(() => {
+        return subscribeKitchenDisplayEvents((payload) => {
+            sendOrderToKitchen(payload);
+        });
+    }, [sendOrderToKitchen]);
+
+    const statusValue = useMemo(() => ({
+        isDisplayConnected,
+        isKitchenConnected,
+    }), [isDisplayConnected, isKitchenConnected]);
+
+    const connectionsValue = useMemo(() => ({
+        connectToDisplay,
+        disconnectDisplay,
+        connectToKitchen,
+        disconnectKitchen,
+    }), [connectToDisplay, disconnectDisplay, connectToKitchen, disconnectKitchen]);
+
+    const receiverValue = useMemo(() => ({
+        myPeerId,
+        setupReceiver,
+        receivedData,
+        sendImageToCashier,
+    }), [myPeerId, setupReceiver, receivedData, sendImageToCashier]);
+
+    const cameraValue = useMemo(() => ({
+        requestCustomerCamera,
+        customerImage,
+        clearCustomerImage,
+    }), [requestCustomerCamera, customerImage, clearCustomerImage]);
+
+    const contextValue = useMemo(() => ({
+        isDisplayConnected,
+        connectToDisplay,
+        disconnectDisplay,
+        sendDataToDisplay,
+        isKitchenConnected,
+        connectToKitchen,
+        disconnectKitchen,
+        sendOrderToKitchen,
+        myPeerId,
+        setupReceiver,
+        receivedData,
+        requestCustomerCamera,
+        customerImage,
+        clearCustomerImage,
+        sendImageToCashier,
+    }), [
+        isDisplayConnected,
+        connectToDisplay,
+        disconnectDisplay,
+        sendDataToDisplay,
+        isKitchenConnected,
+        connectToKitchen,
+        disconnectKitchen,
+        sendOrderToKitchen,
+        myPeerId,
+        setupReceiver,
+        receivedData,
+        requestCustomerCamera,
+        customerImage,
+        clearCustomerImage,
+        sendImageToCashier,
+    ]);
+
+    return (
+        <CustomerDisplayContext.Provider value={contextValue}>
+            <CustomerDisplayStatusContext.Provider value={statusValue}>
+                <CustomerDisplayConnectionsContext.Provider value={connectionsValue}>
+                    <CustomerDisplayReceiverContext.Provider value={receiverValue}>
+                        <CustomerDisplayCameraContext.Provider value={cameraValue}>
+                            {children}
+                        </CustomerDisplayCameraContext.Provider>
+                    </CustomerDisplayReceiverContext.Provider>
+                </CustomerDisplayConnectionsContext.Provider>
+            </CustomerDisplayStatusContext.Provider>
         </CustomerDisplayContext.Provider>
     );
 };
@@ -219,6 +285,38 @@ export const useCustomerDisplay = () => {
     const context = useContext(CustomerDisplayContext);
     if (context === undefined) {
         throw new Error('useCustomerDisplay must be used within a CustomerDisplayProvider');
+    }
+    return context;
+};
+
+export const useCustomerDisplayStatus = () => {
+    const context = useContext(CustomerDisplayStatusContext);
+    if (context === undefined) {
+        throw new Error('useCustomerDisplayStatus must be used within a CustomerDisplayProvider');
+    }
+    return context;
+};
+
+export const useCustomerDisplayConnections = () => {
+    const context = useContext(CustomerDisplayConnectionsContext);
+    if (context === undefined) {
+        throw new Error('useCustomerDisplayConnections must be used within a CustomerDisplayProvider');
+    }
+    return context;
+};
+
+export const useCustomerDisplayReceiver = () => {
+    const context = useContext(CustomerDisplayReceiverContext);
+    if (context === undefined) {
+        throw new Error('useCustomerDisplayReceiver must be used within a CustomerDisplayProvider');
+    }
+    return context;
+};
+
+export const useCustomerDisplayCamera = () => {
+    const context = useContext(CustomerDisplayCameraContext);
+    if (context === undefined) {
+        throw new Error('useCustomerDisplayCamera must be used within a CustomerDisplayProvider');
     }
     return context;
 };

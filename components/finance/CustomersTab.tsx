@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useCustomer } from '../../context/CustomerContext';
 import { useFinance } from '../../context/FinanceContext';
-import { useUI } from '../../context/UIContext';
+import { useUIActions } from '../../context/UIContext';
 import { useSettings } from '../../context/SettingsContext';
 import { CURRENCY_FORMATTER } from '../../constants';
 import { dataService } from '../../services/dataService';
@@ -37,7 +37,7 @@ const CustomerTransactionsModal: React.FC<{
     if (!isOpen || !customer) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Riwayat Belanja: ${customer.name}`}>
+        <Modal isOpen={isOpen} onClose={onClose} title={`Riwayat Belanja: ${customer.name}`} mobileLayout="fullscreen" size="lg">
             <div className="space-y-4">
                 <div className="bg-slate-900 p-3 rounded-lg border border-slate-700 flex justify-between items-center text-sm">
                     <span className="text-slate-400">Total Transaksi</span>
@@ -139,7 +139,7 @@ const CustomerHistoryModal: React.FC<{
 
     return (
         <>
-            <Modal isOpen={isOpen} onClose={onClose} title={`Riwayat Saldo: ${customer.name}`}>
+            <Modal isOpen={isOpen} onClose={onClose} title={`Riwayat Saldo: ${customer.name}`} mobileLayout="fullscreen" size="lg">
                 <div className="space-y-4">
                     <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 flex justify-between items-center">
                         <div>
@@ -231,7 +231,7 @@ const MemberCardModal: React.FC<{
         scale: 3 
     });
     
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
 
     if (!isOpen || !customer) return null;
 
@@ -317,7 +317,7 @@ const MemberCardModal: React.FC<{
     }
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Kartu Member Digital">
+        <Modal isOpen={isOpen} onClose={onClose} title="Kartu Member Digital" mobileLayout="fullscreen" size="lg">
             <div className="space-y-6 flex flex-col items-center">
                 
                 {/* --- CARD DESIGN START --- */}
@@ -426,7 +426,7 @@ const BulkCustomerModal: React.FC<{
     onClose: () => void;
     onSave: (customers: Omit<Customer, 'id' | 'memberId' | 'createdAt'>[]) => void;
 }> = ({ isOpen, onClose, onSave }) => {
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
     const [mode, setMode] = useState<'manual' | 'import'>('manual');
     const [rows, setRows] = useState<Array<{ name: string, contact: string, points: string, balance: string }>>([
         { name: '', contact: '', points: '0', balance: '0' },
@@ -500,7 +500,7 @@ const BulkCustomerModal: React.FC<{
     if (!isOpen) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Tambah Pelanggan Massal">
+        <Modal isOpen={isOpen} onClose={onClose} title="Tambah Pelanggan Massal" mobileLayout="fullscreen" size="lg">
             <div className="space-y-4">
                 <div className="flex bg-slate-700 p-1 rounded-lg">
                     <button onClick={() => setMode('manual')} className={`flex-1 py-2 text-sm rounded transition-colors ${mode === 'manual' ? 'bg-[#347758] text-white font-bold' : 'text-slate-300'}`}>Manual (Tabel)</button>
@@ -566,7 +566,7 @@ const BulkCustomerModal: React.FC<{
 
 const CustomersTab: React.FC = () => {
     const { customers, addCustomer, updateCustomer, deleteCustomer, addBalance, bulkAddCustomers } = useCustomer();
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setModalOpen] = useState(false);
     const [isBulkModalOpen, setBulkModalOpen] = useState(false);
@@ -768,7 +768,7 @@ const CustomersTab: React.FC = () => {
             />
 
             {/* Top Up Modal */}
-            <Modal isOpen={isTopUpOpen} onClose={() => setIsTopUpOpen(false)} title="Top Up Saldo Member">
+            <Modal isOpen={isTopUpOpen} onClose={() => setIsTopUpOpen(false)} title="Top Up Saldo Member" mobileLayout="sheet">
                 <div className="space-y-4">
                     {topUpCustomer && (
                         <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">

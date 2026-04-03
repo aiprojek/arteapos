@@ -1,5 +1,6 @@
 
-import Dexie, { Table } from 'dexie';
+import Dexie from 'dexie';
+import type { Table } from 'dexie';
 import type { 
     Product, 
     RawMaterial, 
@@ -18,7 +19,7 @@ import type {
     BalanceLog,
     AppData
 } from '../types';
-import { INITIAL_PRODUCTS } from '../constants'; // Import Data Sampel
+import { INITIAL_PRODUCTS } from '../constants.ts'; // Import Data Sampel
 
 class ArteaPOSDB extends Dexie {
     products!: Table<Product, string>;

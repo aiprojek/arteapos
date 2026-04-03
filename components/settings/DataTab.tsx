@@ -6,9 +6,9 @@ import Modal from '../Modal';
 import { dataService } from '../../services/dataService';
 import { dropboxService } from '../../services/dropboxService';
 import { decryptReport, encryptCredentials, decryptCredentials } from '../../utils/crypto';
-import { useData } from '../../context/DataContext';
+import { useDataActions, useDataState } from '../../context/DataContext';
 import { useFinance } from '../../context/FinanceContext';
-import { useUI } from '../../context/UIContext';
+import { useUIActions } from '../../context/UIContext';
 import { db } from '../../services/db'; 
 import type { CartItem, Transaction as TransactionType } from '../../types';
 import BarcodeScannerModal from '../BarcodeScannerModal'; 
@@ -31,9 +31,10 @@ const SettingsCard: React.FC<{ title: string; description?: string; children: Re
 );
 
 const DataTab: React.FC = () => {
-    const { data, restoreData } = useData();
+    const { data } = useDataState();
+    const { restoreData } = useDataActions();
     const { importTransactions } = useFinance();
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
     const isNative = Capacitor.isNativePlatform();
     
     // Offline Status State
@@ -143,7 +144,7 @@ const DataTab: React.FC = () => {
         }
     };
 
-    const handleRetrySW = async () => {
+    const handleRepairOfflineCache = async () => {
         setIsRetryingSW(true);
         try {
             if ('serviceWorker' in navigator) {
@@ -157,12 +158,12 @@ const DataTab: React.FC = () => {
                     sw.addEventListener('statechange', () => {
                         if (sw.state === 'installed') {
                             setIsOfflineReady(true);
-                            showAlert({ type: 'alert', title: 'Berhasil', message: 'Aset offline sedang diunduh di latar belakang. Aplikasi siap digunakan tanpa internet.' });
+                            showAlert({ type: 'alert', title: 'Cache Offline Diperbarui', message: 'Mode offline sedang diperbaiki dan diaktifkan ulang. Setelah selesai, aplikasi siap dipakai tanpa internet.' });
                         }
                     });
                 } else {
                      setIsOfflineReady(true);
-                     showAlert({ type: 'alert', title: 'Berhasil', message: 'Service Worker aktif.' });
+                     showAlert({ type: 'alert', title: 'Cache Offline Aktif', message: 'Mode offline sudah aktif dan aplikasi siap digunakan tanpa internet.' });
                 }
             } else {
                 alert("Browser ini tidak mendukung Mode Offline.");
@@ -174,7 +175,7 @@ const DataTab: React.FC = () => {
                 title = 'Mode Preview Terbatas';
                 message = (
                     <div className="text-left text-sm">
-                        <p className="mb-2">Gagal mengunduh <code>sw.js</code>. Browser menerima file HTML, bukan Script.</p>
+                        <p className="mb-2">Gagal memuat ulang <code>sw.js</code>. Browser menerima file HTML, bukan Script.</p>
                         <div className="bg-yellow-900/30 border border-yellow-700 p-2 rounded text-yellow-200">
                             <strong>Solusi:</strong> Error ini wajar jika Anda menjalankan aplikasi di lingkungan Preview/Dev (seperti Google IDX/Stackblitz).
                             <br/><br/>
@@ -183,7 +184,7 @@ const DataTab: React.FC = () => {
                     </div>
                 );
             } else {
-                message = 'Gagal mengaktifkan mode offline: ' + e.message;
+                message = 'Gagal memperbaiki cache offline: ' + e.message;
             }
             showAlert({ type: 'alert', title: title, message: message });
         } finally {
@@ -691,9 +692,8 @@ const DataTab: React.FC = () => {
 
     return (
         <div className="animate-fade-in">
-            {/* ... (Status Aplikasi Card - Unchanged) ... */}
             {!isNative && (
-                <SettingsCard title="Status Aplikasi" description="Cek apakah aplikasi siap berjalan tanpa internet.">
+                <SettingsCard title="Status Offline" description="Pantau apakah cache offline aplikasi sudah aktif dan siap dipakai tanpa internet.">
                     <div className={`p-4 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isOfflineReady ? 'bg-green-900/20 border-green-800' : 'bg-red-900/20 border-red-800'}`}>
                         <div className="flex items-center gap-3">
                             <div className={`p-2 rounded-full ${isOfflineReady ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
@@ -701,19 +701,24 @@ const DataTab: React.FC = () => {
                             </div>
                             <div>
                                 <h4 className={`font-bold ${isOfflineReady ? 'text-green-300' : 'text-red-300'}`}>
-                                    {isOfflineReady ? 'Siap Offline' : 'Mode Online Saja'}
+                                    {isOfflineReady ? 'Cache Offline Aktif' : 'Cache Offline Belum Aktif'}
                                 </h4>
-                                <p className="text-xs text-slate-400">
+                                <p className="text-xs text-slate-400 mb-2">
                                     {isOfflineReady 
-                                        ? 'Aset aplikasi sudah tersimpan. Bisa dibuka tanpa internet.' 
-                                        : 'Aset belum terunduh sempurna. Perlu internet untuk membuka aplikasi.'}
+                                        ? 'Aplikasi sudah siap dibuka kembali dan digunakan tanpa internet untuk operasional inti.' 
+                                        : 'Aplikasi masih bisa dipakai saat online, tetapi mode offline belum siap sepenuhnya.'}
                                 </p>
+                                {!isOfflineReady && (
+                                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                                        Jika status belum aktif, sambungkan internet lalu tekan tombol perbaikan cache. Setelah selesai, aplikasi akan lebih siap digunakan tanpa internet.
+                                    </p>
+                                )}
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {!isOfflineReady && (
-                                <Button size="sm" onClick={handleRetrySW} disabled={isRetryingSW} className="w-full sm:w-auto">
-                                    {isRetryingSW ? 'Mengunduh...' : 'Download Aset Offline'}
+                                <Button size="sm" onClick={handleRepairOfflineCache} disabled={isRetryingSW} className="w-full sm:w-auto">
+                                    {isRetryingSW ? 'Memperbaiki...' : 'Perbaiki Cache Offline'}
                                 </Button>
                             )}
                             {installPrompt && (

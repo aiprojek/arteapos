@@ -2,7 +2,7 @@
 import React, { useEffect, useRef } from 'react';
 import KitchenNote from './KitchenNote';
 import { useSettings } from '../context/SettingsContext';
-import { useUI } from '../context/UIContext';
+import { useUIActions } from '../context/UIContext';
 import type { Transaction as TransactionType } from '../types';
 import Icon from './Icon';
 
@@ -14,7 +14,7 @@ interface KitchenNoteModalProps {
 
 const KitchenNoteModal: React.FC<KitchenNoteModalProps> = ({ isOpen, onClose, transaction }) => {
   const { receiptSettings } = useSettings();
-  const { showAlert } = useUI();
+  const { showAlert } = useUIActions();
   const noteRef = useRef<HTMLDivElement>(null);
   const hasTriggeredPrint = useRef(false);
 

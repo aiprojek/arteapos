@@ -14,7 +14,7 @@
 
 <h1 align="center">Artea POS</h1>
 
-**Artea POS** adalah sistem Point of Sale (POS) modern, bebas, dan *open-source* yang dirancang khusus untuk UMKM (F&B, Retail, Jasa). Aplikasi ini dibangun dengan prinsip **Offline-First**, artinya dapat beroperasi penuh tanpa internet, namun memiliki kemampuan **Cloud Sync** canggih untuk manajemen multi-cabang.
+**Artea POS** adalah sistem Point of Sale (POS) modern, bebas, dan *open-source* yang dirancang khusus untuk UMKM (F&B, Retail, Jasa). Aplikasi ini dirancang agar tetap bisa dipakai untuk operasional inti walau internet sedang tidak tersedia, dan tetap mendukung sinkronisasi antar cabang saat online.
 
 ---
 
@@ -38,7 +38,7 @@ Kami sangat menghargai jika Anda ingin menggunakannya, dan lebih senang lagi jik
 ### 🌟 Fitur Unggulan
 
 #### 🚀 Performa & Stabilitas
-*   **Offline-First Architecture:** Data tersimpan lokal di browser (IndexedDB). Tidak ada loading lama karena internet lambat.
+*   **Siap Dipakai Tanpa Internet:** Data utama disimpan langsung di perangkat, jadi kasir tetap lancar dipakai untuk operasional inti meski koneksi sedang tidak tersedia.
 *   **Lazy Loading Reports:** Mampu menangani ribuan transaksi tanpa lag. Laporan hanya memuat data yang diperlukan.
 *   **Data Archiving:** Fitur manajemen memori untuk mengarsipkan data lama ke Excel/PDF dan membersihkan database agar aplikasi tetap ringan selamanya.
 
@@ -68,11 +68,12 @@ Kami sangat menghargai jika Anda ingin menggunakannya, dan lebih senang lagi jik
 
 ## 🚀 Cara Instalasi & Penggunaan
 
-### 1. Penggunaan Langsung (PWA)
-Aplikasi ini adalah **Progressive Web App (PWA)**.
+### 1. Penggunaan Langsung
+Artea POS bisa dipasang ke layar utama HP atau desktop agar lebih mudah dibuka seperti aplikasi biasa.
 1.  Buka aplikasi di browser (Chrome/Edge disarankan).
-2.  Klik ikon **"Install"** di bar alamat browser (biasanya ikon monitor+panah).
-3.  Aplikasi akan terpasang di layar utama HP/Desktop dan bisa dibuka secara offline.
+2.  Biarkan aplikasi selesai dimuat sekali saat online sampai mode offline aktif.
+3.  Klik ikon **"Install"** di bar alamat browser (biasanya ikon monitor+panah).
+4.  Aplikasi akan terpasang di layar utama HP/Desktop dan dapat dibuka kembali secara offline untuk operasional inti.
 
 ### 2. Instalasi Lokal (Untuk Pengembang)
 

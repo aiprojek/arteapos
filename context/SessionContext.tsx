@@ -1,9 +1,9 @@
 
 import React, { createContext, useContext, ReactNode, useCallback, useState, useEffect } from 'react';
-import { useData } from './DataContext';
-import { useAuth } from './AuthContext';
-import { useCloudSync } from './CloudSyncContext'; // NEW
+import { useDataActions, useDataStatus, useSettingsData } from './DataContext';
+import { useAuthState } from './AuthContext';
 import { db } from '../services/db';
+import { requestAutoSync } from '../services/appEvents';
 import type { SessionState, SessionSettings, CashMovement, SessionHistory } from '../types';
 
 interface SessionContextType {
@@ -18,10 +18,10 @@ interface SessionContextType {
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { data, setData, isDataLoading } = useData();
-    const { triggerAutoSync } = useCloudSync(); // Use new hook
-    const { currentUser } = useAuth();
-    const { sessionSettings } = data;
+    const { setData } = useDataActions();
+    const { isDataLoading } = useDataStatus();
+    const { sessionSettings } = useSettingsData();
+    const { currentUser } = useAuthState();
     const [session, setSession] = useState<SessionState | null>(null);
 
     useEffect(() => {
@@ -80,12 +80,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
             await db.session.delete('activeSession');
             setSession(null);
             
-            setTimeout(() => triggerAutoSync(getStaffName()), 1000);
+            setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 1000);
 
         } catch (error) {
             console.error("Failed to delete session from DB", error);
         }
-    }, [session, setData, triggerAutoSync, currentUser]);
+    }, [session, setData, currentUser]);
 
     const addCashMovement = useCallback(async (type: 'in' | 'out', amount: number, description: string) => {
         if (!session) return;

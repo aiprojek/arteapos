@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import Icon from './Icon';
-import { useUI } from '../context/UIContext';
+import { useUIActions } from '../context/UIContext';
 import { dataService } from '../services/dataService';
 import { encryptReport } from '../utils/crypto';
 import { CURRENCY_FORMATTER } from '../constants';
@@ -27,7 +27,7 @@ const SendReportModal: React.FC<SendReportModalProps> = ({
     isOpen, onClose, data, adminWhatsapp, adminTelegram, 
     startingCash = 0, cashIn = 0, cashOut = 0 
 }) => {
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
     const { stockAdjustments } = useProduct(); // Access stock adjustment history
     const { receiptSettings } = useSettings();
     const [isSyncing, setIsSyncing] = useState(false);

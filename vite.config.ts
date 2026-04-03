@@ -8,13 +8,13 @@ export default defineConfig({
   base: './', 
   build: {
     outDir: 'dist',
+    manifest: 'asset-manifest.json',
     assetsDir: '', // Flat structure
     sourcemap: false,
     emptyOutDir: true,
     target: 'es2020', // Sedikit modern untuk support Top Level Await di SW jika perlu
     assetsInlineLimit: 0, // Matikan inline base64 agar semua jadi file fisik (lebih mudah di-cache)
     rollupOptions: {
-      external: ['peerjs', 'tesseract.js'], // PeerJS & Tesseract diload via CDN (ImportMap), jangan di-bundle
       output: {
         // PENTING: Nama file statis agar bisa didaftarkan di sw.js
         entryFileNames: 'index.js',

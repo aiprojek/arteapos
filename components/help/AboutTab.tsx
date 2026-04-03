@@ -13,7 +13,7 @@ const AboutTab: React.FC = () => {
                 
                 <div className="text-left text-slate-300 space-y-4 mb-8 text-sm leading-relaxed">
                     <p>
-                        <strong>Artea POS</strong> adalah aplikasi Point of Sale (POS) atau kasir <em>offline-first</em> berbasis web yang dirancang untuk usaha kecil dan menengah di bidang makanan dan minuman serta usaha lainnya. Aplikasi ini sepenuhnya berjalan di browser Anda, menyimpan semua data secara lokal, sehingga dapat beroperasi dengan lancar meski tanpa koneksi internet.
+                        <strong>Artea POS</strong> adalah aplikasi Point of Sale (POS) atau kasir <em>offline-first</em> berbasis web yang dirancang untuk usaha kecil dan menengah di bidang makanan dan minuman serta usaha lainnya. Data aplikasi disimpan langsung di perangkat, sehingga kasir tetap bisa digunakan untuk operasional inti walau internet sedang tidak tersedia.
                     </p>
                     <div className="bg-slate-900/50 p-4 rounded-lg border-l-4 border-[#52a37c] text-slate-400 text-xs sm:text-sm my-4">
                         <strong className="text-white block mb-2 text-base">⚠️ Disclaimer & Latar Belakang</strong>

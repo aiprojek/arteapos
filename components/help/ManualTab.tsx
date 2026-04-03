@@ -16,7 +16,7 @@ const PromoWAMessage = () => (
         >
             Halo rekan-rekan pengusaha! 👋<br/><br/>
             Saya mau berbagi info aplikasi kasir (POS) gratis yang canggih:<br/>
-            *Artea POS* - Offline First & Open Source.<br/><br/>
+            *Artea POS* - aplikasi kasir gratis dan open source.<br/><br/>
             ✅ Gratis selamanya, tanpa langganan.<br/>
             ✅ Bisa jalan tanpa internet (Offline).<br/>
             ✅ Multi-cabang pakai Dropbox.<br/>

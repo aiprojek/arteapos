@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useCustomerDisplay } from '../context/CustomerDisplayContext';
+import { useCustomerDisplayReceiver } from '../context/CustomerDisplayContext';
 import { KitchenDisplayPayload } from '../types';
 import Icon from '../components/Icon';
 import Button from '../components/Button';
@@ -10,8 +10,35 @@ interface KitchenOrder extends KitchenDisplayPayload {
     status: 'new' | 'cooking' | 'done';
 }
 
+function playKitchenAlert() {
+    try {
+        const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!AudioContextCtor) return;
+
+        const audioContext = new AudioContextCtor();
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+
+        oscillator.type = 'triangle';
+        oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+        gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.12, audioContext.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.35);
+
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.35);
+        oscillator.onended = () => {
+            void audioContext.close();
+        };
+    } catch (error) {
+        console.log('Audio alert failed', error);
+    }
+}
+
 const KitchenDisplayView: React.FC = () => {
-    const { setupReceiver, receivedData, myPeerId } = useCustomerDisplay();
+    const { setupReceiver, receivedData, myPeerId } = useCustomerDisplayReceiver();
     const [orders, setOrders] = useState<KitchenOrder[]>([]);
     
     // Setup receiver on mount
@@ -29,9 +56,7 @@ const KitchenDisplayView: React.FC = () => {
                 return [...prev, { ...newOrder, status: 'new' }];
             });
             
-            // Optional: Play Sound
-            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-            audio.play().catch(e => console.log("Audio play failed", e));
+            playKitchenAlert();
         }
     }, [receivedData]);
 

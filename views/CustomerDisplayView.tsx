@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useCustomerDisplay } from '../context/CustomerDisplayContext';
+import { useCustomerDisplayReceiver } from '../context/CustomerDisplayContext';
 import { CURRENCY_FORMATTER } from '../constants';
 import Icon from '../components/Icon';
 import Button from '../components/Button';
 
 const CustomerDisplayView: React.FC = () => {
-    const { setupReceiver, receivedData, myPeerId, sendImageToCashier } = useCustomerDisplay();
+    const { setupReceiver, receivedData, myPeerId, sendImageToCashier } = useCustomerDisplayReceiver();
     const [currentTime, setCurrentTime] = useState(new Date());
 
     // Camera State

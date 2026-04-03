@@ -5,14 +5,14 @@ import Receipt from './Receipt';
 import Button from './Button';
 import Icon from './Icon';
 import { useSettings } from '../context/SettingsContext';
-import { useUI } from '../context/UIContext';
+import { useUIActions } from '../context/UIContext';
 import { useFinance } from '../context/FinanceContext';
-import { useCustomerDisplay } from '../context/CustomerDisplayContext'; // IMPORT
 import type { Transaction as TransactionType } from '../types';
 import { useToImage } from '../hooks/useToImage';
 import { bluetoothPrinterService } from '../utils/bluetoothPrinter';
 import { Capacitor } from '@capacitor/core';
 import { shareFileNative } from '../utils/nativeHelper';
+import { sendCustomerDisplayEvent } from '../services/appEvents';
 
 declare global {
     interface Window {
@@ -28,9 +28,8 @@ interface ReceiptModalProps {
 
 const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transaction }) => {
   const { receiptSettings } = useSettings();
-  const { showAlert } = useUI();
+  const { showAlert } = useUIActions();
   const { refundTransaction } = useFinance();
-  const { sendDataToDisplay, isDisplayConnected } = useCustomerDisplay(); // NEW
   
   const [isRefundView, setIsRefundView] = useState(false);
   const [refundReason, setRefundReason] = useState('');
@@ -103,14 +102,12 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
       refundTransaction(transaction.id); // Note: Should ideally pass reason to audit log in future update
       
       // 2. Alert Customer Display
-      if(isDisplayConnected) {
-          sendDataToDisplay({
-              type: 'REFUND_ALERT',
-              refundReason: refundReason,
-              total: transaction.total,
-              cartItems: [], subtotal: 0, discount: 0, tax: 0 // Dummy required fields
-          });
-      }
+      void sendCustomerDisplayEvent({
+          type: 'REFUND_ALERT',
+          refundReason: refundReason,
+          total: transaction.total,
+          cartItems: [], subtotal: 0, discount: 0, tax: 0
+      });
 
       onClose();
       showAlert({ type: 'alert', title: 'Refund Berhasil', message: 'Transaksi dibatalkan dan stok dikembalikan.' });

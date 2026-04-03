@@ -1,11 +1,28 @@
 
 import React, { createContext, useContext, ReactNode, useCallback } from 'react';
-import { useData } from './DataContext';
-import { useAuth } from './AuthContext';
-import { useCloudSync } from './CloudSyncContext'; // NEW
-import { useAudit } from './AuditContext'; // NEW
+import { useDataActions, useFinanceData } from './DataContext';
+import { useAuthState } from './AuthContext';
 import { useSettings } from './SettingsContext'; // For Store ID
-import type { Expense, Supplier, Purchase, ExpenseStatus, PurchaseStatus, StockAdjustment, Transaction as TransactionType, Payment, OtherIncome, Product, RawMaterial } from '../types';
+import {
+    addExpensePaymentInData,
+    addExpenseToData,
+    addOtherIncomeToData,
+    addPurchasePaymentInData,
+    addSupplierToData,
+    deleteExpenseInData,
+    deleteOtherIncomeInData,
+    deleteSupplierInData,
+    updateExpenseInData,
+    updateOtherIncomeInData,
+    updateSupplierInData,
+} from '../services/financeCrudService';
+import { refundTransactionInData } from '../services/refundService';
+import { addPaymentToTransactionInData } from '../services/financeTransactionService';
+import { createPurchaseInData } from '../services/inventoryService';
+import { generateScopedUniqueId } from '../services/idService';
+import { importFinanceDataToData, importTransactionsToData } from '../services/importService';
+import { emitAuditEvent, requestAutoSync } from '../services/appEvents';
+import type { Expense, Supplier, Purchase, Transaction as TransactionType, Payment, OtherIncome } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 
 interface FinanceContextType {
@@ -35,346 +52,142 @@ interface FinanceContextType {
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
 export const FinanceProvider: React.FC<{children?: React.ReactNode}> = ({ children }) => {
-    const { data, setData } = useData();
-    const { triggerAutoSync } = useCloudSync(); // Use new hook
-    const { logAudit } = useAudit(); // Use new hook
-    const { currentUser } = useAuth();
+    const { setData } = useDataActions();
+    const {
+        expenses,
+        otherIncomes = [],
+        suppliers,
+        purchases,
+        transactionRecords: transactions,
+    } = useFinanceData();
+    const { currentUser } = useAuthState();
     const { receiptSettings } = useSettings();
-    const { expenses, otherIncomes = [], suppliers, purchases, transactionRecords: transactions } = data;
 
     // Helper to get staff name
     const getStaffName = () => currentUser?.name || 'Staff';
 
     // Helper to generate unique ID: [STORE_ID]-[TIMESTAMP]-[USER]-[RANDOM]
     const generateUniqueId = useCallback((prefix: string = '') => {
-        const storeId = receiptSettings.storeId ? receiptSettings.storeId.replace(/[^a-zA-Z0-9]/g, '') : 'LOC';
-        const timestamp = Date.now().toString();
-        // Include partial User ID to prevent collision if multiple staff in same store hit save at same second
-        const userSuffix = currentUser?.id ? currentUser.id.slice(-3).toUpperCase() : 'SYS';
-        const random = Math.random().toString(36).substring(2, 5).toUpperCase();
-        return `${storeId}-${prefix}${timestamp}-${userSuffix}${random}`;
+        return generateScopedUniqueId({
+            storeId: receiptSettings.storeId,
+            user: currentUser,
+            prefix,
+        });
     }, [receiptSettings.storeId, currentUser]);
 
     const addExpense = useCallback((expenseData: Omit<Expense, 'id' | 'status'>) => {
-        const status: ExpenseStatus = expenseData.amountPaid >= expenseData.amount ? 'lunas' : 'belum-lunas';
-        const newExpense = { ...expenseData, id: generateUniqueId('EXP'), status };
-        setData(prev => ({ ...prev, expenses: [newExpense, ...prev.expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
-        setTimeout(() => triggerAutoSync(getStaffName()), 500);
-    }, [setData, triggerAutoSync, currentUser, generateUniqueId]);
+        setData(prev => addExpenseToData(prev, expenseData, generateUniqueId('EXP')));
+        setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
+    }, [setData, currentUser, generateUniqueId]);
 
     const updateExpense = useCallback((updatedExpenseData: Expense) => {
-        const status: ExpenseStatus = updatedExpenseData.amountPaid >= updatedExpenseData.amount ? 'lunas' : 'belum-lunas';
-        const updatedExpense = { ...updatedExpenseData, status };
-        setData(prev => ({ ...prev, expenses: prev.expenses.map(e => e.id === updatedExpense.id ? updatedExpense : e).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
-        setTimeout(() => triggerAutoSync(getStaffName()), 500);
-    }, [setData, triggerAutoSync, currentUser]);
+        setData(prev => updateExpenseInData(prev, updatedExpenseData));
+        setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
+    }, [setData, currentUser]);
 
     const deleteExpense = useCallback((expenseId: string) => {
-        setData(prev => ({ ...prev, expenses: prev.expenses.filter(e => e.id !== expenseId) }));
-        setTimeout(() => triggerAutoSync(getStaffName()), 500);
-    }, [setData, triggerAutoSync, currentUser]);
+        setData(prev => deleteExpenseInData(prev, expenseId));
+        setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
+    }, [setData, currentUser]);
 
     const addPaymentToExpense = useCallback((expenseId: string, amount: number) => {
-        setData(prev => {
-            const updatedExpenses = prev.expenses.map(e => {
-                if (e.id === expenseId) {
-                    const newAmountPaid = e.amountPaid + amount;
-                    const newStatus: ExpenseStatus = newAmountPaid >= e.amount ? 'lunas' : 'belum-lunas';
-                    return { ...e, amountPaid: newAmountPaid, status: newStatus };
-                }
-                return e;
-            });
-            return { ...prev, expenses: updatedExpenses };
-        });
-        setTimeout(() => triggerAutoSync(getStaffName()), 500);
-    }, [setData, triggerAutoSync, currentUser]);
+        setData(prev => addExpensePaymentInData(prev, expenseId, amount));
+        setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
+    }, [setData, currentUser]);
 
     const addOtherIncome = useCallback((incomeData: Omit<OtherIncome, 'id'>) => {
-        const newIncome = { ...incomeData, id: generateUniqueId('INC') };
-        setData(prev => ({ ...prev, otherIncomes: [newIncome, ...(prev.otherIncomes || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
-        setTimeout(() => triggerAutoSync(getStaffName()), 500);
-    }, [setData, triggerAutoSync, currentUser, generateUniqueId]);
+        setData(prev => addOtherIncomeToData(prev, incomeData, generateUniqueId('INC')));
+        setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
+    }, [setData, currentUser, generateUniqueId]);
 
     const updateOtherIncome = useCallback((updatedIncome: OtherIncome) => {
-        setData(prev => ({ ...prev, otherIncomes: (prev.otherIncomes || []).map(i => i.id === updatedIncome.id ? updatedIncome : i).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) }));
-        setTimeout(() => triggerAutoSync(getStaffName()), 500);
-    }, [setData, triggerAutoSync, currentUser]);
+        setData(prev => updateOtherIncomeInData(prev, updatedIncome));
+        setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
+    }, [setData, currentUser]);
 
     const deleteOtherIncome = useCallback((incomeId: string) => {
-        setData(prev => ({ ...prev, otherIncomes: (prev.otherIncomes || []).filter(i => i.id !== incomeId) }));
-        setTimeout(() => triggerAutoSync(getStaffName()), 500);
-    }, [setData, triggerAutoSync, currentUser]);
+        setData(prev => deleteOtherIncomeInData(prev, incomeId));
+        setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
+    }, [setData, currentUser]);
 
     const addSupplier = useCallback((supplier: Omit<Supplier, 'id'>) => {
-        const newSupplier = { ...supplier, id: Date.now().toString() };
-        setData(prev => ({ ...prev, suppliers: [newSupplier, ...prev.suppliers].sort((a,b) => a.name.localeCompare(b.name)) }));
+        setData(prev => addSupplierToData(prev, supplier, Date.now().toString()));
     }, [setData]);
 
     const updateSupplier = useCallback((updatedSupplier: Supplier) => {
-        setData(prev => ({ ...prev, suppliers: prev.suppliers.map(s => s.id === updatedSupplier.id ? updatedSupplier : s).sort((a,b) => a.name.localeCompare(b.name)) }));
+        setData(prev => updateSupplierInData(prev, updatedSupplier));
     }, [setData]);
 
     const deleteSupplier = useCallback((supplierId: string) => {
-        setData(prev => ({ ...prev, suppliers: prev.suppliers.filter(s => s.id !== supplierId) }));
+        setData(prev => deleteSupplierInData(prev, supplierId));
     }, [setData]);
 
     const addPurchase = useCallback((purchaseData: Omit<Purchase, 'id' | 'status' | 'supplierName' | 'totalAmount'>) => {
         setData(prev => {
-            const supplier = prev.suppliers.find(s => s.id === purchaseData.supplierId);
-            if (!supplier) {
+            const result = createPurchaseInData({
+                prevData: prev,
+                purchaseData,
+                purchaseId: generateUniqueId('PUR'),
+            });
+
+            if (!result.purchase) {
                 console.error("Supplier not found for purchase");
                 return prev;
             }
 
-            const totalAmount = purchaseData.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            const status: PurchaseStatus = purchaseData.amountPaid >= totalAmount ? 'lunas' : 'belum-lunas';
-
-            const newPurchase: Purchase = {
-                ...purchaseData,
-                id: generateUniqueId('PUR'),
-                supplierName: supplier.name,
-                totalAmount,
-                status,
-            };
-            
-            let updatedRawMaterials = [...prev.rawMaterials];
-            let updatedProducts = [...prev.products];
-            let updatedStockAdjustments = [...(prev.stockAdjustments || [])];
-
-            newPurchase.items.forEach(item => {
-                if (item.itemType === 'raw_material' && item.rawMaterialId) {
-                    const materialIndex = updatedRawMaterials.findIndex(m => m.id === item.rawMaterialId);
-                    if (materialIndex > -1) {
-                        updatedRawMaterials[materialIndex].stock += item.quantity;
-                    }
-                } else if (item.itemType === 'product' && item.productId) {
-                    const productIndex = updatedProducts.findIndex(p => p.id === item.productId);
-                    if (productIndex > -1) {
-                        const product = updatedProducts[productIndex];
-                        if (product.trackStock) {
-                            const newStock = (product.stock || 0) + item.quantity;
-                            updatedProducts[productIndex] = { ...product, stock: newStock };
-
-                            const newAdjustment: StockAdjustment = {
-                                id: `${generateUniqueId('SA')}-${item.productId}`,
-                                productId: product.id,
-                                productName: product.name,
-                                change: item.quantity,
-                                newStock,
-                                notes: `Pembelian dari ${supplier.name} (ID: ${newPurchase.id})`,
-                                createdAt: new Date().toISOString(),
-                            };
-                            updatedStockAdjustments.unshift(newAdjustment);
-                        }
-                    }
-                }
-            });
-
-            return {
-                ...prev,
-                purchases: [newPurchase, ...prev.purchases].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                rawMaterials: updatedRawMaterials,
-                products: updatedProducts,
-                stockAdjustments: updatedStockAdjustments,
-            };
+            return result.nextData;
         });
-        setTimeout(() => triggerAutoSync(getStaffName()), 500);
-    }, [setData, triggerAutoSync, currentUser, generateUniqueId]);
+        setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
+    }, [setData, currentUser, generateUniqueId]);
 
     const addPaymentToPurchase = useCallback((purchaseId: string, amount: number) => {
-        setData(prev => {
-            const updatedPurchases = prev.purchases.map(p => {
-                if (p.id === purchaseId) {
-                    const newAmountPaid = p.amountPaid + amount;
-                    const newStatus: PurchaseStatus = newAmountPaid >= p.totalAmount ? 'lunas' : 'belum-lunas';
-                    return { ...p, amountPaid: newAmountPaid, status: newStatus };
-                }
-                return p;
-            });
-            return { ...prev, purchases: updatedPurchases };
-        });
-        setTimeout(() => triggerAutoSync(getStaffName()), 500);
-    }, [setData, triggerAutoSync, currentUser]);
+        setData(prev => addPurchasePaymentInData(prev, purchaseId, amount));
+        setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
+    }, [setData, currentUser]);
 
     const addPaymentToTransaction = useCallback((transactionId: string, payments: Array<Omit<Payment, 'id' | 'createdAt'>>) => {
         setData(prev => {
-            const targetTransaction = prev.transactionRecords.find(t => t.id === transactionId);
-            if (!targetTransaction) {
+            const result = addPaymentToTransactionInData({ prevData: prev, transactionId, payments });
+            if (!result.updatedTransaction) {
                 console.error("Transaction not found for payment update");
                 return prev;
             }
-
-            const now = new Date();
-            const fullNewPayments: Payment[] = payments.map((p, index) => ({
-                ...p,
-                id: `${now.getTime()}-${index}`,
-                createdAt: now.toISOString(),
-            }));
-
-            const updatedPayments = [...targetTransaction.payments, ...fullNewPayments];
-            const newAmountPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
-
-            let newPaymentStatus: TransactionType['paymentStatus'];
-            if (newAmountPaid >= targetTransaction.total) {
-                newPaymentStatus = 'paid';
-            } else if (newAmountPaid > 0) {
-                newPaymentStatus = 'partial';
-            } else {
-                newPaymentStatus = 'unpaid';
-            }
-            
-            const updatedTransaction: TransactionType = {
-                ...targetTransaction,
-                payments: updatedPayments,
-                amountPaid: newAmountPaid,
-                paymentStatus: newPaymentStatus,
-            };
-
-            const updatedTransactions = prev.transactionRecords.map(t => 
-                t.id === transactionId ? updatedTransaction : t
-            );
-
-            return { ...prev, transactionRecords: updatedTransactions };
+            return result.nextData;
         });
-        setTimeout(() => triggerAutoSync(getStaffName()), 500);
-    }, [setData, triggerAutoSync, currentUser]);
+        setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
+    }, [setData, currentUser]);
 
     const refundTransaction = useCallback((transactionId: string, reason?: string) => {
         setData(prev => {
-            const targetTransaction = prev.transactionRecords.find(t => t.id === transactionId);
-            if (!targetTransaction || targetTransaction.paymentStatus === 'refunded') return prev;
+            const result = refundTransactionInData({
+                prevData: prev,
+                transactionId,
+                adjustmentIdFactory: (suffix) => `${generateUniqueId('SA')}-${suffix}`,
+            });
 
-            // Audit Log
+            if (!result.refundedTransaction) {
+                return prev;
+            }
+
             const reasonText = reason ? `. Alasan: ${reason}` : '';
-            logAudit(currentUser, 'REFUND_TRANSACTION', `Refund transaksi #${transactionId.slice(-4)}. Total: ${CURRENCY_FORMATTER.format(targetTransaction.total)}${reasonText}`, transactionId);
+            emitAuditEvent({
+                user: currentUser,
+                action: 'REFUND_TRANSACTION',
+                details: `Refund transaksi #${transactionId.slice(-4)}. Total: ${CURRENCY_FORMATTER.format(result.refundedTransaction.total)}${reasonText}`,
+                targetId: transactionId,
+            });
 
-            const updatedTransaction: TransactionType = { ...targetTransaction, paymentStatus: 'refunded' };
-            const updatedTransactions = prev.transactionRecords.map(t => t.id === transactionId ? updatedTransaction : t);
-
-            let updatedProducts = [...prev.products];
-            let updatedRawMaterials = [...prev.rawMaterials];
-            let updatedCustomers = [...prev.customers];
-            let updatedStockAdjustments = [...(prev.stockAdjustments || [])];
-            
-            if (prev.inventorySettings.enabled) {
-                const itemsList = targetTransaction.items || [];
-                const cartItems = itemsList.filter(item => !(item.isReward && item.price === 0));
-
-                cartItems.forEach(item => {
-                    const product = prev.products.find(p => p.id === item.id);
-                    const recipeToRestore = item.recipe || product?.recipe;
-
-                    if (prev.inventorySettings.trackIngredients && recipeToRestore && recipeToRestore.length > 0) {
-                        recipeToRestore.forEach(recipeItem => {
-                            const totalToRestore = recipeItem.quantity * item.quantity;
-                            
-                            if (recipeItem.itemType === 'product' && recipeItem.productId) {
-                                const pIdx = updatedProducts.findIndex(p => p.id === recipeItem.productId);
-                                if (pIdx > -1) {
-                                    const currentStock = updatedProducts[pIdx].stock || 0;
-                                    const newStock = currentStock + totalToRestore;
-                                    updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: newStock };
-                                    
-                                    if(updatedProducts[pIdx].trackStock) {
-                                        updatedStockAdjustments.unshift({
-                                            id: `${generateUniqueId('SA')}-ref-${recipeItem.productId}`,
-                                            productId: recipeItem.productId!,
-                                            productName: updatedProducts[pIdx].name,
-                                            change: totalToRestore,
-                                            newStock: newStock,
-                                            notes: `Refund Transaksi #${transactionId.slice(-4)}`,
-                                            createdAt: new Date().toISOString()
-                                        });
-                                    }
-                                }
-                            } else {
-                                const materialId = recipeItem.rawMaterialId || '';
-                                const mIdx = updatedRawMaterials.findIndex(m => m.id === materialId);
-                                if (mIdx > -1) {
-                                    updatedRawMaterials[mIdx].stock += totalToRestore;
-                                }
-                            }
-                        });
-                    } else if (product && product.trackStock) {
-                        const pIdx = updatedProducts.findIndex(p => p.id === product.id);
-                        if (pIdx > -1) {
-                            const currentStock = updatedProducts[pIdx].stock || 0;
-                            const newStock = currentStock + item.quantity;
-                            updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: newStock };
-
-                            updatedStockAdjustments.unshift({
-                                id: `${generateUniqueId('SA')}-ref-${product.id}`,
-                                productId: product.id,
-                                productName: product.name,
-                                change: item.quantity,
-                                newStock: newStock,
-                                notes: `Refund Transaksi #${transactionId.slice(-4)}`,
-                                createdAt: new Date().toISOString()
-                            });
-                        }
-                    }
-                });
-            }
-
-            if (targetTransaction.customerId && targetTransaction.pointsEarned && prev.membershipSettings.enabled) {
-                const customerIndex = updatedCustomers.findIndex(c => c.id === targetTransaction.customerId);
-                if (customerIndex > -1) {
-                    let pointsCorrection = -targetTransaction.pointsEarned;
-                    if (targetTransaction.rewardsRedeemed) {
-                        const pointsSpent = targetTransaction.rewardsRedeemed.reduce((sum, r) => sum + r.pointsSpent, 0);
-                        pointsCorrection += pointsSpent;
-                    }
-                    const newPoints = Math.max(0, updatedCustomers[customerIndex].points + pointsCorrection);
-                    updatedCustomers[customerIndex] = { ...updatedCustomers[customerIndex], points: newPoints };
-                }
-            }
-
-            return {
-                ...prev,
-                transactionRecords: updatedTransactions,
-                products: updatedProducts,
-                rawMaterials: updatedRawMaterials,
-                customers: updatedCustomers,
-                stockAdjustments: updatedStockAdjustments
-            };
+            return result.nextData;
         });
-        setTimeout(() => triggerAutoSync(getStaffName()), 500);
-    }, [setData, logAudit, currentUser, triggerAutoSync, generateUniqueId]);
+        setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
+    }, [setData, currentUser, generateUniqueId]);
 
     const importTransactions = useCallback((newTransactions: TransactionType[]) => {
-        setData(prev => {
-            const existingIds = new Set(prev.transactionRecords.map(t => t.id));
-            const uniqueNewTransactions = newTransactions.filter(t => !existingIds.has(t.id));
-            
-            if (uniqueNewTransactions.length === 0) return prev;
-
-            return {
-                ...prev,
-                transactionRecords: [...uniqueNewTransactions, ...prev.transactionRecords].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            };
-        });
+        setData(prev => importTransactionsToData(prev, newTransactions));
     }, [setData]);
 
     const importFinanceData = useCallback((newExpenses: Expense[], newIncomes: OtherIncome[], newPurchases: Purchase[]) => {
-        setData(prev => {
-            const existingExpIds = new Set(prev.expenses.map(e => e.id));
-            const uniqueExpenses = newExpenses.filter(e => !existingExpIds.has(e.id));
-
-            const existingIncIds = new Set(prev.otherIncomes?.map(i => i.id) || []);
-            const uniqueIncomes = newIncomes.filter(i => !existingIncIds.has(i.id));
-
-            const existingPurchIds = new Set(prev.purchases?.map(p => p.id) || []);
-            const uniquePurchases = newPurchases.filter(p => !existingPurchIds.has(p.id));
-
-            if (uniqueExpenses.length === 0 && uniqueIncomes.length === 0 && uniquePurchases.length === 0) return prev;
-
-            return {
-                ...prev,
-                expenses: [...uniqueExpenses, ...prev.expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                otherIncomes: [...uniqueIncomes, ...(prev.otherIncomes || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                purchases: [...uniquePurchases, ...(prev.purchases || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-            };
-        });
+        setData(prev => importFinanceDataToData(prev, newExpenses, newIncomes, newPurchases));
     }, [setData]);
 
     return (

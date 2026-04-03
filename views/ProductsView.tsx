@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useProduct } from '../context/ProductContext';
-import { useUI } from '../context/UIContext';
-import { useAuth } from '../context/AuthContext'; 
+import { useUIActions } from '../context/UIContext';
+import { useAuthState } from '../context/AuthContext'; 
 import type { Product, RecipeItem, Addon, ProductVariant, BranchPrice, ModifierGroup, ModifierOption } from '../types';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -20,9 +20,6 @@ import OverflowMenu from '../components/OverflowMenu';
 import { useSettings } from '../context/SettingsContext';
 import { compressImage } from '../utils/imageCompression'; 
 import { dataService } from '../services/dataService';
-
-// Informasikan TypeScript tentang pustaka global JsBarcode
-declare const JsBarcode: any;
 
 type ImageSource = 'none' | 'url' | 'upload' | 'camera';
 
@@ -91,7 +88,7 @@ const CategoryInput: React.FC<{
     onChange: (value: string[]) => void;
 }> = ({ value, onChange }) => {
     const { categories, addCategory } = useProduct();
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
     const [inputValue, setInputValue] = useState('');
     const [suggestions, setSuggestions] = useState<string[]>([]);
 
@@ -434,8 +431,8 @@ const BulkProductModal: React.FC<{
     onClose: () => void;
     onSave: (products: Product[]) => void;
 }> = ({ isOpen, onClose, onSave }) => {
-    const { showAlert } = useUI();
-    const { currentUser } = useAuth();
+    const { showAlert } = useUIActions();
+    const { currentUser } = useAuthState();
     const isStaff = currentUser?.role === 'staff';
 
     const [mode, setMode] = useState<'manual' | 'import'>('manual');
@@ -593,7 +590,7 @@ interface ProductFormProps {
 const ProductForm = React.forwardRef<HTMLFormElement, ProductFormProps>(({ 
     product, onSave, onCancel, onOpenCamera, isCameraAvailable, capturedImage 
 }, ref) => {
-    const { currentUser } = useAuth();
+    const { currentUser } = useAuthState();
     // PENTING: Ambil inventorySettings & rawMaterials dari context agar bisa cek status Resep & Stok
     const { inventorySettings, rawMaterials, products } = useProduct(); 
     const isStaff = currentUser?.role === 'staff'; 
@@ -801,8 +798,8 @@ const ProductForm = React.forwardRef<HTMLFormElement, ProductFormProps>(({
 
 const ProductsView: React.FC = () => {
     const { products, addProduct, updateProduct, deleteProduct, bulkAddProducts } = useProduct();
-    const { showAlert } = useUI();
-    const { currentUser } = useAuth();
+    const { showAlert } = useUIActions();
+    const { currentUser } = useAuthState();
     const [isFormOpen, setFormOpen] = useState(false);
     const [isCameraOpen, setCameraOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);

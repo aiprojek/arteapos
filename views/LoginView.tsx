@@ -1,25 +1,25 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useUI } from '../context/UIContext';
+import { useAuthActions, useAuthState } from '../context/AuthContext';
+import { useUIActions } from '../context/UIContext';
 import { useSettings } from '../context/SettingsContext';
-import { useData } from '../context/DataContext';
+import { useDataActions } from '../context/DataContext';
 import { dataService } from '../services/dataService';
 import { db } from '../services/db';
-import { useAudit } from '../context/AuditContext'; // IMPORT AUDIT
 import Icon from '../components/Icon';
 import Modal from '../components/Modal';
 import Button from '../components/Button';
 import ShowcaseModal from '../components/ShowcaseModal'; 
+import { emitAuditEvent } from '../services/appEvents';
 import type { User } from '../types';
 import { hashRecoveryCode, loadLocalRecoveryCode, clearLocalRecoveryCode } from '../utils/recoveryCode';
 
 const LoginView: React.FC = () => {
-    const { users, login, authSettings, overrideAdminPin, resetPinWithTicket, updateAuthSettings } = useAuth(); 
-    const { restoreData } = useData();
-    const { showAlert, hideAlert } = useUI();
+    const { users, authSettings } = useAuthState();
+    const { login, overrideAdminPin, resetPinWithTicket, updateAuthSettings } = useAuthActions();
+    const { restoreData } = useDataActions();
+    const { showAlert, hideAlert } = useUIActions();
     const { receiptSettings } = useSettings();
-    const { logAudit } = useAudit(); 
 
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [pin, setPin] = useState('');
@@ -196,7 +196,12 @@ const LoginView: React.FC = () => {
             }
 
             // Log ke Audit
-            logAudit(user, 'LOGIN', auditDetail, undefined, evidence);
+            void emitAuditEvent({
+                user,
+                action: 'LOGIN',
+                details: auditDetail,
+                evidenceImageUrl: evidence,
+            });
 
             showAlert({
                 type: 'alert',

@@ -405,15 +405,16 @@ export const MANUAL_SECTIONS: HelpSection[] = [
         desc: 'Konfigurasi sistem, sinkronisasi, dan manajemen user.',
         items: [
             {
-                id: 'install_app', title: 'Instalasi Aplikasi (Siap Offline)', icon: 'download', colorClass: 'text-green-400', badge: 'Wajib',
+                id: 'install_app', title: 'Instalasi Aplikasi & Mode Offline', icon: 'download', colorClass: 'text-green-400', badge: 'Wajib',
                 content: `
-                    <p>Agar aplikasi bisa berjalan tanpa internet (Offline Mode), Anda wajib menginstalnya ke perangkat:</p>
+                    <p>Agar aplikasi lebih mudah dibuka dari layar utama dan tetap siap dipakai saat internet terputus, sebaiknya lakukan langkah berikut:</p>
                     <ol class="list-decimal pl-5 space-y-1 mt-2 text-sm text-slate-300">
                         <li>Masuk ke menu <strong>Pengaturan</strong> &rarr; Tab <strong>Data & Cloud</strong>.</li>
-                        <li>Cari kartu paling atas bernama <strong>"Status Aplikasi"</strong>.</li>
-                        <li>Tunggu hingga muncul status "Siap Offline".</li>
-                        <li>Klik tombol biru <strong>"Install Aplikasi"</strong> (jika tersedia) atau <strong>"Download Aset Offline"</strong>.</li>
-                        <li>Aplikasi akan muncul di layar utama HP Anda dan bisa dibuka kapan saja meski kuota habis.</li>
+                        <li>Cari kartu paling atas bernama <strong>"Status Offline"</strong>.</li>
+                        <li>Tunggu hingga muncul status <strong>"Cache Offline Aktif"</strong>.</li>
+                        <li>Jika status belum aktif, gunakan tombol <strong>"Perbaiki Cache Offline"</strong> saat internet tersedia.</li>
+                        <li>Jika tersedia, klik tombol biru <strong>"Install Aplikasi"</strong>.</li>
+                        <li>Setelah itu aplikasi akan lebih mudah dibuka dari layar utama dan lebih siap dipakai tanpa internet.</li>
                     </ol>
                 `
             },
@@ -423,7 +424,7 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                     <p>Pahami perbedaan cara penyimpanan data agar data transaksi Anda tidak hilang secara tidak sengaja:</p>
                     <ul class="list-disc pl-5 mt-2 space-y-2 text-sm text-slate-300">
                         <li>
-                            <strong>Versi Web (Browser):</strong> Data disimpan di <em>Browser Cache</em>. Jika Anda mbersihkan histori browser (Clear Cache), data bisa hilang. 
+                            <strong>Versi Web (Browser):</strong> Data disimpan di penyimpanan browser. Jika Anda membersihkan data browser, data lokal aplikasi bisa ikut hilang. 
                             <br/><strong class="text-yellow-400">Saran:</strong> Segera "Install Aplikasi" agar data pindah ke penyimpanan yang lebih stabil.
                         </li>
                         <li>
@@ -444,7 +445,7 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 content: `
                     <p class="mb-2">Masuk ke tab <strong>"Perangkat Keras"</strong> untuk mengatur alat:</p>
                     <ul class="list-disc pl-5 space-y-1 text-sm">
-                        <li><strong>Printer Bluetooth:</strong> Gunakan browser <strong>Google Chrome</strong> atau <strong>Edge</strong> (Android/Laptop) dan gunakan fitur "Cari Printer" di menu Hardware untuk koneksi Web Bluetooth. Jika menggunakan Aplikasi (APK), gunakan opsi <em>Direct Connection</em> (Cari Perangkat Paired) di menu Hardware.</li>
+                        <li><strong>Printer Bluetooth:</strong> Jika memakai browser di Android atau laptop, gunakan <strong>Google Chrome</strong> atau <strong>Edge</strong>, lalu pakai fitur "Cari Printer" di menu Hardware. Jika memakai aplikasi Android (APK), gunakan opsi <em>Direct Connection</em> atau "Cari Perangkat Paired" di menu Hardware.</li>
                         <li><strong>Printer USB/Kabel:</strong> Gunakan <em>USB via Print Agent</em> (endpoint lokal) agar bisa cetak tanpa dialog. Alternatifnya, gunakan dialog cetak bawaan OS jika tersedia.</li>
                         <li><strong>USB via Print Agent (Endpoint Lokal):</strong> Aktifkan <em>Print Agent</em> di menu Hardware, masukkan endpoint lokal (contoh: <code>http://127.0.0.1:9165/print</code>), lalu tes print.</li>
                         <li><strong>Barcode Scanner:</strong> Mendukung scanner fisik (USB/Wireless) dan kamera HP.</li>
@@ -623,7 +624,7 @@ export const FAQS: FaqItem[] = [
         id: 'faq_offline',
         category: 'Teknis',
         title: 'Apakah butuh internet terus-menerus?',
-        content: '<strong>Tidak.</strong> Aplikasi ini Offline-First. Internet hanya butuh saat: 1. Awal Shift (Tarik harga terbaru), 2. Akhir Shift (Kirim laporan ke Owner), 3. Menggunakan fitur AI atau Layar Ganda.'
+        content: '<strong>Tidak.</strong> Setelah mode offline aktif, kasir tetap bisa dipakai untuk operasional inti tanpa internet. Internet biasanya hanya dibutuhkan saat sinkronisasi data, mengirim laporan ke owner, atau memakai fitur cloud dan layanan tambahan tertentu.'
     },
     {
         id: 'faq_kds_undo',
@@ -635,7 +636,7 @@ export const FAQS: FaqItem[] = [
         id: 'faq_printer',
         category: 'Hardware',
         title: 'Printer Bluetooth tidak terdeteksi?',
-        content: 'Pastikan: 1. Bluetooth HP nyala. 2. Printer sudah di-pairing di menu Bluetooth HP. 3. Jika pakai aplikasi Android, klik "Cari Perangkat (Paired)". Jika di web browser, gunakan browser Chrome/Edge yang support Web Bluetooth.'
+        content: 'Pastikan: 1. Bluetooth HP menyala. 2. Printer sudah dipasangkan di menu Bluetooth HP. 3. Jika memakai aplikasi Android, klik "Cari Perangkat (Paired)". Jika memakai browser, gunakan Chrome atau Edge.'
     },
     {
         id: 'faq_print_agent',
@@ -659,6 +660,6 @@ export const FAQS: FaqItem[] = [
         id: 'faq_storage_native',
         category: 'Teknis',
         title: 'Di mana data disimpan pada versi Android/Desktop?',
-        content: '<p>Berbeda dengan versi web yang menggunakan cache browser, aplikasi <strong>Android & Desktop</strong> menyimpan data di ruang penyimpanan aplikasi yang lebih aman dan permanen.</p><ul class="list-disc pl-5 mt-2 space-y-1"><li><strong>Android:</strong> Data tersimpan di internal sistem. <strong>PENTING:</strong> Menghapus data melalui menu "Hapus Data" (Clear Data) di pengaturan Android akan menghapus seluruh data lokal Anda.</li><li><strong>Desktop:</strong> Data tersimpan di folder sistem aplikasi, tidak terpengaruh oleh pembersihan browser.</li><li><strong>Keamanan:</strong> Gunakan fitur "Backup" atau "Sinkronisasi Cloud" secara rutin untuk menjaga keamanan data Anda.</li></ul>'
+        content: '<p>Pada versi <strong>Android & Desktop</strong>, data disimpan di ruang penyimpanan aplikasi yang lebih aman dan stabil.</p><ul class="list-disc pl-5 mt-2 space-y-1"><li><strong>Android:</strong> Data tersimpan di penyimpanan internal aplikasi. <strong>PENTING:</strong> Jika Anda memilih menu "Hapus Data" (Clear Data) di pengaturan Android, seluruh data lokal akan ikut terhapus.</li><li><strong>Desktop:</strong> Data tersimpan di folder aplikasi dan tidak ikut hilang saat browser dibersihkan.</li><li><strong>Keamanan:</strong> Tetap lakukan "Backup" atau aktifkan "Sinkronisasi Cloud" secara rutin agar data lebih aman.</li></ul>'
     }
 ];

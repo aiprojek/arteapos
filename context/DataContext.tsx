@@ -1,272 +1,216 @@
 
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useRef,
+  useCallback,
+} from 'react';
 import type { AppData } from '../types';
-import { db, initialData } from '../services/db';
+import { initialData } from '../services/db';
+import { restoreAppDataToDb } from '../services/dataPersistenceService';
+import {
+  type DbUsageStatus,
+  useDbUsageStatus,
+  useLoadInitialAppData,
+  usePersistedAppData,
+} from './dataProviderHooks';
+import {
+  type DataActionsContextType,
+  type DataStateContextType,
+  type DataStatusContextType,
+  type CatalogDataContextType,
+  type FinanceDataContextType,
+  type SalesDataContextType,
+  type UserDataContextType,
+  type CustomerDataContextType,
+  type SettingsDataContextType,
+  type MasterDataContextType,
+  useDataContextValues,
+} from './dataContextValues';
+import { useRenderProfiler } from '../utils/renderProfiler';
 
-// New interface for DB Usage
-interface DbUsageStatus {
-    totalRecords: number;
-    isHeavy: boolean;
-}
+interface DataContextType
+  extends DataStateContextType,
+    DataActionsContextType,
+    DataStatusContextType {}
 
-interface DataContextType {
-  data: AppData;
-  setData: (value: AppData | ((val: AppData) => AppData)) => void;
-  restoreData: (backupData: AppData) => Promise<void>;
-  isDataLoading: boolean;
-  dbUsageStatus: DbUsageStatus | null; // Exposed Status
-}
-
-const DataContext = createContext<DataContextType | undefined>(undefined);
-
-function base64ToBlob(base64: string): Blob {
-    const [meta, data] = base64.split(',');
-    if (!meta || !data) {
-        return new Blob();
-    }
-    const mime = meta.match(/:(.*?);/)?.[1];
-    const bstr = atob(data);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-        u8arr[n] = bstr.charCodeAt(n);
-    }
-    return new Blob([u8arr], { type: mime });
-}
+const DataStateContext = createContext<DataStateContextType | undefined>(undefined);
+const DataActionsContext = createContext<DataActionsContextType | undefined>(undefined);
+const DataStatusContext = createContext<DataStatusContextType | undefined>(undefined);
+const CatalogDataContext = createContext<CatalogDataContextType | undefined>(undefined);
+const FinanceDataContext = createContext<FinanceDataContextType | undefined>(undefined);
+const SalesDataContext = createContext<SalesDataContextType | undefined>(undefined);
+const UserDataContext = createContext<UserDataContextType | undefined>(undefined);
+const CustomerDataContext = createContext<CustomerDataContextType | undefined>(undefined);
+const SettingsDataContext = createContext<SettingsDataContextType | undefined>(undefined);
+const MasterDataContext = createContext<MasterDataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isDataLoading, setIsLoading] = useState(true);
   const [data, _setData] = useState<AppData>(initialData);
-  const [dbUsageStatus, setDbUsageStatus] = useState<DbUsageStatus | null>(null);
   const prevDataRef = useRef<AppData | null>(null);
-  
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Cast db to any to avoid TS errors
-        await (db as any).open();
-        console.log("Database opened successfully");
-        
-        let [
-          products, categoriesObj, rawMaterials, transactionRecords, users, settings,
-          expenses, otherIncomes, suppliers, purchases, stockAdjustments, customers, discountDefinitions, heldCarts, sessionHistory, auditLogs, balanceLogs
-        ] = await Promise.all([
-          db.products.toArray(),
-          db.appState.get('categories'),
-          db.rawMaterials.toArray(),
-          db.transactionRecords.toArray(),
-          db.users.toArray(),
-          db.settings.toArray(),
-          db.expenses.toArray(),
-          db.otherIncomes.toArray(),
-          db.suppliers.toArray(),
-          db.purchases.toArray(),
-          db.stockAdjustments.toArray(),
-          db.customers.toArray(),
-          db.discountDefinitions.toArray(),
-          db.heldCarts.toArray(),
-          db.sessionHistory.toArray(),
-          db.auditLogs.toArray(),
-          db.balanceLogs.toArray(),
-        ]);
-        
-        // --- SEEDING LOGIC (Jika Produk Kosong, Isi Sample) ---
-        if (products.length === 0) {
-            console.log("Database kosong. Mengisi data sampel...");
-            await db.products.bulkAdd(initialData.products);
-            // Refresh products variable
-            products = await db.products.toArray();
-            
-            // Seed Categories jika kosong
-            if (!categoriesObj) {
-                await db.appState.put({ key: 'categories', value: initialData.categories });
-                categoriesObj = { key: 'categories', value: initialData.categories };
-            }
-        }
-        // -------------------------------------------------------
+  const dbUsageStatus = useDbUsageStatus(data);
 
-        // Calculate DB Load
-        const totalRecs = transactionRecords.length + stockAdjustments.length + auditLogs.length + (balanceLogs?.length || 0);
-        setDbUsageStatus({
-            totalRecords: totalRecs,
-            isHeavy: totalRecs > 5000
-        });
+  useRenderProfiler('DataProvider', {
+    isDataLoading,
+    totalRecords: dbUsageStatus?.totalRecords ?? 0,
+    products: data.products.length,
+    rawMaterials: data.rawMaterials.length,
+    transactions: data.transactionRecords.length,
+    expenses: data.expenses.length,
+    heldCarts: data.heldCarts.length,
+    customers: data.customers.length,
+    users: data.users.length,
+  });
 
-        const loadedData = {
-          products,
-          categories: categoriesObj?.value || initialData.categories,
-          rawMaterials,
-          transactionRecords,
-          users,
-          expenses,
-          otherIncomes: otherIncomes || [],
-          suppliers,
-          purchases,
-          stockAdjustments,
-          customers,
-          discountDefinitions,
-          heldCarts,
-          sessionHistory: sessionHistory || [],
-          auditLogs: auditLogs || [],
-          balanceLogs: balanceLogs || [],
-          receiptSettings: settings.find(s => s.key === 'receiptSettings')?.value || initialData.receiptSettings,
-          inventorySettings: settings.find(s => s.key === 'inventorySettings')?.value || initialData.inventorySettings,
-          authSettings: settings.find(s => s.key === 'authSettings')?.value || initialData.authSettings,
-          sessionSettings: settings.find(s => s.key === 'sessionSettings')?.value || initialData.sessionSettings,
-          membershipSettings: settings.find(s => s.key === 'membershipSettings')?.value || initialData.membershipSettings,
-        };
+  useLoadInitialAppData({
+    setData: _setData,
+    setIsLoading,
+    prevDataRef,
+  });
 
-        _setData(loadedData as AppData);
-        prevDataRef.current = loadedData as AppData;
-      } catch (error) {
-        console.error("Failed to load data from IndexedDB:", error);
-        _setData(initialData);
-        prevDataRef.current = initialData;
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
-  }, []);
-
-  // --- PERSISTENCE LOGIC ONLY ---
-  useEffect(() => {
-    const prevData = prevDataRef.current;
-    if (isDataLoading || !prevData || prevData === data) return;
-    
-    const persist = async () => {
-      try {
-        // Cast db to any to avoid TS errors
-        await (db as any).transaction('rw', (db as any).tables.map((t: any) => t.name), async () => {
-          const promises: Promise<any>[] = [];
-
-          const syncTableById = async (tableName: string, rows: any[]) => {
-            const table = (db as any).table(tableName);
-            const nextRows = Array.isArray(rows) ? rows : [];
-            const nextIds = new Set(
-              nextRows
-                .map((r: any) => r?.id)
-                .filter((id: any) => id !== undefined && id !== null)
-            );
-
-            await table.bulkPut(nextRows);
-
-            const existingIds = await table.toCollection().primaryKeys();
-            const staleIds = existingIds.filter((id: any) => !nextIds.has(id));
-            if (staleIds.length > 0) {
-              await table.bulkDelete(staleIds);
-            }
-          };
-          
-          Object.keys(data).forEach(keyStr => {
-              const key = keyStr as keyof AppData;
-              if (data[key] === prevData[key]) return;
-
-              const value = data[key];
-              
-              switch(key) {
-                case 'products':
-                case 'rawMaterials':
-                case 'transactionRecords':
-                case 'users':
-                case 'expenses':
-                case 'otherIncomes':
-                case 'suppliers':
-                case 'purchases':
-                case 'stockAdjustments':
-                case 'customers':
-                case 'discountDefinitions':
-                case 'heldCarts':
-                case 'sessionHistory':
-                case 'auditLogs':
-                case 'balanceLogs':
-                  // Granular persistence to reduce write amplification on large datasets.
-                  promises.push(syncTableById(key, value as any[]));
-                  break;
-                case 'categories':
-                  promises.push(db.appState.put({ key: 'categories', value }));
-                  break;
-                case 'receiptSettings':
-                case 'inventorySettings':
-                case 'authSettings':
-                case 'sessionSettings':
-                case 'membershipSettings':
-                  promises.push(db.settings.put({ key: key, value }));
-                  break;
-              }
-          });
-
-          await Promise.all(promises);
-        });
-      } catch (e) {
-        console.error("Failed to persist data changes to IndexedDB", e);
-      }
-    };
-    
-    persist();
-    prevDataRef.current = data;
-  }, [data, isDataLoading]);
+  usePersistedAppData({
+    data,
+    isDataLoading,
+    prevDataRef,
+  });
   
   const setData = useCallback((value: AppData | ((val: AppData) => AppData)) => {
     _setData(value);
   }, []);
 
   const restoreData = useCallback(async (backupData: AppData) => {
-    // Cast db to any to avoid TS errors
-    await (db as any).transaction('rw', (db as any).tables.map((t: any) => t.name), async () => {
-      await Promise.all((db as any).tables.map((table: any) => table.clear()));
-
-      const productsWithBlobs = (backupData.products || []).map(p => {
-        const prod: any = { ...p };
-        if (prod.imageUrl && prod.imageUrl.startsWith('data:')) {
-            prod.image = base64ToBlob(prod.imageUrl);
-            delete prod.imageUrl;
-        }
-        return prod;
-      });
-
-      await db.products.bulkAdd(productsWithBlobs);
-      await db.rawMaterials.bulkAdd(backupData.rawMaterials || []);
-      await db.transactionRecords.bulkAdd(backupData.transactionRecords || []);
-      await db.users.bulkAdd(backupData.users || []);
-      await db.expenses.bulkAdd(backupData.expenses || []);
-      await db.otherIncomes.bulkAdd(backupData.otherIncomes || []);
-      await db.suppliers.bulkAdd(backupData.suppliers || []);
-      await db.purchases.bulkAdd(backupData.purchases || []);
-      await db.stockAdjustments.bulkAdd(backupData.stockAdjustments || []);
-      await db.customers.bulkAdd(backupData.customers || []);
-      await db.discountDefinitions.bulkAdd(backupData.discountDefinitions || []);
-      await db.heldCarts.bulkAdd(backupData.heldCarts || []);
-      await db.sessionHistory.bulkAdd(backupData.sessionHistory || []);
-      await db.auditLogs.bulkAdd(backupData.auditLogs || []); 
-      await db.balanceLogs.bulkAdd(backupData.balanceLogs || []);
-      
-      await db.appState.put({ key: 'categories', value: backupData.categories || [] });
-
-      await db.settings.bulkAdd([
-        { key: 'receiptSettings', value: backupData.receiptSettings },
-        { key: 'inventorySettings', value: backupData.inventorySettings },
-        { key: 'authSettings', value: backupData.authSettings },
-        { key: 'sessionSettings', value: backupData.sessionSettings },
-        { key: 'membershipSettings', value: backupData.membershipSettings },
-      ]);
-    });
+    await restoreAppDataToDb(backupData);
     
     window.location.reload();
   }, []);
+  const {
+    stateValue,
+    actionsValue,
+    statusValue,
+    catalogValue,
+    financeValue,
+    salesValue,
+    userValue,
+    customerValue,
+    settingsValue,
+    masterValue,
+  } = useDataContextValues({
+    data,
+    isDataLoading,
+    dbUsageStatus,
+    setData,
+    restoreData,
+  });
 
   return (
-    <DataContext.Provider value={{ data, setData, restoreData, isDataLoading, dbUsageStatus }}>
-      {children}
-    </DataContext.Provider>
+    <DataActionsContext.Provider value={actionsValue}>
+      <DataStatusContext.Provider value={statusValue}>
+        <DataStateContext.Provider value={stateValue}>
+          <CatalogDataContext.Provider value={catalogValue}>
+            <FinanceDataContext.Provider value={financeValue}>
+              <SalesDataContext.Provider value={salesValue}>
+                <UserDataContext.Provider value={userValue}>
+                  <CustomerDataContext.Provider value={customerValue}>
+                    <SettingsDataContext.Provider value={settingsValue}>
+                      <MasterDataContext.Provider value={masterValue}>
+                        {children}
+                      </MasterDataContext.Provider>
+                    </SettingsDataContext.Provider>
+                  </CustomerDataContext.Provider>
+                </UserDataContext.Provider>
+              </SalesDataContext.Provider>
+            </FinanceDataContext.Provider>
+          </CatalogDataContext.Provider>
+        </DataStateContext.Provider>
+      </DataStatusContext.Provider>
+    </DataActionsContext.Provider>
   );
 };
 
-export const useData = () => {
-  const context = useContext(DataContext);
+export const useDataState = () => {
+  const context = useContext(DataStateContext);
   if (context === undefined) {
     throw new Error('useData must be used within a DataProvider');
   }
   return context;
 };
+
+export const useDataActions = () => {
+  const context = useContext(DataActionsContext);
+  if (context === undefined) {
+    throw new Error('useDataActions must be used within a DataProvider');
+  }
+  return context;
+};
+
+export const useDataStatus = () => {
+  const context = useContext(DataStatusContext);
+  if (context === undefined) {
+    throw new Error('useDataStatus must be used within a DataProvider');
+  }
+  return context;
+};
+
+export const useCatalogData = () => {
+  const context = useContext(CatalogDataContext);
+  if (context === undefined) {
+    throw new Error('useCatalogData must be used within a DataProvider');
+  }
+  return context;
+};
+
+export const useFinanceData = () => {
+  const context = useContext(FinanceDataContext);
+  if (context === undefined) {
+    throw new Error('useFinanceData must be used within a DataProvider');
+  }
+  return context;
+};
+
+export const useSalesData = () => {
+  const context = useContext(SalesDataContext);
+  if (context === undefined) {
+    throw new Error('useSalesData must be used within a DataProvider');
+  }
+  return context;
+};
+
+export const useUserData = () => {
+  const context = useContext(UserDataContext);
+  if (context === undefined) {
+    throw new Error('useUserData must be used within a DataProvider');
+  }
+  return context;
+};
+
+export const useCustomerData = () => {
+  const context = useContext(CustomerDataContext);
+  if (context === undefined) {
+    throw new Error('useCustomerData must be used within a DataProvider');
+  }
+  return context;
+};
+
+export const useSettingsData = () => {
+  const context = useContext(SettingsDataContext);
+  if (context === undefined) {
+    throw new Error('useSettingsData must be used within a DataProvider');
+  }
+  return context;
+};
+
+export const useMasterData = () => {
+  const context = useContext(MasterDataContext);
+  if (context === undefined) {
+    throw new Error('useMasterData must be used within a DataProvider');
+  }
+  return context;
+};
+
+export const useData = (): DataContextType => ({
+  ...useDataState(),
+  ...useDataActions(),
+  ...useDataStatus(),
+});

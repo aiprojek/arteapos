@@ -9,7 +9,7 @@ import VirtualizedTable from '../VirtualizedTable';
 import type { Expense, PaymentMethod } from '../../types';
 import { compressImage } from '../../utils/imageCompression';
 import { ocrService } from '../../services/ocrService';
-import { useUI } from '../../context/UIContext';
+import { useUIActions } from '../../context/UIContext';
 import { Capacitor } from '@capacitor/core';
 import { saveBinaryFileNative } from '../../utils/nativeHelper';
 import CameraCaptureModal from '../CameraCaptureModal'; // NEW Import
@@ -21,7 +21,7 @@ interface ExpensesTabProps {
 
 const ExpensesTab: React.FC<ExpensesTabProps> = ({ dataSource = 'local', cloudData = [] }) => {
     const { expenses: localExpenses, addExpense, deleteExpense, updateExpense } = useFinance();
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
     const [isModalOpen, setModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [formData, setFormData] = useState({ 

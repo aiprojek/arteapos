@@ -1,7 +1,6 @@
-/* 
-   Karena kita menggunakan CDN di index.html untuk preview Google AI Studio, 
-   kita tidak menggunakan @tailwind directives di sini untuk menghindari error syntax di browser.
-*/
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* Setup Root untuk Aplikasi Full Screen (SPA) */
 html, body, #root {

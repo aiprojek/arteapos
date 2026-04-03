@@ -8,9 +8,11 @@ import Icon from './Icon';
 interface CartItemProps {
   item: CartItemType;
   onOpenDiscountModal: (cartItemId: string) => void;
+  compact?: boolean;
+  ultraCompact?: boolean;
 }
 
-const CartItem: React.FC<CartItemProps> = ({ item, onOpenDiscountModal }) => {
+const CartItem: React.FC<CartItemProps> = ({ item, onOpenDiscountModal, compact = false, ultraCompact = false }) => {
   const { updateCartQuantity, removeFromCart, removeRewardFromCart } = useCart();
   const [inputValue, setInputValue] = React.useState(item.quantity.toString());
 
@@ -67,18 +69,22 @@ const CartItem: React.FC<CartItemProps> = ({ item, onOpenDiscountModal }) => {
   // --- REWARD ITEM VIEW ---
   if (item.isReward) {
       return (
-         <div className="flex items-center justify-between py-3 bg-[#347758]/10 border border-[#347758]/50 px-3 rounded-lg shadow-sm">
+         <div className={`flex items-center justify-between bg-[#347758]/10 border border-[#347758]/50 rounded-lg shadow-sm ${ultraCompact ? 'px-2 py-1' : compact ? 'px-2.5 py-1.5' : 'px-3 py-2.5'}`}>
             <div className="flex-1 min-w-0 mr-2">
-                <p className="font-semibold text-[#7ac0a0] flex items-center gap-2 truncate">
-                    <Icon name="award" className="w-4 h-4 flex-shrink-0" />
+                <p className={`font-semibold text-[#7ac0a0] flex items-center truncate ${ultraCompact ? 'gap-1 text-xs' : 'gap-2'}`}>
+                    <Icon name="award" className={`${ultraCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} flex-shrink-0`} />
                     <span className="truncate">{item.name}</span>
                 </p>
-                <p className="text-xs text-slate-400">{item.price === 0 ? 'GRATIS' : `Potongan ${CURRENCY_FORMATTER.format(item.price * -1)}`}</p>
+                <p className={`${ultraCompact ? 'text-[10px]' : 'text-xs'} text-slate-400`}>
+                  {item.price === 0 ? 'GRATIS' : `Potongan ${CURRENCY_FORMATTER.format(item.price * -1)}`}
+                </p>
             </div>
             <div className="text-right">
-                <div className="font-bold text-[#52a37c] text-sm">{CURRENCY_FORMATTER.format(item.price * item.quantity)}</div>
-                <button onClick={removeRewardFromCart} className="text-slate-500 hover:text-red-500 mt-1">
-                    <Icon name="trash" className="w-4 h-4" />
+                <div className={`font-bold text-[#52a37c] ${ultraCompact ? 'text-xs' : 'text-sm'}`}>
+                  {CURRENCY_FORMATTER.format(item.price * item.quantity)}
+                </div>
+                <button onClick={removeRewardFromCart} className={`text-slate-500 hover:text-red-500 ${ultraCompact ? 'mt-0.5' : 'mt-1'}`}>
+                    <Icon name="trash" className={`${ultraCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
                 </button>
             </div>
         </div>
@@ -87,68 +93,64 @@ const CartItem: React.FC<CartItemProps> = ({ item, onOpenDiscountModal }) => {
 
   // --- STANDARD ITEM VIEW (Card Layout) ---
   return (
-    <div className="bg-slate-700/40 border border-slate-700 p-2 rounded-lg">
-      <div className="flex flex-col">
-        {/* Item Name */}
-        <div className="min-w-0">
-          <p className="font-semibold text-white break-words">{item.name}</p>
+    <div className={`bg-slate-700/30 border border-slate-700/70 rounded-lg ${ultraCompact ? 'px-2 py-0.5' : compact ? 'px-2 py-1.5' : 'px-2.5 py-2'}`}>
+      <div className={`flex flex-col ${ultraCompact ? 'gap-1' : compact ? 'gap-1.5' : 'gap-2'}`}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className={`font-semibold text-white break-words ${ultraCompact ? 'text-[11px] leading-tight' : compact ? 'text-[13px] leading-snug' : 'text-sm leading-snug'}`}>{item.name}</p>
+            {!compact && !ultraCompact && ((item.selectedAddons?.length || 0) > 0 || (item.selectedModifiers?.length || 0) > 0 || item.discount?.name) ? (
+              <div className="text-[11px] text-slate-400 mt-1 space-y-0.5">
+                {item.discount?.name && <p className="font-semibold text-green-400 truncate">{item.discount.name}</p>}
+                {item.selectedAddons?.slice(0, 2).map(addon => (
+                    <div key={addon.id} className="truncate">
+                        + {addon.name}
+                    </div>
+                ))}
+                {item.selectedModifiers?.slice(0, 2).map((mod, idx) => (
+                    <div key={`${mod.optionId}-${idx}`} className="truncate">
+                        • {mod.name}
+                    </div>
+                ))}
+                {((item.selectedAddons?.length || 0) > 2 || (item.selectedModifiers?.length || 0) > 2) && (
+                    <div className="text-slate-500">Detail lain tersimpan</div>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="text-right shrink-0">
+            {!compact && item.discount && <span className="block text-[11px] text-slate-500 line-through decoration-slate-500">{CURRENCY_FORMATTER.format(originalPrice)}</span>}
+            <span className={`font-bold text-white leading-none ${ultraCompact ? 'text-xs' : compact ? 'text-sm' : 'text-sm sm:text-base'}`}>{CURRENCY_FORMATTER.format(finalPrice)}</span>
+            {(compact || ultraCompact) && item.discount ? <span className="block text-[10px] text-green-400 mt-0.5">Disc</span> : null}
+            {!compact && discountDisplay && <span className="block text-[10px] text-green-400 mt-1">{discountDisplay}</span>}
+          </div>
         </div>
 
-        {/* Controls container */}
-        <div className="flex items-center gap-2 mt-2">
-          {/* Quantity Controls */}
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center bg-slate-800 rounded-lg border border-slate-600 flex-shrink-0">
-            <button onClick={() => handleQuantityChange(item.quantity - 1)} className="w-7 h-7 flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-l-md text-white font-bold transition-colors">-</button>
+            <button onClick={() => handleQuantityChange(item.quantity - 1)} className={`${ultraCompact ? 'w-5 h-5 text-[10px]' : compact ? 'w-6 h-6 text-sm' : 'w-7 h-7'} flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-l-md text-white font-bold transition-colors`}>-</button>
             <input
               type="number"
-              className="w-8 text-center font-mono text-sm font-bold text-white bg-transparent no-spinners"
+              className={`${ultraCompact ? 'w-5 text-[11px]' : compact ? 'w-7 text-[13px]' : 'w-8 text-sm'} text-center font-mono font-bold text-white bg-transparent no-spinners`}
               value={inputValue}
               onChange={handleInputChange}
               onBlur={handleInputBlur}
               onKeyDown={handleInputKeyDown}
               min="1"
             />
-            <button onClick={() => handleQuantityChange(item.quantity + 1)} className="w-7 h-7 flex items-center justify-center bg-[#347758] hover:bg-[#2a6046] rounded-r-md text-white font-bold transition-colors">+</button>
+            <button onClick={() => handleQuantityChange(item.quantity + 1)} className={`${ultraCompact ? 'w-5 h-5 text-[10px]' : compact ? 'w-6 h-6 text-sm' : 'w-7 h-7'} flex items-center justify-center bg-[#347758] hover:bg-[#2a6046] rounded-r-md text-white font-bold transition-colors`}>+</button>
           </div>
 
-          {/* Price */}
-          <div className="flex-grow text-right">
-              <div className="flex flex-col items-end">
-                  {item.discount && <span className="text-xs text-slate-500 line-through decoration-slate-500">{CURRENCY_FORMATTER.format(originalPrice)}</span>}
-                  <span className="font-bold text-base text-white leading-none">{CURRENCY_FORMATTER.format(finalPrice)}</span>
-              </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center flex-shrink-0">
-              <button onClick={() => onOpenDiscountModal(item.cartItemId)} className={`p-1.5 rounded-lg transition-colors ${item.discount ? 'text-green-300' : 'text-slate-400 hover:text-white'}`} title="Diskon Item">
-                  <Icon name="tag" className="w-4 h-4" />
+          <div className={`flex items-center flex-shrink-0 ${ultraCompact ? 'gap-0' : 'gap-0.5'}`}>
+              <button onClick={() => onOpenDiscountModal(item.cartItemId)} className={`${ultraCompact ? 'p-0.5' : compact ? 'p-1' : 'p-1.5'} rounded-lg transition-colors ${item.discount ? 'text-green-300 bg-green-900/20' : 'text-slate-400 hover:text-white'}`} title="Diskon Item">
+                  <Icon name={`${ultraCompact ? 'tag' : 'tag'}`} className={`${ultraCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
               </button>
-              <button onClick={() => removeFromCart(item.cartItemId)} className="p-1.5 rounded-lg text-red-400 hover:text-red-300 transition-colors" title="Hapus">
-                  <Icon name="trash" className="w-4 h-4" />
+              <button onClick={() => removeFromCart(item.cartItemId)} className={`${ultraCompact ? 'p-0.5' : compact ? 'p-1' : 'p-1.5'} rounded-lg text-red-400 hover:text-red-300 transition-colors`} title="Hapus">
+                  <Icon name="trash" className={`${ultraCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
               </button>
           </div>
         </div>
       </div>
-
-      {/* Optional Details Row (for addons/modifiers/discount name) */}
-      {((item.selectedAddons?.length || 0) > 0 || (item.selectedModifiers?.length || 0) > 0 || item.discount?.name) && (
-          <div className="text-xs text-slate-400 bg-slate-800/50 p-2 rounded mt-2">
-              {item.discount?.name && <p className="font-semibold text-green-400">{item.discount.name}</p>}
-              {item.selectedAddons?.map(addon => (
-                  <div key={addon.id} className="flex justify-between">
-                      <span>+ {addon.name}</span>
-                      <span>{CURRENCY_FORMATTER.format(addon.price).replace('Rp', '')}</span>
-                  </div>
-              ))}
-              {item.selectedModifiers?.map((mod, idx) => (
-                  <div key={`${mod.optionId}-${idx}`} className="flex justify-between">
-                      <span>• {mod.name}</span>
-                      {mod.price > 0 && <span>+{CURRENCY_FORMATTER.format(mod.price).replace('Rp', '')}</span>}
-                  </div>
-              ))}
-          </div>
-      )}
     </div>
   );
 };

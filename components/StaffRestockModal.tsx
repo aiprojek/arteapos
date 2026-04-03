@@ -4,8 +4,8 @@ import Modal from './Modal';
 import Button from './Button';
 import Icon from './Icon';
 import { useProduct } from '../context/ProductContext';
-import { useUI } from '../context/UIContext';
-import { useAuth } from '../context/AuthContext';
+import { useUIActions } from '../context/UIContext';
+import { useAuthState } from '../context/AuthContext';
 
 interface StaffRestockModalProps {
     isOpen: boolean;
@@ -27,8 +27,8 @@ const REASONS = [
 
 const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose, filterType }) => {
     const { products, rawMaterials, addStockAdjustment } = useProduct();
-    const { showAlert } = useUI();
-    const { currentUser } = useAuth();
+    const { showAlert } = useUIActions();
+    const { currentUser } = useAuthState();
     
     const [mode, setMode] = useState<AdjustmentType>('in');
     const [activeTab, setActiveTab] = useState<ViewTab>('all');
@@ -148,12 +148,12 @@ const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose, 
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={handleClose} title={getTitle()}>
-            <div className="space-y-4">
+        <Modal isOpen={isOpen} onClose={handleClose} title={getTitle()} mobileLayout="fullscreen" size="lg">
+            <div className="space-y-4 h-full flex flex-col min-h-0">
                 
                 {/* 1. Toggle Mode (IN / OUT) */}
                 {!selectedItem && (
-                    <div className="flex bg-slate-700 p-1 rounded-lg">
+                    <div className="flex bg-slate-700 p-1 rounded-lg shrink-0">
                         <button 
                             onClick={() => setMode('in')} 
                             className={`flex-1 py-2 text-sm rounded-md transition-colors flex items-center justify-center gap-2 ${mode === 'in' ? 'bg-green-600 text-white font-bold shadow' : 'text-slate-300 hover:text-white'}`}
@@ -171,10 +171,10 @@ const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose, 
 
                 {/* 2. Search & List Section */}
                 {!selectedItem ? (
-                    <div>
+                    <div className="flex-1 min-h-0 flex flex-col">
                         {/* TYPE TABS (Shown if no strict filter passed) */}
                         {!filterType && (
-                            <div className="flex gap-2 mb-3 border-b border-slate-700 pb-2">
+                            <div className="flex gap-2 mb-3 border-b border-slate-700 pb-2 overflow-x-auto shrink-0">
                                 <button 
                                     onClick={() => setActiveTab('all')}
                                     className={`px-3 py-1 text-xs rounded-full transition-colors ${activeTab === 'all' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'}`}
@@ -199,7 +199,7 @@ const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose, 
                         <label className="block text-sm text-slate-400 mb-2">
                             {mode === 'in' ? 'Cari barang yang diterima:' : 'Cari barang yang rusak/terbuang:'}
                         </label>
-                        <div className="relative">
+                        <div className="relative shrink-0">
                             <input 
                                 type="text" 
                                 value={searchTerm} 
@@ -212,7 +212,7 @@ const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose, 
                         </div>
                         
                         {/* RESULT LIST */}
-                        <div className="mt-2 max-h-60 overflow-y-auto bg-slate-700 rounded-lg border border-slate-600">
+                        <div className="mt-2 flex-1 min-h-0 overflow-y-auto bg-slate-700 rounded-lg border border-slate-600">
                             {filteredItems.length === 0 ? (
                                 <p className="p-4 text-slate-400 text-sm text-center">
                                     {searchTerm ? 'Barang tidak ditemukan.' : 'Ketik nama barang di atas.'}
@@ -222,7 +222,7 @@ const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose, 
                                     <button 
                                         key={item.id} 
                                         onClick={() => handleSelect(item)}
-                                        className="w-full text-left p-3 hover:bg-slate-600 border-b border-slate-600 last:border-0 flex justify-between items-center group transition-colors"
+                                        className="w-full text-left p-3 hover:bg-slate-600 border-b border-slate-600 last:border-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 group transition-colors"
                                     >
                                         <div>
                                             <p className="font-bold text-white group-hover:text-[#52a37c]">{item.name}</p>
@@ -233,7 +233,7 @@ const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose, 
                                                 {item.unit && <span className="text-xs text-slate-400">Unit: {item.unit}</span>}
                                             </div>
                                         </div>
-                                        <div className="text-right">
+                                        <div className="text-left sm:text-right">
                                             <p className="text-xs text-slate-400">Sisa Stok</p>
                                             <p className={`font-mono font-bold ${item.currentStock <= 5 ? 'text-red-400' : 'text-white'}`}>
                                                 {item.currentStock}
@@ -247,7 +247,7 @@ const StaffRestockModal: React.FC<StaffRestockModalProps> = ({ isOpen, onClose, 
                 ) : (
                     /* 3. Input Details Section */
                     <div className={`p-4 rounded-lg border animate-fade-in ${mode === 'in' ? 'bg-green-900/20 border-green-800' : 'bg-red-900/20 border-red-800'}`}>
-                        <div className="flex justify-between items-start mb-4">
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-4">
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
                                     <span className={`text-xs px-2 py-0.5 rounded font-bold uppercase ${mode === 'in' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>

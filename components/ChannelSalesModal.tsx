@@ -47,8 +47,8 @@ const ChannelSalesModal: React.FC<ChannelSalesModalProps> = ({ isOpen, onClose }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Potong Stok Channel Online">
-      <div className="space-y-4">
+    <Modal isOpen={isOpen} onClose={onClose} title="Potong Stok Channel Online" mobileLayout="fullscreen" size="lg">
+      <div className="space-y-4 h-full flex flex-col min-h-0">
         <div className="bg-slate-900 border border-slate-700 rounded p-3 text-xs text-slate-300">
           Gunakan menu ini untuk penjualan dari ShopeeFood/Grab/GoFood agar stok dan bahan baku tetap akurat
           tanpa mencatat omzet dua kali.
@@ -65,36 +65,38 @@ const ChannelSalesModal: React.FC<ChannelSalesModalProps> = ({ isOpen, onClose }
           />
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-1">
           {rows.map((row, idx) => (
-            <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+            <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-slate-900/40 border border-slate-700 rounded-lg p-3">
               <select
                 value={row.productId}
                 onChange={(e) => updateRow(idx, { productId: e.target.value })}
-                className="col-span-8 bg-slate-900 border border-slate-600 rounded px-2 py-2 text-white"
+                className="sm:col-span-8 bg-slate-900 border border-slate-600 rounded px-2 py-2 text-white"
               >
                 <option value="">Pilih Produk</option>
                 {productOptions.map((p: Product) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={row.quantity}
-                onChange={(e) => updateRow(idx, { quantity: e.target.value })}
-                className="col-span-3 bg-slate-900 border border-slate-600 rounded px-2 py-2 text-white"
-                placeholder="Qty"
-              />
-              <button
-                type="button"
-                onClick={() => removeRow(idx)}
-                className="col-span-1 text-red-400 hover:text-red-300"
-                title="Hapus baris"
-              >
-                <Icon name="trash" className="w-4 h-4" />
-              </button>
+              <div className="grid grid-cols-[1fr_auto] gap-2 sm:col-span-4">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={row.quantity}
+                  onChange={(e) => updateRow(idx, { quantity: e.target.value })}
+                  className="bg-slate-900 border border-slate-600 rounded px-2 py-2 text-white"
+                  placeholder="Qty"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeRow(idx)}
+                  className="inline-flex items-center justify-center px-3 rounded border border-red-900/40 text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                  title="Hapus baris"
+                >
+                  <Icon name="trash" className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ))}
           <Button variant="secondary" onClick={addRow} className="w-full">Tambah Baris</Button>
@@ -111,7 +113,7 @@ const ChannelSalesModal: React.FC<ChannelSalesModalProps> = ({ isOpen, onClose }
           />
         </div>
 
-        <Button onClick={handleSubmit} className="w-full">Potong Stok</Button>
+        <Button onClick={handleSubmit} className="w-full shrink-0">Potong Stok</Button>
       </div>
     </Modal>
   );

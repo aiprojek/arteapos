@@ -5,9 +5,9 @@ import Button from './Button';
 import Icon from './Icon';
 import { useSession } from '../context/SessionContext';
 import { useProduct } from '../context/ProductContext';
-import { useAudit } from '../context/AuditContext'; 
-import { useAuth } from '../context/AuthContext';
+import { useAuthState } from '../context/AuthContext';
 import { CURRENCY_FORMATTER } from '../constants';
+import { emitAuditEvent } from '../services/appEvents';
 
 interface EndSessionModalProps {
     isOpen: boolean;
@@ -21,8 +21,7 @@ interface EndSessionModalProps {
 const EndSessionModal: React.FC<EndSessionModalProps> = ({ isOpen, onClose, sessionSales, startingCash, cashIn, cashOut }) => {
     const { endSession, sessionSettings } = useSession(); 
     const { products, performStockOpname } = useProduct();
-    const { logAudit } = useAudit();
-    const { currentUser } = useAuth();
+    const { currentUser } = useAuthState();
 
     const [step, setStep] = useState(1);
     const [finalCashInput, setFinalCashInput] = useState('');
@@ -94,7 +93,12 @@ const EndSessionModal: React.FC<EndSessionModalProps> = ({ isOpen, onClose, sess
                 const details = discrepancies.map(d => `${d.name}: Sys(${d.systemStock}) vs Fisik(${d.inputStock})`).join(', ');
                 
                 // Ensure currentUser is handled correctly
-                logAudit(currentUser, 'STOCK_OPNAME', `Selisih Stok saat Tutup Shift: ${details}`, 'SHIFT-AUDIT');
+                void emitAuditEvent({
+                    user: currentUser,
+                    action: 'STOCK_OPNAME',
+                    details: `Selisih Stok saat Tutup Shift: ${details}`,
+                    targetId: 'SHIFT-AUDIT',
+                });
                 
                 // Adjust Stock
                 const opnamePayload = discrepancies.map(d => ({
@@ -127,7 +131,13 @@ const EndSessionModal: React.FC<EndSessionModalProps> = ({ isOpen, onClose, sess
     }
 
     return (
-        <Modal isOpen={isOpen} onClose={handleClose} title="Tutup Sesi Penjualan">
+        <Modal
+            isOpen={isOpen}
+            onClose={handleClose}
+            title="Tutup Sesi Penjualan"
+            mobileLayout="fullscreen"
+            size="lg"
+        >
             
             {/* STEP 1: Uang Fisik */}
             {step === 1 && (

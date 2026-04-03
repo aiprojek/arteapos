@@ -4,8 +4,8 @@ import type { AuthSettings, User } from '../../types';
 import Button from '../Button';
 import Icon from '../Icon';
 import Modal from '../Modal';
-import { useAuth } from '../../context/AuthContext';
-import { useUI } from '../../context/UIContext';
+import { useAuthActions, useAuthState } from '../../context/AuthContext';
+import { useUIActions } from '../../context/UIContext';
 import { useSettings } from '../../context/SettingsContext';
 import { generateRecoveryCode, hashRecoveryCode, saveLocalRecoveryCode } from '../../utils/recoveryCode';
 import { dropboxService } from '../../services/dropboxService';
@@ -44,9 +44,10 @@ const ToggleSwitch: React.FC<{ label: string; checked: boolean; onChange: (check
 );
 
 const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
-    const { currentUser, users, addUser, updateUser, deleteUser, createPinResetTicket } = useAuth();
+    const { currentUser, users } = useAuthState();
+    const { addUser, updateUser, deleteUser, createPinResetTicket } = useAuthActions();
     const { receiptSettings } = useSettings();
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
     
     const [isUserModalOpen, setUserModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);

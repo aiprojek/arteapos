@@ -1,6 +1,6 @@
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { useData } from './DataContext';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
+import { useDataActions, useDataStatus, useUserData } from './DataContext';
 import { dropboxService } from '../services/dropboxService';
 import type { User, AuthSettings } from '../types';
 
@@ -30,11 +30,16 @@ interface AuthContextType {
   updateAuthSettings: (settings: AuthSettings) => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+type AuthStateContextType = Pick<AuthContextType, 'currentUser' | 'users' | 'authSettings'>;
+type AuthActionsContextType = Omit<AuthContextType, 'currentUser' | 'users' | 'authSettings'>;
+
+const AuthStateContext = createContext<AuthStateContextType | undefined>(undefined);
+const AuthActionsContext = createContext<AuthActionsContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { data, setData, isDataLoading } = useData();
-  const { authSettings, users } = data;
+  const { setData } = useDataActions();
+  const { isDataLoading } = useDataStatus();
+  const { authSettings, users } = useUserData();
   const [currentUser, setCurrentUser] = useState<User | null>(() => authSettings.enabled ? null : SYSTEM_USER);
 
   useEffect(() => {
@@ -194,30 +199,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setData(prev => ({ ...prev, authSettings: settings }));
   }, [setData]);
 
+  const stateValue = useMemo(() => ({
+    currentUser,
+    users,
+    authSettings,
+  }), [currentUser, users, authSettings]);
+
+  const actionsValue = useMemo(() => ({
+    login,
+    logout,
+    addUser,
+    updateUser,
+    deleteUser,
+    createPinResetTicket,
+    resetPinWithTicket,
+    overrideAdminPin,
+    updateAuthSettings,
+  }), [
+    login,
+    logout,
+    addUser,
+    updateUser,
+    deleteUser,
+    createPinResetTicket,
+    resetPinWithTicket,
+    overrideAdminPin,
+    updateAuthSettings,
+  ]);
+
   return (
-    <AuthContext.Provider value={{
-      currentUser,
-      users,
-      authSettings,
-      login,
-      logout,
-      addUser,
-      updateUser,
-      deleteUser,
-      createPinResetTicket,
-      resetPinWithTicket,
-      overrideAdminPin,
-      updateAuthSettings,
-    }}>
-      {children}
-    </AuthContext.Provider>
+    <AuthStateContext.Provider value={stateValue}>
+      <AuthActionsContext.Provider value={actionsValue}>
+        {children}
+      </AuthActionsContext.Provider>
+    </AuthStateContext.Provider>
   );
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
+export const useAuthState = () => {
+  const context = useContext(AuthStateContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuthState must be used within an AuthProvider');
+  }
+  return context;
+};
+
+export const useAuthActions = () => {
+  const context = useContext(AuthActionsContext);
+  if (context === undefined) {
+    throw new Error('useAuthActions must be used within an AuthProvider');
   }
   return context;
 };

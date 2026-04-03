@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { AuditLog, AuditAction, User } from '../types';
 import { db } from '../services/db';
+import { subscribeAuditEvents } from '../services/appEvents';
 
 interface AuditContextType {
     auditLogs: AuditLog[];
@@ -49,6 +50,12 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             console.error("Failed to save audit log", error);
         }
     }, []);
+
+    useEffect(() => {
+        return subscribeAuditEvents(({ user, action, details, targetId, evidenceImageUrl }) => {
+            void logAudit(user, action, details, targetId, evidenceImageUrl);
+        });
+    }, [logAudit]);
 
     return (
         <AuditContext.Provider value={{ auditLogs, logAudit, isLoadingLogs }}>

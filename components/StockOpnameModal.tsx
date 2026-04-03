@@ -4,8 +4,8 @@ import Modal from './Modal';
 import Button from './Button';
 import Icon from './Icon';
 import { useProduct } from '../context/ProductContext';
-import { useUI } from '../context/UIContext';
-import { useAuth } from '../context/AuthContext'; // Import Auth
+import { useUIActions } from '../context/UIContext';
+import { useAuthState } from '../context/AuthContext';
 
 interface StockOpnameModalProps {
     isOpen: boolean;
@@ -26,8 +26,8 @@ interface OpnameEntry {
 
 const StockOpnameModal: React.FC<StockOpnameModalProps> = ({ isOpen, onClose, initialTab = 'product' }) => {
     const { products, rawMaterials, performStockOpname } = useProduct();
-    const { showAlert } = useUI();
-    const { currentUser } = useAuth(); // Get current user
+    const { showAlert } = useUIActions();
+    const { currentUser } = useAuthState();
     const [activeTab, setActiveTab] = useState<'product' | 'raw_material'>(initialTab);
     const [searchTerm, setSearchTerm] = useState('');
     const [entries, setEntries] = useState<OpnameEntry[]>([]);
@@ -117,8 +117,8 @@ const StockOpnameModal: React.FC<StockOpnameModalProps> = ({ isOpen, onClose, in
     if (!isOpen) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Stock Opname (Audit Stok)">
-            <div className="flex flex-col h-[75vh]"> {/* Fixed height for scrolling */}
+        <Modal isOpen={isOpen} onClose={onClose} title="Stock Opname (Audit Stok)" mobileLayout="fullscreen" size="lg">
+            <div className="flex flex-col h-full min-h-0">
                 
                 <div className="flex gap-2 mb-4 bg-slate-700 p-1 rounded-lg shrink-0">
                     <button 
@@ -147,7 +147,7 @@ const StockOpnameModal: React.FC<StockOpnameModalProps> = ({ isOpen, onClose, in
                 </div>
 
                 {/* Table Header */}
-                <div className="grid grid-cols-12 gap-2 bg-slate-700 p-2 rounded-t-lg text-xs font-bold text-slate-300 shrink-0 pr-4">
+                <div className="hidden sm:grid grid-cols-12 gap-2 bg-slate-700 p-2 rounded-t-lg text-xs font-bold text-slate-300 shrink-0 pr-4">
                     <div className="col-span-5">Nama Item</div>
                     <div className="col-span-2 text-center">Sistem</div>
                     <div className="col-span-3 text-center">Fisik (Actual)</div>
@@ -162,8 +162,8 @@ const StockOpnameModal: React.FC<StockOpnameModalProps> = ({ isOpen, onClose, in
                         const isModified = diff !== 0;
 
                         return (
-                            <div key={entry.id} className={`grid grid-cols-12 gap-2 items-center p-2 rounded border ${isModified ? 'border-yellow-600 bg-yellow-900/10' : 'border-slate-800 bg-slate-800'}`}>
-                                <div className="col-span-5">
+                            <div key={entry.id} className={`grid grid-cols-1 sm:grid-cols-12 gap-2 items-start sm:items-center p-3 rounded border ${isModified ? 'border-yellow-600 bg-yellow-900/10' : 'border-slate-800 bg-slate-800'}`}>
+                                <div className="sm:col-span-5">
                                     <div className="text-sm text-white truncate">
                                         {entry.name}
                                         {entry.unit && <span className="text-xs text-slate-500 ml-1">({entry.unit})</span>}
@@ -175,19 +175,24 @@ const StockOpnameModal: React.FC<StockOpnameModalProps> = ({ isOpen, onClose, in
                                         </div>
                                     )}
                                 </div>
-                                <div className="col-span-2 text-center text-sm text-slate-400">
-                                    {entry.systemStock}
-                                </div>
-                                <div className="col-span-3">
-                                    <input 
-                                        type="number" 
-                                        value={entry.actualStock}
-                                        onChange={(e) => handleActualChange(entry.id, e.target.value)}
-                                        className={`w-full bg-slate-700 border rounded px-2 py-1 text-center font-bold focus:ring-1 focus:ring-[#347758] ${isModified ? 'text-yellow-400 border-yellow-600' : 'text-white border-slate-600'}`}
-                                    />
-                                </div>
-                                <div className={`col-span-2 text-right text-sm font-bold ${diff === 0 ? 'text-slate-600' : diff > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {diff > 0 ? '+' : ''}{diff}
+                                <div className="grid grid-cols-3 gap-2 sm:contents">
+                                    <div className="sm:col-span-2 text-left sm:text-center text-sm text-slate-400">
+                                        <span className="block sm:hidden text-[10px] uppercase tracking-wide text-slate-500 mb-1">Sistem</span>
+                                        {entry.systemStock}
+                                    </div>
+                                    <div className="sm:col-span-3">
+                                        <span className="block sm:hidden text-[10px] uppercase tracking-wide text-slate-500 mb-1">Fisik</span>
+                                        <input 
+                                            type="number" 
+                                            value={entry.actualStock}
+                                            onChange={(e) => handleActualChange(entry.id, e.target.value)}
+                                            className={`w-full bg-slate-700 border rounded px-2 py-2 sm:py-1 text-left sm:text-center font-bold focus:ring-1 focus:ring-[#347758] ${isModified ? 'text-yellow-400 border-yellow-600' : 'text-white border-slate-600'}`}
+                                        />
+                                    </div>
+                                    <div className={`sm:col-span-2 text-left sm:text-right text-sm font-bold ${diff === 0 ? 'text-slate-600' : diff > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                        <span className="block sm:hidden text-[10px] uppercase tracking-wide text-slate-500 mb-1">Selisih</span>
+                                        {diff > 0 ? '+' : ''}{diff}
+                                    </div>
                                 </div>
                             </div>
                         );
@@ -203,7 +208,7 @@ const StockOpnameModal: React.FC<StockOpnameModalProps> = ({ isOpen, onClose, in
                         placeholder="Catatan Opname (Opsional, cth: Audit Akhir Bulan)" 
                         className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
                     />
-                    <div className="flex gap-3">
+                    <div className="flex flex-col sm:flex-row gap-3">
                         <div className="flex-1 bg-slate-800 p-2 rounded text-center border border-slate-700">
                             <span className="text-xs text-slate-400 block">Item Selisih</span>
                             <span className={`font-bold ${totalDiff > 0 ? 'text-yellow-400' : 'text-green-400'}`}>{totalDiff}</span>

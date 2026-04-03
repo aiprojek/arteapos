@@ -8,9 +8,17 @@ interface ProductListItemProps {
   product: Product;
   onClick: () => void;
   availability: { available: boolean; reason: string };
+  compact?: boolean;
+  ultraCompact?: boolean;
 }
 
-const ProductListItem: React.FC<ProductListItemProps> = ({ product, onClick, availability }) => {
+const ProductListItem: React.FC<ProductListItemProps> = ({
+  product,
+  onClick,
+  availability,
+  compact = false,
+  ultraCompact = false,
+}) => {
   const { available, reason } = availability;
   const [imageSrc, setImageSrc] = useState<string | undefined>();
 
@@ -34,9 +42,9 @@ const ProductListItem: React.FC<ProductListItemProps> = ({ product, onClick, ava
     <button
       onClick={onClick}
       disabled={!available}
-      className="w-full bg-slate-800 hover:bg-slate-700 p-2 rounded-lg flex items-center gap-3 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed group border border-transparent focus:border-[#347758]"
+      className={`w-full bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed group border border-transparent focus:border-[#347758] ${ultraCompact ? 'p-1.5 gap-2 rounded-md' : compact ? 'p-2 gap-2.5' : 'p-2 gap-3'}`}
     >
-      <div className="w-12 h-12 flex-shrink-0 bg-slate-700 rounded-md overflow-hidden relative">
+      <div className={`${ultraCompact ? 'w-10 h-10' : compact ? 'w-11 h-11' : 'w-12 h-12'} flex-shrink-0 bg-slate-700 rounded-md overflow-hidden relative`}>
          {!available && (
             <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10">
               <span className="text-white font-bold text-[10px] text-center leading-none px-1">{reason}</span>
@@ -50,10 +58,10 @@ const ProductListItem: React.FC<ProductListItemProps> = ({ product, onClick, ava
       </div>
       
       <div className="flex-1 min-w-0">
-        <h4 className="font-semibold text-white truncate group-hover:text-[#52a37c] transition-colors">{product.name}</h4>
+        <h4 className={`font-semibold text-white truncate group-hover:text-[#52a37c] transition-colors ${ultraCompact ? 'text-[13px]' : ''}`}>{product.name}</h4>
         <div className="flex justify-between items-center mt-0.5">
-             <p className="text-sm text-slate-400">{CURRENCY_FORMATTER.format(product.price)}</p>
-             {product.variants && product.variants.length > 0 && <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">Varian</span>}
+             <p className={`${ultraCompact ? 'text-xs' : 'text-sm'} text-slate-400`}>{CURRENCY_FORMATTER.format(product.price)}</p>
+             {product.variants && product.variants.length > 0 && <span className={`${ultraCompact ? 'text-[9px] px-1 py-0.5' : 'text-[10px] px-1.5 py-0.5'} bg-blue-500/20 text-blue-300 rounded`}>Varian</span>}
         </div>
       </div>
     </button>

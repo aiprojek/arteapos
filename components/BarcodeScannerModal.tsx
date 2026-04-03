@@ -4,8 +4,7 @@ import Modal from './Modal';
 import Icon from './Icon';
 import { Capacitor } from '@capacitor/core';
 import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
-
-declare const Html5Qrcode: any;
+import { Html5Qrcode } from 'html5-qrcode';
 
 declare global {
     interface Window {
@@ -20,7 +19,7 @@ interface BarcodeScannerModalProps {
 }
 
 const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClose, onScan }) => {
-  const scannerRef = useRef<any>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isNativeScanning, setIsNativeScanning] = useState(false);
 
@@ -114,26 +113,30 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
       }
 
       // 3. WEB BROWSER
-      if (typeof Html5Qrcode === 'undefined') {
-        setError("Library scanner web tidak dimuat.");
-        return;
-      }
-      
-      const scanner = new Html5Qrcode('barcode-scanner-container');
-      scannerRef.current = scanner;
-      scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, 
-        (decodedText: string) => { 
-            if(scannerRef.current) scannerRef.current.stop().catch(() => {});
-            onScan(decodedText); 
-            onClose(); 
-        }, 
-        () => {}
-      ).catch((err: any) => {
-          console.error(err);
-          setError("Gagal akses kamera web.");
-      });
+      const startWebScanner = window.setTimeout(() => {
+        const container = document.getElementById('barcode-scanner-container');
+        if (!container) {
+          setError('Scanner belum siap dibuka.');
+          return;
+        }
+
+        const scanner = new Html5Qrcode('barcode-scanner-container');
+        scannerRef.current = scanner;
+        scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, 
+          (decodedText: string) => { 
+              if(scannerRef.current) scannerRef.current.stop().catch(() => {});
+              onScan(decodedText); 
+              onClose(); 
+          }, 
+          () => {}
+        ).catch((err: any) => {
+            console.error(err);
+            setError("Gagal akses kamera web.");
+        });
+      }, 30);
       
       return () => {
+        window.clearTimeout(startWebScanner);
         if (scannerRef.current && scannerRef.current.isScanning) {
             scannerRef.current.stop().catch(() => {});
         }
@@ -198,8 +201,12 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
   if (Capacitor.isNativePlatform()) return null; // Don't render modal structure on Native waiting phase
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Pindai Barcode">
-      <div className="relative aspect-video bg-slate-900 rounded-lg overflow-hidden flex flex-col items-center justify-center">
+    <Modal isOpen={isOpen} onClose={onClose} title="Pindai Barcode" mobileLayout="fullscreen" size="lg" bodyClassName="p-3 sm:p-6">
+      <div className="h-full flex flex-col gap-3">
+        <div className="text-xs text-slate-400 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 shrink-0">
+          Arahkan kamera ke barcode produk. Pastikan barcode terlihat jelas dan cukup terang.
+        </div>
+        <div className="relative flex-1 min-h-[50dvh] sm:min-h-[50vh] bg-slate-900 rounded-lg overflow-hidden flex flex-col items-center justify-center">
         {error ? (
             <div className="text-center p-6">
                 <Icon name="warning" className="w-12 h-12 text-red-500 mx-auto mb-2" />
@@ -209,6 +216,7 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen, onClo
         ) : (
             <div id="barcode-scanner-container" className="w-full h-full" />
         )}
+        </div>
       </div>
     </Modal>
   );

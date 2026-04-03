@@ -1,10 +1,33 @@
 
 import React, { createContext, useContext, ReactNode, useCallback } from 'react';
-import { useData } from './DataContext';
-import { useUI } from './UIContext';
-import { useAuth } from './AuthContext';
-import { useAudit } from './AuditContext'; 
-import { useCloudSync } from './CloudSyncContext'; 
+import { useCatalogData, useDataActions } from './DataContext';
+import { useUIActions } from './UIContext';
+import { useAuthState } from './AuthContext';
+import { applyChannelSalesToData } from '../services/channelSalesService';
+import {
+  applyStockAdjustmentToData,
+  performStockOpnameToData,
+  processIncomingTransfersToData,
+  processOutgoingTransferToData,
+} from '../services/inventoryService';
+import {
+  importStockAdjustmentsToData,
+  mergeProductsToData,
+  mergeRawMaterialsToData,
+} from '../services/importService';
+import {
+  addCategoryToData,
+  addProductToData,
+  addRawMaterialToData,
+  canDeleteRawMaterial,
+  deleteCategoryFromData,
+  deleteProductFromData,
+  deleteRawMaterialFromData,
+  updateInventorySettingsInData,
+  updateProductInData,
+  updateRawMaterialInData,
+} from '../services/productCrudService';
+import { emitAuditEvent, requestAutoSync } from '../services/appEvents';
 import type { Product, RawMaterial, InventorySettings, StockAdjustment, StockTransferPayload } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 
@@ -61,18 +84,22 @@ function base64ToBlob(base64: string): Blob {
 }
 
 export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
-  const { data, setData } = useData();
-  const { logAudit } = useAudit(); 
-  const { triggerAutoSync } = useCloudSync(); 
-  const { products, categories, rawMaterials, inventorySettings, stockAdjustments, receiptSettings } = data;
-  const { showAlert } = useUI();
-  const { currentUser } = useAuth();
+  const { setData } = useDataActions();
+  const {
+    products,
+    categories,
+    rawMaterials,
+    inventorySettings,
+    stockAdjustments,
+    receiptSettings,
+  } = useCatalogData();
+  const { showAlert } = useUIActions();
+  const { currentUser } = useAuthState();
 
   const getStaffName = () => currentUser?.name || 'Staff';
 
   const addProduct = useCallback((product: Omit<Product, 'id'>) => {
-    const newProduct = { ...product, id: Date.now().toString() };
-    setData(prev => ({ ...prev, products: [...prev.products, newProduct] }));
+    setData(prev => addProductToData(prev, product, Date.now().toString()));
   }, [setData]);
 
   const updateProduct = useCallback((updatedProduct: Product) => {
@@ -80,14 +107,11 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
     if (oldProduct && oldProduct.price !== updatedProduct.price) {
         const oldFmt = CURRENCY_FORMATTER.format(oldProduct.price);
         const newFmt = CURRENCY_FORMATTER.format(updatedProduct.price);
-        logAudit(currentUser, 'UPDATE_PRICE', `Harga produk '${updatedProduct.name}' diubah dari ${oldFmt} menjadi ${newFmt}`, updatedProduct.id);
+        emitAuditEvent({ user: currentUser, action: 'UPDATE_PRICE', details: `Harga produk '${updatedProduct.name}' diubah dari ${oldFmt} menjadi ${newFmt}`, targetId: updatedProduct.id });
     }
 
-    setData(prev => ({
-      ...prev,
-      products: prev.products.map(p => p.id === updatedProduct.id ? updatedProduct : p)
-    }));
-  }, [setData, products, logAudit, currentUser]);
+    setData(prev => updateProductInData(prev, updatedProduct));
+  }, [setData, products, currentUser]);
 
   const deleteProduct = useCallback((productId: string) => {
     const product = products.find(p => p.id === productId);
@@ -97,27 +121,21 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       message: 'Apakah Anda yakin ingin menghapus produk ini? Tindakan ini tidak dapat diurungkan.',
       onConfirm: () => {
         if(product) {
-            logAudit(currentUser, 'DELETE_PRODUCT', `Produk '${product.name}' dihapus permanen.`, productId);
+            emitAuditEvent({ user: currentUser, action: 'DELETE_PRODUCT', details: `Produk '${product.name}' dihapus permanen.`, targetId: productId });
         }
-        setData(prev => ({ ...prev, products: prev.products.filter(p => p.id !== productId) }));
+        setData(prev => deleteProductFromData(prev, productId));
       },
       confirmVariant: 'danger',
       confirmText: 'Ya, Hapus'
     });
-  }, [setData, showAlert, products, logAudit, currentUser]);
+  }, [setData, showAlert, products, currentUser]);
 
   const addCategory = useCallback((category: string) => {
-    setData(prev => {
-        const lowerCaseCategories = prev.categories.map(c => c.toLowerCase());
-        if (!lowerCaseCategories.includes(category.toLowerCase())) {
-            return { ...prev, categories: [...prev.categories, category].sort() };
-        }
-        return prev;
-    });
+    setData(prev => addCategoryToData(prev, category));
   }, [setData]);
 
   const deleteCategory = useCallback((categoryToDelete: string) => {
-    setData(prev => ({ ...prev, categories: prev.categories.filter(c => c !== categoryToDelete) }));
+    setData(prev => deleteCategoryFromData(prev, categoryToDelete));
   }, [setData]);
 
   const findProductByBarcode = useCallback((barcode: string) => {
@@ -132,31 +150,20 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
   }, [products, receiptSettings.storeId]);
 
   const addRawMaterial = useCallback((material: Omit<RawMaterial, 'id'>) => {
-    const newMaterial = { ...material, id: Date.now().toString() };
-    setData(prev => ({ ...prev, rawMaterials: [...prev.rawMaterials, newMaterial] }));
+    setData(prev => addRawMaterialToData(prev, material, Date.now().toString()));
   }, [setData]);
 
   const updateRawMaterial = useCallback((updatedMaterial: RawMaterial) => {
-    setData(prev => ({
-      ...prev,
-      rawMaterials: prev.rawMaterials.map(m => m.id === updatedMaterial.id ? updatedMaterial : m)
-    }));
+    setData(prev => updateRawMaterialInData(prev, updatedMaterial));
   }, [setData]);
 
   const deleteRawMaterial = useCallback((materialId: string) => {
-    // 1. DATA INTEGRITY CHECK: Cek apakah bahan baku dipakai di resep produk
-    const usedInProducts = products.filter(p => 
-        p.recipe && p.recipe.some(r => r.rawMaterialId === materialId)
-    );
-
-    if (usedInProducts.length > 0) {
-        const productNames = usedInProducts.map(p => p.name).slice(0, 3).join(', ');
-        const moreCount = usedInProducts.length > 3 ? ` dan ${usedInProducts.length - 3} lainnya` : '';
-        
+    const dependencyCheck = canDeleteRawMaterial(products, materialId);
+    if (!dependencyCheck.canDelete) {
         showAlert({
             type: 'alert',
             title: 'Gagal Menghapus',
-            message: `Bahan baku ini sedang digunakan dalam resep produk: ${productNames}${moreCount}. Hapus resep produk tersebut terlebih dahulu.`
+            message: dependencyCheck.message || 'Bahan baku tidak bisa dihapus.'
         });
         return;
     }
@@ -166,7 +173,7 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
         title: 'Hapus Bahan Baku?',
         message: 'Apakah Anda yakin ingin menghapus bahan baku ini?',
         onConfirm: () => {
-            setData(prev => ({ ...prev, rawMaterials: prev.rawMaterials.filter(m => m.id !== materialId) }));
+            setData(prev => deleteRawMaterialFromData(prev, materialId));
         },
         confirmVariant: 'danger',
         confirmText: 'Ya, Hapus'
@@ -174,254 +181,66 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
   }, [setData, showAlert, products]);
   
   const updateInventorySettings = useCallback((settings: InventorySettings) => {
-    setData(prev => ({ ...prev, inventorySettings: settings }));
+    setData(prev => updateInventorySettingsInData(prev, settings));
   }, [setData]);
 
   const addStockAdjustment = useCallback((productId: string, quantity: number, notes?: string) => {
-    setData(prev => {
-        // Try finding as Product first
-        const productIndex = prev.products.findIndex(p => p.id === productId);
-        if (productIndex > -1) {
-             const product = prev.products[productIndex];
-             const newStock = (product.stock || 0) + quantity;
-             const updatedProducts = [...prev.products];
-             updatedProducts[productIndex] = { ...product, stock: newStock };
-             
-             const newAdjustment: StockAdjustment = {
-                id: Date.now().toString(),
-                productId: product.id,
-                productName: product.name,
-                change: quantity,
-                newStock,
-                notes,
-                createdAt: new Date().toISOString(),
-             };
-             return {
-                 ...prev,
-                 products: updatedProducts,
-                 stockAdjustments: [newAdjustment, ...(prev.stockAdjustments || [])]
-             };
-        }
-
-        // Try finding as Raw Material
-        const materialIndex = prev.rawMaterials.findIndex(m => m.id === productId);
-        if (materialIndex > -1) {
-            const material = prev.rawMaterials[materialIndex];
-            const newStock = (material.stock || 0) + quantity;
-            const updatedMaterials = [...prev.rawMaterials];
-            updatedMaterials[materialIndex] = { ...material, stock: newStock };
-
-            const newAdjustment: StockAdjustment = {
-                id: Date.now().toString(),
-                productId: material.id,
-                productName: material.name,
-                change: quantity,
-                newStock,
-                notes,
-                createdAt: new Date().toISOString(),
-             };
-            return {
-                ...prev,
-                rawMaterials: updatedMaterials,
-                stockAdjustments: [newAdjustment, ...(prev.stockAdjustments || [])]
-            }
-        }
-
-        return prev;
-    });
-    setTimeout(() => triggerAutoSync(getStaffName()), 500);
-  }, [setData, triggerAutoSync, currentUser]);
+    setData(prev => applyStockAdjustmentToData({ prevData: prev, productId, quantity, notes }));
+    setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
+  }, [setData, currentUser]);
 
   const applyChannelSales = useCallback((items: { productId: string; quantity: number }[], channel: string, notes: string = ''): boolean => {
-    if (!items.length) return false;
+    let success = false;
+    let error: { title: string; message: string } | undefined;
+    let finalNote = '';
+
     const cleanItems = items.filter(i => i.productId && i.quantity > 0);
-    if (cleanItems.length === 0) return false;
-
-    // Pre-check if strict stock is enabled
-    if (inventorySettings.enabled && inventorySettings.preventNegativeStock) {
-      for (const item of cleanItems) {
-        const product = products.find(p => p.id === item.productId);
-        if (!product) continue;
-        const qty = item.quantity;
-
-        if (product.trackStock && (product.stock || 0) < qty) {
-          showAlert({ type: 'alert', title: 'Stok Tidak Cukup', message: `Produk "${product.name}" hanya tersedia ${(product.stock || 0)}.` });
-          return false;
-        }
-
-        if (inventorySettings.trackIngredients && product.recipe && product.recipe.length > 0) {
-          for (const recipeItem of product.recipe) {
-            const required = recipeItem.quantity * qty;
-            if (recipeItem.itemType === 'raw_material' && recipeItem.rawMaterialId) {
-              const material = rawMaterials.find(m => m.id === recipeItem.rawMaterialId);
-              if (material && (material.stock || 0) < required) {
-                showAlert({
-                  type: 'alert',
-                  title: 'Bahan Baku Tidak Cukup',
-                  message: `Bahan "${material.name}" hanya tersedia ${(material.stock || 0)}.`
-                });
-                return false;
-              }
-            }
-            if (recipeItem.itemType === 'product' && recipeItem.productId) {
-              const subProduct = products.find(p => p.id === recipeItem.productId);
-              if (subProduct && subProduct.trackStock && (subProduct.stock || 0) < required) {
-                showAlert({
-                  type: 'alert',
-                  title: 'Stok Tidak Cukup',
-                  message: `Produk "${subProduct.name}" hanya tersedia ${(subProduct.stock || 0)}.`
-                });
-                return false;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    const now = new Date().toISOString();
-    const notePrefix = `Channel Online (${channel || 'Online'})`;
-    const finalNote = notes ? `${notePrefix} - ${notes}` : notePrefix;
-
-    logAudit(
-      currentUser,
-      'CHANNEL_SALE',
-      `Pengurangan stok channel online: ${cleanItems.length} item. ${finalNote}`,
-      'CHANNEL-SALE'
-    );
 
     setData(prev => {
-      let updatedProducts = [...prev.products];
-      let updatedMaterials = [...prev.rawMaterials];
-      let updatedAdjustments = [...(prev.stockAdjustments || [])];
-
-      cleanItems.forEach((item, idx) => {
-        const productIndex = updatedProducts.findIndex(p => p.id === item.productId);
-        if (productIndex === -1) return;
-
-        const product = updatedProducts[productIndex];
-        const qty = item.quantity;
-        const logNotes = `${finalNote} (Item #${idx + 1})`;
-
-        if (inventorySettings.enabled && inventorySettings.trackIngredients && product.recipe && product.recipe.length > 0) {
-          product.recipe.forEach(recipeItem => {
-            const deductionAmount = recipeItem.quantity * qty;
-
-            if (recipeItem.itemType === 'raw_material' && recipeItem.rawMaterialId) {
-              const matIndex = updatedMaterials.findIndex(m => m.id === recipeItem.rawMaterialId);
-              if (matIndex > -1) {
-                const oldStock = updatedMaterials[matIndex].stock || 0;
-                const newStock = oldStock - deductionAmount;
-                updatedMaterials[matIndex] = { ...updatedMaterials[matIndex], stock: newStock };
-
-                updatedAdjustments.unshift({
-                  id: `CH-MAT-${Date.now()}-${recipeItem.rawMaterialId}`,
-                  productId: recipeItem.rawMaterialId,
-                  productName: updatedMaterials[matIndex].name,
-                  change: -deductionAmount,
-                  newStock,
-                  notes: logNotes,
-                  createdAt: now
-                });
-              }
-            } else if (recipeItem.itemType === 'product' && recipeItem.productId) {
-              const subIdx = updatedProducts.findIndex(p => p.id === recipeItem.productId);
-              if (subIdx > -1 && updatedProducts[subIdx].trackStock) {
-                const oldStock = updatedProducts[subIdx].stock || 0;
-                const newStock = oldStock - deductionAmount;
-                updatedProducts[subIdx] = { ...updatedProducts[subIdx], stock: newStock };
-
-                updatedAdjustments.unshift({
-                  id: `CH-SUB-${Date.now()}-${recipeItem.productId}`,
-                  productId: recipeItem.productId,
-                  productName: updatedProducts[subIdx].name,
-                  change: -deductionAmount,
-                  newStock,
-                  notes: logNotes,
-                  createdAt: now
-                });
-              }
-            }
-          });
-        }
-
-        if (inventorySettings.enabled && product.trackStock) {
-          const oldStock = product.stock || 0;
-          const newStock = oldStock - qty;
-          updatedProducts[productIndex] = { ...product, stock: newStock };
-
-          updatedAdjustments.unshift({
-            id: `CH-PROD-${Date.now()}-${product.id}`,
-            productId: product.id,
-            productName: product.name,
-            change: -qty,
-            newStock,
-            notes: logNotes,
-            createdAt: now
-          });
-        }
+      const result = applyChannelSalesToData({
+        prevData: prev,
+        items,
+        channel,
+        notes,
       });
 
-      return {
-        ...prev,
-        products: updatedProducts,
-        rawMaterials: updatedMaterials,
-        stockAdjustments: updatedAdjustments
-      };
+      if (!result.ok || !result.nextData) {
+        error = result.error;
+        return prev;
+      }
+
+      success = true;
+      finalNote = result.finalNote || channel;
+      return result.nextData;
     });
 
-    setTimeout(() => triggerAutoSync(getStaffName()), 500);
+    if (!success) {
+      if (error) {
+        showAlert({ type: 'alert', title: error.title, message: error.message });
+      }
+      return false;
+    }
+
+    emitAuditEvent({
+      user: currentUser,
+      action: 'CHANNEL_SALE',
+      details: `Pengurangan stok channel online: ${cleanItems.length} item. ${finalNote}`,
+      targetId: 'CHANNEL-SALE',
+    });
+
+    setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
     return true;
-  }, [inventorySettings.enabled, inventorySettings.preventNegativeStock, inventorySettings.trackIngredients, products, rawMaterials, setData, triggerAutoSync, currentUser, showAlert]);
+  }, [setData, currentUser, showAlert]);
 
   const performStockOpname = useCallback((items: OpnameItem[], notes: string = '') => {
       const count = items.filter(i => i.systemStock !== i.actualStock).length;
       if (count > 0) {
-          logAudit(currentUser, 'STOCK_OPNAME', `Melakukan stock opname massal. ${count} item disesuaikan. ${notes}`, 'BATCH-OPNAME');
+          emitAuditEvent({ user: currentUser, action: 'STOCK_OPNAME', details: `Melakukan stock opname massal. ${count} item disesuaikan. ${notes}`, targetId: 'BATCH-OPNAME' });
       }
 
-      setData(prev => {
-          let updatedProducts = [...prev.products];
-          let updatedMaterials = [...prev.rawMaterials];
-          let newAdjustments: StockAdjustment[] = [];
-          const now = new Date().toISOString();
-
-          items.forEach((item, index) => {
-              const diff = item.actualStock - item.systemStock;
-              if (diff === 0) return;
-
-              if (item.type === 'product') {
-                  const pIdx = updatedProducts.findIndex(p => p.id === item.id);
-                  if (pIdx > -1) {
-                      updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: item.actualStock };
-                  }
-              } else {
-                  const mIdx = updatedMaterials.findIndex(m => m.id === item.id);
-                  if (mIdx > -1) {
-                      updatedMaterials[mIdx] = { ...updatedMaterials[mIdx], stock: item.actualStock };
-                  }
-              }
-
-              newAdjustments.push({
-                  id: `${Date.now()}-${index}`,
-                  productId: item.id,
-                  productName: item.name,
-                  change: diff,
-                  newStock: item.actualStock,
-                  notes: `[Stock Opname] ${notes}`,
-                  createdAt: now
-              });
-          });
-
-          return {
-              ...prev,
-              products: updatedProducts,
-              rawMaterials: updatedMaterials,
-              stockAdjustments: [...newAdjustments, ...(prev.stockAdjustments || [])]
-          };
-      });
-      setTimeout(() => triggerAutoSync(getStaffName()), 500);
-  }, [setData, logAudit, currentUser, triggerAutoSync]);
+      setData(prev => performStockOpnameToData({ prevData: prev, items, notes }));
+      setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 500);
+  }, [setData, currentUser]);
 
   const bulkAddProducts = useCallback((newProducts: Product[]) => {
     setData(prev => {
@@ -433,19 +252,12 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
             }
             return prod;
         });
-
-        const productMap = new Map(prev.products.map(p => [p.id, p]));
-        productsWithBlobs.forEach(p => productMap.set(p.id, p));
-        return { ...prev, products: Array.from(productMap.values()) };
+        return mergeProductsToData(prev, productsWithBlobs);
     });
   }, [setData]);
 
   const bulkAddRawMaterials = useCallback((newRawMaterials: RawMaterial[]) => {
-    setData(prev => {
-        const materialMap = new Map(prev.rawMaterials.map(m => [m.id, m]));
-        newRawMaterials.forEach(m => materialMap.set(m.id, m));
-        return { ...prev, rawMaterials: Array.from(materialMap.values()) };
-    });
+    setData(prev => mergeRawMaterialsToData(prev, newRawMaterials));
   }, [setData]);
 
   const isProductAvailable = useCallback((product: Product): { available: boolean, reason: string } => {
@@ -492,144 +304,41 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
   }, [inventorySettings, rawMaterials, products]);
 
   const importStockAdjustments = useCallback((newAdjustments: StockAdjustment[]) => {
-      setData(prev => {
-          const existingIds = new Set(prev.stockAdjustments?.map(a => a.id) || []);
-          const uniqueNew = newAdjustments.filter(a => !existingIds.has(a.id));
-          if (uniqueNew.length === 0) return prev;
-
-          return {
-              ...prev,
-              stockAdjustments: [...uniqueNew, ...(prev.stockAdjustments || [])].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          };
-      });
+      setData(prev => importStockAdjustmentsToData(prev, newAdjustments));
   }, [setData]);
 
   const processIncomingTransfers = useCallback((transfers: StockTransferPayload[]) => {
       if (transfers.length === 0) return;
       let totalAdded = 0;
-      
       setData(prev => {
-          let updatedProducts = [...prev.products];
-          let updatedMaterials = [...prev.rawMaterials];
-          let newAdjustments: StockAdjustment[] = [];
-          const now = new Date().toISOString();
-
-          transfers.forEach(transfer => {
-              const transferNote = `Transfer dari ${transfer.fromStoreId} (${new Date(transfer.timestamp).toLocaleDateString()})`;
-              
-              transfer.items.forEach((item, idx) => {
-                  if (item.type === 'product') {
-                      const pIdx = updatedProducts.findIndex(p => p.id === item.id);
-                      if (pIdx > -1 && updatedProducts[pIdx].trackStock) {
-                          const oldStock = updatedProducts[pIdx].stock || 0;
-                          const newStock = oldStock + item.qty;
-                          updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: newStock };
-                          
-                          newAdjustments.push({
-                              id: `TRANS-IN-${transfer.id}-${idx}`,
-                              productId: item.id,
-                              productName: item.name,
-                              change: item.qty,
-                              newStock: newStock,
-                              notes: `${transferNote} - ${transfer.notes || ''}`,
-                              createdAt: now
-                          });
-                          totalAdded++;
-                      }
-                  } else {
-                      const mIdx = updatedMaterials.findIndex(m => m.id === item.id);
-                      if (mIdx > -1) {
-                          const oldStock = updatedMaterials[mIdx].stock || 0;
-                          const newStock = oldStock + item.qty;
-                          updatedMaterials[mIdx] = { ...updatedMaterials[mIdx], stock: newStock };
-
-                          newAdjustments.push({
-                              id: `TRANS-IN-${transfer.id}-${idx}`,
-                              productId: item.id,
-                              productName: item.name,
-                              change: item.qty,
-                              newStock: newStock,
-                              notes: `${transferNote} - ${transfer.notes || ''}`,
-                              createdAt: now
-                          });
-                          totalAdded++;
-                      }
-                  }
-              });
-          });
-
-          return {
-              ...prev,
-              products: updatedProducts,
-              rawMaterials: updatedMaterials,
-              stockAdjustments: [...newAdjustments, ...(prev.stockAdjustments || [])]
-          }
+          const result = processIncomingTransfersToData({ prevData: prev, transfers });
+          totalAdded = result.totalAdded;
+          return result.nextData;
       });
 
       if (totalAdded > 0) {
-          logAudit(currentUser, 'STOCK_TRANSFER_IN', `Menerima ${totalAdded} item stok transfer dari Pusat/Gudang.`, 'BATCH-TRANSFER');
-          setTimeout(() => triggerAutoSync(getStaffName()), 1000);
+          emitAuditEvent({ user: currentUser, action: 'STOCK_TRANSFER_IN', details: `Menerima ${totalAdded} item stok transfer dari Pusat/Gudang.`, targetId: 'BATCH-TRANSFER' });
+          setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 1000);
       }
-  }, [setData, logAudit, currentUser, triggerAutoSync]);
+  }, [setData, currentUser]);
 
   const processOutgoingTransfer = useCallback((targetStoreId: string, items: StockTransferPayload['items'], notes: string) => {
+      let error: { title: string; message: string } | undefined;
       setData(prev => {
-          let updatedProducts = [...prev.products];
-          let updatedMaterials = [...prev.rawMaterials];
-          let newAdjustments: StockAdjustment[] = [];
-          const now = new Date().toISOString();
-          const notePrefix = `Transfer Keluar ke ${targetStoreId}`;
-
-          items.forEach((item, idx) => {
-              if (item.type === 'product') {
-                  const pIdx = updatedProducts.findIndex(p => p.id === item.id);
-                  if (pIdx > -1 && updatedProducts[pIdx].trackStock) {
-                      const oldStock = updatedProducts[pIdx].stock || 0;
-                      const newStock = oldStock - item.qty; 
-                      updatedProducts[pIdx] = { ...updatedProducts[pIdx], stock: newStock };
-                      
-                      newAdjustments.push({
-                          id: `TRANS-OUT-${Date.now()}-${idx}`,
-                          productId: item.id,
-                          productName: item.name,
-                          change: -item.qty, 
-                          newStock: newStock,
-                          notes: `${notePrefix} - ${notes}`,
-                          createdAt: now
-                      });
-                  }
-              } else {
-                  const mIdx = updatedMaterials.findIndex(m => m.id === item.id);
-                  if (mIdx > -1) {
-                      const oldStock = updatedMaterials[mIdx].stock || 0;
-                      const newStock = oldStock - item.qty; 
-                      updatedMaterials[mIdx] = { ...updatedMaterials[mIdx], stock: newStock };
-
-                      newAdjustments.push({
-                          id: `TRANS-OUT-${Date.now()}-${idx}`,
-                          productId: item.id,
-                          productName: item.name,
-                          change: -item.qty, 
-                          newStock: newStock,
-                          notes: `${notePrefix} - ${notes}`,
-                          createdAt: now
-                      });
-                  }
-              }
-          });
-
-          return {
-              ...prev,
-              products: updatedProducts,
-              rawMaterials: updatedMaterials,
-              stockAdjustments: [...newAdjustments, ...(prev.stockAdjustments || [])]
-          }
+          const result = processOutgoingTransferToData({ prevData: prev, targetStoreId, items, notes });
+          error = result.error;
+          return result.nextData;
       });
 
-      logAudit(currentUser, 'STOCK_TRANSFER_OUT', `Mengirim ${items.length} jenis barang ke cabang ${targetStoreId}.`, 'BATCH-TRANSFER');
-      setTimeout(() => triggerAutoSync(getStaffName()), 1000);
+      if (error) {
+          showAlert({ type: 'alert', title: error.title, message: error.message });
+          return;
+      }
 
-  }, [setData, logAudit, currentUser, triggerAutoSync]);
+      emitAuditEvent({ user: currentUser, action: 'STOCK_TRANSFER_OUT', details: `Mengirim ${items.length} jenis barang ke cabang ${targetStoreId}.`, targetId: 'BATCH-TRANSFER' });
+      setTimeout(() => requestAutoSync({ staffName: getStaffName() }), 1000);
+
+  }, [setData, currentUser, showAlert]);
 
   return (
     <ProductContext.Provider value={{

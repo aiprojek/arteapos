@@ -1,43 +1,55 @@
 
-const CACHE_NAME = 'artea-pos-offline-v7-robust';
+const CACHE_NAME = 'artea-pos-offline-v8-local-bootstrap';
+const ASSET_MANIFEST_URL = './asset-manifest.json';
 
 // DAFTAR FILE KRUSIAL (Tanpa ini aplikasi blank)
 const CRITICAL_URLS = [
   './',
   './index.html',
   './manifest.json',
+  ASSET_MANIFEST_URL,
   './favicon.svg',
   './index.js',
-  './style.css',
-  'https://cdn.tailwindcss.com',
-  'https://esm.sh/react@18.3.1',
-  'https://esm.sh/react-dom@18.3.1',
-  'https://esm.sh/dexie@^4.0.7',
-  'https://esm.sh/react-window@^1.8.10?external=react,react-dom'
+  './style.css'
 ];
 
 // DAFTAR FILE PENDUKUNG (Jika gagal, aplikasi masih bisa jalan)
 const OPTIONAL_URLS = [
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/fonts/bootstrap-icons.woff2',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/fonts/bootstrap-icons.woff',
-  'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
-  'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
-  'https://esm.sh/xlsx@^0.18.5',
-  'https://esm.sh/@capacitor/core@^6.0.0',
-  'https://esm.sh/@capacitor/camera@^6.0.0',
-  'https://esm.sh/@capacitor/share@^6.0.0',
-  'https://esm.sh/@capacitor/filesystem@^6.0.0',
-  'https://esm.sh/@capacitor-community/barcode-scanner@^4.0.1',
-  'https://esm.sh/recharts@^2.12.7?external=react,react-dom',
-  'https://esm.sh/jspdf@^2.5.1',
-  'https://esm.sh/jspdf-autotable@^3.8.2',
-  'https://esm.sh/crypto-js@^4.2.0',
-  'https://esm.sh/dropbox@^10.34.0',
-  'https://esm.sh/path-browserify@^1.0.1',
-  'https://esm.sh/url'
+  './bootstrap-icons.woff',
+  './bootstrap-icons.woff2',
+  './vendor/tesseract/worker.min.js',
+  './vendor/tesseract-core/tesseract-core.wasm.js',
+  './vendor/tesseract-core/tesseract-core.wasm',
+  './vendor/tesseract-core/tesseract-core-simd.wasm.js',
+  './vendor/tesseract-core/tesseract-core-simd.wasm',
+  './vendor/tesseract-core/tesseract-core-lstm.wasm.js',
+  './vendor/tesseract-core/tesseract-core-lstm.wasm',
+  './vendor/tesseract-core/tesseract-core-simd-lstm.wasm.js',
+  './vendor/tesseract-core/tesseract-core-simd-lstm.wasm',
+  './vendor/tesseract-lang/eng/eng.traineddata.gz'
 ];
+
+const normalizeLocalUrl = (url) => {
+  if (!url) return null;
+  return url.startsWith('./') ? url : `./${url}`;
+};
+
+const collectManifestAssets = (manifest) => {
+  const assetUrls = new Set();
+
+  Object.values(manifest).forEach((entry) => {
+    if (!entry || typeof entry !== 'object') return;
+    if (entry.file) assetUrls.add(normalizeLocalUrl(entry.file));
+    if (Array.isArray(entry.css)) {
+      entry.css.forEach((file) => assetUrls.add(normalizeLocalUrl(file)));
+    }
+    if (Array.isArray(entry.assets)) {
+      entry.assets.forEach((file) => assetUrls.add(normalizeLocalUrl(file)));
+    }
+  });
+
+  return [...assetUrls].filter(Boolean);
+};
 
 // Helper untuk fetch dengan timeout dan mode cors
 const fetchWithRetry = async (url) => {
@@ -78,6 +90,23 @@ self.addEventListener('install', event => {
           // Kita tidak throw error agar SW tetap terinstall sebagian
           // User akan load file ini dari network saat butuh
         }
+      }
+
+      try {
+        const manifestResponse = await fetchWithRetry(ASSET_MANIFEST_URL);
+        const manifest = await manifestResponse.clone().json();
+        const manifestAssets = collectManifestAssets(manifest);
+
+        for (const url of manifestAssets) {
+          try {
+            const response = await fetchWithRetry(url);
+            await cache.put(url, response);
+          } catch (error) {
+            console.warn(`[SW] Gagal cache manifest asset: ${url}`, error);
+          }
+        }
+      } catch (error) {
+        console.warn('[SW] Gagal membaca asset manifest.', error);
       }
 
       // 2. Cache Optional (Paralel untuk kecepatan)

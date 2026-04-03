@@ -13,7 +13,7 @@ export type IconName =
   | 'chevron-down' | 'chevron-up' | 'keyboard' | 'play' | 'wifi' | 'database' 
   | 'warning' | 'question' | 'bluetooth' | 'lock' | 'clipboard' | 'boxes' | 'file-lock' 
   | 'clock-history' | 'eye' | 'cloud' | 'shop' | 'tools' | 'money' | 'lightbulb' | 'cast'
-  | 'zoom-in' | 'zoom-out' | 'dash' | 'sync' | 'calculator'; 
+  | 'zoom-in' | 'zoom-out' | 'dash' | 'sync' | 'calculator' | 'save' | 'cart'; 
 
 interface IconProps {
   name: IconName;

@@ -1,12 +1,13 @@
 
 import { useEffect, useRef } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthActions, useAuthState } from '../context/AuthContext';
 
 // Default timeout: 10 minutes
 const DEFAULT_TIMEOUT = 10 * 60 * 1000; 
 
 export const useIdleTimer = (timeout: number = DEFAULT_TIMEOUT) => {
-    const { logout, authSettings, currentUser } = useAuth();
+    const { authSettings, currentUser } = useAuthState();
+    const { logout } = useAuthActions();
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {

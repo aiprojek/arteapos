@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import AppProviders from './context/AppProviders';
-import { useAuth } from './context/AuthContext';
-import { useUI } from './context/UIContext';
+import { useAuthState } from './context/AuthContext';
+import { useUIActions, useUIState } from './context/UIContext';
 import { useProduct } from './context/ProductContext';
 import { useCart } from './context/CartContext';
 import type { View } from './types';
@@ -21,12 +21,14 @@ import Icon from './components/Icon';
 import AlertModal from './components/AlertModal';
 import DashboardView from './views/DashboardView';
 import OnboardingModals from './components/OnboardingModals'; 
+import { useRenderProfiler } from './utils/renderProfiler';
 
 const AppContent = () => {
-  const { currentUser } = useAuth();
+  const { currentUser } = useAuthState();
   const { findProductByBarcode, inventorySettings } = useProduct();
   const { addToCart } = useCart();
-  const { showAlert, alertState, hideAlert } = useUI();
+  const { showAlert, hideAlert } = useUIActions();
+  const { alertState } = useUIState();
   
   // ROLE CHECK
   const isViewer = currentUser?.role === 'viewer';
@@ -45,6 +47,16 @@ const AppContent = () => {
   });
   
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+
+  useRenderProfiler('AppContent', {
+    currentUserId: currentUser?.id ?? null,
+    currentUserRole: currentUser?.role ?? null,
+    activeView,
+    isSidebarOpen,
+    alertOpen: alertState.isOpen,
+    inventoryEnabled: inventorySettings.enabled,
+    trackIngredients: inventorySettings.trackIngredients,
+  });
 
   // --- KODULAR / NATIVE BRIDGE LISTENER ---
   useEffect(() => {
@@ -206,17 +218,21 @@ const AppContent = () => {
 };
 
 const RootNavigator = () => {
-  const { currentUser, authSettings } = useAuth();
-  const { alertState, hideAlert } = useUI();
-  const [urlView, setUrlView] = useState<string | null>(null);
-
-  useEffect(() => {
-      const params = new URLSearchParams(window.location.search);
-      const view = params.get('view');
-      if (view === 'customer-display' || view === 'kitchen-display') {
-          setUrlView(view);
-      }
+  const { currentUser, authSettings } = useAuthState();
+  const { hideAlert } = useUIActions();
+  const { alertState } = useUIState();
+  const urlView = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const view = params.get('view');
+    return view === 'customer-display' || view === 'kitchen-display' ? view : null;
   }, []);
+
+  useRenderProfiler('RootNavigator', {
+    currentUserId: currentUser?.id ?? null,
+    authEnabled: authSettings.enabled,
+    urlView,
+    alertOpen: alertState.isOpen,
+  });
 
   if (urlView === 'customer-display') {
       return <CustomerDisplayView />;

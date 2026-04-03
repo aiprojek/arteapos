@@ -1,22 +1,23 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { View, Branch } from '../types';
 import Icon from './Icon';
-import { useAuth } from '../context/AuthContext';
-import { useData } from '../context/DataContext';
+import { useAuthActions, useAuthState } from '../context/AuthContext';
+import { useDataActions, useDataStatus } from '../context/DataContext';
 import { useSettings } from '../context/SettingsContext';
 import { useCloudSync } from '../context/CloudSyncContext'; 
 import { useProduct } from '../context/ProductContext'; // NEW
 import Button from './Button';
 import { dataService } from '../services/dataService';
-import { useUI } from '../context/UIContext';
+import { useUIActions } from '../context/UIContext';
 import { dropboxService } from '../services/dropboxService';
 import { db } from '../services/db'; 
 import Modal from './Modal';
 import DataArchivingModal from './DataArchivingModal'; 
 import ConflictResolveModal from './ConflictResolveModal'; 
 import Skeleton from './Skeleton';
+import { useRenderProfiler } from '../utils/renderProfiler';
 
 interface HeaderProps {
     activeView: View;
@@ -37,13 +38,129 @@ const viewTitles: Record<View, string> = {
     'kitchen-display': 'Layar Dapur'
 };
 
+interface SyncStatusBadgeProps {
+    syncStatus: 'idle' | 'syncing' | 'success' | 'error';
+    syncErrorMessage?: string | null;
+    showMemoryWarning: boolean;
+    onSyncErrorClick: () => void;
+    onOpenArchiving: () => void;
+    compact?: boolean;
+}
+
+const SyncStatusBadge = memo(({
+    syncStatus,
+    syncErrorMessage,
+    showMemoryWarning,
+    onSyncErrorClick,
+    onOpenArchiving,
+    compact = false,
+}: SyncStatusBadgeProps) => {
+    const isQuotaSyncError = Boolean(
+        syncErrorMessage && (syncErrorMessage.includes('QUOTA') || syncErrorMessage.includes('Penuh'))
+    );
+
+    return (
+        <>
+            <AnimatePresence mode="wait">
+                {syncStatus === 'syncing' && (
+                    <motion.div 
+                        key="syncing"
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        className={`flex items-center gap-1.5 rounded-full bg-blue-900/30 border border-blue-800 shrink-0 ${compact ? 'px-1.5 py-0.5' : 'px-2 py-0.5'}`}
+                    >
+                        <Skeleton variant="pill" width={8} height={8} className="bg-blue-400" />
+                        {!compact && <Skeleton variant="text" width={48} height={12} className="bg-blue-400/50" />}
+                    </motion.div>
+                )}
+                {syncStatus === 'success' && (
+                    <motion.div 
+                        key="success"
+                        initial={{ opacity: 0, scale: 0.9, y: 5 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className={`flex items-center gap-1.5 rounded-full bg-green-900/30 border border-green-800 shrink-0 ${compact ? 'px-1.5 py-0.5' : 'px-2 py-0.5'}`}
+                    >
+                        <Icon name="check-circle-fill" className="w-3 h-3 text-green-400" />
+                        {!compact && <span className="text-[10px] text-green-300 font-medium">Tersimpan di Cloud</span>}
+                    </motion.div>
+                )}
+                {syncStatus === 'error' && (
+                    <motion.button 
+                        key="error"
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        onClick={onSyncErrorClick} 
+                        className={`flex items-center gap-1.5 rounded-full bg-red-900/30 border border-red-800 hover:bg-red-900/50 transition-colors shrink-0 ${compact ? 'px-1.5 py-0.5' : 'px-2 py-0.5'}`}
+                    >
+                        <Icon name="warning" className="w-3 h-3 text-red-400" />
+                        {!compact && <span className="text-[10px] text-red-300 font-medium">
+                            {isQuotaSyncError ? 'Cloud Penuh' : 'Gagal Sync'}
+                        </span>}
+                    </motion.button>
+                )}
+            </AnimatePresence>
+
+            {showMemoryWarning && (
+                <button 
+                    onClick={onOpenArchiving}
+                    className={`flex items-center gap-1.5 rounded-full bg-orange-900/30 border border-orange-800 hover:bg-orange-900/50 transition-colors animate-pulse shrink-0 ${compact ? 'px-1.5 py-0.5' : 'px-2 py-0.5'}`}
+                    title="Database penuh. Klik untuk bersihkan."
+                >
+                    <Icon name="database" className="w-3 h-3 text-orange-400" />
+                    {!compact && <span className="text-[10px] text-orange-300 font-bold">Memori Penuh</span>}
+                </button>
+            )}
+        </>
+    );
+});
+
+SyncStatusBadge.displayName = 'SyncStatusBadge';
+
+interface BranchSelectionListProps {
+    availableBranches: Branch[];
+    selectedBranchId: string;
+    onSelectBranch: (branchId: string) => void;
+}
+
+const BranchSelectionList = memo(({
+    availableBranches,
+    selectedBranchId,
+    onSelectBranch,
+}: BranchSelectionListProps) => (
+    <div className="space-y-2 max-h-60 overflow-y-auto">
+        {availableBranches.map((branch) => (
+            <button
+                key={branch.id}
+                onClick={() => onSelectBranch(branch.id)}
+                className={`w-full text-left p-3 rounded-lg border transition-colors flex justify-between items-center
+                    ${selectedBranchId === branch.id 
+                        ? 'bg-[#347758] border-[#347758] text-white' 
+                        : 'bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700'
+                    }`}
+            >
+                <div>
+                    <div className="font-bold">{branch.name}</div>
+                    <div className="text-xs opacity-75">{branch.id}</div>
+                </div>
+                {selectedBranchId === branch.id && <Icon name="check-circle-fill" className="w-5 h-5"/>}
+            </button>
+        ))}
+    </div>
+));
+
+BranchSelectionList.displayName = 'BranchSelectionList';
+
 const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick }) => {
-    const { currentUser, logout, authSettings } = useAuth();
-    const { restoreData, dbUsageStatus } = useData(); 
+    const { currentUser, authSettings } = useAuthState();
+    const { logout } = useAuthActions();
+    const { restoreData } = useDataActions();
+    const { dbUsageStatus } = useDataStatus();
     const { syncStatus, syncErrorMessage } = useCloudSync(); 
     const { updateReceiptSettings, receiptSettings } = useSettings();
     const { processIncomingTransfers } = useProduct(); // NEW
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
     
     const [isDataModalOpen, setDataModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -57,14 +174,44 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
     
     // Conflict Modal State
     const [isConflictModalOpen, setConflictModalOpen] = useState(false);
+    const [isCompactViewport, setIsCompactViewport] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const updateViewportMode = () => {
+            setIsCompactViewport(window.innerHeight <= 820 || window.innerWidth < 768);
+        };
+
+        updateViewportMode();
+        window.addEventListener('resize', updateViewportMode);
+
+        return () => window.removeEventListener('resize', updateViewportMode);
+    }, []);
 
     // SECURITY CHECK: Only 'admin' role can see destructive cloud options
     const isAdmin = currentUser?.role === 'admin';
 
     // Show warning if database is heavy (e.g. > 5000 records)
-    const showMemoryWarning = isAdmin && dbUsageStatus && dbUsageStatus.totalRecords > 5000;
+    const showMemoryWarning = Boolean(
+        isAdmin && dbUsageStatus && dbUsageStatus.totalRecords > 5000
+    );
+
+    useRenderProfiler('Header', {
+        activeView,
+        isDataModalOpen,
+        isBranchModalOpen,
+        isArchivingModalOpen,
+        isConflictModalOpen,
+        isProcessing,
+        syncStatus,
+        syncErrorMessage,
+        showMemoryWarning,
+        selectedBranchId,
+        availableBranchesCount: availableBranches.length,
+        currentUserId: currentUser?.id ?? null,
+        compactViewport: isCompactViewport,
+    });
 
     // --- Helper untuk Redirect ke Settings jika belum config ---
     const checkCloudConfig = () => {
@@ -92,9 +239,9 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
         }
     };
 
-    const handleLocalRestoreClick = () => {
+    const handleLocalRestoreClick = useCallback(() => {
         fileInputRef.current?.click();
-    };
+    }, []);
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -253,22 +400,22 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
         });
     };
 
-    const handleSaveBranchSelection = () => {
+    const handleSaveBranchSelection = useCallback(() => {
         if (!selectedBranchId) return;
         updateReceiptSettings({ ...receiptSettings, storeId: selectedBranchId });
         setBranchModalOpen(false);
         showAlert({ type: 'alert', title: 'Setup Selesai', message: `Identitas disimpan sebagai: ${selectedBranchId}. Aplikasi akan dimuat ulang.` });
         setTimeout(() => window.location.reload(), 1500); 
-    };
+    }, [receiptSettings, selectedBranchId, showAlert, updateReceiptSettings]);
 
-    const handleSetAsCentral = () => {
+    const handleSetAsCentral = useCallback(() => {
         updateReceiptSettings({ ...receiptSettings, storeId: 'PUSAT' });
         setBranchModalOpen(false);
         showAlert({ type: 'alert', title: 'Mode Pusat Aktif', message: 'Perangkat ini diatur sebagai PUSAT (Admin). Aplikasi akan dimuat ulang.' });
         setTimeout(() => window.location.reload(), 1500); 
-    };
+    }, [receiptSettings, showAlert, updateReceiptSettings]);
 
-    const handleSyncErrorClick = () => {
+    const handleSyncErrorClick = useCallback(() => {
         if (syncErrorMessage && (syncErrorMessage.includes('QUOTA') || syncErrorMessage.includes('Penuh'))) {
             showAlert({
                 type: 'alert',
@@ -288,77 +435,46 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
         } else {
             showAlert({ type: 'alert', title: 'Gagal Sinkronisasi', message: syncErrorMessage || 'Terjadi kesalahan jaringan.' });
         }
-    }
+    }, [showAlert, syncErrorMessage]);
+
+    const openArchivingModal = useCallback(() => {
+        setIsArchivingModalOpen(true);
+    }, []);
+
+    const handleSelectBranch = useCallback((branchId: string) => {
+        setSelectedBranchId(branchId);
+    }, []);
 
     return (
         <>
-        <header className="sticky top-0 z-[60] flex items-start md:items-center justify-between p-4 bg-slate-900/80 backdrop-blur-xl border-b border-slate-700/50 flex-shrink-0 gap-3">
-            <div className="flex items-start md:items-center min-w-0">
-                <button onClick={onMenuClick} className="p-1 mr-3 md:hidden text-slate-300 hover:text-white" aria-label="Buka menu">
-                    <Icon name="menu" className="w-6 h-6" />
+        <header className={`sticky top-0 z-[60] flex items-center justify-between bg-slate-900/80 backdrop-blur-xl border-b border-slate-700/50 flex-shrink-0 ${isCompactViewport ? 'px-3 py-2.5 gap-2 min-h-[60px]' : 'p-4 gap-3 min-h-[68px]'}`}>
+            <div className={`flex items-center min-w-0 ${isCompactViewport ? 'gap-1.5' : ''}`}>
+                <button
+                    onClick={onMenuClick}
+                    className={`text-slate-300 hover:text-white md:hidden inline-flex items-center justify-center self-center rounded-xl border border-slate-700/70 bg-slate-800/60 shadow-sm ${isCompactViewport ? 'w-9 h-9' : 'w-10 h-10 mr-3'}`}
+                    aria-label="Buka menu"
+                >
+                    <Icon name="menu" className={`${isCompactViewport ? 'w-5 h-5' : 'w-6 h-6'} block`} />
                 </button>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3 min-w-0">
-                    <h1 className="text-lg font-semibold text-white truncate max-w-[55vw] sm:max-w-none">{viewTitles[activeView]}</h1>
+                <div className={`flex min-w-0 ${isCompactViewport ? 'items-center gap-2 min-h-[36px]' : 'flex-col sm:flex-row sm:items-center sm:gap-3'}`}>
+                    <h1 className={`font-semibold text-white truncate ${isCompactViewport ? 'text-[15px] leading-tight max-w-[42vw] sm:max-w-[52vw]' : 'text-lg leading-tight max-w-[55vw] sm:max-w-none'}`}>{viewTitles[activeView]}</h1>
                     
-                    <AnimatePresence mode="wait">
-                        {syncStatus === 'syncing' && (
-                            <motion.div 
-                                key="syncing"
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                 exit={{ opacity: 0, scale: 0.9 }}
-                                 className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-900/30 border border-blue-800 shrink-0"
-                             >
-                                 <Skeleton variant="pill" width={8} height={8} className="bg-blue-400" />
-                                 <Skeleton variant="text" width={48} height={12} className="bg-blue-400/50" />
-                             </motion.div>
-                        )}
-                        {syncStatus === 'success' && (
-                            <motion.div 
-                                key="success"
-                                initial={{ opacity: 0, scale: 0.9, y: 5 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0 }}
-                                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-900/30 border border-green-800 shrink-0"
-                            >
-                                <Icon name="check-circle-fill" className="w-3 h-3 text-green-400" />
-                                <span className="text-[10px] text-green-300 font-medium">Tersimpan di Cloud</span>
-                            </motion.div>
-                        )}
-                        {syncStatus === 'error' && (
-                            <motion.button 
-                                key="error"
-                                initial={{ opacity: 0, x: 10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                onClick={handleSyncErrorClick} 
-                                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-900/30 border border-red-800 hover:bg-red-900/50 transition-colors shrink-0"
-                            >
-                                <Icon name="warning" className="w-3 h-3 text-red-400" />
-                                <span className="text-[10px] text-red-300 font-medium">
-                                    {syncErrorMessage && syncErrorMessage.includes('QUOTA') ? 'Cloud Penuh' : 'Gagal Sync'}
-                                </span>
-                            </motion.button>
-                        )}
-                    </AnimatePresence>
-                    
-                    {showMemoryWarning && (
-                        <button 
-                            onClick={() => setIsArchivingModalOpen(true)}
-                            className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-orange-900/30 border border-orange-800 hover:bg-orange-900/50 transition-colors animate-pulse shrink-0"
-                            title="Database penuh. Klik untuk bersihkan."
-                        >
-                            <Icon name="database" className="w-3 h-3 text-orange-400" />
-                            <span className="text-[10px] text-orange-300 font-bold">Memori Penuh</span>
-                        </button>
-                    )}
+                    <SyncStatusBadge
+                        syncStatus={syncStatus}
+                        syncErrorMessage={syncErrorMessage}
+                        showMemoryWarning={showMemoryWarning}
+                        onSyncErrorClick={handleSyncErrorClick}
+                        onOpenArchiving={openArchivingModal}
+                        compact={isCompactViewport}
+                    />
                 </div>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
+            <div className={`flex items-center shrink-0 ${isCompactViewport ? 'gap-2' : 'gap-3'}`}>
                  <Button
                     onClick={() => setDataModalOpen(true)}
                     variant="secondary"
                     size="sm"
-                    className="p-2 aspect-square bg-slate-700 border border-slate-600 hover:bg-slate-600"
+                    className={`${isCompactViewport ? 'p-1.5' : 'p-2'} aspect-square bg-slate-700 border border-slate-600 hover:bg-slate-600`}
                     aria-label="Menu Data & Sync"
                     title="Menu Data & Sinkronisasi"
                 >
@@ -370,7 +486,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                         onClick={() => setActiveView('help')} 
                         variant="secondary" 
                         size="sm" 
-                        className="p-2 aspect-square"
+                        className={`${isCompactViewport ? 'p-1.5' : 'p-2'} aspect-square`}
                         aria-label="Bantuan"
                         title="Bantuan & Info"
                     >
@@ -379,12 +495,12 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                 )}
                 {currentUser && authSettings.enabled && (
                     <>
-                        <span className="text-sm text-slate-300 hidden sm:block">
+                        <span className={`text-sm text-slate-300 ${isCompactViewport ? 'hidden lg:block' : 'hidden sm:block'}`}>
                             Login sebagai: <span className="font-bold text-white">{currentUser.name}</span>
                         </span>
-                        <Button onClick={logout} variant="secondary" size="sm" aria-label="Logout">
+                        <Button onClick={logout} variant="secondary" size="sm" aria-label="Logout" className={isCompactViewport ? 'px-2 py-1.5' : ''}>
                             <Icon name="logout" className="w-4 h-4" />
-                            <span className="hidden sm:inline">Logout</span>
+                            <span className={isCompactViewport ? 'hidden lg:inline' : 'hidden sm:inline'}>Logout</span>
                         </Button>
                     </>
                 )}
@@ -521,25 +637,11 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
 
                 <div>
                     <p className="text-slate-300 text-sm mb-2">Atau pilih lokasi operasional:</p>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                        {availableBranches.map(branch => (
-                            <button
-                                key={branch.id}
-                                onClick={() => setSelectedBranchId(branch.id)}
-                                className={`w-full text-left p-3 rounded-lg border transition-colors flex justify-between items-center
-                                    ${selectedBranchId === branch.id 
-                                        ? 'bg-[#347758] border-[#347758] text-white' 
-                                        : 'bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700'
-                                    }`}
-                            >
-                                <div>
-                                    <div className="font-bold">{branch.name}</div>
-                                    <div className="text-xs opacity-75">{branch.id}</div>
-                                </div>
-                                {selectedBranchId === branch.id && <Icon name="check-circle-fill" className="w-5 h-5"/>}
-                            </button>
-                        ))}
-                    </div>
+                    <BranchSelectionList
+                        availableBranches={availableBranches}
+                        selectedBranchId={selectedBranchId}
+                        onSelectBranch={handleSelectBranch}
+                    />
                 </div>
 
                 <Button onClick={handleSaveBranchSelection} disabled={!selectedBranchId} className="w-full">

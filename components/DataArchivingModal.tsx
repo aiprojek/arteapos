@@ -7,8 +7,8 @@ import Skeleton from './Skeleton';
 import { dataService } from '../services/dataService';
 import { generateTablePDF } from '../utils/pdfGenerator';
 import { useSettings } from '../context/SettingsContext';
-import { useUI } from '../context/UIContext';
-import { useCloudSync } from '../context/CloudSyncContext'; // IMPORT CONTEXT
+import { useUIActions } from '../context/UIContext';
+import { requestAutoSync } from '../services/appEvents';
 
 interface DataArchivingModalProps {
     isOpen: boolean;
@@ -17,8 +17,7 @@ interface DataArchivingModalProps {
 
 const DataArchivingModal: React.FC<DataArchivingModalProps> = ({ isOpen, onClose }) => {
     const { receiptSettings } = useSettings();
-    const { showAlert } = useUI();
-    const { triggerAutoSync } = useCloudSync(); // USE HOOK
+    const { showAlert } = useUIActions();
     const [range, setRange] = useState<'1m' | '3m' | '6m' | '1y'>('3m');
     const [counts, setCounts] = useState<any>(null);
     const [loading, setLoading] = useState(false);
@@ -137,7 +136,7 @@ const DataArchivingModal: React.FC<DataArchivingModalProps> = ({ isOpen, onClose
                     await dataService.deleteOperationalDataByRange(cutoff);
                     
                     // 2. Trigger Sync ke Cloud (Agar file di Cloud ikut bersih/ringan)
-                    await triggerAutoSync('System-Admin');
+                    await requestAutoSync({ staffName: 'System-Admin' });
 
                     showAlert({ 
                         type: 'alert', 

@@ -13,6 +13,7 @@ const ActiveOrderList: React.FC<ActiveOrderListProps> = ({ cart, onOpenDiscountM
     const { removeFromCart } = useCart();
     // Selected Item state for Keyboard Shortcuts (Del)
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+    const [listDensity, setListDensity] = useState<'normal' | 'compact' | 'ultra-compact'>('normal');
 
     // Auto-select last added item
     useEffect(() => {
@@ -45,15 +46,47 @@ const ActiveOrderList: React.FC<ActiveOrderListProps> = ({ cart, onOpenDiscountM
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [selectedItemId, removeFromCart]);
 
+    useEffect(() => {
+        const updateCompactMode = () => {
+            const isUltraCompact = window.innerHeight <= 720 || cart.length >= 8;
+            const isCompact = window.innerHeight <= 820 || cart.length >= 5;
+
+            if (isUltraCompact) {
+                setListDensity('ultra-compact');
+                return;
+            }
+
+            if (isCompact) {
+                setListDensity('compact');
+                return;
+            }
+
+            setListDensity('normal');
+        };
+
+        updateCompactMode();
+        window.addEventListener('resize', updateCompactMode);
+
+        return () => window.removeEventListener('resize', updateCompactMode);
+    }, [cart.length]);
+
+    const isCompactList = listDensity !== 'normal';
+    const isUltraCompactList = listDensity === 'ultra-compact';
+
     return (
-        <div className="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1 space-y-1 pb-2 h-full">
+        <div className={`flex-1 min-h-0 overflow-y-auto pr-1 -mr-1 pb-2 h-full ${isUltraCompactList ? 'space-y-0.5' : isCompactList ? 'space-y-1' : 'space-y-1.5'}`}>
             {cart.map(item => (
                 <div 
                     key={item.cartItemId} 
                     onClick={() => setSelectedItemId(item.cartItemId)}
-                    className={`cursor-pointer rounded-lg transition-colors border ${selectedItemId === item.cartItemId ? 'border-[#347758] ring-1 ring-[#347758] bg-slate-700' : 'border-transparent'}`}
+                    className={`cursor-pointer rounded-lg transition-colors border ${selectedItemId === item.cartItemId ? 'border-[#347758] ring-1 ring-[#347758] bg-slate-700/40' : 'border-transparent'}`}
                 >
-                    <CartItemComponent item={item} onOpenDiscountModal={onOpenDiscountModal}/>
+                    <CartItemComponent
+                        item={item}
+                        onOpenDiscountModal={onOpenDiscountModal}
+                        compact={isCompactList}
+                        ultraCompact={isUltraCompactList}
+                    />
                 </div>
             ))}
         </div>

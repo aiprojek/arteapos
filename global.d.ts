@@ -9,7 +9,7 @@ declare module 'peerjs' {
 }
 
 declare module 'tesseract.js' {
-  export function createWorker(lang?: string): Promise<any>;
+  export function createWorker(lang?: string, oem?: number, options?: Record<string, unknown>, config?: Record<string, unknown>): Promise<any>;
 }
 
 declare module '@supabase/supabase-js' {

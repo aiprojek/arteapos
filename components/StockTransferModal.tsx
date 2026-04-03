@@ -4,7 +4,7 @@ import Modal from './Modal';
 import Button from './Button';
 import Icon from './Icon';
 import { useProduct } from '../context/ProductContext';
-import { useUI } from '../context/UIContext';
+import { useUIActions } from '../context/UIContext';
 import { useSettings } from '../context/SettingsContext';
 import { dropboxService } from '../services/dropboxService';
 
@@ -16,7 +16,7 @@ interface StockTransferModalProps {
 const StockTransferModal: React.FC<StockTransferModalProps> = ({ isOpen, onClose }) => {
     const { products, rawMaterials, processOutgoingTransfer } = useProduct(); // IMPORT FUNCTION
     const { receiptSettings } = useSettings();
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
     
     const [targetStoreId, setTargetStoreId] = useState('');
     const [searchTerm, setSearchTerm] = useState('');

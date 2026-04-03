@@ -1,5 +1,5 @@
 import React, { createContext, useContext, ReactNode, useCallback } from 'react';
-import { useData } from './DataContext';
+import { useDataActions, useMasterData } from './DataContext';
 import type { DiscountDefinition } from '../types';
 
 interface DiscountContextType {
@@ -12,8 +12,8 @@ interface DiscountContextType {
 const DiscountContext = createContext<DiscountContextType | undefined>(undefined);
 
 export const DiscountProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { data, setData } = useData();
-    const { discountDefinitions = [] } = data;
+    const { setData } = useDataActions();
+    const { discountDefinitions = [] } = useMasterData();
 
     const addDiscountDefinition = useCallback((discountData: Omit<DiscountDefinition, 'id'>) => {
         const newDiscount = { ...discountData, id: Date.now().toString() };

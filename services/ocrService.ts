@@ -7,10 +7,16 @@ interface OCRResult {
     text: string;
 }
 
+const OCR_OPTIONS = {
+    workerPath: './vendor/tesseract/worker.min.js',
+    corePath: './vendor/tesseract-core',
+    langPath: './vendor/tesseract-lang/eng',
+};
+
 export const ocrService = {
     scanReceipt: async (image: string): Promise<OCRResult> => {
         try {
-            const worker = await createWorker('eng'); // English is better for numbers generally, can add 'ind'
+            const worker = await createWorker('eng', 1, OCR_OPTIONS);
             const { data: { text } } = await worker.recognize(image);
             await worker.terminate();
 

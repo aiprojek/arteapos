@@ -2,14 +2,14 @@
 import React, { useMemo, useState, useRef } from 'react';
 import { useFinance } from '../../context/FinanceContext';
 import { useSession } from '../../context/SessionContext'; // Import Session
-import { useUI } from '../../context/UIContext';
-import { useAuth } from '../../context/AuthContext';
-import { useAudit } from '../../context/AuditContext'; // Use new context
+import { useUIActions } from '../../context/UIContext';
+import { useAuthState } from '../../context/AuthContext';
 import { CURRENCY_FORMATTER } from '../../constants';
 import Button from '../Button';
 import VirtualizedTable from '../VirtualizedTable';
 import Modal from '../Modal';
 import Icon from '../Icon';
+import { emitAuditEvent } from '../../services/appEvents';
 import type { Transaction, PaymentMethod } from '../../types';
 import { compressImage } from '../../utils/imageCompression';
 
@@ -21,9 +21,8 @@ interface DebtsTabProps {
 const DebtsTab: React.FC<DebtsTabProps> = ({ dataSource = 'local', cloudData = [] }) => {
     const { transactions: localTransactions, addPaymentToTransaction } = useFinance();
     const { addCashMovement, session } = useSession(); 
-    const { logAudit } = useAudit();
-    const { currentUser } = useAuth();
-    const { showAlert } = useUI();
+    const { currentUser } = useAuthState();
+    const { showAlert } = useUIActions();
 
     // Modal State
     const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -90,12 +89,12 @@ const DebtsTab: React.FC<DebtsTabProps> = ({ dataSource = 'local', cloudData = [
         }
 
         // 3. Audit Log
-        logAudit(
-            currentUser, 
-            'OTHER', 
-            `Menerima pembayaran utang sebesar ${CURRENCY_FORMATTER.format(amount)} (${paymentMethod}) untuk transaksi #${selectedTransaction.id.slice(-4)}`, 
-            selectedTransaction.id
-        );
+        void emitAuditEvent({
+            user: currentUser,
+            action: 'OTHER',
+            details: `Menerima pembayaran utang sebesar ${CURRENCY_FORMATTER.format(amount)} (${paymentMethod}) untuk transaksi #${selectedTransaction.id.slice(-4)}`,
+            targetId: selectedTransaction.id,
+        });
 
         showAlert({ type: 'alert', title: 'Berhasil', message: 'Pembayaran utang berhasil dicatat.' });
         setPaymentModalOpen(false);

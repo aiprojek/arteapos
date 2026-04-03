@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Icon from '../components/Icon';
 import Button from '../components/Button';
-import { useAuth } from '../context/AuthContext'; 
+import { useAuthState } from '../context/AuthContext'; 
 import ShowcaseModal from '../components/ShowcaseModal'; // Import Showcase
 
 // Import Modular Tabs
@@ -15,7 +15,7 @@ import PremiumTab from '../components/help/PremiumTab';
 import StrategyTab from '../components/help/StrategyTab';
 
 const HelpView: React.FC = () => {
-    const { currentUser } = useAuth();
+    const { currentUser } = useAuthState();
     
     // State untuk Showcase Modal
     const [isShowcaseOpen, setShowcaseOpen] = useState(false);

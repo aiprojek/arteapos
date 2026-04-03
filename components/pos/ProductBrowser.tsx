@@ -30,6 +30,8 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
     const [activeCategory, setActiveCategory] = useState('Semua');
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [isCompactViewport, setIsCompactViewport] = useState(false);
+    const [isUltraCompactViewport, setIsUltraCompactViewport] = useState(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Keyboard shortcut for search
@@ -47,6 +49,18 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isSessionLocked]);
+
+    useEffect(() => {
+        const updateViewportMode = () => {
+            setIsCompactViewport(window.innerHeight <= 820 || window.innerWidth < 768);
+            setIsUltraCompactViewport(window.innerHeight <= 720 || window.innerWidth < 480);
+        };
+
+        updateViewportMode();
+        window.addEventListener('resize', updateViewportMode);
+
+        return () => window.removeEventListener('resize', updateViewportMode);
+    }, []);
 
     // FILTER LOGIC: Filter products based on Store ID
     const availableProducts = useMemo(() => {
@@ -85,79 +99,133 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
     return (
         <div className="flex flex-col h-full">
             {/* Search & Actions Header */}
-            <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                <div className="relative flex-1">
+            <div className={`${isUltraCompactViewport ? 'mb-2 space-y-1.5' : 'mb-3 space-y-2'}`}>
+                <div className="flex items-center gap-2">
+                    <div className="relative flex-1 min-w-0">
                         <input
-                        ref={searchInputRef}
-                        type="text"
-                        placeholder="Cari produk... (Ctrl+/)"
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        disabled={isSessionLocked}
-                        className={`w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-[#347758] focus:border-[#347758] ${isSessionLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    />
-                        <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                            ref={searchInputRef}
+                            type="text"
+                            placeholder="Cari produk..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            disabled={isSessionLocked}
+                            className={`w-full bg-slate-800 border border-slate-700 rounded-lg ${isUltraCompactViewport ? 'pl-8 pr-2.5 py-1.5 text-[13px]' : isCompactViewport ? 'pl-9 pr-3 py-2 text-sm' : 'pl-9 pr-3 py-2.5 sm:py-2 text-sm'} text-white focus:ring-[#347758] focus:border-[#347758] ${isSessionLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        />
+                        <Icon name="search" className={`absolute top-1/2 -translate-y-1/2 text-slate-400 ${isUltraCompactViewport ? 'left-2.5 w-3.5 h-3.5' : 'left-3 w-4 h-4 sm:w-5 sm:h-5'}`} />
+                    </div>
+
+                    <div className="hidden sm:flex items-center gap-2 overflow-x-auto scrollbar-hide">
+                        {inventorySettings.enabled && (
+                            <div className={`flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-900/40 ${isCompactViewport ? 'p-0.5' : 'p-1'}`}>
+                                <Button
+                                    variant="secondary"
+                                    onClick={onOpenRestock}
+                                    disabled={isSessionLocked}
+                                    title="Terima Barang / Lapor Waste"
+                                    className={`${isUltraCompactViewport ? 'px-2 py-1.5' : isCompactViewport ? 'px-2.5 py-1.5' : 'px-3'} bg-slate-800 border border-slate-700`}
+                                >
+                                    <Icon name="tag" className="w-5 h-5" />
+                                    {!isCompactViewport && <span className="text-xs">Terima</span>}
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    onClick={onOpenOpname}
+                                    disabled={isSessionLocked}
+                                    title="Stock Opname (Audit Stok)"
+                                    className={`${isUltraCompactViewport ? 'px-2 py-1.5' : isCompactViewport ? 'px-2.5 py-1.5' : 'px-3'} bg-slate-800 border border-slate-700`}
+                                >
+                                    <Icon name="boxes" className="w-5 h-5" />
+                                    {!isCompactViewport && <span className="text-xs">Opname</span>}
+                                </Button>
+                            </div>
+                        )}
+                        <div className={`flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-900/40 ${isCompactViewport ? 'p-0.5' : 'p-1'}`}>
+                            <Button
+                                variant="secondary"
+                                onClick={onOpenScanner}
+                                disabled={isSessionLocked}
+                                title="Pindai Barcode Produk"
+                                className={`${isUltraCompactViewport ? 'px-2 py-1.5' : isCompactViewport ? 'px-2.5 py-1.5' : 'px-3'} bg-slate-800 border border-slate-700`}
+                            >
+                                <Icon name="barcode" className="w-5 h-5" />
+                                {!isCompactViewport && <span className="text-xs">Scan</span>}
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                onClick={onOpenChannelSales}
+                                disabled={isSessionLocked}
+                                title="Catat Penjualan Channel Online"
+                                className={`${isUltraCompactViewport ? 'px-2 py-1.5' : isCompactViewport ? 'px-2.5 py-1.5' : 'px-3'} bg-slate-800 border border-slate-700`}
+                            >
+                                <Icon name="cloud" className="w-5 h-5" />
+                                {!isCompactViewport && <span className="text-xs">Channel</span>}
+                            </Button>
+                        </div>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
-                    {/* Inventory Actions */}
+
+                <div className={`grid sm:hidden ${inventorySettings.enabled ? 'grid-cols-4' : 'grid-cols-2'} ${isUltraCompactViewport ? 'gap-1.5' : 'gap-2'}`}>
                     {inventorySettings.enabled && (
-                        <div className="flex gap-1 flex-shrink-0">
-                            <Button 
-                                variant="secondary" 
+                        <>
+                            <button
+                                type="button"
                                 onClick={onOpenRestock}
                                 disabled={isSessionLocked}
                                 title="Terima Barang / Lapor Waste"
-                                className="bg-slate-800 border border-slate-700 px-3"
+                                className={`flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 disabled:opacity-50 ${isUltraCompactViewport ? 'gap-0.5 px-1.5 py-1.5 text-[10px]' : 'gap-1 px-2 py-2 text-[11px]'}`}
                             >
-                                <Icon name="tag" className="w-5 h-5" /> 
-                            </Button>
-                            <Button 
-                                variant="secondary" 
+                                <Icon name="tag" className={`${isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+                                <span className="leading-none">Terima</span>
+                            </button>
+                            <button
+                                type="button"
                                 onClick={onOpenOpname}
                                 disabled={isSessionLocked}
                                 title="Stock Opname (Audit Stok)"
-                                className="bg-slate-800 border border-slate-700 px-3"
+                                className={`flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 disabled:opacity-50 ${isUltraCompactViewport ? 'gap-0.5 px-1.5 py-1.5 text-[10px]' : 'gap-1 px-2 py-2 text-[11px]'}`}
                             >
-                                <Icon name="boxes" className="w-5 h-5" />
-                            </Button>
-                        </div>
+                                <Icon name="boxes" className={`${isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+                                <span className="leading-none">Opname</span>
+                            </button>
+                        </>
                     )}
-                    
-                    <Button 
-                        variant="secondary" 
+                    <button
+                        type="button"
                         onClick={onOpenScanner}
                         disabled={isSessionLocked}
                         title="Pindai Barcode Produk"
-                        className="bg-slate-800 border border-slate-700 flex-shrink-0"
+                        className={`flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 disabled:opacity-50 ${isUltraCompactViewport ? 'gap-0.5 px-1.5 py-1.5 text-[10px]' : 'gap-1 px-2 py-2 text-[11px]'}`}
                     >
-                        <Icon name="barcode" className="w-5 h-5" />
-                    </Button>
-                    <Button
-                        variant="secondary"
+                        <Icon name="barcode" className={`${isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+                        <span className="leading-none">Scan</span>
+                    </button>
+                    <button
+                        type="button"
                         onClick={onOpenChannelSales}
                         disabled={isSessionLocked}
                         title="Catat Penjualan Channel Online"
-                        className="bg-slate-800 border border-slate-700 flex-shrink-0"
+                        className={`flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 disabled:opacity-50 ${isUltraCompactViewport ? 'gap-0.5 px-1.5 py-1.5 text-[10px]' : 'gap-1 px-2 py-2 text-[11px]'}`}
                     >
-                        <Icon name="cloud" className="w-5 h-5" />
-                    </Button>
+                        <Icon name="cloud" className={`${isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+                        <span className="leading-none">Channel</span>
+                    </button>
                 </div>
             </div>
 
             {/* Category Filter & View Toggle */}
-            <div className="flex items-center justify-between gap-4 pb-3 mb-2">
-                    <div className="flex items-center gap-2 overflow-x-auto -mx-4 px-4 scrollbar-hide">
-                    <button onClick={() => setActiveCategory('Semua')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full transition-colors ${activeCategory === 'Semua' ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>Semua</button>
-                    <button onClick={() => setActiveCategory('__FAVORITES__')} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full flex items-center gap-1 transition-colors ${activeCategory === '__FAVORITES__' ? 'bg-[#347758] text-white' : 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/40'}`}>
+            <div className={`flex items-center justify-between gap-3 ${isUltraCompactViewport ? 'pb-2 mb-1.5' : 'pb-3 mb-2'}`}>
+                <div className={`flex items-center overflow-x-auto -mx-4 px-4 scrollbar-hide min-w-0 flex-1 ${isUltraCompactViewport ? 'gap-1.5' : 'gap-2'}`}>
+                    <button onClick={() => setActiveCategory('Semua')} className={`flex-shrink-0 rounded-full transition-colors ${isUltraCompactViewport ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1 text-xs sm:text-sm'} ${activeCategory === 'Semua' ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>Semua</button>
+                    <button onClick={() => setActiveCategory('__FAVORITES__')} className={`flex-shrink-0 rounded-full flex items-center gap-1 transition-colors ${isUltraCompactViewport ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1 text-xs sm:text-sm'} ${activeCategory === '__FAVORITES__' ? 'bg-[#347758] text-white' : 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/40'}`}>
                         ⭐ Favorit
                     </button>
                     {categories.map(cat => (
-                        <button key={cat} onClick={() => setActiveCategory(cat)} className={`flex-shrink-0 px-3 py-1 text-sm rounded-full transition-colors ${activeCategory === cat ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>{cat}</button>
+                        <button key={cat} onClick={() => setActiveCategory(cat)} className={`flex-shrink-0 rounded-full transition-colors ${isUltraCompactViewport ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1 text-xs sm:text-sm'} ${activeCategory === cat ? 'bg-[#347758] text-white' : 'bg-slate-700 text-slate-300'}`}>{cat}</button>
                     ))}
                 </div>
-                <div className="flex items-center bg-slate-700 rounded-lg p-1 shrink-0">
-                    <button onClick={() => setViewMode('grid')} className={`p-1 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-[#347758] text-white' : 'text-slate-400 hover:text-white'}`}><Icon name="products" className="w-4 h-4"/></button>
-                    <button onClick={() => setViewMode('list')} className={`p-1 rounded-md transition-colors ${viewMode === 'list' ? 'bg-[#347758] text-white' : 'text-slate-400 hover:text-white'}`}><Icon name="menu" className="w-4 h-4"/></button>
+                <div className={`flex items-center bg-slate-700 rounded-lg shrink-0 ${isUltraCompactViewport ? 'p-0.5' : 'p-1'}`}>
+                    <button onClick={() => setViewMode('grid')} className={`${isUltraCompactViewport ? 'p-1' : 'p-1.5'} rounded-md transition-colors ${viewMode === 'grid' ? 'bg-[#347758] text-white' : 'text-slate-400 hover:text-white'}`}><Icon name="products" className={`${isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'}`}/></button>
+                    <button onClick={() => setViewMode('list')} className={`${isUltraCompactViewport ? 'p-1' : 'p-1.5'} rounded-md transition-colors ${viewMode === 'list' ? 'bg-[#347758] text-white' : 'text-slate-400 hover:text-white'}`}><Icon name="menu" className={`${isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'}`}/></button>
                 </div>
             </div>
 
@@ -174,15 +242,29 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
                         {receiptSettings.storeId && <p className="text-xs mt-1">(Filter Cabang: {receiptSettings.storeId})</p>}
                     </div>
                 ) : viewMode === 'grid' ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                    <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 ${isUltraCompactViewport ? 'gap-2' : 'gap-3'}`}>
                         {filteredProducts.map(product => (
-                        <ProductCard key={product.id} product={product} onClick={() => onProductClick(product)} availability={isProductAvailable(product)} />
+                        <ProductCard
+                            key={product.id}
+                            product={product}
+                            onClick={() => onProductClick(product)}
+                            availability={isProductAvailable(product)}
+                            compact={isCompactViewport}
+                            ultraCompact={isUltraCompactViewport}
+                        />
                         ))}
                     </div>
                 ) : (
-                        <div className="space-y-2">
+                        <div className={isUltraCompactViewport ? 'space-y-1.5' : 'space-y-2'}>
                         {filteredProducts.map(product => (
-                            <ProductListItem key={product.id} product={product} onClick={() => onProductClick(product)} availability={isProductAvailable(product)} />
+                            <ProductListItem
+                                key={product.id}
+                                product={product}
+                                onClick={() => onProductClick(product)}
+                                availability={isProductAvailable(product)}
+                                compact={isCompactViewport}
+                                ultraCompact={isUltraCompactViewport}
+                            />
                         ))}
                     </div>
                 )}

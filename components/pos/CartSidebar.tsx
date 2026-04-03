@@ -1,10 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCart } from '../../context/CartContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useCustomer } from '../../context/CustomerContext';
 import { useSession } from '../../context/SessionContext'; // IMPORTED
-import { useCustomerDisplay } from '../../context/CustomerDisplayContext'; 
+import { useCustomerDisplayStatus } from '../../context/CustomerDisplayContext'; 
 import { CURRENCY_FORMATTER } from '../../constants';
 import Icon from '../Icon';
 import Button from '../Button';
@@ -74,18 +74,16 @@ const CustomerSelection: React.FC<{
     
     const isDineIn = orderType.toLowerCase().includes('makan') || orderType.toLowerCase().includes('dine') || orderType.toLowerCase().includes('meja');
 
-    // COMPACT CUSTOMER SELECTION BAR
     return (
-        <div className="space-y-1">
-            {/* Top Row: Selectors Row */}
-            <div className="flex gap-1">
-                {/* 1. Order Type Dropdown / Toggle */}
+        <div className="space-y-2">
+            <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Jenis Pesanan</p>
                 <div className="flex-1 min-w-0 bg-slate-700/80 rounded-lg p-1 border border-slate-600/50 flex items-center overflow-x-auto scrollbar-hide">
                     {availableOrderTypes.map(type => (
                         <button 
                             key={type}
                             onClick={() => onSelectOrderType(type)} 
-                            className={`flex-1 min-w-max px-2 py-1 text-[10px] leading-tight rounded transition-colors truncate ${orderType === type ? 'bg-[#347758] text-white font-bold shadow-sm' : 'text-slate-400 hover:text-slate-300'}`}
+                            className={`flex-1 min-w-max px-3 py-2 text-[11px] leading-tight rounded-md transition-colors truncate ${orderType === type ? 'bg-[#347758] text-white font-bold shadow-sm' : 'text-slate-400 hover:text-slate-300'}`}
                             title={type}
                         >
                             {type}
@@ -94,59 +92,65 @@ const CustomerSelection: React.FC<{
                 </div>
             </div>
 
-            <div className="flex gap-1">
-                 {/* 2. Table & Pax Input (If Dine In) */}
-                 {sessionSettings.enableTableManagement && isDineIn && (
-                    <div className="flex gap-1 bg-slate-700/80 rounded-lg p-1 border border-slate-600/50 flex-shrink-0 animate-fade-in">
-                        <div className="flex bg-slate-800 rounded px-1.5 items-center">
-                            <span className="text-slate-500 font-bold text-[9px] mr-1">T</span>
+            <div className="flex flex-col gap-2 sm:flex-row">
+                {sessionSettings.enableTableManagement && isDineIn && (
+                    <div className="flex gap-2 bg-slate-700/80 rounded-xl p-2 border border-slate-600/50 flex-shrink-0 animate-fade-in sm:w-auto">
+                        <div className="flex bg-slate-800 rounded-lg px-2 items-center min-w-[84px]">
+                            <span className="text-slate-500 font-bold text-[10px] mr-2">MEJA</span>
                             <input 
                                 type="text" 
                                 value={tableNumber} 
                                 onChange={(e) => setTableNumber(e.target.value)} 
                                 placeholder="-"
-                                className="w-6 bg-transparent text-white text-[11px] font-bold outline-none text-center"
+                                className="w-full bg-transparent text-white text-sm font-bold outline-none text-center"
                             />
                         </div>
-                        <div className="flex bg-slate-800 rounded px-1.5 items-center">
-                            <span className="text-slate-500 font-bold text-[9px] mr-1">P</span>
+                        <div className="flex bg-slate-800 rounded-lg px-2 items-center min-w-[72px]">
+                            <span className="text-slate-500 font-bold text-[10px] mr-2">PAX</span>
                             <input 
                                 type="number" 
                                 min="1"
                                 value={paxCount || ''} 
                                 onChange={(e) => setPaxCount(parseInt(e.target.value) || 0)} 
                                 placeholder="-"
-                                className="w-5 bg-transparent text-white text-[11px] font-bold outline-none text-center"
+                                className="w-full bg-transparent text-white text-sm font-bold outline-none text-center"
                             />
                         </div>
                     </div>
                 )}
 
-                {/* 3. Customer Pill */}
                 {membershipSettings.enabled && (
-                    <div className={`flex-1 flex items-center justify-between p-1 rounded-lg border ${selectedCustomer ? 'bg-[#347758]/20 border-[#347758]/30' : 'bg-slate-700/80 border-slate-600/50'}`}>
-                        <div className="flex items-center gap-1.5 overflow-hidden pl-1 flex-1 cursor-pointer" onClick={() => !selectedCustomer && onOpenSearchModal()}>
-                            <Icon name="users" className={`w-3 h-3 flex-shrink-0 ${selectedCustomer ? 'text-[#52a37c]' : 'text-slate-400'}`} />
+                    <div className={`flex-1 flex items-center justify-between p-2 rounded-xl border min-h-[54px] ${selectedCustomer ? 'bg-[#347758]/20 border-[#347758]/30' : 'bg-slate-700/80 border-slate-600/50'}`}>
+                        <div className="flex items-center gap-2 overflow-hidden pl-1 flex-1 cursor-pointer" onClick={() => !selectedCustomer && onOpenSearchModal()}>
+                            <Icon name="users" className={`w-4 h-4 flex-shrink-0 ${selectedCustomer ? 'text-[#52a37c]' : 'text-slate-400'}`} />
                             <div className="min-w-0">
-                                <p className={`font-bold text-[11px] leading-tight truncate ${selectedCustomer ? 'text-white' : 'text-slate-400'}`}>
+                                <p className={`font-bold text-xs leading-tight truncate ${selectedCustomer ? 'text-white' : 'text-slate-400'}`}>
                                     {selectedCustomer ? selectedCustomer.name : 'Pilih Member'}
+                                </p>
+                                <p className="text-[10px] text-slate-500 truncate">
+                                    {selectedCustomer ? 'Kelola saldo atau lepas member' : 'Cari member atau scan barcode'}
                                 </p>
                             </div>
                         </div>
                         
                         {selectedCustomer ? (
                             <div className="flex items-center gap-1 pl-1">
-                                <button onClick={onTopUpClick} className="text-[#52a37c] hover:bg-[#347758]/20 p-1 rounded transition-colors" title="Saldo">
-                                    <Icon name="cash" className="w-3 h-3"/>
+                                <button onClick={onTopUpClick} className="text-[#52a37c] hover:bg-[#347758]/20 p-1.5 rounded-lg transition-colors" title="Saldo">
+                                    <Icon name="cash" className="w-4 h-4"/>
                                 </button>
-                                <button onClick={() => onSelectCustomer(null)} className="text-slate-400 hover:text-red-400 p-1">
-                                    <Icon name="close" className="w-3 h-3"/>
+                                <button onClick={() => onSelectCustomer(null)} className="text-slate-400 hover:text-red-400 p-1.5 rounded-lg">
+                                    <Icon name="close" className="w-4 h-4"/>
                                 </button>
                             </div>
                         ) : (
-                            <button onClick={onOpenScanner} className="text-slate-400 hover:text-white p-1" title="Scan Barcode">
-                                <Icon name="barcode" className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center gap-1 pl-1">
+                                <button onClick={onOpenAddModal} className="text-slate-400 hover:text-white p-1.5 rounded-lg" title="Tambah Member">
+                                    <Icon name="plus" className="w-4 h-4" />
+                                </button>
+                                <button onClick={onOpenScanner} className="text-slate-400 hover:text-white p-1.5 rounded-lg" title="Scan Barcode">
+                                    <Icon name="barcode" className="w-4 h-4" />
+                                </button>
+                            </div>
                         )}
                     </div>
                 )}
@@ -191,7 +195,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const { sessionSettings } = useSession();
     const { membershipSettings, addBalance } = useCustomer();
     const { receiptSettings } = useSettings();
-    const { isDisplayConnected } = useCustomerDisplay(); 
+    const { isDisplayConnected } = useCustomerDisplayStatus(); 
 
     const { subtotal, itemDiscountAmount, cartDiscountAmount, taxAmount, serviceChargeAmount, finalTotal } = getCartTotals();
     
@@ -201,10 +205,37 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     const [isDualScreenModalOpen, setDualScreenModalOpen] = useState(false);
     const [isSavedCartsModalOpen, setIsSavedCartsModalOpen] = useState(false);
     const [savedCartSearchTerm, setSavedCartSearchTerm] = useState('');
+    const [isCartMetaCollapsed, setCartMetaCollapsed] = useState(false);
+    const [isTotalsExpanded, setTotalsExpanded] = useState(false);
+    const [isCompactViewport, setIsCompactViewport] = useState(false);
+    const [isUltraCompactViewport, setIsUltraCompactViewport] = useState(false);
 
     const filteredHeldCarts = heldCarts.filter(c => 
         c.name.toLowerCase().includes(savedCartSearchTerm.toLowerCase())
     );
+
+    useEffect(() => {
+        const updateViewportMode = () => {
+            setIsCompactViewport(window.innerHeight <= 820 || window.innerWidth < 640);
+            setIsUltraCompactViewport(window.innerHeight <= 720 || window.innerWidth < 480);
+        };
+
+        updateViewportMode();
+        window.addEventListener('resize', updateViewportMode);
+
+        return () => window.removeEventListener('resize', updateViewportMode);
+    }, []);
+
+    useEffect(() => {
+        if (cart.length === 0) {
+            setCartMetaCollapsed(false);
+            setTotalsExpanded(false);
+            return;
+        }
+
+        setCartMetaCollapsed(isCompactViewport);
+        setTotalsExpanded(!(isCompactViewport || isUltraCompactViewport));
+    }, [cart.length, isCompactViewport, isUltraCompactViewport]);
 
     const handleSwitchCart = (cartId: string | null) => {
         switchActiveCart(cartId);
@@ -260,7 +291,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
     };
 
     return (
-        <div className="w-full md:w-96 lg:w-[420px] bg-slate-800 md:rounded-xl shadow-none md:shadow-2xl flex flex-col p-4 flex-shrink-0 h-full border-l-0 md:border-l border-slate-700 transition-all">
+        <div className={`w-full md:w-96 lg:w-[420px] bg-slate-800 md:rounded-xl shadow-none md:shadow-2xl flex flex-col flex-shrink-0 h-full border-l-0 md:border-l border-slate-700 transition-all relative ${isUltraCompactViewport ? 'p-3' : 'p-4'}`}>
             {isSessionLocked && (
                 <div className="absolute inset-0 bg-slate-900/80 z-20 flex items-center justify-center rounded-xl backdrop-blur-sm">
                     <div className="text-center p-4">
@@ -271,14 +302,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             )}
             
             {/* Cart Header */}
-            <div className="flex items-center gap-2 mb-2">
-                <h2 className="text-lg font-bold text-white leading-none hidden md:block">Keranjang</h2>
+            <div className={`flex items-center gap-2 ${isUltraCompactViewport ? 'mb-1.5' : 'mb-2'}`}>
+                <div>
+                    <h2 className={`${isUltraCompactViewport ? 'text-base' : 'text-lg'} font-bold text-white leading-none`}>Keranjang</h2>
+                    <p className={`text-[11px] text-slate-500 mt-1 ${isCompactViewport ? 'hidden' : 'hidden md:block'}`}>Ringkasan pesanan dan pembayaran</p>
+                </div>
 
                 {/* New Cart Button */}
                 {(sessionSettings.enableCartHolding) && (
                     <button 
                         onClick={() => handleSwitchCart(null)} 
-                        className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors border
+                        className={`flex-shrink-0 flex items-center gap-1.5 ${isUltraCompactViewport ? 'px-2 py-1 text-[13px]' : 'px-2.5 py-1.5 text-sm'} rounded-lg transition-colors border
                             ${activeHeldCartId === null 
                                 ? 'bg-[#347758] text-white font-semibold border-[#347758]' 
                                 : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500'}`
@@ -293,7 +327,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 {heldCarts.length > 0 && (
                     <button 
                         onClick={() => setIsSavedCartsModalOpen(true)}
-                        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors border bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500"
+                        className={`flex-shrink-0 flex items-center gap-1.5 rounded-lg transition-colors border bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500 ${isUltraCompactViewport ? 'px-2 py-1 text-[13px]' : 'px-2.5 py-1.5 text-sm'}`}
                     >
                         <Icon name="cart" className="w-4 h-4" />
                         <span className="hidden sm:inline">Tersimpan</span>
@@ -307,41 +341,59 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                 {/* Second Screen Button (far right) */}
                 <button 
                     onClick={() => setDualScreenModalOpen(true)}
-                    className={`flex-shrink-0 p-1.5 rounded transition-colors ${isDisplayConnected ? 'bg-[#347758] text-white animate-pulse' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
+                    className={`flex-shrink-0 rounded-lg transition-colors ${isUltraCompactViewport ? 'p-1' : 'p-1.5'} ${isDisplayConnected ? 'bg-[#347758] text-white animate-pulse' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
                     title="Layar Kedua"
                 >
-                    <Icon name="cast" className="w-4 h-4"/>
+                    <Icon name="cast" className={isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
                 </button>
             </div>
 
             {/* --- 1. TOP BOX: PINNED CONFIG BAR --- */}
             {cart.length > 0 && (
-                <div className="mb-2 space-y-1.5 flex-shrink-0">
-                    <CustomerSelection 
-                        selectedCustomer={selectedCustomer} 
-                        onSelectCustomer={setSelectedCustomer}
-                        onOpenAddModal={onOpenCustomerForm}
-                        onOpenSearchModal={() => setIsMemberSearchOpen(true)}
-                        onOpenScanner={triggerScanner}
-                        onSelectOrderType={setOrderType}
-                        onTopUpClick={() => setIsTopUpOpen(true)}
-                        orderType={orderType}
-                    />
-                    
-                    <div className="flex gap-1">
-                        {membershipSettings.enabled && (
-                            <button onClick={onOpenRewardModal} disabled={!selectedCustomer} className={`flex-1 flex gap-1 items-center justify-center text-[10px] py-1 rounded border transition-colors ${selectedCustomer ? 'border-amber-700/50 hover:bg-amber-700/20 text-amber-500' : 'border-slate-700 text-slate-600 cursor-not-allowed'}`}>
-                                <Icon name="award" className="w-3 h-3"/> Loyalti
-                            </button>
-                        )}
-                        <button onClick={onOpenCartDiscountModal} className="flex-1 flex gap-1 items-center justify-center text-[10px] py-1 rounded border border-blue-700/50 hover:bg-blue-700/20 text-blue-400 transition-colors">
-                            <Icon name="tag" className="w-3 h-3"/> Diskon
+                <div className={`space-y-2 flex-shrink-0 ${isUltraCompactViewport ? 'mb-1.5' : 'mb-2'}`}>
+                    {isCompactViewport && (
+                        <button
+                            type="button"
+                            onClick={() => setCartMetaCollapsed(prev => !prev)}
+                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl border border-slate-700 bg-slate-900/50 text-left"
+                        >
+                            <div>
+                                <p className="text-xs font-semibold text-white">Info Pesanan</p>
+                                <p className="text-[11px] text-slate-500">
+                                    {selectedCustomer ? selectedCustomer.name : 'Pelanggan umum'} • {cart.length} item
+                                </p>
+                            </div>
+                            <Icon name={isCartMetaCollapsed ? 'chevron-down' : 'chevron-up'} className="w-4 h-4 text-slate-400" />
                         </button>
-                        {onSplitBill && (
-                            <button onClick={onSplitBill} className="flex-1 flex gap-1 items-center justify-center text-[10px] py-1 rounded border border-purple-700/50 hover:bg-purple-700/20 text-purple-400 transition-colors">
-                                <Icon name="share" className="w-3 h-3"/> Split
+                    )}
+
+                    <div className={`${isCartMetaCollapsed ? 'hidden' : 'block'} ${isUltraCompactViewport ? 'space-y-1.5' : 'space-y-2'}`}>
+                        <CustomerSelection 
+                            selectedCustomer={selectedCustomer} 
+                            onSelectCustomer={setSelectedCustomer}
+                            onOpenAddModal={onOpenCustomerForm}
+                            onOpenSearchModal={() => setIsMemberSearchOpen(true)}
+                            onOpenScanner={triggerScanner}
+                            onSelectOrderType={setOrderType}
+                            onTopUpClick={() => setIsTopUpOpen(true)}
+                            orderType={orderType}
+                        />
+                        
+                        <div className={`grid ${isUltraCompactViewport ? 'gap-1.5' : 'gap-2'} ${onSplitBill ? 'grid-cols-3' : membershipSettings.enabled ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                            {membershipSettings.enabled && (
+                                <button onClick={onOpenRewardModal} disabled={!selectedCustomer} className={`flex gap-2 items-center justify-center rounded-xl border transition-colors ${isUltraCompactViewport ? 'text-[11px] py-2' : 'text-xs py-2.5'} ${selectedCustomer ? 'border-amber-700/50 hover:bg-amber-700/20 text-amber-500' : 'border-slate-700 text-slate-600 cursor-not-allowed'}`}>
+                                    <Icon name="award" className={isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> Loyalti
+                                </button>
+                            )}
+                            <button onClick={onOpenCartDiscountModal} className={`flex gap-2 items-center justify-center rounded-xl border border-blue-700/50 hover:bg-blue-700/20 text-blue-400 transition-colors ${isUltraCompactViewport ? 'text-[11px] py-2' : 'text-xs py-2.5'}`}>
+                                <Icon name={isUltraCompactViewport ? 'tag' : 'tag'} className={isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> Diskon
                             </button>
-                        )}
+                            {onSplitBill && (
+                                <button onClick={onSplitBill} className={`flex gap-2 items-center justify-center rounded-xl border border-purple-700/50 hover:bg-purple-700/20 text-purple-400 transition-colors ${isUltraCompactViewport ? 'text-[11px] py-2' : 'text-xs py-2.5'}`}>
+                                    <Icon name="share" className={isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> Split
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
@@ -355,53 +407,65 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
             ) : (
                 <>
                     {/* --- 2. MIDDLE BOX: SCROLLING ORDER ITEMS --- */}
-                    <div className="flex-1 overflow-y-auto pr-1 -mr-1 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent border-t border-slate-700/50 pt-2 min-h-[50px]">
+                    <div className={`flex-1 overflow-y-auto pr-1 -mr-1 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent border-t border-slate-700/50 min-h-[50px] ${isUltraCompactViewport ? 'pt-1' : 'pt-1.5'}`}>
                         <ActiveOrderList cart={cart} onOpenDiscountModal={onOpenDiscountModal} />
                     </div>
                     
                     {/* --- 3. BOTTOM BOX: COMPACT TOTALS & PAY --- */}
-                    <div className="pt-2 mt-auto bg-slate-800 flex-shrink-0 relative z-10 border-t border-slate-700">
-                        {/* Compact Totals */}
-                         <div className="space-y-0.5 text-xs bg-slate-900/30 p-1.5 rounded border border-slate-700/30 mb-2">
-                            <div className="flex justify-between text-slate-400">
-                                <span>Subtotal</span>
-                                <span>{CURRENCY_FORMATTER.format(subtotal)}</span>
-                            </div>
-                            {(itemDiscountAmount > 0 || cartDiscountAmount > 0) && (
-                                <div className="flex justify-between text-green-400">
-                                    <span className="flex items-center gap-1">
-                                        Diskon
-                                        {cartDiscount?.name && <span className="text-[9px] text-green-500/70 truncate max-w-[80px]">({cartDiscount.name})</span>}
-                                    </span>
-                                    <span>- {CURRENCY_FORMATTER.format(itemDiscountAmount + cartDiscountAmount)}</span>
+                    <div className={`mt-auto bg-slate-800 flex-shrink-0 relative z-10 border-t border-slate-700 ${isUltraCompactViewport ? 'pt-1' : 'pt-1.5'}`}>
+                        <div className={`bg-slate-900/30 rounded-xl border border-slate-700/30 ${isUltraCompactViewport ? 'p-1.5 mb-1.5' : 'p-2 mb-2'}`}>
+                            <button
+                                type="button"
+                                onClick={() => setTotalsExpanded(prev => !prev)}
+                                className="w-full flex items-center justify-between gap-3"
+                            >
+                                <div className="text-left">
+                                    <p className="text-[11px] text-slate-500 uppercase tracking-wide">Total Bayar</p>
+                                    <p className={`font-black text-[#52a37c] ${isUltraCompactViewport ? 'text-base sm:text-lg' : 'text-lg sm:text-xl'}`}>{CURRENCY_FORMATTER.format(finalTotal)}</p>
                                 </div>
-                            )}
-                            {serviceChargeAmount > 0 && (
+                                <div className="flex items-center gap-2 text-slate-400">
+                                    <span className="hidden sm:inline text-xs">Rincian</span>
+                                    <Icon name={isTotalsExpanded ? 'chevron-up' : 'chevron-down'} className="w-4 h-4" />
+                                </div>
+                            </button>
+
+                            <div className={`${isTotalsExpanded ? 'block' : 'hidden'} space-y-0.5 text-xs ${isUltraCompactViewport ? 'mt-1.5 pt-1.5' : 'mt-2 pt-2'} border-t border-slate-700/50`}>
                                 <div className="flex justify-between text-slate-400">
-                                    <span>Service ({receiptSettings.serviceChargeRate}%)</span>
-                                    <span>{CURRENCY_FORMATTER.format(serviceChargeAmount)}</span>
+                                    <span>Subtotal</span>
+                                    <span>{CURRENCY_FORMATTER.format(subtotal)}</span>
                                 </div>
-                            )}
-                            {taxAmount > 0 && (
-                                <div className="flex justify-between text-slate-400">
-                                    <span>Pajak</span>
-                                    <span>{CURRENCY_FORMATTER.format(taxAmount)}</span>
-                                </div>
-                            )}
-                            <div className="flex justify-between items-baseline pt-1 mt-1 border-t border-slate-700/50">
-                                <span className="font-bold text-slate-300">TOTAL</span>
-                                <span className="font-black text-xl text-[#52a37c]">{CURRENCY_FORMATTER.format(finalTotal)}</span>
+                                {(itemDiscountAmount > 0 || cartDiscountAmount > 0) && (
+                                    <div className="flex justify-between text-green-400">
+                                        <span className="flex items-center gap-1">
+                                            Diskon
+                                            {cartDiscount?.name && <span className="text-[9px] text-green-500/70 truncate max-w-[80px]">({cartDiscount.name})</span>}
+                                        </span>
+                                        <span>- {CURRENCY_FORMATTER.format(itemDiscountAmount + cartDiscountAmount)}</span>
+                                    </div>
+                                )}
+                                {serviceChargeAmount > 0 && (
+                                    <div className="flex justify-between text-slate-400">
+                                        <span>Service ({receiptSettings.serviceChargeRate}%)</span>
+                                        <span>{CURRENCY_FORMATTER.format(serviceChargeAmount)}</span>
+                                    </div>
+                                )}
+                                {taxAmount > 0 && (
+                                    <div className="flex justify-between text-slate-400">
+                                        <span>Pajak</span>
+                                        <span>{CURRENCY_FORMATTER.format(taxAmount)}</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        <div className="flex gap-2 h-12">
-                             <Button variant="danger" className="w-12 h-full flex-shrink-0 p-0 flex items-center justify-center" onClick={handleClearCart}>
+                        <div className={`flex gap-2 ${isUltraCompactViewport ? 'h-10' : 'h-11 sm:h-12'}`}>
+                             <Button variant="danger" className={`${isUltraCompactViewport ? 'w-10' : 'w-11 sm:w-12'} h-full flex-shrink-0 p-0 flex items-center justify-center`} onClick={handleClearCart}>
                                 <Icon name="trash" className="w-5 h-5 text-white"/>
                             </Button>
                             
                             <CartActions />
 
-                            <Button variant="primary" className="flex-[2] text-sm sm:text-base font-black h-full shadow-lg shadow-[#347758]/20" onClick={onOpenPaymentModal} title="Shortcut: F2">
+                            <Button variant="primary" className={`flex-[2] font-black h-full shadow-lg shadow-[#347758]/20 ${isUltraCompactViewport ? 'text-[13px]' : 'text-sm sm:text-base'}`} onClick={onOpenPaymentModal} title="Shortcut: F2">
                                 BAYAR
                             </Button>
                         </div>

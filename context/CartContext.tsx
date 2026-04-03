@@ -1,15 +1,14 @@
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
-import { useData } from './DataContext';
-import { useUI } from './UIContext';
-import { useAuth } from './AuthContext';
+import { useDataActions, useSalesData } from './DataContext';
+import { useUIActions } from './UIContext';
+import { useAuthState } from './AuthContext';
 import { useProduct } from './ProductContext';
 import { useSettings } from './SettingsContext';
-import { useCloudSync } from './CloudSyncContext';
-import { useAudit } from './AuditContext';
-import { useCustomerDisplay } from './CustomerDisplayContext';
 import { calculateCartTotals } from '../utils/cartCalculations';
-import type { CartItem, Discount, Product, HeldCart, Transaction as TransactionType, Payment, PaymentMethod, PaymentStatus, Addon, Reward, Customer, OrderType, ProductVariant, SelectedModifier, StockAdjustment } from '../types';
+import { saveTransactionToData } from '../services/transactionService';
+import { requestAutoSync, sendCustomerDisplayEvent, sendKitchenDisplayEvent } from '../services/appEvents';
+import type { CartItem, Discount, Product, HeldCart, Transaction as TransactionType, Payment, PaymentMethod, Addon, Reward, Customer, OrderType, ProductVariant, SelectedModifier } from '../types';
 
 interface CartContextType {
     cart: CartItem[];
@@ -59,15 +58,12 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children }) => {
-    const { data, setData } = useData();
-    const { triggerAutoSync } = useCloudSync(); 
-    const { logAudit } = useAudit(); 
-    const { sendDataToDisplay, isDisplayConnected, sendOrderToKitchen, isKitchenConnected } = useCustomerDisplay(); 
-    const { showAlert } = useUI();
-    const { currentUser } = useAuth();
+    const { setData } = useDataActions();
+    const { heldCarts = [] } = useSalesData();
+    const { showAlert } = useUIActions();
+    const { currentUser } = useAuthState();
     const { receiptSettings } = useSettings();
     const { products, rawMaterials, inventorySettings } = useProduct();
-    const { heldCarts = [] } = data;
 
     const defaultOrderType = receiptSettings.orderTypes && receiptSettings.orderTypes.length > 0 ? receiptSettings.orderTypes[0] : 'Makan di Tempat';
     const [cart, setCart] = useState<CartItem[]>([]);
@@ -80,19 +76,17 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
 
     // --- EFFECT: SYNC TO CUSTOMER DISPLAY ---
     useEffect(() => {
-        if (isDisplayConnected) {
-            const totals = calculateCartTotals(cart, cartDiscount, receiptSettings);
-            sendDataToDisplay({
-                type: 'CART_UPDATE',
-                cartItems: cart,
-                subtotal: totals.subtotal,
-                discount: totals.itemDiscountAmount + totals.cartDiscountAmount,
-                tax: totals.taxAmount + totals.serviceChargeAmount,
-                total: totals.finalTotal,
-                shopName: receiptSettings.shopName
-            });
-        }
-    }, [cart, cartDiscount, receiptSettings, isDisplayConnected, sendDataToDisplay]);
+        const totals = calculateCartTotals(cart, cartDiscount, receiptSettings);
+        void sendCustomerDisplayEvent({
+            type: 'CART_UPDATE',
+            cartItems: cart,
+            subtotal: totals.subtotal,
+            discount: totals.itemDiscountAmount + totals.cartDiscountAmount,
+            tax: totals.taxAmount + totals.serviceChargeAmount,
+            total: totals.finalTotal,
+            shopName: receiptSettings.shopName
+        });
+    }, [cart, cartDiscount, receiptSettings]);
 
     const removeRewardFromCart = useCallback(() => {
         setCart(prev => prev.filter(item => !item.isReward));
@@ -273,16 +267,14 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         setOrderType(defaultOrderType);
         setTableNumber(''); 
         setPaxCount(0);     
-        
-        if (isDisplayConnected) {
-            sendDataToDisplay({
-                type: 'CART_UPDATE',
-                cartItems: [],
-                subtotal: 0, discount: 0, tax: 0, total: 0,
-                shopName: receiptSettings.shopName
-            });
-        }
-    }, [setAppliedRewards, defaultOrderType, isDisplayConnected, sendDataToDisplay, receiptSettings]);
+
+        void sendCustomerDisplayEvent({
+            type: 'CART_UPDATE',
+            cartItems: [],
+            subtotal: 0, discount: 0, tax: 0, total: 0,
+            shopName: receiptSettings.shopName
+        });
+    }, [setAppliedRewards, defaultOrderType, receiptSettings]);
 
     const getCartTotals = useCallback(() => {
         return calculateCartTotals(cart, cartDiscount, receiptSettings);
@@ -339,7 +331,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
             setPaxCount(0);
             setActiveHeldCartId(null);
         } else {
-            const targetCart = data.heldCarts.find(c => c.id === newCartId);
+            const targetCart = heldCarts.find(c => c.id === newCartId);
             if (targetCart) {
                 setCart(targetCart.items);
                 setOrderType(targetCart.orderType || defaultOrderType);
@@ -348,7 +340,7 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
                 setActiveHeldCartId(newCartId);
             }
         }
-    }, [saveCurrentCartState, removeRewardFromCart, data.heldCarts, removeCartDiscount, defaultOrderType]);
+    }, [saveCurrentCartState, removeRewardFromCart, heldCarts, removeCartDiscount, defaultOrderType]);
       
     const holdActiveCart = useCallback((name: string) => {
         if (cart.length === 0) {
@@ -362,23 +354,21 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         };
         setData(prev => ({ ...prev, heldCarts: [...(prev.heldCarts || []), newHeldCart] }));
         
-        if (isKitchenConnected) {
-             sendOrderToKitchen({
-                 type: 'NEW_ORDER',
-                 orderId: newHeldCart.id,
-                 orderType: orderType,
-                 customerName: name,
-                 items: cart,
-                 timestamp: new Date().toISOString(),
-                 isPaid: false,
-                 tableNumber, 
-                 paxCount
-             });
-        }
+        void sendKitchenDisplayEvent({
+            type: 'NEW_ORDER',
+            orderId: newHeldCart.id,
+            orderType: orderType,
+            customerName: name,
+            items: cart,
+            timestamp: new Date().toISOString(),
+            isPaid: false,
+            tableNumber, 
+            paxCount
+        });
 
         switchActiveCart(newHeldCart.id);
         showAlert({ type: 'alert', title: 'Tersimpan & Terkirim', message: `Pesanan "${name}" disimpan dan dikirim ke Layar Dapur.` });
-    }, [cart, orderType, tableNumber, paxCount, saveCurrentCartState, setData, switchActiveCart, showAlert, isKitchenConnected, sendOrderToKitchen]);
+    }, [cart, orderType, tableNumber, paxCount, saveCurrentCartState, setData, switchActiveCart, showAlert]);
 
     const deleteHeldCart = useCallback((cartId: string) => {
         showAlert({
@@ -439,212 +429,62 @@ export const CartProvider: React.FC<{children?: React.ReactNode}> = ({ children 
         if (cart.length === 0) throw new Error("Cart is empty");
         if (!currentUser) throw new Error("No user is logged in");
 
-        const { finalTotal, taxAmount, serviceChargeAmount } = getCartTotals();
+        const totals = getCartTotals();
+        const { finalTotal } = totals;
         const amountPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-        let paymentStatus: PaymentStatus = amountPaid >= finalTotal - 0.01 ? 'paid' : (amountPaid > 0 ? 'partial' : 'unpaid');
+        const paymentStatus = amountPaid >= finalTotal - 0.01 ? 'paid' : (amountPaid > 0 ? 'partial' : 'unpaid');
         
         const now = new Date();
-        const fullPayments: Payment[] = payments.map((p, index) => ({ ...p, id: `${now.getTime()}-${index}`, createdAt: now.toISOString() }));
 
-        if (isDisplayConnected && paymentStatus === 'paid') {
+        if (paymentStatus === 'paid') {
             const change = amountPaid - finalTotal;
-            sendDataToDisplay({
+            void sendCustomerDisplayEvent({
                 type: 'PAYMENT_SUCCESS',
                 cartItems: [], subtotal: 0, discount: 0, tax: 0,
                 total: finalTotal, change: change > 0 ? change : 0, shopName: receiptSettings.shopName
             });
         }
-
-        const storeIdPrefix = receiptSettings.storeId ? receiptSettings.storeId.replace(/[^a-zA-Z0-9]/g, '') : 'LOC';
-        const timestampId = now.getTime().toString();
-        const userSuffix = currentUser.id.slice(-4).replace(/[^a-zA-Z0-9]/g, 'X').toUpperCase(); 
-        const randomSuffix = Math.random().toString(36).substring(2, 4).toUpperCase();
-        
-        const uniqueId = `${storeIdPrefix}-${timestampId}-${userSuffix}${randomSuffix}`;
-
-        // Calculate Cost Price & Lock prices
-        const cartWithCost = cart.map(item => {
-            const product = products.find(p => p.id === item.id);
-            const addonsCost = item.selectedAddons?.reduce((sum, addon) => sum + (addon.costPrice || 0), 0) || 0;
-            const itemCost = (item.costPrice || product?.costPrice || 0) + addonsCost;
-            return { ...item, costPrice: itemCost };
-        });
-
-        const newTransaction: TransactionType = {
-            id: uniqueId, 
-            items: cartWithCost, 
-            subtotal: getCartTotals().subtotal,
-            cartDiscount, 
-            total: finalTotal, amountPaid,
-            tax: taxAmount, serviceCharge: serviceChargeAmount, 
-            orderType, tableNumber, paxCount,
-            paymentStatus, payments: fullPayments, createdAt: now.toISOString(), userId: currentUser.id,
-            userName: currentUser.name, customerName, customerContact, customerId,
-            storeId: receiptSettings.storeId || 'LOCAL'
-        };
-
-        if (isKitchenConnected) {
-             sendOrderToKitchen({
-                 type: 'NEW_ORDER',
-                 orderId: uniqueId,
-                 orderType: orderType,
-                 customerName: customerName || `Order #${uniqueId.slice(-4)}`,
-                 items: cart,
-                 timestamp: now.toISOString(),
-                 isPaid: true,
-                 tableNumber, paxCount
-             });
-        }
-
-        // --- UPDATE DATABASE & INVENTORY (CRITICAL) ---
+        let newTransaction!: TransactionType;
         setData(prev => {
-            let updatedProducts = [...prev.products];
-            let updatedRawMaterials = [...prev.rawMaterials];
-            let updatedStockAdjustments = [...(prev.stockAdjustments || [])];
-            let updatedCustomers = [...prev.customers];
-
-            // 1. INVENTORY DEDUCTION LOGIC
-            if (inventorySettings.enabled) {
-                cartWithCost.forEach(item => {
-                    // Skip rewards (Assuming reward items don't reduce stock or handled separately, usually they do reduce stock)
-                    // Let's assume Rewards DO reduce stock
-                    const productIndex = updatedProducts.findIndex(p => p.id === item.id);
-                    if (productIndex === -1) return;
-
-                    const product = updatedProducts[productIndex];
-                    const qtySold = item.quantity;
-                    const logNotes = `Terjual di Transaksi #${uniqueId.slice(-4)}`;
-
-                    // A. Recipe / Ingredient Based Deduction
-                    if (inventorySettings.trackIngredients && product.recipe && product.recipe.length > 0) {
-                        product.recipe.forEach(recipeItem => {
-                            const deductionAmount = recipeItem.quantity * qtySold;
-
-                            if (recipeItem.itemType === 'raw_material' && recipeItem.rawMaterialId) {
-                                const matIndex = updatedRawMaterials.findIndex(m => m.id === recipeItem.rawMaterialId);
-                                if (matIndex > -1) {
-                                    const oldStock = updatedRawMaterials[matIndex].stock || 0;
-                                    const newStock = oldStock - deductionAmount;
-                                    updatedRawMaterials[matIndex] = { ...updatedRawMaterials[matIndex], stock: newStock };
-                                    
-                                    // Log Mutation
-                                    updatedStockAdjustments.unshift({
-                                        id: `SALES-MAT-${uniqueId}-${recipeItem.rawMaterialId}`,
-                                        productId: recipeItem.rawMaterialId,
-                                        productName: updatedRawMaterials[matIndex].name,
-                                        change: -deductionAmount,
-                                        newStock: newStock,
-                                        notes: `${logNotes} (via ${product.name})`,
-                                        createdAt: now.toISOString()
-                                    });
-                                }
-                            } else if (recipeItem.itemType === 'product' && recipeItem.productId) {
-                                // Nested Product
-                                const subProdIndex = updatedProducts.findIndex(p => p.id === recipeItem.productId);
-                                if (subProdIndex > -1 && updatedProducts[subProdIndex].trackStock) {
-                                    const oldStock = updatedProducts[subProdIndex].stock || 0;
-                                    const newStock = oldStock - deductionAmount;
-                                    updatedProducts[subProdIndex] = { ...updatedProducts[subProdIndex], stock: newStock };
-
-                                    updatedStockAdjustments.unshift({
-                                        id: `SALES-SUBPROD-${uniqueId}-${recipeItem.productId}`,
-                                        productId: recipeItem.productId,
-                                        productName: updatedProducts[subProdIndex].name,
-                                        change: -deductionAmount,
-                                        newStock: newStock,
-                                        notes: `${logNotes} (via ${product.name})`,
-                                        createdAt: now.toISOString()
-                                    });
-                                }
-                            }
-                        });
-                    } 
-                    
-                    // B. Direct Product Deduction (If Track Stock is ON)
-                    // Note: A product can track its own stock AND have ingredients (e.g. bundled item)
-                    if (product.trackStock) {
-                        const oldStock = product.stock || 0;
-                        const newStock = oldStock - qtySold;
-                        updatedProducts[productIndex] = { ...product, stock: newStock };
-
-                        updatedStockAdjustments.unshift({
-                            id: `SALES-PROD-${uniqueId}-${product.id}`,
-                            productId: product.id,
-                            productName: product.name,
-                            change: -qtySold,
-                            newStock: newStock,
-                            notes: logNotes,
-                            createdAt: now.toISOString()
-                        });
-                    }
-                });
-            }
-
-            // 2. CUSTOMER POINTS & BALANCE LOGIC
-            if (customerId) {
-                const customerIndex = updatedCustomers.findIndex(c => c.id === customerId);
-                if (customerIndex > -1) {
-                    const customer = updatedCustomers[customerIndex];
-                    
-                    // Calculate Points Earned
-                    // ... (Simplification for brevity, assume simple rule)
-                    // In real implementation, re-use point calculation logic from useCustomer or inline here
-                    let pointsToAdd = 0;
-                    if (data.membershipSettings.enabled) {
-                        data.membershipSettings.pointRules.forEach(rule => {
-                             if (rule.type === 'spend' && rule.spendAmount && rule.pointsEarned) {
-                                 pointsToAdd += Math.floor(finalTotal / rule.spendAmount) * rule.pointsEarned;
-                             }
-                             // Add category/product rules here if needed
-                        });
-                    }
-
-                    // Deduct Points if Rewards Used
-                    let pointsUsed = 0;
-                    if (appliedRewards.length > 0) {
-                        pointsUsed = appliedRewards.reduce((sum, ar) => sum + ar.reward.pointsCost, 0);
-                        // Attach usage info to transaction
-                        newTransaction.rewardsRedeemed = appliedRewards.map(ar => ({
-                            rewardId: ar.reward.id,
-                            pointsSpent: ar.reward.pointsCost,
-                            description: ar.reward.name
-                        }));
-                    }
-
-                    const newPoints = (customer.points || 0) + pointsToAdd - pointsUsed;
-                    updatedCustomers[customerIndex] = { 
-                        ...customer, 
-                        points: Math.max(0, newPoints),
-                        // Balance update is handled separately via 'addBalance' in PaymentModal
-                        // but we snapshot it here
-                    };
-                    
-                    newTransaction.pointsEarned = pointsToAdd;
-                    newTransaction.customerPointsSnapshot = newPoints;
-                    newTransaction.customerBalanceSnapshot = customer.balance; // Snapshot before this txn payment deduction if any
-                }
-            }
-
-            // 3. REMOVE HELD CART
-            let updatedHeldCarts = prev.heldCarts || [];
-            if (activeHeldCartId) updatedHeldCarts = updatedHeldCarts.filter(c => c.id !== activeHeldCartId);
-
-            return { 
-                ...prev, 
-                transactionRecords: [newTransaction, ...prev.transactionRecords], 
-                products: updatedProducts,
-                rawMaterials: updatedRawMaterials,
-                stockAdjustments: updatedStockAdjustments,
-                customers: updatedCustomers, 
-                heldCarts: updatedHeldCarts 
-            };
+            const result = saveTransactionToData({
+                prevData: prev,
+                cart,
+                cartDiscount,
+                payments,
+                customerName,
+                customerContact,
+                customerId,
+                currentUser,
+                appliedRewards,
+                activeHeldCartId,
+                orderType,
+                tableNumber,
+                paxCount,
+                receiptSettings,
+                totals,
+                now,
+            });
+            newTransaction = result.transaction;
+            return result.nextData;
         });
-        
+
+        void sendKitchenDisplayEvent({
+            type: 'NEW_ORDER',
+            orderId: newTransaction.id,
+            orderType: orderType,
+            customerName: customerName || `Order #${newTransaction.id.slice(-4)}`,
+            items: cart,
+            timestamp: now.toISOString(),
+            isPaid: true,
+            tableNumber,
+            paxCount
+        });
+
         switchActiveCart(null);
-        setTimeout(() => triggerAutoSync(currentUser.name), 500);
+        setTimeout(() => requestAutoSync({ staffName: currentUser.name }), 500);
 
         return newTransaction;
-    }, [cart, getCartTotals, setData, currentUser, appliedRewards, activeHeldCartId, switchActiveCart, cartDiscount, inventorySettings, products, rawMaterials, orderType, tableNumber, paxCount, receiptSettings, triggerAutoSync, logAudit, data.customers, data.membershipSettings, isDisplayConnected, sendDataToDisplay, isKitchenConnected, sendOrderToKitchen]);
+    }, [cart, getCartTotals, setData, currentUser, appliedRewards, activeHeldCartId, switchActiveCart, cartDiscount, orderType, tableNumber, paxCount, receiptSettings]);
     
     return (
         <CartContext.Provider value={{

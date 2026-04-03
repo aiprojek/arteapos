@@ -26,3 +26,7 @@ dist-ssr
 # Android signing
 android/*.keystore
 android/keystore.properties
+
+# Docs
+docs/ARCHITECTURE_AUDIT.md
+

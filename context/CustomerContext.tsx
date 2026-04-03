@@ -1,10 +1,10 @@
 
 import React, { createContext, useContext, ReactNode, useCallback, useState } from 'react';
-import { useData } from './DataContext';
-import { useUI } from './UIContext';
+import { useCustomerData, useDataActions } from './DataContext';
+import { useUIActions } from './UIContext';
 import { useSession } from './SessionContext';
-import { useAudit } from './AuditContext';
-import { useAuth } from './AuthContext';
+import { useAuthState } from './AuthContext';
+import { emitAuditEvent } from '../services/appEvents';
 import type { Customer, MembershipSettings, Reward, CartItem, BalanceLog } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 
@@ -23,12 +23,11 @@ interface CustomerContextType {
 const CustomerContext = createContext<CustomerContextType | undefined>(undefined);
 
 export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { data, setData } = useData();
-    const { showAlert } = useUI();
+    const { setData } = useDataActions();
+    const { showAlert } = useUIActions();
     const { addCashMovement } = useSession();
-    const { logAudit } = useAudit();
-    const { currentUser } = useAuth();
-    const { customers, membershipSettings, balanceLogs = [] } = data;
+    const { currentUser } = useAuthState();
+    const { customers, membershipSettings, balanceLogs = [] } = useCustomerData();
 
     const addCustomer = useCallback((customerData: Omit<Customer, 'id' | 'memberId' | 'points' | 'balance' | 'createdAt'>) => {
         setData(prev => {
@@ -152,9 +151,14 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (isTopUp && amount > 0) {
             const customer = customers.find(c => c.id === customerId);
             addCashMovement('in', amount, `Top Up Member: ${customer?.name || 'Unknown'}`);
-            logAudit(currentUser, 'BALANCE_TOPUP', `Top Up Saldo ${CURRENCY_FORMATTER.format(amount)} untuk ${customer?.name}`, customerId);
+            emitAuditEvent({
+                user: currentUser,
+                action: 'BALANCE_TOPUP',
+                details: `Top Up Saldo ${CURRENCY_FORMATTER.format(amount)} untuk ${customer?.name}`,
+                targetId: customerId,
+            });
         }
-    }, [setData, addCashMovement, customers, currentUser, logAudit]);
+    }, [setData, addCashMovement, customers, currentUser]);
 
     return (
         <CustomerContext.Provider value={{

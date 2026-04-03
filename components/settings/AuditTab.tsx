@@ -5,7 +5,7 @@ import Icon from '../Icon';
 import VirtualizedTable from '../VirtualizedTable';
 import { useAudit } from '../../context/AuditContext'; 
 import { dropboxService } from '../../services/dropboxService';
-import { useUI } from '../../context/UIContext';
+import { useUIActions } from '../../context/UIContext';
 import Modal from '../Modal'; // Import Modal
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
@@ -22,7 +22,7 @@ const SettingsCard: React.FC<{ title: string; description?: string; children: Re
 
 const AuditTab: React.FC = () => {
     const { auditLogs: localLogs, isLoadingLogs } = useAudit();
-    const { showAlert } = useUI();
+    const { showAlert } = useUIActions();
     const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
     const [cloudLogs, setCloudLogs] = useState<AuditLog[]>([]);
     const [isCloudLoading, setIsCloudLoading] = useState(false);

@@ -3,8 +3,8 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useFinance } from '../context/FinanceContext';
 import { useProduct } from '../context/ProductContext';
 import { useSettings } from '../context/SettingsContext';
-import { useUI } from '../context/UIContext';
-import { useAuth } from '../context/AuthContext';
+import { useUIActions } from '../context/UIContext';
+import { useAuthState } from '../context/AuthContext';
 import { dropboxService } from '../services/dropboxService';
 import { mockDataService } from '../services/mockData';
 import { CURRENCY_FORMATTER } from '../constants';
@@ -27,8 +27,8 @@ const ReportsView: React.FC = () => {
     const { transactions: localTransactions, refundTransaction, expenses: localExpenses } = useFinance(); 
     const { stockAdjustments: localStockAdjustments, products: localProducts } = useProduct();
     const { receiptSettings } = useSettings();
-    const { showAlert } = useUI();
-    const { currentUser } = useAuth();
+    const { showAlert } = useUIActions();
+    const { currentUser } = useAuthState();
 
     const isStaff = currentUser?.role === 'staff';
 

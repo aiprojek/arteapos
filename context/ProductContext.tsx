@@ -22,6 +22,7 @@ import {
   canDeleteRawMaterial,
   deleteCategoryFromData,
   deleteProductFromData,
+  deleteProductsFromData,
   deleteRawMaterialFromData,
   updateInventorySettingsInData,
   updateProductInData,
@@ -48,6 +49,7 @@ interface ProductContextType {
   addProduct: (product: Omit<Product, 'id'>) => void;
   updateProduct: (product: Product) => void;
   deleteProduct: (productId: string) => void;
+  bulkDeleteProducts: (productIds: string[]) => void;
   addCategory: (category: string) => void;
   deleteCategory: (category: string) => void;
   findProductByBarcode: (barcode: string) => Product | undefined;
@@ -129,6 +131,11 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       confirmText: 'Ya, Hapus'
     });
   }, [setData, showAlert, products, currentUser]);
+
+  const bulkDeleteProducts = useCallback((productIds: string[]) => {
+    if (productIds.length === 0) return;
+    setData(prev => deleteProductsFromData(prev, productIds));
+  }, [setData]);
 
   const addCategory = useCallback((category: string) => {
     setData(prev => addCategoryToData(prev, category));
@@ -350,6 +357,7 @@ export const ProductProvider: React.FC<{children: React.ReactNode}> = ({ childre
       addProduct,
       updateProduct,
       deleteProduct,
+      bulkDeleteProducts,
       addCategory,
       deleteCategory,
       findProductByBarcode,

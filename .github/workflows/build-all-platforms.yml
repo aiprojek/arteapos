@@ -127,9 +127,11 @@ jobs:
       - name: Build APK
         run: |
           cd android
+          # Hindari cache transform lama yang sering memicu error jars-9 pada runner CI
+          rm -rf ~/.gradle/caches/jars-9 ~/.gradle/caches/transforms-* || true
           # Pastikan gradlew executable
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew --no-daemon --no-build-cache assembleRelease
           
       - name: Upload APK
         uses: actions/upload-artifact@v4

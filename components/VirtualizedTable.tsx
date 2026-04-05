@@ -15,14 +15,22 @@ interface VirtualizedTableProps<T> {
   columns: Column<T>[];
   rowHeight: number;
   minWidth?: number;
+  minHeight?: number;
 }
 
-const VirtualizedTable = <T extends { id: string | number }>({ data, columns, rowHeight, minWidth = 800 }: VirtualizedTableProps<T>) => {
+const VirtualizedTable = <T extends { id: string | number }>({
+  data,
+  columns,
+  rowHeight,
+  minWidth = 800,
+  minHeight = 360,
+}: VirtualizedTableProps<T>) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { width, height } = useResizeObserver(containerRef);
 
   // Ensure table has at least minWidth, otherwise use container width
   const effectiveWidth = Math.max(width, minWidth);
+  const effectiveHeight = Math.max(height, minHeight);
 
   // Helper to calculate flex-basis and flex-grow based on input
   const getColStyle = (widthStr: string): React.CSSProperties => {
@@ -61,7 +69,11 @@ const VirtualizedTable = <T extends { id: string | number }>({ data, columns, ro
   const HEADER_HEIGHT = 45; 
 
   return (
-    <div ref={containerRef} className="w-full h-full flex flex-col overflow-hidden relative border border-slate-700 rounded-lg">
+    <div
+      ref={containerRef}
+      className="w-full h-full flex flex-col overflow-hidden relative border border-slate-700 rounded-lg"
+      style={{ minHeight }}
+    >
       {/* Horizontal Scroll Container */}
       <div className="w-full h-full overflow-x-auto overflow-y-hidden bg-slate-800">
         
@@ -84,9 +96,9 @@ const VirtualizedTable = <T extends { id: string | number }>({ data, columns, ro
             
             {/* Body */}
             <div className="flex-1 w-full relative">
-                {height > 0 && (
+                {effectiveHeight > 0 && (
                     <FixedSizeList
-                        height={Math.max(height - HEADER_HEIGHT, 0)} // Prevent negative height
+                        height={Math.max(effectiveHeight - HEADER_HEIGHT, rowHeight)}
                         width={effectiveWidth}
                         itemCount={data.length}
                         itemSize={rowHeight}

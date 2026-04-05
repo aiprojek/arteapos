@@ -11,13 +11,11 @@ import { CURRENCY_FORMATTER } from '../constants';
 import CameraCaptureModal from '../components/CameraCaptureModal';
 import { useCameraAvailability } from '../hooks/useCameraAvailability';
 import ProductPlaceholder from '../components/ProductPlaceholder';
-import VirtualizedTable from '../components/VirtualizedTable';
 import StockOpnameModal from '../components/StockOpnameModal';
 import StockTransferModal from '../components/StockTransferModal'; 
 import StaffRestockModal from '../components/StaffRestockModal';
 import ChannelSalesModal from '../components/ChannelSalesModal';
 import OverflowMenu from '../components/OverflowMenu';
-import { useSettings } from '../context/SettingsContext';
 import { compressImage } from '../utils/imageCompression'; 
 import { dataService } from '../services/dataService';
 
@@ -79,6 +77,35 @@ const InputField: React.FC<{
                 placeholder={placeholder}
                 className={`w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white ${className}`}
             />
+        </div>
+    );
+};
+
+const ProductsStatCard: React.FC<{
+    label: string;
+    value: string | number;
+    hint: string;
+    icon: React.ComponentProps<typeof Icon>['name'];
+    tone?: 'neutral' | 'success' | 'warning';
+}> = ({ label, value, hint, icon, tone = 'neutral' }) => {
+    const toneClasses = {
+        neutral: 'border-slate-700/80 bg-slate-850/70 text-slate-200',
+        success: 'border-emerald-900/50 bg-emerald-950/10 text-emerald-100',
+        warning: 'border-amber-900/50 bg-amber-950/10 text-amber-100',
+    };
+
+    return (
+        <div className={`rounded-2xl border p-4 shadow-sm ${toneClasses[tone]}`}>
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{value}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">{hint}</p>
+                </div>
+                <div className="rounded-xl border border-white/5 bg-black/15 p-2">
+                    <Icon name={icon} className="h-4.5 w-4.5 text-slate-400" />
+                </div>
+            </div>
         </div>
     );
 };
@@ -507,7 +534,13 @@ const BulkProductModal: React.FC<{
     if (!isOpen) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Tambah Produk Massal">
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Tambah Produk Massal"
+            size="xl"
+            mobileLayout="fullscreen"
+        >
             <div className="space-y-4">
                 <div className="flex bg-slate-700 p-1 rounded-lg">
                     <button onClick={() => setMode('manual')} className={`flex-1 py-2 text-sm rounded transition-colors ${mode === 'manual' ? 'bg-[#347758] text-white font-bold' : 'text-slate-300'}`}>Input Manual (Tabel)</button>
@@ -574,8 +607,248 @@ const BulkProductModal: React.FC<{
     );
 };
 
-// ... CategoryManagerModal ...
-const CategoryManagerModal: React.FC<any> = () => null;
+const CategoryManagerModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+}> = ({ isOpen, onClose }) => {
+    const { categories, products, addCategory, deleteCategory } = useProduct();
+    const { showAlert } = useUIActions();
+    const [newCategory, setNewCategory] = useState('');
+
+    const categoryUsage = useMemo(() => {
+        return categories.map(category => ({
+            name: category,
+            productCount: products.filter(product => product.category.includes(category)).length,
+        }));
+    }, [categories, products]);
+
+    const handleAddCategory = () => {
+        const trimmed = newCategory.trim();
+        if (!trimmed) return;
+
+        if (categories.some(category => category.toLowerCase() === trimmed.toLowerCase())) {
+            showAlert({
+                type: 'alert',
+                title: 'Kategori Sudah Ada',
+                message: `Kategori "${trimmed}" sudah ada di daftar.`,
+            });
+            return;
+        }
+
+        addCategory(trimmed);
+        setNewCategory('');
+    };
+
+    const handleDeleteCategory = (category: string, productCount: number) => {
+        if (productCount > 0) {
+            showAlert({
+                type: 'alert',
+                title: 'Kategori Masih Digunakan',
+                message: `Kategori "${category}" masih dipakai oleh ${productCount} produk. Pindahkan produknya dulu sebelum menghapus kategori ini.`,
+            });
+            return;
+        }
+
+        showAlert({
+            type: 'confirm',
+            title: 'Hapus Kategori?',
+            message: `Kategori "${category}" akan dihapus dari daftar kategori.`,
+            confirmText: 'Ya, Hapus',
+            confirmVariant: 'danger',
+            onConfirm: () => deleteCategory(category),
+        });
+    };
+
+    return (
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Kelola Kategori"
+            size="lg"
+            mobileLayout="fullscreen"
+        >
+            <div className="space-y-5">
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4">
+                    <h3 className="text-base font-bold text-white">Tambah Kategori Baru</h3>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-400">
+                        Tambahkan kategori agar lebih mudah mengelompokkan produk di katalog.
+                    </p>
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                        <input
+                            type="text"
+                            value={newCategory}
+                            onChange={e => setNewCategory(e.target.value)}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddCategory();
+                                }
+                            }}
+                            placeholder="Contoh: Minuman Dingin"
+                            className="h-11 flex-1 rounded-xl border border-slate-600 bg-slate-800 px-4 text-white focus:border-[#347758] focus:outline-none focus:ring-2 focus:ring-[#347758]/30"
+                        />
+                        <Button type="button" onClick={handleAddCategory} className="h-11 whitespace-nowrap">
+                            <Icon name="plus" className="w-5 h-5" />
+                            <span>Tambah</span>
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/60">
+                    <div className="border-b border-slate-700 px-4 py-3">
+                        <h3 className="text-base font-bold text-white">Daftar Kategori</h3>
+                        <p className="mt-1 text-sm text-slate-400">
+                            {categoryUsage.length} kategori tersedia untuk produk Anda.
+                        </p>
+                    </div>
+                    {categoryUsage.length > 0 ? (
+                        <div className="max-h-[55dvh] overflow-y-auto p-3 space-y-2">
+                            {categoryUsage.map(category => (
+                                <div
+                                    key={category.name}
+                                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-800/80 px-4 py-3"
+                                >
+                                    <div className="min-w-0">
+                                        <p className="truncate font-semibold text-white">{category.name}</p>
+                                        <p className="mt-1 text-xs text-slate-400">
+                                            {category.productCount} produk memakai kategori ini
+                                        </p>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="danger"
+                                        size="sm"
+                                        onClick={() => handleDeleteCategory(category.name, category.productCount)}
+                                        className="shrink-0"
+                                    >
+                                        <Icon name="trash" className="w-4 h-4" />
+                                        <span className="hidden sm:inline">Hapus</span>
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="px-4 py-8 text-center text-sm text-slate-500">
+                            Belum ada kategori. Tambahkan kategori pertama untuk mulai mengelompokkan produk.
+                        </div>
+                    )}
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+const BulkEditProductsModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    selectedCount: number;
+    onApply: (payload: {
+        categoryMode: 'keep' | 'replace' | 'append';
+        categories: string[];
+        trackStockMode: 'keep' | 'enable' | 'disable';
+    }) => void;
+}> = ({ isOpen, onClose, selectedCount, onApply }) => {
+    const { categories } = useProduct();
+    const [categoryMode, setCategoryMode] = useState<'keep' | 'replace' | 'append'>('keep');
+    const [trackStockMode, setTrackStockMode] = useState<'keep' | 'enable' | 'disable'>('keep');
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setCategoryMode('keep');
+            setTrackStockMode('keep');
+            setSelectedCategories([]);
+        }
+    }, [isOpen]);
+
+    const toggleCategory = (category: string) => {
+        setSelectedCategories(prev =>
+            prev.includes(category)
+                ? prev.filter(entry => entry !== category)
+                : [...prev, category]
+        );
+    };
+
+    return (
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Edit Produk Terpilih"
+            size="lg"
+            mobileLayout="fullscreen"
+        >
+            <div className="space-y-5">
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4">
+                    <p className="text-sm leading-relaxed text-slate-300">
+                        Perubahan di sini akan diterapkan ke <span className="font-bold text-white">{selectedCount}</span> produk yang sedang dipilih.
+                    </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4 space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Kategori</label>
+                        <select
+                            value={categoryMode}
+                            onChange={e => setCategoryMode(e.target.value as 'keep' | 'replace' | 'append')}
+                            className="h-11 w-full rounded-xl border border-slate-600 bg-slate-800 px-4 text-white focus:border-[#347758] focus:outline-none focus:ring-2 focus:ring-[#347758]/30"
+                        >
+                            <option value="keep">Biarkan seperti sekarang</option>
+                            <option value="replace">Ganti kategori produk</option>
+                            <option value="append">Tambahkan kategori ke produk</option>
+                        </select>
+                    </div>
+
+                    {categoryMode !== 'keep' && (
+                        <div className="space-y-2">
+                            <p className="text-xs text-slate-400">Pilih satu atau lebih kategori yang akan diterapkan.</p>
+                            <div className="flex flex-wrap gap-2">
+                                {categories.map(category => (
+                                    <button
+                                        key={category}
+                                        type="button"
+                                        onClick={() => toggleCategory(category)}
+                                        className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${selectedCategories.includes(category)
+                                            ? 'border-[#347758] bg-[#347758]/20 text-[#a9dbc4]'
+                                            : 'border-slate-600 bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                        }`}
+                                    >
+                                        {category}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Pelacakan Stok</label>
+                        <select
+                            value={trackStockMode}
+                            onChange={e => setTrackStockMode(e.target.value as 'keep' | 'enable' | 'disable')}
+                            className="h-11 w-full rounded-xl border border-slate-600 bg-slate-800 px-4 text-white focus:border-[#347758] focus:outline-none focus:ring-2 focus:ring-[#347758]/30"
+                        >
+                            <option value="keep">Biarkan seperti sekarang</option>
+                            <option value="enable">Aktifkan lacak stok</option>
+                            <option value="disable">Matikan lacak stok</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div className="flex justify-end gap-3 border-t border-slate-700 pt-4">
+                    <Button type="button" variant="utility" onClick={onClose}>
+                        Batal
+                    </Button>
+                    <Button
+                        type="button"
+                        onClick={() => onApply({ categoryMode, categories: selectedCategories, trackStockMode })}
+                        disabled={(categoryMode !== 'keep' && selectedCategories.length === 0)}
+                    >
+                        Terapkan Perubahan
+                    </Button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
 
 // PRODUCT FORM COMPONENT (Re-implemented for security check)
 interface ProductFormProps {
@@ -676,7 +949,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, ProductFormProps>(({
     };
 
     return (
-        <form ref={ref} onSubmit={handleSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
+        <form ref={ref} onSubmit={handleSubmit} className="space-y-5">
             <div className="flex justify-center mb-4">
                 <div className="relative w-32 h-32 bg-slate-900 rounded-lg border-2 border-dashed border-slate-600 flex items-center justify-center overflow-hidden group">
                     {imagePreview ? (
@@ -797,7 +1070,7 @@ const ProductForm = React.forwardRef<HTMLFormElement, ProductFormProps>(({
 
 
 const ProductsView: React.FC = () => {
-    const { products, addProduct, updateProduct, deleteProduct, bulkAddProducts } = useProduct();
+    const { products, addProduct, updateProduct, deleteProduct, bulkDeleteProducts, bulkAddProducts } = useProduct();
     const { showAlert } = useUIActions();
     const { currentUser } = useAuthState();
     const [isFormOpen, setFormOpen] = useState(false);
@@ -813,8 +1086,22 @@ const ProductsView: React.FC = () => {
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [isRestockModalOpen, setIsRestockModalOpen] = useState(false); 
     const [isChannelSalesOpen, setIsChannelSalesOpen] = useState(false);
+    const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
+    const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
 
     const isAdmin = currentUser?.role === 'admin';
+    const trackableProducts = useMemo(() => products.filter(product => product.trackStock), [products]);
+    const lowStockProducts = useMemo(
+        () => trackableProducts.filter(product => (product.stock || 0) <= 5),
+        [trackableProducts],
+    );
+    const categoryCount = useMemo(() => {
+        const categorySet = new Set<string>();
+        products.forEach(product => {
+            product.category.forEach(category => categorySet.add(category));
+        });
+        return categorySet.size;
+    }, [products]);
 
     const filteredProducts = useMemo(() => {
         return products.filter(p => 
@@ -822,6 +1109,16 @@ const ProductsView: React.FC = () => {
             (p.barcode && p.barcode.includes(searchTerm))
         ).sort((a, b) => a.name.localeCompare(b.name));
     }, [products, searchTerm]);
+
+    useEffect(() => {
+        setSelectedProductIds(prev => prev.filter(id => filteredProducts.some(product => product.id === id)));
+    }, [filteredProducts]);
+
+    const allVisibleSelected = filteredProducts.length > 0 && filteredProducts.every(product => selectedProductIds.includes(product.id));
+    const selectedProducts = useMemo(
+        () => products.filter(product => selectedProductIds.includes(product.id)),
+        [products, selectedProductIds],
+    );
 
     const handleEdit = (product: Product) => {
         setEditingProduct(product);
@@ -855,6 +1152,85 @@ const ProductsView: React.FC = () => {
             type: 'alert',
             title: 'Export Berhasil',
             message: 'Data produk (CSV) berhasil diunduh.'
+        });
+    };
+
+    const toggleProductSelection = (productId: string) => {
+        setSelectedProductIds(prev =>
+            prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId]
+        );
+    };
+
+    const toggleSelectAllVisible = () => {
+        if (allVisibleSelected) {
+            setSelectedProductIds(prev => prev.filter(id => !filteredProducts.some(product => product.id === id)));
+            return;
+        }
+
+        const visibleIds = filteredProducts.map(product => product.id);
+        setSelectedProductIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+    };
+
+    const handleExportSelected = () => {
+        if (selectedProducts.length === 0) return;
+        dataService.exportProductsCSV(selectedProducts);
+        showAlert({
+            type: 'alert',
+            title: 'Export Berhasil',
+            message: `${selectedProducts.length} produk terpilih berhasil diunduh sebagai CSV.`,
+        });
+    };
+
+    const handleBulkDelete = () => {
+        if (selectedProducts.length === 0) return;
+        showAlert({
+            type: 'confirm',
+            title: 'Hapus Produk Terpilih?',
+            message: `${selectedProducts.length} produk yang dipilih akan dihapus permanen.`,
+            confirmText: 'Ya, Hapus',
+            confirmVariant: 'danger',
+            onConfirm: () => {
+                bulkDeleteProducts(selectedProductIds);
+                setSelectedProductIds([]);
+            },
+        });
+    };
+
+    const handleBulkEdit = () => {
+        if (selectedProducts.length === 0) return;
+        setIsBulkEditModalOpen(true);
+    };
+
+    const handleApplyBulkEdit = (payload: {
+        categoryMode: 'keep' | 'replace' | 'append';
+        categories: string[];
+        trackStockMode: 'keep' | 'enable' | 'disable';
+    }) => {
+        const updatedProducts = selectedProducts.map(product => {
+            let nextCategories = product.category;
+            if (payload.categoryMode === 'replace') {
+                nextCategories = payload.categories;
+            } else if (payload.categoryMode === 'append') {
+                nextCategories = Array.from(new Set([...product.category, ...payload.categories]));
+            }
+
+            let nextTrackStock = product.trackStock;
+            if (payload.trackStockMode === 'enable') nextTrackStock = true;
+            if (payload.trackStockMode === 'disable') nextTrackStock = false;
+
+            return {
+                ...product,
+                category: nextCategories,
+                trackStock: nextTrackStock,
+            };
+        });
+
+        updatedProducts.forEach(updateProduct);
+        setIsBulkEditModalOpen(false);
+        showAlert({
+            type: 'alert',
+            title: 'Bulk Edit Berhasil',
+            message: `${updatedProducts.length} produk berhasil diperbarui.`,
         });
     };
 
@@ -898,91 +1274,394 @@ const ProductsView: React.FC = () => {
         )}
     ], [deleteProduct]);
 
+    const actionItems = [
+        ...(isAdmin ? [{
+            id: 'transfer',
+            label: 'Transfer Stok',
+            onClick: () => setIsTransferModalOpen(true),
+            icon: 'share' as const,
+        }] : []),
+        {
+            id: 'channel',
+            label: 'Channel Online',
+            onClick: () => setIsChannelSalesOpen(true),
+            icon: 'cloud' as const,
+        },
+        {
+            id: 'export',
+            label: 'Export CSV',
+            onClick: handleExport,
+            icon: 'download' as const,
+        },
+        {
+            id: 'bulk',
+            label: 'Tambah Massal',
+            onClick: () => setBulkModalOpen(true),
+            icon: 'boxes' as const,
+        },
+        {
+            id: 'category',
+            label: 'Kelola Kategori',
+            onClick: () => setCategoryModalOpen(true),
+            icon: 'tag' as const,
+        },
+        {
+            id: 'opname',
+            label: 'Stok Opname',
+            onClick: () => setIsOpnameOpen(true),
+            icon: 'clipboard' as const,
+        },
+    ];
+
     return (
-        <div className="flex flex-col h-full">
-            <div className="flex flex-col gap-3 mb-6">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <div className="flex flex-col gap-1">
-                        <h1 className="text-2xl font-bold text-white">Produk</h1>
+        <div className="flex h-full min-h-0 flex-col gap-5">
+            <section className="rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-850 p-5 shadow-xl sm:p-6">
+                <div className="flex flex-col gap-5">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                        <div className="max-w-2xl">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#7ac0a0]">Katalog Produk</p>
+                            <h1 className="mt-2 text-2xl font-bold text-white sm:text-[30px]">Kelola produk, stok, dan channel penjualan dalam satu tempat.</h1>
+                            <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-400">
+                                Cari produk dengan cepat, cek stok yang perlu perhatian, lalu lanjut ke tambah produk, stok manual, atau sinkronisasi channel tanpa harus pindah halaman.
+                            </p>
+                        </div>
                     </div>
-                    <div className="flex gap-2 flex-wrap">
-                        <Button variant="primary" onClick={() => { setEditingProduct(null); setFormOpen(true); }} className="flex-shrink-0">
-                            <Icon name="plus" className="w-5 h-5"/>
-                            <span className="hidden sm:inline">Tambah</span>
-                        </Button>
-                        <Button variant="secondary" onClick={() => setIsRestockModalOpen(true)} className="flex-shrink-0 bg-green-600 hover:bg-green-500 text-white border-none" title="Terima Barang dari Supplier / Koreksi Manual">
-                            <Icon name="download" className="w-5 h-5 rotate-180"/>
-                            <span className="hidden sm:inline">Stok Manual</span>
-                        </Button>
-                        <OverflowMenu
-                            items={[
-                                ...(isAdmin ? [{
-                                    id: 'transfer',
-                                    label: 'Transfer Stok',
-                                    onClick: () => setIsTransferModalOpen(true),
-                                    icon: 'share' as const
-                                }] : []),
-                                {
-                                    id: 'channel',
-                                    label: 'Channel Online',
-                                    onClick: () => setIsChannelSalesOpen(true),
-                                    icon: 'cloud' as const
-                                },
-                                {
-                                    id: 'export',
-                                    label: 'Export',
-                                    onClick: handleExport,
-                                    icon: 'download' as const
-                                },
-                                {
-                                    id: 'bulk',
-                                    label: 'Tambah Massal',
-                                    onClick: () => setBulkModalOpen(true),
-                                    icon: 'boxes' as const
-                                },
-                                {
-                                    id: 'category',
-                                    label: 'Kategori',
-                                    onClick: () => setCategoryModalOpen(true),
-                                    icon: 'tag' as const
-                                },
-                                {
-                                    id: 'opname',
-                                    label: 'Opname',
-                                    onClick: () => setIsOpnameOpen(true),
-                                    icon: 'clipboard' as const
-                                }
-                            ]}
+
+                    <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+                        <ProductsStatCard
+                            label="Total Produk"
+                            value={products.length}
+                            hint="Jumlah item aktif yang saat ini tercatat di katalog."
+                            icon="boxes"
+                        />
+                        <ProductsStatCard
+                            label="Kategori Aktif"
+                            value={categoryCount}
+                            hint="Kategori yang sudah dipakai oleh produk di daftar saat ini."
+                            icon="tag"
+                        />
+                        <ProductsStatCard
+                            label="Lacak Stok"
+                            value={trackableProducts.length}
+                            hint="Produk yang stoknya dipantau dan akan berkurang saat terjual."
+                            icon="clipboard"
+                            tone="success"
+                        />
+                        <ProductsStatCard
+                            label="Stok Menipis"
+                            value={lowStockProducts.length}
+                            hint="Produk dengan stok 5 atau kurang yang perlu dicek lebih dulu."
+                            icon="warning"
+                            tone="warning"
                         />
                     </div>
                 </div>
-                <div className="relative w-full sm:max-w-md">
-                    <input
-                        type="text"
-                        placeholder="Cari produk..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-[#347758] focus:border-[#347758]"
-                    />
-                    <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                </div>
-            </div>
+            </section>
 
-            <div className="flex-1 min-h-0 bg-slate-800 rounded-lg shadow-md flex flex-col">
-                {filteredProducts.length > 0 ? (
-                    <VirtualizedTable
-                        data={filteredProducts}
-                        columns={columns}
-                        rowHeight={60}
-                    />
-                ) : (
-                    <div className="flex-1 flex items-center justify-center p-8 text-slate-500">
-                        {searchTerm ? 'Produk tidak ditemukan.' : 'Belum ada produk. Tambahkan produk baru.'}
+            <section className="flex min-h-0 flex-1 flex-col rounded-3xl border border-slate-800 bg-slate-800/95 shadow-xl">
+                <div className="flex flex-col gap-3 border-b border-slate-700/80 px-4 py-4 sm:px-5">
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <h2 className="text-lg font-bold text-white">Daftar Produk</h2>
+                            <p className="mt-1 text-sm text-slate-400">
+                                {searchTerm
+                                    ? `${filteredProducts.length} hasil ditemukan untuk pencarian "${searchTerm}".`
+                                    : `${products.length} produk tersedia dan siap dikelola dari halaman ini.`}
+                            </p>
+                        </div>
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+                        <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5">
+                            {trackableProducts.length} produk melacak stok
+                        </span>
+                            <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5">
+                                {lowStockProducts.length} stok menipis
+                            </span>
+                        </div>
                     </div>
-                )}
-            </div>
 
-            <Modal isOpen={isFormOpen} onClose={() => { setFormOpen(false); setEditingProduct(null); setCapturedImage(null); }} title={editingProduct ? 'Edit Produk' : 'Tambah Produk'}>
+                    <div className="flex flex-col gap-2 lg:grid lg:grid-cols-[minmax(0,1.8fr)_repeat(3,minmax(0,0.6fr))] lg:items-center">
+                        <div className="relative w-full min-w-0">
+                            <input
+                                type="text"
+                                placeholder="Cari nama produk atau barcode..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="h-11 w-full rounded-xl border border-slate-700 bg-slate-900/70 pl-11 pr-12 text-white focus:border-[#347758] focus:outline-none focus:ring-2 focus:ring-[#347758]/30"
+                            />
+                            <Icon name="search" className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                            {searchTerm && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+                                    title="Bersihkan pencarian"
+                                >
+                                    <Icon name="close" className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                        <div className="grid w-full grid-cols-3 gap-2 lg:contents">
+                            <Button
+                                variant="primary"
+                                onClick={() => { setEditingProduct(null); setFormOpen(true); }}
+                                className="h-11 w-full min-w-0 whitespace-nowrap px-0 sm:px-4"
+                                title="Tambah Produk"
+                            >
+                                <Icon name="plus" className="h-5 w-5" />
+                                <span className="hidden sm:inline">Tambah Produk</span>
+                            </Button>
+                            <Button
+                                variant="operational"
+                                onClick={() => setIsRestockModalOpen(true)}
+                                className="h-11 w-full min-w-0 whitespace-nowrap px-0 sm:px-4"
+                                title="Terima barang dari supplier atau koreksi stok manual"
+                            >
+                                <Icon name="download" className="h-5 w-5 rotate-180" />
+                                <span className="hidden sm:inline">Stok Manual</span>
+                            </Button>
+                            <OverflowMenu
+                                items={actionItems}
+                                label="Aksi"
+                                variant="utility"
+                                showLabelOnMobile={false}
+                                matchTriggerWidth
+                                buttonClassName="h-11 w-full min-w-0 px-0 sm:px-4"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="min-h-0 flex-1 p-3 sm:p-4">
+                    <div className="h-full min-h-0 overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900/60">
+                        {filteredProducts.length > 0 && (
+                            <div className="flex flex-col gap-3 border-b border-slate-700 bg-slate-900/90 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex flex-wrap items-center gap-2 text-sm">
+                                    <button
+                                        type="button"
+                                        onClick={toggleSelectAllVisible}
+                                        className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                                    >
+                                        {allVisibleSelected ? 'Batal pilih semua' : 'Pilih semua yang terlihat'}
+                                    </button>
+                                    {selectedProductIds.length > 0 && (
+                                        <span className="rounded-full border border-[#347758]/40 bg-[#347758]/15 px-3 py-1.5 text-[#a9dbc4]">
+                                            {selectedProductIds.length} produk dipilih
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                    <Button
+                                        type="button"
+                                        variant="operational"
+                                        size="sm"
+                                        onClick={handleBulkEdit}
+                                        disabled={selectedProductIds.length === 0}
+                                        className="h-10 px-2 sm:px-3"
+                                        title={selectedProductIds.length > 0 ? 'Edit produk terpilih' : 'Pilih produk dulu untuk diedit'}
+                                    >
+                                        <Icon name="edit" className="w-4 h-4" />
+                                        <span className="hidden sm:inline">Edit Terpilih</span>
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="utility"
+                                        size="sm"
+                                        onClick={() => setSelectedProductIds([])}
+                                        disabled={selectedProductIds.length === 0}
+                                        className="h-10 px-2 sm:px-3"
+                                        title="Bersihkan pilihan"
+                                    >
+                                        <Icon name="close" className="w-4 h-4" />
+                                        <span className="hidden sm:inline">Bersihkan Pilihan</span>
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="operational"
+                                        size="sm"
+                                        onClick={handleExportSelected}
+                                        disabled={selectedProductIds.length === 0}
+                                        className="h-10 px-2 sm:px-3"
+                                        title="Export produk terpilih"
+                                    >
+                                        <Icon name="download" className="w-4 h-4" />
+                                        <span className="hidden sm:inline">Export Terpilih</span>
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="danger"
+                                        size="sm"
+                                        onClick={handleBulkDelete}
+                                        disabled={selectedProductIds.length === 0}
+                                        className="h-10 px-2 sm:px-3"
+                                        title="Hapus produk terpilih"
+                                    >
+                                        <Icon name="trash" className="w-4 h-4" />
+                                        <span className="hidden sm:inline">Hapus Terpilih</span>
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                        {filteredProducts.length > 0 ? (
+                            <>
+                                <div className="h-full overflow-auto md:hidden">
+                                    <div className="space-y-2 p-2">
+                                        {filteredProducts.map(product => (
+                                            <div
+                                                key={product.id}
+                                                className="rounded-xl border border-slate-700/80 bg-slate-800/70 p-2.5 shadow-sm"
+                                            >
+                                                <div className="flex items-start gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedProductIds.includes(product.id)}
+                                                        onChange={() => toggleProductSelection(product.id)}
+                                                        className="mt-0.5 h-3.5 w-3.5 rounded border-slate-600 bg-slate-900"
+                                                        aria-label={`Pilih produk ${product.name}`}
+                                                    />
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-start gap-2">
+                                                            {product.imageUrl ? (
+                                                                <img src={product.imageUrl} alt={product.name} className="h-9 w-9 rounded-lg object-cover" />
+                                                            ) : (
+                                                                <ProductPlaceholder productName={product.name} size="small" className="h-9 w-9 rounded-lg" />
+                                                            )}
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="flex items-start justify-between gap-2">
+                                                                    <p className="truncate pr-1 text-[12px] font-bold leading-tight text-white">{product.name}</p>
+                                                                    {product.modifierGroups && product.modifierGroups.length > 0 ? (
+                                                                        <span className="shrink-0 rounded-full border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-medium text-purple-300">
+                                                                            Modifier
+                                                                        </span>
+                                                                    ) : (product.variants && product.variants.length > 0 ? (
+                                                                        <span className="shrink-0 rounded-full border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-medium text-blue-300">
+                                                                            Varian
+                                                                        </span>
+                                                                    ) : null)}
+                                                                </div>
+                                                                <p className="mt-0.5 line-clamp-1 text-[10px] text-slate-400">{product.category.join(', ') || 'Tanpa kategori'}</p>
+                                                                <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
+                                                                    <span className="rounded-full border border-slate-600 bg-slate-900/80 px-1.5 py-0.5 text-slate-300">
+                                                                        {CURRENCY_FORMATTER.format(product.price)}
+                                                                    </span>
+                                                                    <span className={`rounded-full border px-1.5 py-0.5 ${product.trackStock && (product.stock || 0) <= 5 ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-slate-600 bg-slate-900/80 text-slate-300'}`}>
+                                                                        {product.trackStock ? `Stok ${product.stock}` : 'Tanpa stok'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="mt-2 grid grid-cols-2 gap-1.5">
+                                                            <Button
+                                                                type="button"
+                                                                variant="utility"
+                                                                size="sm"
+                                                                onClick={() => handleEdit(product)}
+                                                                className="h-8 gap-1 px-2 text-[11px] sm:text-sm"
+                                                                title="Edit produk"
+                                                            >
+                                                                <Icon name="edit" className="w-4 h-4" />
+                                                                <span className="hidden min-[380px]:inline">Edit</span>
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="danger"
+                                                                size="sm"
+                                                                onClick={() => deleteProduct(product.id)}
+                                                                className="h-8 gap-1 px-2 text-[11px] sm:text-sm"
+                                                                title="Hapus produk"
+                                                            >
+                                                                <Icon name="trash" className="w-4 h-4" />
+                                                                <span className="hidden min-[380px]:inline">Hapus</span>
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="hidden h-full overflow-auto md:block">
+                                <table className="min-w-[760px] w-full text-left text-sm text-slate-300">
+                                    <thead className="sticky top-0 z-10 bg-slate-800/95 backdrop-blur border-b border-slate-700">
+                                        <tr>
+                                            <th className="w-14 px-4 py-3 font-semibold text-slate-200">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={allVisibleSelected}
+                                                    onChange={toggleSelectAllVisible}
+                                                    className="h-4 w-4 rounded border-slate-600 bg-slate-900"
+                                                    aria-label="Pilih semua produk yang terlihat"
+                                                />
+                                            </th>
+                                            {columns.map((column, index) => (
+                                                <th key={index} className="px-4 py-3 font-semibold text-slate-200">
+                                                    {column.label}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredProducts.map(product => (
+                                            <tr key={product.id} className="border-b border-slate-800 hover:bg-slate-800/50 align-middle">
+                                                <td className="px-4 py-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedProductIds.includes(product.id)}
+                                                        onChange={() => toggleProductSelection(product.id)}
+                                                        className="h-4 w-4 rounded border-slate-600 bg-slate-900"
+                                                        aria-label={`Pilih produk ${product.name}`}
+                                                    />
+                                                </td>
+                                                {columns.map((column, index) => (
+                                                    <td
+                                                        key={index}
+                                                        className={`px-4 py-3 text-slate-300 ${column.className || ''}`}
+                                                    >
+                                                        {column.render(product)}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex h-full min-h-[280px] flex-col items-center justify-center px-6 text-center">
+                                <div className="rounded-2xl border border-slate-700 bg-slate-800/80 p-4">
+                                    <Icon name="boxes" className="mx-auto h-10 w-10 text-slate-500" />
+                                </div>
+                                <h3 className="mt-4 text-lg font-semibold text-white">
+                                    {searchTerm ? 'Produk tidak ditemukan.' : 'Belum ada produk di katalog.'}
+                                </h3>
+                                <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-400">
+                                    {searchTerm
+                                        ? 'Coba ubah kata kunci pencarian atau cek kembali barcode yang Anda masukkan.'
+                                        : 'Tambahkan produk pertama agar katalog siap dipakai untuk penjualan, pengelolaan stok, dan channel online.'}
+                                </p>
+                                {!searchTerm && (
+                                    <Button
+                                        variant="primary"
+                                        onClick={() => { setEditingProduct(null); setFormOpen(true); }}
+                                        className="mt-4"
+                                    >
+                                        <Icon name="plus" className="h-5 w-5" />
+                                        <span>Tambah Produk Pertama</span>
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </section>
+
+            <Modal
+                isOpen={isFormOpen}
+                onClose={() => { setFormOpen(false); setEditingProduct(null); setCapturedImage(null); }}
+                title={editingProduct ? 'Edit Produk' : 'Tambah Produk'}
+                size="xl"
+                mobileLayout="fullscreen"
+            >
                 <ProductForm 
                     ref={formRef}
                     product={editingProduct} 
@@ -995,6 +1674,13 @@ const ProductsView: React.FC = () => {
             </Modal>
             
             <CategoryManagerModal isOpen={isCategoryModalOpen} onClose={() => setCategoryModalOpen(false)} />
+
+            <BulkEditProductsModal
+                isOpen={isBulkEditModalOpen}
+                onClose={() => setIsBulkEditModalOpen(false)}
+                selectedCount={selectedProductIds.length}
+                onApply={handleApplyBulkEdit}
+            />
 
             <CameraCaptureModal 
                 isOpen={isCameraOpen} 

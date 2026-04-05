@@ -11,15 +11,15 @@ import { Capacitor } from '@capacitor/core';
 import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode; icon?: any }> = ({ title, description, children, icon }) => (
-    <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
-        <div className="p-4 border-b border-slate-700 bg-slate-800 flex items-start gap-3">
-            {icon && <div className="p-2 bg-slate-700 rounded-lg text-slate-300">{icon}</div>}
+    <div className="mb-6 overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-800/85 shadow-[0_10px_35px_rgba(15,23,42,0.22)]">
+        <div className="flex items-start gap-3 border-b border-slate-700/80 bg-slate-800/90 p-4 sm:p-5">
+            {icon && <div className="rounded-xl bg-slate-700/80 p-2 text-slate-200">{icon}</div>}
             <div>
                 <h3 className="text-lg font-semibold text-white">{title}</h3>
-                {description && <p className="text-sm text-slate-400 mt-1">{description}</p>}
+                {description && <p className="mt-1 text-sm leading-relaxed text-slate-400">{description}</p>}
             </div>
         </div>
-        <div className="p-4 space-y-4">
+        <div className="space-y-4 p-4 sm:p-5">
             {children}
         </div>
     </div>
@@ -192,11 +192,11 @@ const HardwareTab: React.FC = () => {
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
                         {isNative && (
-                            <Button onClick={openAppSettings} variant="secondary" size="sm" className="w-full sm:w-auto">
+                            <Button onClick={openAppSettings} variant="utility" size="sm" className="w-full sm:w-auto">
                                 <Icon name="settings" className="w-4 h-4"/> Buka Setting
                             </Button>
                         )}
-                        <Button onClick={handleRequestDevicePermissions} variant="secondary" size="sm" className="w-full sm:w-auto" disabled={isRequestingPermissions}>
+                        <Button onClick={handleRequestDevicePermissions} variant="operational" size="sm" className="w-full sm:w-auto" disabled={isRequestingPermissions}>
                             <Icon name="bluetooth" className="w-4 h-4"/> Minta Izin Bluetooth & Kamera
                         </Button>
                     </div>
@@ -232,7 +232,7 @@ const HardwareTab: React.FC = () => {
                         className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white text-sm"
                     />
                     <div className="pt-2">
-                        <Button onClick={handleSaveAgentSettings} variant="secondary" size="sm" className="w-full">
+                        <Button onClick={handleSaveAgentSettings} variant="utility" size="sm" className="w-full">
                             <Icon name="check-circle-fill" className="w-4 h-4"/> Simpan Endpoint
                         </Button>
                     </div>
@@ -258,7 +258,7 @@ const HardwareTab: React.FC = () => {
                                 <div className="text-xs text-yellow-500 mb-3 italic">Belum ada printer dipilih.</div>
                             )}
 
-                            <Button onClick={handleScanNativeDevices} disabled={isScanningBt} variant="secondary" className="w-full bg-slate-700">
+                            <Button onClick={handleScanNativeDevices} disabled={isScanningBt} variant="operational" className="w-full">
                                 {isScanningBt ? 'Mencari...' : <><Icon name="search" className="w-4 h-4"/> Cari Perangkat Paired</>}
                             </Button>
 
@@ -291,11 +291,11 @@ const HardwareTab: React.FC = () => {
                             <p className="font-bold text-yellow-300 mb-1">Mode PC/Laptop (Web Bluetooth)</p>
                             <p>Gunakan Google Chrome atau Edge. Fitur ini mungkin tidak jalan di Firefox/Safari.</p>
                         </div>
-                        <div className="flex gap-3">
-                            <Button onClick={handleConnectWebBluetooth} variant="secondary" className="flex-1">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <Button onClick={handleConnectWebBluetooth} variant="operational" className="w-full h-11 justify-center text-sm">
                                 <Icon name="bluetooth" className="w-4 h-4"/> 1. Cari Printer
                             </Button>
-                            <Button onClick={handleTestPrint} className="flex-1">
+                            <Button onClick={handleTestPrint} className="w-full h-11 justify-center text-sm">
                                 <Icon name="printer" className="w-4 h-4"/> 2. Tes Print
                             </Button>
                         </div>
@@ -345,11 +345,11 @@ const HardwareTab: React.FC = () => {
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
                         {isNative && (
-                            <Button onClick={openAppSettings} variant="secondary" size="sm" className="w-full sm:w-auto">
+                            <Button onClick={openAppSettings} variant="utility" size="sm" className="w-full sm:w-auto">
                                 <Icon name="settings" className="w-4 h-4"/> Buka Setting
                             </Button>
                         )}
-                        <Button onClick={() => setCameraTestOpen(true)} variant="secondary" size="sm" className="w-full sm:w-auto">
+                        <Button onClick={() => setCameraTestOpen(true)} variant="operational" size="sm" className="w-full sm:w-auto">
                             <Icon name="camera" className="w-4 h-4"/> Tes Kamera
                         </Button>
                     </div>

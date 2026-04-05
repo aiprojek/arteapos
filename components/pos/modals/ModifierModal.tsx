@@ -64,8 +64,14 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({ isOpen, onClose, p
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Pilihan ${product.name}`}>
-            <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-1">
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title={`Pilihan ${product.name}`}
+            size="lg"
+            mobileLayout="fullscreen"
+        >
+            <div className="space-y-6 max-h-[65dvh] sm:max-h-[60vh] overflow-y-auto pr-1">
                 {product.modifierGroups.map((group) => (
                     <div key={group.id} className="space-y-2">
                         <div className="flex justify-between items-baseline border-b border-slate-700 pb-1">

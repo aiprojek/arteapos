@@ -26,8 +26,14 @@ export const AddonModal: React.FC<AddonModalProps> = ({ isOpen, onClose, product
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Add-on ${product.name}`}>
-            <div className="space-y-3 max-h-64 overflow-y-auto">
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title={`Add-on ${product.name}`}
+            size="lg"
+            mobileLayout="fullscreen"
+        >
+            <div className="space-y-3 max-h-[60dvh] sm:max-h-64 overflow-y-auto">
                 {product.addons.map((addon) => {
                     const isSelected = !!selected.find((x) => x.id === addon.id);
                     return (

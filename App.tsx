@@ -209,8 +209,12 @@ const AppContent = () => {
 
       <main className="flex-1 flex flex-col min-w-0 h-full relative z-0">
         <Header activeView={activeView} setActiveView={setActiveView} onMenuClick={() => setSidebarOpen(true)} />
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-900 scroll-smooth">
-            {renderView()}
+        <div className={`flex-1 min-h-0 ${activeView === 'pos' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'} bg-slate-900 scroll-smooth`}>
+            {['pos', 'products', 'raw-materials', 'reports', 'finance', 'settings', 'dashboard', 'help'].includes(activeView) ? (
+              <div className={`p-4 md:p-6 ${activeView === 'pos' ? 'flex-1 min-h-0 overflow-hidden' : 'min-h-full'}`}>
+                {renderView()}
+              </div>
+            ) : renderView()}
         </div>
       </main>
     </div>

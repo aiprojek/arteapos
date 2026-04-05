@@ -41,7 +41,13 @@ export const SplitBillModal: React.FC<SplitBillModalProps> = ({ isOpen, onClose,
     if (!isOpen) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Split Bill (Pisah Bayar)">
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Split Bill (Pisah Bayar)"
+            size="lg"
+            mobileLayout="fullscreen"
+        >
             <div className="space-y-4">
                 <p className="text-sm text-slate-300">Pilih item yang ingin dibayar <strong className="text-white">SEKARANG</strong>. Item yang tidak dipilih akan disimpan ke keranjang terpisah.</p>
                 
@@ -49,7 +55,7 @@ export const SplitBillModal: React.FC<SplitBillModalProps> = ({ isOpen, onClose,
                     {selectedIds.size === cartItems.length ? 'Batalkan Semua' : 'Pilih Semua'}
                 </button>
 
-                <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                <div className="max-h-[55dvh] sm:max-h-60 overflow-y-auto space-y-2 pr-1">
                     {cartItems.map((item) => {
                         const mods = (item.selectedModifiers || []).reduce((s, m) => s + m.price, 0);
                         const price = (item.price + mods) * item.quantity;

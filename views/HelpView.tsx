@@ -53,8 +53,8 @@ const HelpView: React.FC = () => {
             icon: "cloud", color: "text-blue-400", bg: "bg-blue-900/20"
         },
         {
-            title: "Artea AI: Analis Bisnis",
-            desc: "Konsultan cerdas untuk analisa strategi dan tren penjualan.",
+            title: "Ringkasan Bisnis Cerdas",
+            desc: "Ringkasan lokal berbasis data dashboard untuk membantu membaca kondisi bisnis.",
             icon: "chat", color: "text-purple-400", bg: "bg-purple-900/20"
         },
         {
@@ -84,42 +84,73 @@ const HelpView: React.FC = () => {
         }
     ];
 
+    const activeTabMeta = tabs.find(tab => tab.id === activeTab);
+
     return (
         <div className="max-w-6xl mx-auto pb-24">
-            {/* Header */}
-            <div className="text-center py-8">
-                <div className="inline-block p-3 rounded-full bg-slate-800 border border-slate-700 mb-4 shadow-lg">
-                    <Icon name="logo" className="w-12 h-12 text-[#52a37c]" />
+            <section className="overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 shadow-[0_24px_80px_rgba(15,23,42,0.35)]">
+                <div className="px-5 py-6 sm:px-6 sm:py-7 bg-[radial-gradient(circle_at_top_left,_rgba(82,163,124,0.16),_transparent_34%),linear-gradient(180deg,rgba(15,23,42,0.92),rgba(15,23,42,0.72))]">
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                        <div className="space-y-3">
+                            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-900/50 bg-emerald-950/30 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300">
+                                Info & Bantuan
+                            </div>
+                            <div className="flex items-start gap-4">
+                                <div className="hidden sm:flex rounded-2xl border border-slate-700 bg-slate-900/80 p-3 shadow-lg">
+                                    <Icon name="logo" className="w-10 h-10 text-[#52a37c]" />
+                                </div>
+                                <div>
+                                    <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">Pusat Pengetahuan</h1>
+                                    <p className="mt-2 max-w-2xl text-sm sm:text-base text-slate-400 leading-relaxed">
+                                        Pelajari fitur, skenario penggunaan, panduan operasional, dan informasi penting Artea POS dalam susunan yang lebih rapi.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full lg:w-auto lg:min-w-[360px]">
+                            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-3">
+                                <p className="text-[11px] uppercase tracking-wide text-slate-500">Tab Aktif</p>
+                                <p className="mt-1 text-sm font-semibold text-white">{activeTabMeta?.label || 'Pusat Pengetahuan'}</p>
+                            </div>
+                            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-3">
+                                <p className="text-[11px] uppercase tracking-wide text-slate-500">Fokus</p>
+                                <p className="mt-1 text-sm font-semibold text-white">
+                                    {activeTab === 'about' ? 'Info aplikasi' : activeTab === 'faq' ? 'Jawaban cepat' : 'Panduan & referensi'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">Pusat Pengetahuan</h1>
-                <p className="text-slate-400 mt-2 max-w-xl mx-auto text-sm sm:text-base">
-                    Pelajari cara memaksimalkan Artea POS untuk bisnis Anda.
-                </p>
-            </div>
+            </section>
 
             {/* Navigation Tabs */}
-            <div className="sticky top-[-1rem] md:top-[-1.5rem] z-20 -mx-4 md:-mx-6 px-4 md:px-6 py-3 mb-8 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/50 transition-all">
-                <div className="overflow-x-auto hide-scrollbar flex md:justify-center">
-                    <div className="bg-slate-800 p-1 rounded-xl flex gap-1 shadow-lg border border-slate-700 whitespace-nowrap min-w-max">
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id as any)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap
-                                    ${activeTab === tab.id ? 'bg-[#347758] text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
-                            >
-                                {/* @ts-ignore */}
-                                <Icon name={tab.icon} className="w-4 h-4" />
-                                <span>{tab.label}</span>
-                            </button>
-                        ))}
+            <div className="sticky top-0 z-20 mt-6 mb-8">
+                <div className="rounded-2xl border border-slate-800/80 bg-slate-900/90 px-3 py-3 shadow-lg backdrop-blur-xl">
+                    <div className="overflow-x-auto hide-scrollbar flex md:justify-center">
+                        <div className="flex gap-1.5 whitespace-nowrap min-w-max">
+                            {tabs.map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id as any)}
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap border
+                                        ${activeTab === tab.id
+                                            ? 'bg-[#347758] text-white border-[#347758] shadow'
+                                            : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white hover:bg-slate-700'}`}
+                                >
+                                    {/* @ts-ignore */}
+                                    <Icon name={tab.icon} className="w-4 h-4" />
+                                    <span>{tab.label}</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* --- CONTENT AREA --- */}
             
-            <div className="animate-fade-in px-4 md:px-0">
+            <section className="animate-fade-in rounded-3xl border border-slate-800 bg-slate-900/55 p-4 sm:p-5 shadow-[0_16px_60px_rgba(15,23,42,0.24)]">
                 
                 {/* TAB FITUR (NEW) */}
                 {activeTab === 'features' && (
@@ -160,7 +191,7 @@ const HelpView: React.FC = () => {
                 {activeTab === 'faq' && <FAQTab />}
                 {activeTab === 'license' && <LicenseTab />}
                 {activeTab === 'about' && <AboutTab />}
-            </div>
+            </section>
 
             {/* Showcase Modal Launcher */}
             <ShowcaseModal isOpen={isShowcaseOpen} onClose={() => setShowcaseOpen(false)} />

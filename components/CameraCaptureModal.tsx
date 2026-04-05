@@ -147,8 +147,8 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
   if (Capacitor.isNativePlatform()) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
-      <div className="relative aspect-video bg-slate-900 rounded-lg overflow-hidden flex flex-col items-center justify-center">
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg" mobileLayout="fullscreen">
+      <div className="relative min-h-[46dvh] sm:aspect-video bg-slate-900 rounded-xl overflow-hidden flex flex-col items-center justify-center">
         {error ? (
           <div className="text-center p-6 max-w-xs text-slate-300">
             <Icon name="warning" className="w-10 h-10 text-red-500 mx-auto mb-2" />

@@ -40,24 +40,30 @@ const UpdatePaymentModal: React.FC<UpdatePaymentModalProps> = ({ isOpen, onClose
     }
     
     return (
-        <Modal isOpen={isOpen} onClose={handleClose} title={`Update Pembayaran untuk ${transaction.customerName || `Transaksi #${transaction.id}`}`}>
+        <Modal
+            isOpen={isOpen}
+            onClose={handleClose}
+            title={`Update Pembayaran untuk ${transaction.customerName || `Transaksi #${transaction.id}`}`}
+            size="lg"
+            mobileLayout="fullscreen"
+        >
             <div className="space-y-4">
                 {transaction.customerName && (
-                    <div className="bg-slate-900 p-2 rounded-md text-sm">
+                    <div className="bg-slate-900 p-3 rounded-xl text-sm">
                         <p><span className="text-slate-400">Pelanggan:</span> <span className="font-semibold">{transaction.customerName}</span></p>
                         {transaction.customerContact && <p><span className="text-slate-400">Kontak:</span> <span>{transaction.customerContact}</span></p>}
                     </div>
                 )}
-                <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="bg-slate-700 p-2 rounded-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
+                    <div className="bg-slate-700 p-3 rounded-xl">
                         <p className="text-slate-400 text-xs">Total Tagihan</p>
                         <p className="text-lg font-bold text-slate-200">{CURRENCY_FORMATTER.format(transaction.total)}</p>
                     </div>
-                    <div className="bg-slate-700 p-2 rounded-lg">
+                    <div className="bg-slate-700 p-3 rounded-xl">
                         <p className="text-slate-400 text-xs">Sudah Dibayar</p>
                         <p className="text-lg font-bold text-green-400">{CURRENCY_FORMATTER.format(transaction.amountPaid)}</p>
                     </div>
-                    <div className="bg-slate-700 p-2 rounded-lg">
+                    <div className="bg-slate-700 p-3 rounded-xl">
                         <p className="text-slate-400 text-xs">Sisa Tagihan</p>
                         <p className="text-lg font-bold text-yellow-400">{CURRENCY_FORMATTER.format(transaction.total - transaction.amountPaid)}</p>
                     </div>
@@ -67,7 +73,7 @@ const UpdatePaymentModal: React.FC<UpdatePaymentModalProps> = ({ isOpen, onClose
                     <p className="text-sm font-semibold mb-2">Tambah Pembayaran Baru</p>
                     <div className="space-y-2">
                         {newPayments.map((p, i) => (
-                            <div key={i} className="flex justify-between p-2 bg-slate-700 rounded-md text-sm">
+                            <div key={i} className="flex justify-between p-3 bg-slate-700 rounded-xl text-sm">
                                 <span>Pembayaran Baru {i+1} ({p.method === 'cash' ? 'Tunai' : 'Non-Tunai'})</span>
                                 <span>{CURRENCY_FORMATTER.format(p.amount)}</span>
                             </div>
@@ -75,11 +81,11 @@ const UpdatePaymentModal: React.FC<UpdatePaymentModalProps> = ({ isOpen, onClose
                     </div>
                 </div>
 
-                <input type="number" min="0" value={newPaymentAmount} onChange={e => setNewPaymentAmount(e.target.value)} placeholder="Masukkan jumlah bayar" className="w-full bg-slate-700 p-3 text-xl text-center rounded-md text-white" />
+                <input type="number" min="0" value={newPaymentAmount} onChange={e => setNewPaymentAmount(e.target.value)} placeholder="Masukkan jumlah bayar" className="w-full bg-slate-700 p-3 text-xl text-center rounded-xl text-white" />
 
                 <div className="grid grid-cols-2 gap-3">
-                    <Button onClick={() => handleAddPayment('cash')} disabled={!newPaymentAmount}>Tambah Tunai</Button>
-                    <Button onClick={() => handleAddPayment('non-cash')} disabled={!newPaymentAmount}>Tambah Non-Tunai</Button>
+                    <Button onClick={() => handleAddPayment('cash')} disabled={!newPaymentAmount} className="py-2.5">Tambah Tunai</Button>
+                    <Button onClick={() => handleAddPayment('non-cash')} disabled={!newPaymentAmount} className="py-2.5">Tambah Non-Tunai</Button>
                 </div>
                 
                 <div className="pt-4 border-t border-slate-700">

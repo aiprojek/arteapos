@@ -3,14 +3,16 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useFinance } from '../../context/FinanceContext';
 import { CURRENCY_FORMATTER } from '../../constants';
 import Button from '../Button';
+import Icon from '../Icon';
 import type { Transaction as TransactionType, Expense, OtherIncome } from '../../types';
 
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
 
-const StatCard: React.FC<{title: string; value: string | number; className?: string}> = ({title, value, className}) => (
-    <div className={`bg-slate-800 p-4 rounded-lg shadow-md ${className}`}>
-        <h3 className="text-slate-400 text-sm">{title}</h3>
-        <p className="text-2xl font-bold text-white">{typeof value === 'number' ? CURRENCY_FORMATTER.format(value) : value}</p>
+const StatCard: React.FC<{title: string; value: string | number; hint: string; className?: string}> = ({title, value, hint, className}) => (
+    <div className={`rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm ${className || ''}`}>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">{title}</p>
+        <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{typeof value === 'number' ? CURRENCY_FORMATTER.format(value) : value}</p>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">{hint}</p>
     </div>
 );
 
@@ -105,80 +107,121 @@ const CashFlowTab: React.FC<CashFlowTabProps> = ({ dataSource = 'local', cloudDa
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-wrap w-full">
+            <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-3 sm:p-4">
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-wrap w-full">
                     
-                    <div className="relative" ref={filterDropdownRef}>
-                        <Button variant="secondary" onClick={() => setFilterDropdownOpen(prev => !prev)}>
-                            Filter: {filterLabels[filter]}
-                            <svg className={`w-4 h-4 ml-2 transition-transform ${isFilterDropdownOpen ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                        </Button>
-                        {isFilterDropdownOpen && (
-                            <div className="absolute top-full left-0 mt-2 w-48 bg-slate-700 rounded-lg shadow-xl z-10">
-                                {(['today', 'week', 'month', 'all', 'custom'] as TimeFilter[]).map(f => (
-                                    <button key={f} onClick={() => handleFilterChange(f)} className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter === f ? 'bg-[#347758] text-white' : 'text-slate-200 hover:bg-slate-600'}`}>
-                                        {filterLabels[f]}
-                                    </button>
-                                ))}
+                        <div className="relative" ref={filterDropdownRef}>
+                            <Button variant="utility" onClick={() => setFilterDropdownOpen(prev => !prev)} className="h-11 whitespace-nowrap">
+                                Filter: {filterLabels[filter]}
+                                <svg className={`w-4 h-4 ml-2 transition-transform ${isFilterDropdownOpen ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </Button>
+                            {isFilterDropdownOpen && (
+                                <div className="absolute top-full left-0 mt-2 w-48 bg-slate-700 rounded-lg shadow-xl z-10">
+                                    {(['today', 'week', 'month', 'all', 'custom'] as TimeFilter[]).map(f => (
+                                        <button key={f} onClick={() => handleFilterChange(f)} className={`w-full text-left px-4 py-2 text-sm transition-colors ${filter === f ? 'bg-[#347758] text-white' : 'text-slate-200 hover:bg-slate-600'}`}>
+                                            {filterLabels[f]}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        
+                        {filter === 'custom' && (
+                            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/70 p-2 animate-fade-in">
+                                <input 
+                                    type="date" 
+                                    value={customStartDate} 
+                                    onChange={(e) => setCustomStartDate(e.target.value)}
+                                    className="rounded-lg bg-slate-700 px-3 py-2 text-sm text-white border-none focus:ring-1 focus:ring-[#347758]"
+                                />
+                                <span className="text-slate-400 text-xs">s/d</span>
+                                <input 
+                                    type="date" 
+                                    value={customEndDate} 
+                                    onChange={(e) => setCustomEndDate(e.target.value)}
+                                    className="rounded-lg bg-slate-700 px-3 py-2 text-sm text-white border-none focus:ring-1 focus:ring-[#347758]"
+                                />
                             </div>
                         )}
                     </div>
-                    
-                    {/* CUSTOM DATE UI (FIXED) */}
-                    {filter === 'custom' && (
-                        <div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-slate-600 animate-fade-in">
-                            <input 
-                                type="date" 
-                                value={customStartDate} 
-                                onChange={(e) => setCustomStartDate(e.target.value)}
-                                className="bg-slate-700 text-white px-2 py-1 rounded text-sm border-none focus:ring-1 focus:ring-[#347758]"
-                            />
-                            <span className="text-slate-400 text-xs">s/d</span>
-                            <input 
-                                type="date" 
-                                value={customEndDate} 
-                                onChange={(e) => setCustomEndDate(e.target.value)}
-                                className="bg-slate-700 text-white px-2 py-1 rounded text-sm border-none focus:ring-1 focus:ring-[#347758]"
-                            />
-                        </div>
-                    )}
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatCard title="Total Pemasukan" value={data.totalIncome} className="border-l-4 border-green-500" />
-                <StatCard title="Total Pengeluaran" value={data.totalExpenses} className="border-l-4 border-red-500" />
-                <StatCard title="Arus Kas Bersih" value={data.netCashFlow} className={`border-l-4 ${data.netCashFlow >= 0 ? 'border-[#347758]' : 'border-yellow-500'}`} />
+            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <StatCard title="Total Pemasukan" value={data.totalIncome} hint="Gabungan penjualan dan pemasukan lain untuk periode yang sedang dipilih." />
+                <StatCard title="Total Pengeluaran" value={data.totalExpenses} hint="Akumulasi pengeluaran operasional dan pembelian untuk periode aktif." />
+                <StatCard title="Arus Kas Bersih" value={data.netCashFlow} hint="Selisih pemasukan dan pengeluaran pada periode yang sedang dipantau." className={data.netCashFlow >= 0 ? 'border-emerald-900/50 bg-emerald-950/10' : 'border-amber-900/50 bg-amber-950/10'} />
             </div>
-            <div className="bg-slate-800 rounded-lg shadow-md">
-                <h3 className="text-lg font-bold text-white p-4">Riwayat Arus Kas</h3>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left min-w-[800px]">
-                        <thead className="bg-slate-700 text-slate-200">
-                            <tr>
-                                <th className="p-3">Tanggal</th>
-                                <th className="p-3">Tipe</th>
-                                <th className="p-3">Deskripsi</th>
-                                <th className="p-3 text-right">Jumlah</th>
-                                {dataSource !== 'local' && <th className="p-3 text-right">Cabang</th>}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {data.combinedFlow.map((item, index) => (
-                                <tr key={index} className="border-b border-slate-700 last:border-b-0">
-                                    <td className="p-3 text-slate-400 whitespace-nowrap">{new Date(item.date).toLocaleDateString('id-ID')}</td>
-                                    <td className="p-3"><span className={`text-xs px-2 py-1 rounded-full ${item.amount > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{item.type}</span></td>
-                                    <td className="p-3">{item.description}</td>
-                                    <td className={`p-3 text-right font-semibold ${item.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                        {CURRENCY_FORMATTER.format(Math.abs(item.amount))}
-                                    </td>
-                                    {dataSource !== 'local' && <td className="p-3 text-right text-xs text-slate-400">{(item as any).store || '-'}</td>}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    {data.combinedFlow.length === 0 && <p className="p-4 text-center text-slate-500">Tidak ada data untuk periode ini.</p>}
-                </div>
+            <div className="rounded-2xl border border-slate-700 bg-slate-900/50 overflow-hidden">
+                {data.combinedFlow.length > 0 ? (
+                    <>
+                        <div className="border-b border-slate-700/70 px-4 py-3">
+                            <h3 className="text-lg font-bold text-white">Riwayat Arus Kas</h3>
+                            <p className="mt-1 text-sm text-slate-400">Semua arus masuk dan keluar untuk periode yang sedang aktif.</p>
+                        </div>
+                        <div className="md:hidden">
+                            <div className="space-y-2 p-2">
+                                {data.combinedFlow.map((item, index) => (
+                                    <div key={index} className="rounded-xl border border-slate-700/80 bg-slate-800/70 p-3 shadow-sm">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <p className="truncate pr-1 text-[12px] font-bold leading-tight text-white">{item.description}</p>
+                                                    <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${item.amount > 0 ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border border-red-500/30 bg-red-500/10 text-red-300'}`}>{item.type}</span>
+                                                </div>
+                                                <p className="mt-0.5 text-[10px] text-slate-400">
+                                                    {new Date(item.date).toLocaleDateString('id-ID')}{dataSource !== 'local' ? ` • ${(item as any).store || '-'}` : ''}
+                                                </p>
+                                                <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
+                                                    <span className={`rounded-full px-1.5 py-0.5 ${item.amount > 0 ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border border-red-500/30 bg-red-500/10 text-red-300'}`}>
+                                                        {item.amount > 0 ? 'Masuk' : 'Keluar'} {CURRENCY_FORMATTER.format(Math.abs(item.amount))}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full min-w-[800px] text-left">
+                                <thead className="bg-slate-800 text-slate-200">
+                                    <tr>
+                                        <th className="p-3">Tanggal</th>
+                                        <th className="p-3">Tipe</th>
+                                        <th className="p-3">Deskripsi</th>
+                                        <th className="p-3 text-right">Jumlah</th>
+                                        {dataSource !== 'local' && <th className="p-3 text-right">Cabang</th>}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.combinedFlow.map((item, index) => (
+                                        <tr key={index} className="border-b border-slate-700 last:border-b-0">
+                                            <td className="p-3 text-slate-400 whitespace-nowrap">{new Date(item.date).toLocaleDateString('id-ID')}</td>
+                                            <td className="p-3"><span className={`text-xs px-2 py-1 rounded-full ${item.amount > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>{item.type}</span></td>
+                                            <td className="p-3">{item.description}</td>
+                                            <td className={`p-3 text-right font-semibold ${item.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                {CURRENCY_FORMATTER.format(Math.abs(item.amount))}
+                                            </td>
+                                            {dataSource !== 'local' && <td className="p-3 text-right text-xs text-slate-400">{(item as any).store || '-'}</td>}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
+                ) : (
+                    <div className="flex min-h-[280px] flex-col items-center justify-center px-6 text-center">
+                        <div className="rounded-2xl border border-slate-700 bg-slate-800/80 p-4">
+                            <Icon name="trending-up" className="mx-auto h-10 w-10 text-slate-500" />
+                        </div>
+                        <h3 className="mt-4 text-lg font-semibold text-white">Belum ada arus kas pada periode ini.</h3>
+                        <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-400">
+                            Coba ubah filter waktu atau pilih rentang tanggal lain untuk melihat pergerakan kas masuk dan keluar.
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );

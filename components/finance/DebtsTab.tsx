@@ -30,19 +30,36 @@ const DebtsTab: React.FC<DebtsTabProps> = ({ dataSource = 'local', cloudData = [
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
     const [paymentAmount, setPaymentAmount] = useState('');
     const [evidenceImage, setEvidenceImage] = useState<string>(''); // NEW
+    const [searchTerm, setSearchTerm] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const activeTransactions = dataSource === 'local' ? localTransactions : cloudData;
 
-    const unpaidTransactions = useMemo(() => 
-        activeTransactions
+    const unpaidTransactions = useMemo(() => {
+        const keyword = searchTerm.trim().toLowerCase();
+        return activeTransactions
             .filter(t => t.paymentStatus === 'partial' || t.paymentStatus === 'unpaid')
-            .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [activeTransactions]);
+            .filter((transaction) => {
+                if (!keyword) return true;
+                const customerName = (transaction.customerName || 'tanpa nama').toLowerCase();
+                const paymentStatus = (transaction.paymentStatus || '').toLowerCase();
+                const dateLabel = new Date(transaction.createdAt).toLocaleDateString('id-ID').toLowerCase();
+                return customerName.includes(keyword) || paymentStatus.includes(keyword) || dateLabel.includes(keyword) || transaction.id.toLowerCase().includes(keyword);
+            })
+            .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }, [activeTransactions, searchTerm]);
 
     const totalReceivable = useMemo(() => 
         unpaidTransactions.reduce((sum, t) => sum + (t.total - t.amountPaid), 0),
     [unpaidTransactions]);
+    const overdueCount = useMemo(
+        () => unpaidTransactions.filter((transaction) => transaction.paymentStatus === 'unpaid').length,
+        [unpaidTransactions]
+    );
+    const partialCount = useMemo(
+        () => unpaidTransactions.filter((transaction) => transaction.paymentStatus === 'partial').length,
+        [unpaidTransactions]
+    );
 
     const handleOpenPayment = (t: Transaction) => {
         setSelectedTransaction(t);
@@ -117,22 +134,123 @@ const DebtsTab: React.FC<DebtsTabProps> = ({ dataSource = 'local', cloudData = [
     ];
 
     return (
-        <div className="space-y-6">
-            <div className="bg-slate-800 p-6 rounded-lg border-l-4 border-yellow-500 shadow-md">
-                <h3 className="text-slate-400 text-sm uppercase font-bold">Total Piutang (Kasbon Pelanggan)</h3>
-                <p className="text-3xl font-bold text-yellow-400 mt-2">{CURRENCY_FORMATTER.format(totalReceivable)}</p>
-                {dataSource !== 'local' && <p className="text-xs text-slate-500 mt-1">*Total dari seluruh cabang yang terhubung</p>}
-            </div>
-
-            <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-                <h3 className="text-lg font-bold text-white mb-4">Daftar Transaksi Belum Lunas</h3>
-                <div className="h-[400px]">
-                    <VirtualizedTable data={unpaidTransactions} columns={columns} rowHeight={60} minWidth={dataSource !== 'local' ? 900 : 800} />
+        <div className="space-y-4">
+            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Total Piutang</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{CURRENCY_FORMATTER.format(totalReceivable)}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Akumulasi sisa tagihan pelanggan yang belum lunas dari data aktif.</p>
+                </div>
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Belum Bayar</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{overdueCount}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Transaksi kasbon yang sama sekali belum menerima pembayaran.</p>
+                </div>
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm sm:col-span-2 xl:col-span-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Cicilan Berjalan</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{partialCount}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Transaksi yang sudah dibayar sebagian dan masih punya sisa tagihan.</p>
                 </div>
             </div>
 
+            <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-3 sm:p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="relative flex-1">
+                        <input
+                            type="text"
+                            placeholder="Cari pelanggan, status, tanggal, atau ID transaksi..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="h-11 w-full rounded-xl border border-slate-700 bg-slate-800 pl-11 pr-12 text-white focus:border-[#347758] focus:ring-[#347758]"
+                        />
+                        <Icon name="search" className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
+                                title="Bersihkan pencarian"
+                            >
+                                <Icon name="close" className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                    <div className="rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-2 text-center sm:min-w-[150px]">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Hasil Tampil</p>
+                        <p className="mt-1 text-lg font-bold text-white">{unpaidTransactions.length}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-700 bg-slate-900/50 overflow-hidden">
+                {unpaidTransactions.length > 0 ? (
+                    <>
+                        <div className="md:hidden">
+                            <div className="space-y-2 p-2">
+                                {unpaidTransactions.map((transaction) => {
+                                    const remaining = transaction.total - transaction.amountPaid;
+                                    return (
+                                        <div key={transaction.id} className="rounded-xl border border-slate-700/80 bg-slate-800/70 p-3 shadow-sm">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <p className="truncate pr-1 text-[12px] font-bold leading-tight text-white">{transaction.customerName || 'Tanpa Nama'}</p>
+                                                        <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${transaction.paymentStatus === 'partial' ? 'border border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border border-red-500/30 bg-red-500/10 text-red-300'}`}>
+                                                            {transaction.paymentStatus === 'partial' ? 'Sebagian' : 'Belum Bayar'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-0.5 text-[10px] text-slate-400">
+                                                        {new Date(transaction.createdAt).toLocaleDateString('id-ID')} • #{transaction.id.slice(-4)}
+                                                    </p>
+                                                    <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
+                                                        <span className="rounded-full border border-slate-600 bg-slate-900/80 px-1.5 py-0.5 text-slate-300">
+                                                            Total {CURRENCY_FORMATTER.format(transaction.total)}
+                                                        </span>
+                                                        <span className="rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-red-300">
+                                                            Sisa {CURRENCY_FORMATTER.format(remaining)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {dataSource === 'local' ? (
+                                                <div className="mt-2">
+                                                    <Button size="sm" onClick={() => handleOpenPayment(transaction)} className="h-8 w-full gap-1 px-2 text-[11px] sm:text-sm">
+                                                        <Icon name="cash" className="w-4 h-4" /> Terima Pembayaran
+                                                    </Button>
+                                                </div>
+                                            ) : (
+                                                <div className="mt-2 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-center text-[11px] text-slate-500">
+                                                    Read-only
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div className="hidden md:block h-[420px]">
+                            <VirtualizedTable data={unpaidTransactions} columns={columns} rowHeight={60} minWidth={dataSource !== 'local' ? 900 : 800} />
+                        </div>
+                    </>
+                ) : (
+                    <div className="flex min-h-[280px] flex-col items-center justify-center px-6 text-center">
+                        <div className="rounded-2xl border border-slate-700 bg-slate-800/80 p-4">
+                            <Icon name="finance" className="mx-auto h-10 w-10 text-slate-500" />
+                        </div>
+                        <h3 className="mt-4 text-lg font-semibold text-white">
+                            {searchTerm ? 'Transaksi piutang tidak ditemukan.' : 'Semua transaksi sudah lunas.'}
+                        </h3>
+                        <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-400">
+                            {searchTerm
+                                ? 'Coba ubah kata kunci pencarian atau periksa kembali nama pelanggan dan tanggal transaksi yang Anda cari.'
+                                : 'Belum ada kasbon pelanggan yang perlu ditagih pada sumber data yang sedang aktif.'}
+                        </p>
+                    </div>
+                )}
+            </div>
+
             {/* Modal Pembayaran Utang */}
-            <Modal isOpen={isPaymentModalOpen} onClose={() => setPaymentModalOpen(false)} title="Terima Pembayaran Utang">
+            <Modal isOpen={isPaymentModalOpen} onClose={() => setPaymentModalOpen(false)} title="Terima Pembayaran Utang" size="xl" mobileLayout="fullscreen">
                 <div className="space-y-4">
                     {selectedTransaction && (
                         <div className="bg-slate-900 p-3 rounded-lg text-sm text-slate-300">
@@ -193,7 +311,7 @@ const DebtsTab: React.FC<DebtsTabProps> = ({ dataSource = 'local', cloudData = [
                             )}
                             <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
                             {!evidenceImage && (
-                                <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} className="w-full">
+                                <Button size="sm" variant="utility" onClick={() => fileInputRef.current?.click()} className="w-full">
                                     Ambil Foto
                                 </Button>
                             )}

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import CashFlowTab from '../components/finance/CashFlowTab';
 import ExpensesTab from '../components/finance/ExpensesTab';
 import IncomeTab from '../components/finance/IncomeTab';
@@ -12,15 +12,43 @@ import { useAuthState } from '../context/AuthContext';
 import { useUIActions } from '../context/UIContext';
 import { useFinance } from '../context/FinanceContext'; 
 import { useSettings } from '../context/SettingsContext'; 
-import { dropboxService } from '../services/dropboxService';
-import { mockDataService } from '../services/mockData';
 import { dataService } from '../services/dataService';
 import { generateTablePDF } from '../utils/pdfGenerator';
 import { CURRENCY_FORMATTER } from '../constants';
 import type { Transaction, Expense, OtherIncome, Purchase } from '../types';
 import OverflowMenu from '../components/OverflowMenu';
+import { loadFinanceCloudSource } from '../services/cloudReadModel';
 
 type FinanceTab = 'cashflow' | 'expenses' | 'income' | 'purchasing' | 'debts' | 'customers';
+
+const FinanceStatCard: React.FC<{
+    label: string;
+    value: string | number;
+    hint: string;
+    icon: React.ComponentProps<typeof Icon>['name'];
+    tone?: 'neutral' | 'success' | 'warning';
+}> = ({ label, value, hint, icon, tone = 'neutral' }) => {
+    const toneClasses = {
+        neutral: 'border-slate-700/80 bg-slate-850/70 text-slate-200',
+        success: 'border-emerald-900/50 bg-emerald-950/10 text-emerald-100',
+        warning: 'border-amber-900/50 bg-amber-950/10 text-amber-100',
+    };
+
+    return (
+        <div className={`rounded-2xl border p-4 shadow-sm ${toneClasses[tone]}`}>
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{value}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">{hint}</p>
+                </div>
+                <div className="rounded-xl border border-white/5 bg-black/15 p-2">
+                    <Icon name={icon} className="h-4.5 w-4.5 text-slate-400" />
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const FinanceView: React.FC = () => {
     const { currentUser } = useAuthState();
@@ -42,13 +70,7 @@ const FinanceView: React.FC = () => {
     }>({ transactions: [], expenses: [], otherIncomes: [], purchases: [] });
     const [isLoadingCloud, setIsLoadingCloud] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-
-    // Export State
-    const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
-    const exportDropdownRef = useRef<HTMLDivElement>(null);
-    const exportButtonRef = useRef<HTMLDivElement>(null);
-    const exportMenuRef = useRef<HTMLDivElement>(null);
-    const [exportMenuStyles, setExportMenuStyles] = useState<React.CSSProperties>({});
+    const [cloudMode, setCloudMode] = useState<'live' | 'demo' | null>(null);
 
     // Permission Check
     const isStaff = currentUser?.role === 'staff';
@@ -62,91 +84,15 @@ const FinanceView: React.FC = () => {
         { id: 'customers', label: 'Pelanggan', icon: 'users' },
     ];
 
-    // Close dropdown on outside click
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
-                setIsExportDropdownOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    useEffect(() => {
-        if (!isExportDropdownOpen) return;
-
-        const updatePosition = () => {
-            const button = exportButtonRef.current;
-            if (!button) return;
-            const rect = button.getBoundingClientRect();
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-            const maxWidth = Math.max(0, viewportWidth - 16);
-            const width = Math.min(220, maxWidth);
-            const minWidth = Math.min(160, maxWidth);
-
-            let left = rect.right - width;
-            left = Math.min(Math.max(8, left), viewportWidth - width - 8);
-
-            const menuHeight = exportMenuRef.current?.getBoundingClientRect().height ?? 0;
-            let top = rect.bottom + 8;
-            if (menuHeight && top + menuHeight > viewportHeight - 8) {
-                top = Math.max(8, rect.top - menuHeight - 8);
-            }
-
-            setExportMenuStyles({ left, top, width, maxWidth, minWidth });
-        };
-
-        const frame = window.requestAnimationFrame(updatePosition);
-        window.addEventListener('resize', updatePosition);
-        window.addEventListener('scroll', updatePosition, true);
-        return () => {
-            window.cancelAnimationFrame(frame);
-            window.removeEventListener('resize', updatePosition);
-            window.removeEventListener('scroll', updatePosition, true);
-        };
-    }, [isExportDropdownOpen]);
-
     // Load Cloud Data Logic
     const loadCloudData = async () => {
         setIsLoadingCloud(true);
 
-        if (!dropboxService.isConfigured()) {
-             // Fallback Demo Data
-             const mock = mockDataService.getMockDashboardData();
-             setCloudData({
-                 transactions: mock.transactions,
-                 expenses: mock.expenses,
-                 otherIncomes: mock.otherIncomes,
-                 purchases: [] 
-             });
-             setLastUpdated(new Date());
-             setIsLoadingCloud(false);
-             return;
-        }
-
         try {
-            const allBranches = await dropboxService.fetchAllBranchData();
-            let txns: any[] = [];
-            let exps: any[] = [];
-            let incs: any[] = [];
-            let purs: any[] = [];
-
-            allBranches.forEach(branch => {
-                if (branch.transactionRecords) txns.push(...branch.transactionRecords.map((t:any) => ({...t, storeId: branch.storeId})));
-                if (branch.expenses) exps.push(...branch.expenses.map((e:any) => ({...e, storeId: branch.storeId})));
-                if (branch.otherIncomes) incs.push(...branch.otherIncomes.map((i:any) => ({...i, storeId: branch.storeId})));
-                // Purchase sync logic would go here if added to branch payload
-            });
-            
-            setCloudData({ 
-                transactions: txns, 
-                expenses: exps, 
-                otherIncomes: incs, 
-                purchases: purs 
-            });
-            setLastUpdated(new Date());
+            const result = await loadFinanceCloudSource();
+            setCloudData(result.data);
+            setLastUpdated(result.lastUpdated);
+            setCloudMode(result.mode);
         } catch (e: any) {
             showAlert({ type: 'alert', title: 'Gagal Sync', message: e.message });
             setDataSource('local');
@@ -238,13 +184,11 @@ const FinanceView: React.FC = () => {
              ]);
         } else {
             showAlert({ type: 'alert', title: 'Info', message: 'Fitur export untuk tab ini belum tersedia atau gunakan menu Laporan.' });
-            setIsExportDropdownOpen(false);
             return;
         }
 
         if (rows.length === 0) {
             showAlert({ type: 'alert', title: 'Data Kosong', message: 'Tidak ada data untuk diexport pada tab ini.' });
-            setIsExportDropdownOpen(false);
             return;
         }
 
@@ -255,119 +199,167 @@ const FinanceView: React.FC = () => {
             dataService.exportToSpreadsheet(headers, rows, fileName, format);
         }
         
-        setIsExportDropdownOpen(false);
     };
 
+    const currentTransactions = dataSource === 'local' ? localTransactions : cloudData.transactions;
+    const currentExpenses = dataSource === 'local' ? localExpenses : cloudData.expenses;
+    const currentIncomes = dataSource === 'local' ? localIncomes : cloudData.otherIncomes;
+    const currentPurchases = dataSource === 'local' ? localPurchases : cloudData.purchases;
+
+    const totalIncome = currentTransactions
+        .filter(t => t.paymentStatus !== 'refunded')
+        .reduce((sum, transaction) => sum + transaction.total, 0) + currentIncomes.reduce((sum, income) => sum + income.amount, 0);
+    const totalExpense = currentExpenses.reduce((sum, expense) => sum + expense.amount, 0) + currentPurchases.reduce((sum, purchase) => sum + purchase.totalAmount, 0);
+    const outstandingDebtCount = currentTransactions.filter(t => t.paymentStatus !== 'paid' && t.paymentStatus !== 'refunded').length;
+    const recentTransactionsCount = currentTransactions.length;
+
+    const exportMenuItems = [
+        { id: 'pdf', label: 'PDF Document', onClick: () => handleExport('pdf'), icon: 'printer' as const },
+        { id: 'xlsx', label: 'Excel (.xlsx)', onClick: () => handleExport('xlsx'), icon: 'boxes' as const },
+        { id: 'csv', label: 'CSV', onClick: () => handleExport('csv'), icon: 'download' as const },
+        { id: 'ods', label: 'ODS (OpenDoc)', onClick: () => handleExport('ods'), icon: 'file-lock' as const },
+    ];
+
     return (
-        <div className="flex flex-col h-full space-y-4">
-            {/* Header Area */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="flex flex-col gap-1">
-                    <h1 className="text-2xl font-bold text-white">Keuangan</h1>
-                    {dataSource === 'dropbox' && (
-                        <div className="inline-flex items-center gap-2 text-[10px] text-blue-200 bg-blue-900/30 border border-blue-800 px-2 py-1 rounded-full w-fit">
-                            <Icon name="cloud" className="w-3 h-3" />
-                            Mode Cloud Aktif
-                        </div>
-                    )}
+        <div className="flex h-full min-h-0 flex-col gap-5">
+            <section className="rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-850 p-5 shadow-xl sm:p-6">
+                <div className="flex flex-col gap-5">
+                    <div className="max-w-3xl">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#7ac0a0]">Keuangan Operasional</p>
+                        <h1 className="mt-2 text-2xl font-bold text-white sm:text-[30px]">Pantau arus kas, pengeluaran, pembelian, dan piutang dari satu workspace yang lebih rapi.</h1>
+                        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">
+                            Pindah antar tab keuangan, export data aktif, dan cek mode lokal atau cloud tanpa harus berpindah ke halaman lain.
+                        </p>
+                    </div>
+
+                    <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+                        <FinanceStatCard
+                            label="Arus Masuk"
+                            value={CURRENCY_FORMATTER.format(totalIncome)}
+                            hint="Gabungan penjualan dan pemasukan lain dari sumber data aktif."
+                            icon="trending-up"
+                            tone="success"
+                        />
+                        <FinanceStatCard
+                            label="Arus Keluar"
+                            value={CURRENCY_FORMATTER.format(totalExpense)}
+                            hint="Total pengeluaran dan pembelian dari sumber data aktif."
+                            icon="finance"
+                            tone="warning"
+                        />
+                        <FinanceStatCard
+                            label="Piutang Aktif"
+                            value={outstandingDebtCount}
+                            hint="Transaksi yang belum lunas dan masih perlu ditindaklanjuti."
+                            icon="book"
+                        />
+                        <FinanceStatCard
+                            label="Transaksi Tercatat"
+                            value={recentTransactionsCount}
+                            hint="Jumlah transaksi pada sumber data yang sedang ditampilkan."
+                            icon="cash"
+                        />
+                    </div>
                 </div>
-                
-                <div className="flex flex-wrap gap-2 items-center w-full md:w-auto">
-                    
-                    {/* EXPORT DROPDOWN */}
-                    <div className="relative" ref={exportDropdownRef}>
-                        <div className="inline-flex" ref={exportButtonRef}>
-                        <Button 
-                            variant="secondary" 
-                            size="sm" 
-                            onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-                            className="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100"
-                        >
-                                <Icon name="download" className="w-4 h-4" /> Export
-                                <Icon name="chevron-down" className="w-3 h-3 ml-1" />
-                            </Button>
+            </section>
+
+            <section className="flex min-h-0 flex-1 flex-col rounded-3xl border border-slate-800 bg-slate-800/95 shadow-xl">
+                <div className="flex flex-col gap-3 border-b border-slate-700/80 px-4 py-4 sm:px-5">
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <h2 className="text-lg font-bold text-white">Workspace Keuangan</h2>
+                            <p className="mt-1 text-sm text-slate-400">
+                                {dataSource === 'dropbox'
+                                    ? `${cloudMode === 'demo' ? 'Menampilkan data simulasi multi-cabang' : 'Menampilkan data cloud gabungan'}${lastUpdated ? `, terakhir diperbarui ${lastUpdated.toLocaleTimeString()}` : ''}.`
+                                    : 'Menampilkan data lokal yang tersimpan di perangkat ini.'}
+                            </p>
                         </div>
-                        
-                        {isExportDropdownOpen && (
-                            <div
-                                ref={exportMenuRef}
-                                style={exportMenuStyles}
-                                className="fixed max-h-[70vh] bg-slate-800 rounded-lg shadow-xl border border-slate-600 z-50 overflow-hidden overflow-y-auto animate-fade-in"
-                            >
-                                <button onClick={() => handleExport('pdf')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
-                                    <Icon name="printer" className="w-3 h-3 text-red-400"/> PDF Document
-                                </button>
-                                <button onClick={() => handleExport('xlsx')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
-                                    <Icon name="boxes" className="w-3 h-3 text-green-400"/> Excel (.xlsx)
-                                </button>
-                                <button onClick={() => handleExport('csv')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
-                                    <Icon name="tag" className="w-3 h-3 text-blue-400"/> CSV
-                                </button>
-                                <button onClick={() => handleExport('ods')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
-                                    <Icon name="file-lock" className="w-3 h-3 text-yellow-400"/> ODS (OpenDoc)
-                                </button>
+                        {dataSource === 'dropbox' && (
+                            <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] ${cloudMode === 'demo' ? 'border-yellow-700 bg-yellow-900/20 text-yellow-200' : 'border-blue-800 bg-blue-900/20 text-blue-200'}`}>
+                                <Icon name={cloudMode === 'demo' ? 'warning' : 'cloud'} className="w-3 h-3" />
+                                {cloudMode === 'demo' ? 'Mode Demo' : 'Mode Cloud Aktif'}
                             </div>
                         )}
                     </div>
 
-                    {/* Cloud Toggle - Hidden for Staff */}
-                    {!isStaff && (
-                        <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700">
-                            <button 
-                                onClick={() => setDataSource('local')} 
-                                className={`px-4 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'local' ? 'bg-[#347758] text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                            >
-                                Lokal
-                            </button>
-                            <button 
-                                onClick={() => setDataSource('dropbox')} 
-                                className={`px-4 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                            >
-                                Cloud
-                            </button>
-                        </div>
-                    )}
-                    
-                    <OverflowMenu
-                        size="sm"
-                        buttonClassName="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100"
-                        items={[
-                            ...(dataSource === 'dropbox' ? [{
-                                id: 'refresh',
-                                label: isLoadingCloud ? 'Memuat...' : 'Refresh Cloud',
-                                onClick: () => { void loadCloudData(); },
-                                icon: 'reset' as const,
-                                disabled: isLoadingCloud
-                            }] : [])
-                        ]}
-                    />
-                </div>
-            </div>
-            
-            {/* Tabs Navigation */}
-            <div className="flex overflow-x-auto space-x-2 border-b border-slate-700 pb-2 hide-scrollbar">
-                {tabs.map(tab => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-colors ${
-                            activeTab === tab.id 
-                                ? 'bg-[#347758] text-white font-medium' 
-                                : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
-                        }`}
-                    >
-                        <Icon name={tab.icon} className="w-4 h-4" />
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
+                    <div className="flex flex-col gap-2 lg:grid lg:grid-cols-[minmax(0,1.6fr)_auto_auto] lg:items-center">
+                        {!isStaff && (
+                            <div className="flex rounded-xl border border-slate-700 bg-slate-900/60 p-1">
+                                <button
+                                    onClick={() => {
+                                        setDataSource('local');
+                                        setCloudMode(null);
+                                    }}
+                                    className={`flex-1 rounded-lg px-4 py-2 text-xs font-medium transition-colors ${dataSource === 'local' ? 'bg-[#347758] text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    Lokal
+                                </button>
+                                <button
+                                    onClick={() => setDataSource('dropbox')}
+                                    className={`flex-1 rounded-lg px-4 py-2 text-xs font-medium transition-colors ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    Cloud
+                                </button>
+                            </div>
+                        )}
 
-            {/* Content with Cloud Data Props */}
-            <div className="flex-1 overflow-y-auto">
+                        <OverflowMenu
+                            size="sm"
+                            label="Export"
+                            variant="utility"
+                            showLabelOnMobile
+                            matchTriggerWidth
+                            buttonClassName="h-11 w-full sm:w-auto"
+                            items={exportMenuItems}
+                        />
+
+                        <OverflowMenu
+                            size="sm"
+                            label="Aksi"
+                            variant="utility"
+                            showLabelOnMobile={false}
+                            matchTriggerWidth
+                            buttonClassName="h-11 w-full sm:w-auto"
+                            items={[
+                                ...(dataSource === 'dropbox' ? [{
+                                    id: 'refresh',
+                                    label: isLoadingCloud ? 'Memuat...' : 'Refresh Cloud',
+                                    onClick: () => { void loadCloudData(); },
+                                    icon: 'reset' as const,
+                                    disabled: isLoadingCloud
+                                }] : [])
+                            ]}
+                        />
+                    </div>
+
+                    <div className="flex overflow-x-auto space-x-2 border-t border-slate-700/60 pt-2 hide-scrollbar">
+                        {tabs.map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-colors ${
+                                    activeTab === tab.id
+                                        ? 'bg-[#347758] text-white font-medium'
+                                        : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+                                }`}
+                            >
+                                <Icon name={tab.icon} className="w-4 h-4" />
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 {dataSource === 'dropbox' && (
-                    <div className="bg-blue-900/20 border border-blue-800 p-2 rounded-lg mb-4 flex items-center gap-2 text-xs text-blue-200">
-                        <Icon name="cloud" className="w-4 h-4" />
-                        <span>Menampilkan data gabungan dari seluruh cabang (Cloud). {lastUpdated && `Update: ${lastUpdated.toLocaleTimeString()}`}</span>
+                    <div className={`mb-4 flex items-center gap-2 rounded-lg border p-2 text-xs ${cloudMode === 'demo' ? 'border-yellow-700 bg-yellow-900/20 text-yellow-200' : 'border-blue-800 bg-blue-900/20 text-blue-200'}`}>
+                        <Icon name={cloudMode === 'demo' ? 'warning' : 'cloud'} className="w-4 h-4" />
+                        <span>
+                            {cloudMode === 'demo'
+                                ? 'Dropbox belum tersambung. Data simulasi ditampilkan agar halaman keuangan tetap bisa dipreview.'
+                                : 'Menampilkan data gabungan dari seluruh cabang (Cloud).'}
+                            {lastUpdated && ` Update: ${lastUpdated.toLocaleTimeString()}`}
+                        </span>
                     </div>
                 )}
 
@@ -402,7 +394,8 @@ const FinanceView: React.FC = () => {
                     />
                 )}
                 {activeTab === 'customers' && <CustomersTab />}
-            </div>
+                </div>
+            </section>
         </div>
     );
 };

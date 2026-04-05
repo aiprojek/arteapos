@@ -8,12 +8,12 @@ interface InventoryTabProps {
 }
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
-    <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
-        <div className="p-4 border-b border-slate-700 bg-slate-800">
+    <div className="mb-6 overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-800/85 shadow-[0_10px_35px_rgba(15,23,42,0.22)]">
+        <div className="border-b border-slate-700/80 bg-slate-800/90 p-4 sm:p-5">
             <h3 className="text-lg font-semibold text-white">{title}</h3>
-            {description && <p className="text-sm text-slate-400 mt-1">{description}</p>}
+            {description && <p className="mt-1 text-sm leading-relaxed text-slate-400">{description}</p>}
         </div>
-        <div className="p-4 space-y-4">
+        <div className="space-y-4 p-4 sm:p-5">
             {children}
         </div>
     </div>

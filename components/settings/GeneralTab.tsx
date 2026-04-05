@@ -12,12 +12,12 @@ interface GeneralTabProps {
 }
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
-    <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
-        <div className="p-4 border-b border-slate-700 bg-slate-800">
+    <div className="mb-6 overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-800/85 shadow-[0_10px_35px_rgba(15,23,42,0.22)]">
+        <div className="border-b border-slate-700/80 bg-slate-800/90 p-4 sm:p-5">
             <h3 className="text-lg font-semibold text-white">{title}</h3>
-            {description && <p className="text-sm text-slate-400 mt-1">{description}</p>}
+            {description && <p className="mt-1 text-sm leading-relaxed text-slate-400">{description}</p>}
         </div>
-        <div className="p-4 space-y-4">
+        <div className="space-y-4 p-4 sm:p-5">
             {children}
         </div>
     </div>
@@ -92,7 +92,7 @@ const OrderTypeManager: React.FC<{
                     placeholder="cth: Reservasi"
                     className="flex-grow w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
                 />
-                <Button type="button" variant="secondary" onClick={handleAdd}>Tambah</Button>
+                <Button type="button" variant="utility" onClick={handleAdd}>Tambah</Button>
             </div>
              <p className="text-xs text-slate-500 mt-1">Tipe pesanan ini akan muncul sebagai pilihan di halaman kasir.</p>
         </div>
@@ -174,7 +174,7 @@ const BranchManager: React.FC<{
                 </div>
             </div>
 
-            <Modal isOpen={isModalOpen} onClose={() => setModalOpen(false)} title="Tambah Cabang Baru">
+            <Modal isOpen={isModalOpen} onClose={() => setModalOpen(false)} title="Tambah Cabang Baru" size="md" mobileLayout="fullscreen">
                 <div className="space-y-3">
                     <div>
                         <label className="block text-xs font-bold text-slate-300 mb-1">ID Cabang (Unik)</label>
@@ -183,7 +183,7 @@ const BranchManager: React.FC<{
                             placeholder="cth: JKT-01" 
                             value={newBranch.id}
                             onChange={e => setNewBranch({...newBranch, id: e.target.value})}
-                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white uppercase"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white uppercase"
                         />
                     </div>
                     <div>
@@ -193,7 +193,7 @@ const BranchManager: React.FC<{
                             placeholder="cth: Artea Jakarta Pusat" 
                             value={newBranch.name}
                             onChange={e => setNewBranch({...newBranch, name: e.target.value})}
-                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white"
                         />
                     </div>
                     <Button onClick={handleAdd} disabled={!newBranch.id || !newBranch.name} className="w-full">Simpan</Button>

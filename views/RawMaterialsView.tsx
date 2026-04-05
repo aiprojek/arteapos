@@ -9,7 +9,6 @@ import Modal from '../components/Modal';
 import Icon from '../components/Icon';
 import { dataService } from '../services/dataService';
 import { CURRENCY_FORMATTER } from '../constants';
-import VirtualizedTable from '../components/VirtualizedTable';
 import StockOpnameModal from '../components/StockOpnameModal';
 import StaffRestockModal from '../components/StaffRestockModal'; // IMPORT RESTOCK MODAL
 import OverflowMenu from '../components/OverflowMenu';
@@ -97,6 +96,35 @@ const InputField: React.FC<{
         />
     </div>
 );
+
+const RawMaterialsStatCard: React.FC<{
+    label: string;
+    value: string | number;
+    hint: string;
+    icon: React.ComponentProps<typeof Icon>['name'];
+    tone?: 'neutral' | 'warning' | 'success';
+}> = ({ label, value, hint, icon, tone = 'neutral' }) => {
+    const toneClasses = {
+        neutral: 'border-slate-700/80 bg-slate-850/70 text-slate-200',
+        success: 'border-emerald-900/50 bg-emerald-950/10 text-emerald-100',
+        warning: 'border-amber-900/50 bg-amber-950/10 text-amber-100',
+    };
+
+    return (
+        <div className={`rounded-2xl border p-4 shadow-sm ${toneClasses[tone]}`}>
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{value}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">{hint}</p>
+                </div>
+                <div className="rounded-xl border border-white/5 bg-black/15 p-2">
+                    <Icon name={icon} className="h-4.5 w-4.5 text-slate-400" />
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const RawMaterialForm: React.FC<{ 
     material?: RawMaterial | null, 
@@ -366,7 +394,7 @@ const BulkRawMaterialModal: React.FC<{
     if (!isOpen) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Tambah Bahan Baku Massal">
+        <Modal isOpen={isOpen} onClose={onClose} title="Tambah Bahan Baku Massal" size="xl" mobileLayout="fullscreen">
             <div className="space-y-4">
                 <div className="flex bg-slate-700 p-1 rounded-lg">
                     <button onClick={() => setMode('manual')} className={`flex-1 py-2 text-sm rounded transition-colors ${mode === 'manual' ? 'bg-[#347758] text-white font-bold' : 'text-slate-300'}`}>Input Manual (Tabel)</button>
@@ -472,6 +500,15 @@ const RawMaterialsView: React.FC = () => {
     
     // NEW: Restock Modal State
     const [isRestockOpen, setIsRestockOpen] = useState(false);
+    const trackedCostMaterials = useMemo(
+        () => rawMaterials.filter(material => (material.costPerUnit || 0) > 0),
+        [rawMaterials],
+    );
+    const lowStockMaterials = useMemo(
+        () => rawMaterials.filter(material => material.stock <= 5),
+        [rawMaterials],
+    );
+    const unitCount = useMemo(() => new Set(rawMaterials.map(material => material.unit)).size, [rawMaterials]);
 
     const filteredMaterials = useMemo(() => {
         return rawMaterials.filter(material =>
@@ -528,10 +565,10 @@ const RawMaterialsView: React.FC = () => {
         { label: 'Satuan', width: '1fr', render: (m: RawMaterial) => m.unit },
         { label: 'Aksi', width: '1fr', render: (m: RawMaterial) => (
             <div className="flex gap-2">
-                <button onClick={() => handleOpenModal(m)} className="text-sky-400 hover:text-sky-300">
+                <button onClick={() => handleOpenModal(m)} className="rounded-lg bg-sky-400/10 p-1.5 text-sky-400 hover:text-sky-300">
                     <Icon name="edit" className="w-5 h-5" />
                 </button>
-                <button onClick={() => deleteRawMaterial(m.id)} className="text-red-500 hover:text-red-400">
+                <button onClick={() => deleteRawMaterial(m.id)} className="rounded-lg bg-red-500/10 p-1.5 text-red-500 hover:text-red-400">
                     <Icon name="trash" className="w-5 h-5" />
                 </button>
             </div>
@@ -539,72 +576,260 @@ const RawMaterialsView: React.FC = () => {
     ], [deleteRawMaterial, isStaff]);
 
     return (
-        <div className="flex flex-col h-full">
-             <div className="flex flex-col gap-3 mb-6">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <div className="flex flex-col gap-1">
-                        <h1 className="text-2xl font-bold text-white">Bahan Baku</h1>
+        <div className="flex h-full min-h-0 flex-col gap-5">
+            <section className="rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-850 p-5 shadow-xl sm:p-6">
+                <div className="flex flex-col gap-5">
+                    <div className="max-w-2xl">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#7ac0a0]">Manajemen Stok</p>
+                        <h1 className="mt-2 text-2xl font-bold text-white sm:text-[30px]">Kelola bahan baku, biaya satuan, dan ketersediaan stok dengan lebih rapi.</h1>
+                        <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-400">
+                            Cari bahan dengan cepat, lihat stok yang mulai tipis, lalu lanjut ke tambah data, restock, opname, atau import massal tanpa keluar dari halaman ini.
+                        </p>
                     </div>
-                    <div className="flex gap-2 flex-wrap">
-                        <Button variant="primary" onClick={() => handleOpenModal()} className="flex-shrink-0">
-                            <Icon name="plus" className="w-5 h-5"/>
-                            <span className="hidden sm:inline">Tambah Bahan</span>
-                        </Button>
-                        <Button variant="secondary" onClick={() => setIsRestockOpen(true)} className="flex-shrink-0 bg-slate-700 border-slate-600 hover:bg-slate-600" title="Terima Barang / Catat Kerusakan">
-                            <Icon name="tag" className="w-5 h-5"/>
-                            <span className="hidden sm:inline">Kelola Stok</span>
-                        </Button>
-                        <OverflowMenu
-                            items={[
-                                {
-                                    id: 'bulk',
-                                    label: 'Tambah Massal',
-                                    onClick: () => setBulkModalOpen(true),
-                                    icon: 'boxes' as const
-                                },
-                                {
-                                    id: 'opname',
-                                    label: 'Stock Opname',
-                                    onClick: () => setIsOpnameOpen(true),
-                                    icon: 'database' as const
-                                },
-                                {
-                                    id: 'export',
-                                    label: 'Export',
-                                    onClick: handleExport,
-                                    icon: 'download' as const
-                                }
-                            ]}
+
+                    <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+                        <RawMaterialsStatCard
+                            label="Total Bahan"
+                            value={rawMaterials.length}
+                            hint="Jumlah bahan baku aktif yang saat ini tercatat."
+                            icon="boxes"
+                        />
+                        <RawMaterialsStatCard
+                            label="Satuan Aktif"
+                            value={unitCount}
+                            hint="Variasi satuan pakai yang dipakai di bahan baku."
+                            icon="tag"
+                        />
+                        <RawMaterialsStatCard
+                            label="Biaya Tersimpan"
+                            value={trackedCostMaterials.length}
+                            hint="Bahan yang sudah memiliki harga modal per satuan."
+                            icon="finance"
+                            tone="success"
+                        />
+                        <RawMaterialsStatCard
+                            label="Stok Menipis"
+                            value={lowStockMaterials.length}
+                            hint="Bahan dengan stok 5 atau kurang yang perlu dicek."
+                            icon="warning"
+                            tone="warning"
                         />
                     </div>
                 </div>
-                <div className="relative w-full sm:max-w-md">
-                    <input
-                        type="text"
-                        placeholder="Cari bahan baku..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:ring-[#347758] focus:border-[#347758]"
-                    />
-                    <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                </div>
-            </div>
-            
-            <div className="flex-1 min-h-0 bg-slate-800 rounded-lg shadow-md flex flex-col">
-                 {filteredMaterials.length > 0 ? (
-                    <VirtualizedTable
-                        data={filteredMaterials}
-                        columns={columns}
-                        rowHeight={60}
-                    />
-                 ) : (
-                    <div className="flex-1 flex items-center justify-center text-center p-8 text-slate-500">
-                        {searchTerm ? `Tidak ada bahan baku yang cocok dengan "${searchTerm}".` : 'Belum ada bahan baku. Klik "Tambah Bahan Baku" untuk memulai.'}
-                    </div>
-                )}
-            </div>
+            </section>
 
-            <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingMaterial ? 'Edit Bahan Baku' : 'Tambah Bahan Baku'}>
+            <section className="flex min-h-0 flex-1 flex-col rounded-3xl border border-slate-800 bg-slate-800/95 shadow-xl">
+                <div className="flex flex-col gap-3 border-b border-slate-700/80 px-4 py-4 sm:px-5">
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <h2 className="text-lg font-bold text-white">Daftar Bahan Baku</h2>
+                            <p className="mt-1 text-sm text-slate-400">
+                                {searchTerm
+                                    ? `${filteredMaterials.length} hasil ditemukan untuk pencarian "${searchTerm}".`
+                                    : `${rawMaterials.length} bahan baku siap dikelola dari halaman ini.`}
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+                            <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5">
+                                {trackedCostMaterials.length} sudah punya biaya
+                            </span>
+                            <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5">
+                                {lowStockMaterials.length} stok menipis
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2 lg:grid lg:grid-cols-[minmax(0,1.8fr)_repeat(3,minmax(0,0.6fr))] lg:items-center">
+                        <div className="relative w-full min-w-0">
+                            <input
+                                type="text"
+                                placeholder="Cari bahan baku atau satuan..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="h-11 w-full rounded-xl border border-slate-700 bg-slate-900/70 pl-11 pr-12 text-white focus:border-[#347758] focus:outline-none focus:ring-2 focus:ring-[#347758]/30"
+                            />
+                            <Icon name="search" className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                            {searchTerm && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+                                    title="Bersihkan pencarian"
+                                >
+                                    <Icon name="close" className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="grid w-full grid-cols-3 gap-2 lg:contents">
+                            <Button
+                                variant="primary"
+                                onClick={() => handleOpenModal()}
+                                className="h-11 w-full min-w-0 whitespace-nowrap px-0 sm:px-4"
+                                title="Tambah Bahan Baku"
+                            >
+                                <Icon name="plus" className="w-5 h-5" />
+                                <span className="hidden sm:inline">Tambah Bahan</span>
+                            </Button>
+                            <Button
+                                variant="operational"
+                                onClick={() => setIsRestockOpen(true)}
+                                className="h-11 w-full min-w-0 whitespace-nowrap px-0 sm:px-4"
+                                title="Terima barang atau catat kerusakan"
+                            >
+                                <Icon name="download" className="w-5 h-5 rotate-180" />
+                                <span className="hidden sm:inline">Kelola Stok</span>
+                            </Button>
+                            <OverflowMenu
+                                items={[
+                                    {
+                                        id: 'bulk',
+                                        label: 'Tambah Massal',
+                                        onClick: () => setBulkModalOpen(true),
+                                        icon: 'boxes' as const
+                                    },
+                                    {
+                                        id: 'opname',
+                                        label: 'Stock Opname',
+                                        onClick: () => setIsOpnameOpen(true),
+                                        icon: 'database' as const
+                                    },
+                                    {
+                                        id: 'export',
+                                        label: 'Export',
+                                        onClick: handleExport,
+                                        icon: 'download' as const
+                                    }
+                                ]}
+                                label="Aksi"
+                                variant="utility"
+                                showLabelOnMobile={false}
+                                matchTriggerWidth
+                                buttonClassName="h-11 w-full min-w-0 px-0 sm:px-4"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="min-h-0 flex-1 p-3 sm:p-4">
+                    <div className="h-full min-h-0 overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900/60">
+                        {filteredMaterials.length > 0 ? (
+                            <>
+                                <div className="h-full overflow-auto md:hidden">
+                                    <div className="space-y-2 p-2">
+                                        {filteredMaterials.map(material => (
+                                            <div key={material.id} className="rounded-xl border border-slate-700/80 bg-slate-800/70 p-2.5 shadow-sm">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <p className="truncate pr-1 text-[12px] font-bold leading-tight text-white">{material.name}</p>
+                                                            {material.purchaseUnit && material.conversionRate ? (
+                                                                <span className="shrink-0 rounded-full border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-medium text-blue-300">
+                                                                    Konversi
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
+                                                        <p className="mt-0.5 text-[10px] text-slate-400">
+                                                            {material.purchaseUnit && material.conversionRate
+                                                                ? `1 ${material.purchaseUnit} = ${material.conversionRate} ${material.unit}`
+                                                                : `Satuan: ${material.unit}`}
+                                                        </p>
+                                                        <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
+                                                            {!isStaff && (
+                                                                <span className="rounded-full border border-slate-600 bg-slate-900/80 px-1.5 py-0.5 text-slate-300">
+                                                                    {material.costPerUnit ? CURRENCY_FORMATTER.format(material.costPerUnit) : 'Biaya belum diisi'}
+                                                                </span>
+                                                            )}
+                                                            <span className={`rounded-full border px-1.5 py-0.5 ${material.stock <= 5 ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-slate-600 bg-slate-900/80 text-slate-300'}`}>
+                                                                Stok {material.stock} {material.unit}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-2 grid grid-cols-2 gap-1.5">
+                                                    <Button
+                                                        type="button"
+                                                        variant="utility"
+                                                        size="sm"
+                                                        onClick={() => handleOpenModal(material)}
+                                                        className="h-8 gap-1 px-2 text-[11px] sm:text-sm"
+                                                        title="Edit bahan baku"
+                                                    >
+                                                        <Icon name="edit" className="w-4 h-4" />
+                                                        <span className="hidden min-[380px]:inline">Edit</span>
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="danger"
+                                                        size="sm"
+                                                        onClick={() => deleteRawMaterial(material.id)}
+                                                        className="h-8 gap-1 px-2 text-[11px] sm:text-sm"
+                                                        title="Hapus bahan baku"
+                                                    >
+                                                        <Icon name="trash" className="w-4 h-4" />
+                                                        <span className="hidden min-[380px]:inline">Hapus</span>
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="hidden h-full overflow-auto md:block">
+                                    <table className="min-w-[760px] w-full text-left text-sm text-slate-300">
+                                        <thead className="sticky top-0 z-10 bg-slate-800/95 backdrop-blur border-b border-slate-700">
+                                            <tr>
+                                                {columns.map((column, index) => (
+                                                    <th key={index} className="px-4 py-3 font-semibold text-slate-200">
+                                                        {column.label}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredMaterials.map(material => (
+                                                <tr key={material.id} className="border-b border-slate-800 hover:bg-slate-800/50 align-middle">
+                                                    {columns.map((column, index) => (
+                                                        <td key={index} className="px-4 py-3 text-slate-300">
+                                                            {column.render(material)}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex h-full min-h-[280px] flex-col items-center justify-center px-6 text-center">
+                                <div className="rounded-2xl border border-slate-700 bg-slate-800/80 p-4">
+                                    <Icon name="boxes" className="mx-auto h-10 w-10 text-slate-500" />
+                                </div>
+                                <h3 className="mt-4 text-lg font-semibold text-white">
+                                    {searchTerm ? 'Bahan baku tidak ditemukan.' : 'Belum ada bahan baku di daftar.'}
+                                </h3>
+                                <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-400">
+                                    {searchTerm
+                                        ? `Coba ubah kata kunci pencarian atau cek kembali satuan yang Anda masukkan.`
+                                        : 'Tambahkan bahan baku pertama agar stok, biaya satuan, dan resep bisa mulai dikelola dengan rapi.'}
+                                </p>
+                                {!searchTerm && (
+                                    <Button
+                                        variant="primary"
+                                        onClick={() => handleOpenModal()}
+                                        className="mt-4"
+                                    >
+                                        <Icon name="plus" className="h-5 w-5" />
+                                        <span>Tambah Bahan Pertama</span>
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </section>
+
+            <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingMaterial ? 'Edit Bahan Baku' : 'Tambah Bahan Baku'} size="xl" mobileLayout="fullscreen">
                 <RawMaterialForm material={editingMaterial} onSave={handleSaveMaterial} onCancel={handleCloseModal} />
             </Modal>
 

@@ -36,12 +36,14 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, onClose, 
             isOpen={isOpen}
             onClose={onClose}
             title={customer ? "Edit Pelanggan" : "Tambah Pelanggan Baru"}
-            mobileLayout="sheet"
+            size="lg"
+            mobileLayout="fullscreen"
+            bodyClassName="p-3 sm:p-6"
         >
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">Nama Pelanggan</label>
-                    <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" placeholder="Masukkan nama..." />
+                    <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white" placeholder="Masukkan nama..." />
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">Identitas Tambahan / Kontak</label>
@@ -50,7 +52,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, onClose, 
                         value={form.contact} 
                         onChange={e => setForm({...form, contact: e.target.value})} 
                         placeholder="Contoh: No. HP, NIK, Kelas, atau Divisi..." 
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" 
+                        className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white" 
                     />
                     <p className="text-[10px] text-slate-500 mt-1">
                         Bisa diisi Nomor Telepon, Nomor KTP, Keterangan Kelas (Santri), atau Unit Kerja.
@@ -58,7 +60,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, onClose, 
                 </div>
                 <div className="flex justify-end gap-3 pt-2">
                     <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
-                    <Button type="submit">Simpan</Button>
+                    <Button type="submit" className="min-w-[120px]">Simpan</Button>
                 </div>
             </form>
         </Modal>

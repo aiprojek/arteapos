@@ -38,31 +38,32 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 id: 'dash_1', title: 'Statistik & Grafik', icon: 'trending-up', colorClass: 'text-sky-400',
                 content: `
                     <ul class="list-disc pl-5 space-y-1 text-sm">
-                        <li><strong>Kartu Atas:</strong> Ringkasan Penjualan Hari Ini, Jumlah Transaksi, Total Piutang Belum Dibayar, dan Peringatan Stok Menipis.</li>
+                        <li><strong>Kartu Atas:</strong> Ringkasan Penjualan Hari Ini, Net Profit, Stok Menipis, dan Produk Terlaris.</li>
                         <li><strong>Grafik Tren:</strong> Menampilkan pergerakan omzet selama 7 hari terakhir.</li>
-                        <li><strong>Produk Terlaris:</strong> Top 5 produk dengan penjualan tertinggi minggu ini.</li>
-                        <li><strong>Mode Cloud:</strong> Aktifkan "Mode Dropbox" untuk melihat laporan gabungan dari semua cabang.</li>
+                        <li><strong>Kontrol Atas:</strong> Gunakan switch Lokal/Cloud, Filter, Cabang, dan Export pada toolbar atas laporan ringkas.</li>
+                        <li><strong>Filter Cabang:</strong> Saat mode cloud aktif, Anda bisa melihat seluruh cabang atau memilih cabang tertentu dari dropdown cabang.</li>
                     </ul>
                 `
             },
             {
-                id: 'dash_3', title: 'Tombol Refresh (Khusus Admin)', icon: 'reset', colorClass: 'text-blue-400', badge: 'Penting',
+                id: 'dash_3', title: 'Refresh Data Cloud (Khusus Admin)', icon: 'reset', colorClass: 'text-blue-400', badge: 'Penting',
                 content: `
                     <p>Jika Anda menggunakan fitur Cloud/Dropbox:</p>
                     <ul class="list-disc pl-5 space-y-1 mt-2 text-sm">
                         <li>Data cabang <strong>tidak muncul otomatis</strong> (real-time) di layar Admin.</li>
-                        <li>Anda harus menekan tombol <strong>"Refresh Data"</strong> (ikon panah melingkar) yang tersedia di Dashboard, Laporan, atau Keuangan.</li>
+                        <li>Anda perlu membuka menu <strong>Aksi</strong> lalu tekan tombol <strong>"Refresh"</strong> di Dashboard, Laporan, atau Keuangan saat mode cloud aktif.</li>
                         <li>Tombol ini akan memerintahkan aplikasi untuk mengunduh file data terbaru yang dikirim oleh cabang ke Dropbox.</li>
                     </ul>
                 `
             },
             {
-                id: 'dash_2', title: 'Artea AI (Analisis Cerdas)', icon: 'chat', colorClass: 'text-purple-400', badge: 'AI',
+                id: 'dash_2', title: 'Ringkasan Bisnis Cerdas', icon: 'chat', colorClass: 'text-purple-400', badge: 'AI',
                 content: `
-                    <p>Asisten cerdas yang menganalisis data penjualan Anda.</p>
+                    <p>Panel ini membantu membaca kondisi bisnis dari data dashboard yang sedang tampil.</p>
                     <ul class="list-disc pl-5 space-y-1 mt-2 text-sm">
-                        <li>Ketik pertanyaan seperti <em>"Bagaimana cara meningkatkan omzet?"</em> atau <em>"Analisis tren minggu ini"</em>.</li>
-                        <li>AI akan membaca data grafik dan memberikan saran strategi bisnis praktis dalam Bahasa Indonesia.</li>
+                        <li>Pilih salah satu topik yang sudah disediakan, seperti profitabilitas, omzet, stok, atau performa cabang.</li>
+                        <li>Sistem akan menampilkan ringkasan dan saran singkat berdasarkan data yang sedang aktif, tanpa perlu koneksi internet.</li>
+                        <li>Klik topik yang sama lagi jika Anda ingin menyembunyikan hasilnya.</li>
                     </ul>
                 `
             }
@@ -75,11 +76,11 @@ export const MANUAL_SECTIONS: HelpSection[] = [
         desc: 'Halaman utama untuk melakukan transaksi penjualan.',
         items: [
             {
-                id: 'pos_channel', title: 'Penjualan Channel Online (Shopee/Grab/GoFood)', icon: 'cloud', colorClass: 'text-amber-400', badge: 'Update',
+                id: 'pos_channel', title: 'Penjualan Channel Online (Shopee/Grab/GoFood)', icon: 'cloud', colorClass: 'text-amber-400',
                 content: `
                     <p>Gunakan fitur ini jika Anda berjualan lewat platform online yang punya kasir sendiri, tapi Anda tetap ingin stok & bahan baku berkurang.</p>
                     <ol class="list-decimal pl-5 space-y-1 text-sm">
-                        <li>Di halaman Kasir, klik tombol <strong>Channel Online</strong> (sejajar dengan Terima Barang, Stock Opname, Barcode).</li>
+                        <li>Di halaman Kasir, klik tombol <strong>Channel</strong> atau <strong>Channel Online</strong> di area browser produk.</li>
                         <li>Pilih <strong>Nama Channel</strong> (mis. ShopeeFood/GrabFood/GoFood).</li>
                         <li>Tambahkan produk yang terjual dan jumlahnya.</li>
                         <li>Klik <strong>Catat</strong>.</li>
@@ -93,10 +94,13 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 id: 'pos_1', title: 'Alur Transaksi Dasar', icon: 'pay', colorClass: 'text-green-400',
                 content: `
                     <ol class="list-decimal pl-5 space-y-1 text-sm">
+                        <li><strong>Buka Shift:</strong> Mulai sesi kasir terlebih dulu. Setelah sesi aktif, toolbar sesi akan menampilkan tombol <strong>Riwayat</strong>, <strong>Kas</strong>, <strong>Laporan</strong>, dan <strong>Tutup</strong>.</li>
                         <li><strong>Pilih Produk:</strong> Klik produk di daftar atau gunakan scan barcode.</li>
+                        <li><strong>Cari Cepat:</strong> Gunakan search bar di atas daftar produk untuk mencari nama atau barcode, lalu tekan ikon <strong>x</strong> jika ingin membersihkan pencarian.</li>
                         <li><strong>Edit Keranjang:</strong> Klik item di keranjang kiri untuk mengubah jumlah, memberi diskon per item, atau menghapus.</li>
                         <li><strong>Pilih Pelanggan (Opsional):</strong> Di bagian bawah keranjang, klik "Cari" untuk memilih pelanggan.</li>
                         <li><strong>Bayar:</strong> Klik tombol "Bayar", pilih Tunai/Non-Tunai, masukkan nominal.</li>
+                        <li><strong>Tutup Shift:</strong> Setelah selesai operasional, gunakan tombol <strong>Tutup</strong> di toolbar sesi pada bagian atas layar kasir.</li>
                         <li><strong>Struk:</strong> Setelah sukses, struk muncul. Bisa dicetak atau dibagikan gambar via WA.</li>
                     </ol>
                 `
@@ -113,7 +117,7 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 `
             },
             {
-                id: 'pos_evidence', title: 'Upload Bukti Pembayaran (Transfer/QRIS)', icon: 'camera', colorClass: 'text-purple-400', badge: 'Baru',
+                id: 'pos_evidence', title: 'Upload Bukti Pembayaran (Transfer/QRIS)', icon: 'camera', colorClass: 'text-purple-400',
                 content: `
                     <p>Simpan bukti transfer pelanggan langsung di aplikasi agar tidak tercampur di galeri HP pribadi.</p>
                     <ul class="list-disc pl-5 space-y-1 mt-2 text-sm">
@@ -125,7 +129,7 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 `
             },
             {
-                id: 'pos_dual', title: 'Ekosistem Layar Ganda (Dual Screen)', icon: 'cast', colorClass: 'text-yellow-400', badge: 'Update',
+                id: 'pos_dual', title: 'Ekosistem Layar Ganda (Dual Screen)', icon: 'cast', colorClass: 'text-yellow-400',
                 content: `
                     <p>Hubungkan HP/Tablet bekas untuk menjadi layar pendukung.</p>
                     <div class="mt-3 space-y-3 text-sm">
@@ -155,7 +159,7 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 `
             },
             {
-                id: 'pos_member', title: 'Membership, Cari & Scan Kartu', icon: 'users', colorClass: 'text-pink-400', badge: 'Update',
+                id: 'pos_member', title: 'Membership, Cari & Scan Kartu', icon: 'users', colorClass: 'text-pink-400',
                 content: `
                     <p>Kelola pelanggan dengan lebih cepat:</p>
                     <ul class="list-disc pl-5 space-y-1 mt-2 text-sm">
@@ -167,7 +171,7 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 `
             },
             {
-                id: 'pos_2', title: 'Modifier & Varian (Advanced)', icon: 'tag', colorClass: 'text-blue-400', badge: 'Update',
+                id: 'pos_2', title: 'Modifier & Varian (Advanced)', icon: 'tag', colorClass: 'text-blue-400',
                 content: `
                     <p>Fitur baru untuk menangani pesanan yang kompleks (misal: Kopi Gula Aren).</p>
                     <ul class="list-disc pl-5 space-y-1 mt-2 text-sm">
@@ -178,7 +182,7 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 `
             },
             {
-                id: 'pos_3', title: 'Split Bill (Pisah Bayar)', icon: 'share', colorClass: 'text-orange-400', badge: 'Update',
+                id: 'pos_3', title: 'Split Bill (Pisah Bayar)', icon: 'share', colorClass: 'text-orange-400',
                 content: `
                     <p>Fitur untuk memecah satu pesanan menjadi beberapa pembayaran.</p>
                     <ol class="list-decimal pl-5 space-y-1 mt-2 text-sm">
@@ -222,13 +226,13 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                         <li>
                             <strong>Stok Manual (Lokal):</strong><br/>
                             Digunakan saat toko membeli barang sendiri dari pasar/supplier luar (bukan dari Gudang Pusat).
-                            <br/><em>Cara Pakai:</em> Buka menu Produk &rarr; Klik "Stok Manual" &rarr; Pilih "Barang Masuk" &rarr; Isi Jumlah.
+                            <br/><em>Cara Pakai:</em> Buka menu Produk &rarr; Klik <strong>"Stok Manual"</strong> &rarr; Pilih <strong>"Barang Masuk"</strong> &rarr; Isi jumlah.
                         </li>
                     </ul>
                 `
             },
             {
-                id: 'prod_bulk', title: 'Input Massal (Bulk Add)', icon: 'boxes', colorClass: 'text-purple-400', badge: 'Baru',
+                id: 'prod_bulk', title: 'Input Massal (Bulk Add)', icon: 'boxes', colorClass: 'text-purple-400',
                 content: `
                     <p>Cara cepat memasukkan banyak data sekaligus tanpa input satu per satu.</p>
                     <ul class="list-disc pl-5 mt-2 space-y-1 text-sm">
@@ -251,11 +255,11 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 `
             },
             {
-                id: 'prod_3', title: 'Stock Opname (Audit)', icon: 'file-lock', colorClass: 'text-blue-400',
+                id: 'prod_3', title: 'Stok Opname (Audit)', icon: 'file-lock', colorClass: 'text-blue-400',
                 content: `
                     <p>Fitur untuk mencocokkan stok di aplikasi dengan fisik di gudang.</p>
                     <ul class="list-disc pl-5 mt-1 space-y-1 text-sm">
-                        <li>Klik tombol <strong>Stock Opname</strong>.</li>
+                        <li>Klik tombol <strong>Stok Opname</strong>.</li>
                         <li>Isi kolom "Fisik (Actual)" sesuai hitungan riil.</li>
                         <li>Sistem akan menghitung selisih (Variance) dan mencatatnya di Log Audit.</li>
                         <li>Stok di aplikasi akan diperbarui mengikuti angka Fisik.</li>
@@ -275,8 +279,8 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 content: `
                     <p>Menampilkan daftar transaksi penjualan kepada pelanggan.</p>
                     <ul class="list-disc pl-5 mt-2 space-y-2 text-sm">
-                        <li>Gunakan filter waktu (Hari Ini/Minggu Ini/Bulan Ini).</li>
-                        <li>Klik tombol <strong>PDF</strong> atau <strong>CSV</strong> untuk mengunduh laporan.</li>
+                        <li>Gunakan toolbar atas untuk memilih mode <strong>Lokal/Cloud</strong>, filter waktu, filter cabang, dan menu <strong>Export</strong>.</li>
+                        <li>Klik menu <strong>Export</strong> untuk mengunduh laporan dalam format yang tersedia.</li>
                         <li>
                             <strong>Lihat & Unduh Bukti:</strong> Jika ada transaksi dengan ikon kamera biru, klik ikon tersebut.
                             <br/>Di jendela yang muncul, tekan tombol <strong>Unduh</strong>. File akan disimpan dengan nama yang mengandung <strong>ID Transaksi</strong> (cth: <code>Bukti_Trx_LOC-123...</code>) agar Admin Pusat mudah mencocokkannya dengan Laporan CSV/Excel.
@@ -309,12 +313,12 @@ export const MANUAL_SECTIONS: HelpSection[] = [
         desc: 'Pusat pencatatan arus kas, utang, dan belanja.',
         items: [
              {
-                id: 'fin_ocr', title: 'Scan Nota Otomatis (OCR AI)', icon: 'eye', colorClass: 'text-purple-400', badge: 'Baru',
+                id: 'fin_ocr', title: 'Scan Nota Otomatis (OCR AI)', icon: 'eye', colorClass: 'text-purple-400',
                 content: `
                     <p>Malas mengetik detail pengeluaran? Gunakan fitur Scan AI.</p>
                     <ol class="list-decimal pl-5 mt-2 space-y-1 text-sm">
                         <li>Buka menu <strong>Pengeluaran</strong> atau <strong>Pembelian</strong>.</li>
-                        <li>Klik "Catat Baru" &rarr; Klik kotak kamera untuk ambil foto nota belanja.</li>
+                        <li>Klik tombol <strong>"Catat"</strong> atau buka formulir baru, lalu gunakan kotak kamera untuk mengambil foto nota belanja.</li>
                         <li>Setelah foto muncul, klik tombol <strong>"Scan Data (AI)"</strong>.</li>
                         <li>Tunggu sebentar, sistem akan otomatis membaca <strong>Total Harga</strong> dan <strong>Tanggal</strong> dari foto tersebut dan mengisi kolom formulir untuk Anda.</li>
                     </ol>
@@ -363,7 +367,7 @@ export const MANUAL_SECTIONS: HelpSection[] = [
         desc: 'Kelola database member dan kartu digital.',
         items: [
             {
-                id: 'cust_identity', title: 'Data Identitas Bebas (Sekolah/Kantor)', icon: 'tag', colorClass: 'text-sky-400', badge: 'Baru',
+                id: 'cust_identity', title: 'Data Identitas Bebas (Sekolah/Kantor)', icon: 'tag', colorClass: 'text-sky-400',
                 content: `
                     <p>Kolom 'Kontak' pada data pelanggan kini bersifat fleksibel. Anda tidak harus mengisinya dengan Nomor HP.</p>
                     <ul class="list-disc pl-5 space-y-1 mt-2 text-sm">
@@ -374,7 +378,7 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 `
             },
             {
-                id: 'cust_card', title: 'Kartu Member Digital & QR Code', icon: 'award', colorClass: 'text-yellow-400', badge: 'Baru',
+                id: 'cust_card', title: 'Kartu Member Digital & QR Code', icon: 'award', colorClass: 'text-yellow-400',
                 content: `
                     <p>Berikan pengalaman profesional kepada pelanggan setia Anda tanpa biaya cetak kartu fisik.</p>
                     <ul class="list-disc pl-5 space-y-1 mt-2 text-sm">
@@ -453,14 +457,14 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                 `
             },
             {
-                id: 'set_central', title: 'Setup Perangkat Pusat (Admin)', icon: 'star', colorClass: 'text-yellow-400', badge: 'Baru',
+                id: 'set_central', title: 'Setup Perangkat Pusat (Admin)', icon: 'star', colorClass: 'text-yellow-400',
                 content: `
                     <p class="mb-2">Jika Anda adalah Owner/Admin yang ingin memantau cabang dari jauh:</p>
                     <ol class="list-decimal pl-5 space-y-1 text-sm">
                         <li>Buka <strong>Pengaturan &rarr; Toko & Struk</strong>.</li>
                         <li>Pada bagian <strong>"Identitas Perangkat Ini (Store ID)"</strong>, pilih opsi <strong>"★ PUSAT (ADMIN MONITORING)"</strong>.</li>
                         <li>Sistem akan mengenali perangkat ini sebagai Pusat Pengendali (Control Center).</li>
-                        <li>Sebagai Pusat, Anda tidak perlu memilih cabang saat menekan tombol "Refresh" atau "Update".</li>
+                        <li>Sebagai Pusat, Anda tidak perlu memilih cabang saat menekan tombol <strong>"Refresh"</strong> atau <strong>"Cek Update"</strong>.</li>
                     </ol>
                 `
             },
@@ -471,16 +475,16 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                     <ul class="list-disc pl-5 text-sm text-slate-300 space-y-2">
                         <li>
                             <strong>Mengubah Harga/Produk:</strong><br/>
-                            - Di PC (Sumber): Setelah edit, masuk ke <em>Pengaturan &rarr; Data</em>, klik <strong>"Kirim Master" (Push)</strong>.<br/>
-                            - Di HP (Penerima): Masuk menu Data, klik <strong>"Update dari Pusat" (Pull)</strong>.
+                            - Di PC (Sumber): Setelah edit, masuk ke <em>Pengaturan &rarr; Data</em>, klik <strong>"Kirim Master"</strong>.<br/>
+                            - Di HP (Penerima): Masuk menu Data, lalu jalankan <strong>"Cek Update"</strong> atau pembaruan dari pusat sesuai perangkat Anda.
                         </li>
                         <li>
                             <strong>Melihat Laporan:</strong><br/>
-                            Di kedua perangkat, cukup gunakan <strong>Mode Cloud (Dropbox)</strong> di Dashboard/Laporan dan tekan tombol <strong>"Refresh"</strong>. Data akan selalu sama.
+                            Di kedua perangkat, cukup gunakan <strong>Mode Cloud (Dropbox)</strong> di Dashboard/Laporan lalu jalankan <strong>"Refresh"</strong> dari menu aksi. Data akan selalu sama.
                         </li>
                         <li>
                             <strong>Menggabungkan Data (Merge):</strong><br/>
-                            Jika Anda ingin data fisik (stok) di HP juga ikut berubah sesuai laporan PC, klik tombol <strong>"Simpan ke Lokal"</strong> setelah Refresh di Dashboard.
+                            Jika Anda ingin data hasil cloud ikut disimpan sebagai data lokal di perangkat admin, gunakan aksi <strong>"Simpan ke Lokal"</strong> saat memang diperlukan.
                         </li>
                     </ul>
                 `
@@ -492,8 +496,8 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                         <strong class="text-sky-300">Konsep Utama:</strong> Agar perangkat Admin tidak berat/lemot, Anda TIDAK PERLU menyimpan data semua cabang ke database HP Anda secara permanen.
                     </div>
                     <ul class="list-disc pl-5 text-sm text-slate-300 space-y-2">
-                        <li><strong>Mode Intip (Viewer):</strong> Saat Anda menekan tombol "Refresh" di Dashboard/Laporan, data dari Cloud hanya ditampilkan sementara di layar (RAM). Ini sangat ringan.</li>
-                        <li><strong>Kapan harus Simpan ke Lokal?</strong> Hanya jika Anda ingin mengedit data tersebut, melakukan refund, atau mengubah stok secara manual. Jika hanya untuk melihat omzet, biarkan dalam Mode Intip (Dropbox).</li>
+                        <li><strong>Mode Intip (Viewer):</strong> Saat Anda menjalankan tombol "Refresh" dari menu aksi di Dashboard/Laporan, data dari Cloud hanya ditampilkan sementara di layar (RAM). Ini sangat ringan.</li>
+                        <li><strong>Kapan harus Simpan ke Lokal?</strong> Hanya jika Anda ingin mengedit data tersebut, melakukan refund, atau mengubah stok secara manual. Jika hanya untuk melihat omzet, biarkan data tetap dalam mode cloud.</li>
                     </ul>
                 `
             },
@@ -503,8 +507,8 @@ export const MANUAL_SECTIONS: HelpSection[] = [
                     <p>Apa yang harus dilakukan jika penyimpanan Dropbox penuh?</p>
                     <ol className="list-decimal pl-5 mt-2 space-y-1 text-sm text-slate-300">
                         <li>Buka menu <strong>Pengaturan &rarr; Data & Cloud</strong>.</li>
-                        <li>Klik tombol <strong>"Download Arsip Cloud"</strong>. Pilih format (Excel/PDF) yang diinginkan. Simpan file ini di Laptop/Google Drive sebagai arsip bulanan.</li>
-                        <li>Setelah file aman terunduh, klik tombol merah <strong>"Kosongkan Folder Laporan"</strong>.</li>
+                        <li>Klik tombol <strong>"Unduh Arsip"</strong>. Pilih format yang diinginkan, lalu simpan file ini di laptop atau penyimpanan lain sebagai arsip bulanan.</li>
+                        <li>Setelah file aman terunduh, klik tombol merah <strong>"Hapus Laporan"</strong>.</li>
                         <li>Dropbox Anda kembali bersih dan siap menerima data bulan berikutnya. Perangkat Admin Anda tetap ringan karena tidak perlu menampung ribuan data lama.</li>
                     </ol>
                 `
@@ -582,7 +586,7 @@ export const FAQS: FaqItem[] = [
         id: 'faq_role',
         category: 'Akun & Akses',
         title: 'Apa bedanya Admin, Staff, dan Viewer?',
-        content: '<ul><li><strong>Admin:</strong> Bos. Akses penuh, bisa edit/hapus data & lihat semua cabang.</li><li><strong>Staff:</strong> Kasir. Hanya bisa jualan & stok opname di toko tempatnya bekerja. Tidak bisa lihat data cloud.</li><li><strong>Viewer (Baru):</strong> Investor/Owner Pasif. Hanya bisa MELIHAT (Read-only) Laporan, Dashboard, & Audit Log. Aman untuk dipinjamkan ke partner.</li></ul>'
+        content: '<ul><li><strong>Admin:</strong> Bos. Akses penuh, bisa edit/hapus data & lihat semua cabang.</li><li><strong>Staff:</strong> Kasir. Hanya bisa jualan & stok opname di toko tempatnya bekerja. Tidak bisa lihat data cloud.</li><li><strong>Viewer:</strong> Investor atau owner pasif. Hanya bisa MELIHAT (read-only) Dashboard, Laporan, dan Audit Log. Aman untuk dipinjamkan ke partner.</li></ul>'
     },
     {
         id: 'faq_reset_staff_ticket',
@@ -654,7 +658,7 @@ export const FAQS: FaqItem[] = [
         id: 'faq_dropbox_full',
         category: 'Teknis',
         title: 'Dropbox Penuh, Apa yang harus dilakukan?',
-        content: 'Lakukan "Siklus Bulanan". Masuk ke Pengaturan > Data, klik "Download Arsip Cloud" (simpan di Laptop), lalu klik "Hapus Laporan" untuk membersihkan penyimpanan.'
+        content: 'Lakukan "Siklus Bulanan". Masuk ke Pengaturan > Data, klik "Unduh Arsip" lalu simpan file cadangannya, setelah itu klik "Hapus Laporan" untuk membersihkan penyimpanan.'
     },
     {
         id: 'faq_storage_native',

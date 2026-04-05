@@ -45,6 +45,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
     const splitCashTendered = parseFloat(splitCashInput) || 0;
     const splitChange = splitCashTendered - balanceShortage;
     const quickAmounts = useMemo(() => [total, 20000, 50000, 100000], [total]);
+    const [isCompactViewport, setIsCompactViewport] = useState(false);
+
+    useEffect(() => {
+        const updateViewportMode = () => {
+            setIsCompactViewport(window.innerWidth < 640 || window.innerHeight <= 820);
+        };
+
+        updateViewportMode();
+        window.addEventListener('resize', updateViewportMode);
+
+        return () => window.removeEventListener('resize', updateViewportMode);
+    }, []);
 
     useRenderProfiler('PaymentModal', {
         isOpen,
@@ -231,32 +243,32 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
             title="Pembayaran"
             size="lg"
             mobileLayout="fullscreen"
-            bodyClassName="p-4 sm:p-6"
+            bodyClassName="p-3 sm:p-6"
         >
-            <div className="space-y-4">
-                <div className="text-center bg-slate-700 p-4 rounded-lg">
+            <div className={`${isCompactViewport ? 'space-y-3' : 'space-y-4'}`}>
+                <div className={`text-center bg-slate-700 rounded-xl ${isCompactViewport ? 'p-3' : 'p-4'}`}>
                     <p className="text-slate-400 text-sm">Total Tagihan</p>
-                    <p className="text-3xl font-bold text-white">{CURRENCY_FORMATTER.format(total)}</p>
+                    <p className={`${isCompactViewport ? 'text-2xl' : 'text-3xl'} font-bold text-white`}>{CURRENCY_FORMATTER.format(total)}</p>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2">
-                    <button onClick={() => handleMethodChange('cash')} className={`p-2 rounded-lg border text-center transition-colors flex flex-col items-center justify-center ${paymentMethod === 'cash' ? 'bg-[#347758] border-[#347758] text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}`}>
-                        <Icon name="cash" className="w-5 h-5 mb-1"/> 
-                        <span className="text-xs font-bold">Tunai</span>
+                    <button onClick={() => handleMethodChange('cash')} className={`${isCompactViewport ? 'p-2 min-h-[72px]' : 'p-2.5 min-h-[80px]'} rounded-xl border text-center transition-colors flex flex-col items-center justify-center ${paymentMethod === 'cash' ? 'bg-[#347758] border-[#347758] text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}`}>
+                        <Icon name="cash" className={`${isCompactViewport ? 'w-4 h-4 mb-1' : 'w-5 h-5 mb-1'}`} /> 
+                        <span className={`${isCompactViewport ? 'text-[11px]' : 'text-xs'} font-bold`}>Tunai</span>
                     </button>
-                    <button onClick={() => handleMethodChange('non-cash')} className={`p-2 rounded-lg border text-center transition-colors flex flex-col items-center justify-center ${paymentMethod === 'non-cash' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}`}>
-                        <Icon name="pay" className="w-5 h-5 mb-1"/> 
-                        <span className="text-xs font-bold">QRIS/Card</span>
+                    <button onClick={() => handleMethodChange('non-cash')} className={`${isCompactViewport ? 'p-2 min-h-[72px]' : 'p-2.5 min-h-[80px]'} rounded-xl border text-center transition-colors flex flex-col items-center justify-center ${paymentMethod === 'non-cash' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}`}>
+                        <Icon name="pay" className={`${isCompactViewport ? 'w-4 h-4 mb-1' : 'w-5 h-5 mb-1'}`} /> 
+                        <span className={`${isCompactViewport ? 'text-[11px]' : 'text-xs'} font-bold`}>QRIS/Card</span>
                     </button>
                     <button 
                         onClick={() => selectedCustomer ? handleMethodChange('member-balance') : alert('Pilih pelanggan member terlebih dahulu.')}
                         disabled={!selectedCustomer}
-                        className={`p-2 rounded-lg border text-center transition-colors flex flex-col items-center justify-center disabled:opacity-50 relative overflow-hidden ${paymentMethod === 'member-balance' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}`}
+                        className={`${isCompactViewport ? 'p-2 min-h-[72px]' : 'p-2.5 min-h-[80px]'} rounded-xl border text-center transition-colors flex flex-col items-center justify-center disabled:opacity-50 relative overflow-hidden ${paymentMethod === 'member-balance' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-slate-800 border-slate-600 text-slate-300'}`}
                     >
-                        <Icon name="finance" className="w-5 h-5 mb-1"/> 
-                        <span className="text-xs font-bold">Saldo</span>
+                        <Icon name="finance" className={`${isCompactViewport ? 'w-4 h-4 mb-1' : 'w-5 h-5 mb-1'}`} /> 
+                        <span className={`${isCompactViewport ? 'text-[11px]' : 'text-xs'} font-bold`}>Saldo</span>
                         {selectedCustomer && (
-                            <span className="text-[10px] block mt-0.5 bg-black/20 px-1 rounded">
+                            <span className={`${isCompactViewport ? 'text-[9px]' : 'text-[10px]'} block mt-0.5 bg-black/20 px-1 rounded`}>
                                 {CURRENCY_FORMATTER.format(memberBalance).replace(',00', '').replace('Rp', '')}
                             </span>
                         )}
@@ -264,7 +276,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                 </div>
 
                 {paymentMethod === 'member-balance' && selectedCustomer && (
-                    <div className={`p-3 border rounded-lg text-sm ${canPayWithBalance ? 'bg-purple-900/30 border-purple-700' : 'bg-slate-800 border-slate-700'}`}>
+                    <div className={`border rounded-xl text-sm ${isCompactViewport ? 'p-2.5' : 'p-3'} ${canPayWithBalance ? 'bg-purple-900/30 border-purple-700' : 'bg-slate-800 border-slate-700'}`}>
                          <div className="flex justify-between items-center mb-2">
                             <span className="text-slate-300">Saldo Member:</span>
                             <span className={`font-bold ${canPayWithBalance ? 'text-white' : 'text-red-400'}`}>{CURRENCY_FORMATTER.format(memberBalance)}</span>
@@ -272,7 +284,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
 
                         {!canPayWithBalance ? (
                             <div className="space-y-3 animate-fade-in">
-                                <div className="p-3 bg-red-900/40 rounded flex justify-between items-center">
+                                <div className={`bg-red-900/40 rounded-xl flex justify-between items-center ${isCompactViewport ? 'p-2.5' : 'p-3'}`}>
                                     <span className="text-red-300 text-xs font-bold">⚠️ Saldo Kurang</span>
                                     <span className="text-white font-bold text-sm">{CURRENCY_FORMATTER.format(balanceShortage)}</span>
                                 </div>
@@ -284,20 +296,20 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                                         <p className="text-[10px] text-slate-500">Potong Saldo: {CURRENCY_FORMATTER.format(memberBalance)}</p>
                                     </div>
                                     
-                                    <div className="bg-slate-900 p-2 rounded border border-slate-600 mb-2">
+                                    <div className="bg-slate-900 p-2 rounded-xl border border-slate-600 mb-2">
                                         <label className="block text-[10px] text-slate-400 mb-1">Uang Tunai Diterima (untuk kekurangan):</label>
                                         <input 
                                             type="number" 
                                             placeholder={`Min ${balanceShortage}`}
                                             value={splitCashInput}
                                             onChange={(e) => setSplitCashInput(e.target.value)}
-                                            className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-2 text-white font-bold text-center text-lg focus:border-[#347758]"
+                                            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-2 py-2 text-white font-bold text-center text-lg focus:border-[#347758]"
                                             autoFocus
                                         />
                                     </div>
 
                                     {splitCashTendered >= balanceShortage && (
-                                        <div className="bg-green-900/30 p-2 rounded mb-2 text-center animate-fade-in">
+                                    <div className="bg-green-900/30 p-2 rounded-xl mb-2 text-center animate-fade-in">
                                             <p className="text-xs text-green-300">Kembalian</p>
                                             <p className="text-lg font-bold text-white">{CURRENCY_FORMATTER.format(splitChange)}</p>
                                         </div>
@@ -309,17 +321,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                                 </div>
                                 <div className="border-t border-slate-700/50 my-2 pt-2">
                                     <p className="text-xs text-slate-500 text-center mb-1">Atau Top Up dulu:</p>
-                                    <div className="flex gap-2 justify-center">
+                                    <div className="grid grid-cols-4 gap-2">
                                         {[10000, 20000, 50000].map((amt) => (
                                             <button 
                                                 key={amt} 
                                                 onClick={() => setInstantTopUpAmount(amt.toString())}
-                                                className="text-[10px] bg-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-600"
+                                                className="text-[10px] bg-slate-700 text-slate-300 px-2 py-2 rounded-lg hover:bg-slate-600"
                                             >
                                                 +{amt/1000}k
                                             </button>
                                         ))}
-                                        <button onClick={handleInstantTopUp} disabled={!instantTopUpAmount} className="text-[10px] bg-[#347758] text-white px-2 py-1 rounded">Isi</button>
+                                        <button onClick={handleInstantTopUp} disabled={!instantTopUpAmount} className="text-[10px] bg-[#347758] text-white px-2 py-2 rounded-lg">Isi</button>
                                     </div>
                                 </div>
                             </div>
@@ -339,26 +351,26 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
 
                 {paymentMethod !== 'member-balance' && (
                     <div className="animate-fade-in">
-                        <div>
+                        <div className="space-y-2">
                             <label className="block text-sm font-medium text-slate-300 mb-1">{getInputLabel()}</label>
                             <input 
                                 type="number" 
                                 value={amountPaid}
                                 onChange={e => setAmountPaid(e.target.value)}
-                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-3 text-white text-xl font-bold text-center"
+                                className={`w-full bg-slate-900 border border-slate-600 rounded-xl px-3 ${isCompactViewport ? 'py-2.5 text-lg' : 'py-3 text-xl'} font-bold text-center text-white`}
                                 placeholder="0"
                                 autoFocus
                             />
                         </div>
 
                         {paymentMethod === 'cash' && (
-                            <div className="flex gap-2 justify-center mt-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
                                 {quickAmounts.map((amt, idx) => (
                                     <button 
                                         key={idx}
                                         onClick={() => handleQuickAmount(amt)}
                                         disabled={amt < total && idx !== 0}
-                                        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white disabled:opacity-50"
+                                        className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-white disabled:opacity-50"
                                     >
                                         {idx === 0 ? 'Uang Pas' : CURRENCY_FORMATTER.format(amt).replace(',00', '').replace('Rp', '')}
                                     </button>
@@ -369,14 +381,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                 )}
                 
                 {paymentMethod === 'non-cash' && (
-                    <div className="bg-slate-700/50 p-3 rounded-lg border border-slate-600 animate-fade-in">
+                    <div className={`bg-slate-700/50 border border-slate-600 animate-fade-in rounded-xl ${isCompactViewport ? 'p-2.5' : 'p-3'}`}>
                         <label className="text-xs font-bold text-slate-300 mb-2 flex items-center gap-1">
                             <Icon name="camera" className="w-3 h-3"/> Bukti Pembayaran (Opsional)
                         </label>
                         
                         {evidenceImage ? (
                             <div className="relative w-full mb-2">
-                                <img src={evidenceImage} alt="Bukti" className="h-32 w-full object-contain rounded bg-black/40" />
+                                <img src={evidenceImage} alt="Bukti" className={`${isCompactViewport ? 'h-28' : 'h-32'} w-full object-contain rounded-lg bg-black/40`} />
                                 <button onClick={() => setEvidenceImage('')} className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full hover:bg-red-500">
                                     <Icon name="close" className="w-4 h-4"/>
                                 </button>
@@ -384,13 +396,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                         ) : null}
 
                         <div className="grid grid-cols-3 gap-2">
-                            <Button size="sm" variant="secondary" onClick={() => setLocalCameraOpen(true)} className="flex flex-col items-center justify-center h-16 text-xs p-1">
+                            <Button size="sm" variant="operational" onClick={() => setLocalCameraOpen(true)} className={`${isCompactViewport ? 'h-14' : 'h-16'} flex flex-col items-center justify-center text-xs p-1 rounded-xl`}>
                                 <Icon name="camera" className="w-5 h-5 mb-1"/> Kamera
                             </Button>
 
                             <div className="relative">
                                 <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-                                <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} className="w-full flex flex-col items-center justify-center h-16 text-xs p-1">
+                                <Button size="sm" variant="operational" onClick={() => fileInputRef.current?.click()} className={`${isCompactViewport ? 'h-14' : 'h-16'} w-full flex flex-col items-center justify-center text-xs p-1 rounded-xl`}>
                                     <Icon name="upload" className="w-5 h-5 mb-1"/> Upload
                                 </Button>
                             </div>
@@ -398,10 +410,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                             {isDisplayConnected ? (
                                 <Button 
                                     size="sm" 
-                                    variant="secondary"
+                                    variant="operational"
                                     onClick={handleRequestCustomerPhoto}
                                     disabled={isWaitingForCustomer}
-                                    className={`flex flex-col items-center justify-center h-16 text-xs p-1 ${isWaitingForCustomer ? 'bg-purple-900/30 text-purple-300' : 'bg-purple-700 text-white hover:bg-purple-600'}`}
+                                    className={`${isCompactViewport ? 'h-14' : 'h-16'} flex flex-col items-center justify-center text-xs p-1 rounded-xl ${isWaitingForCustomer ? 'bg-purple-900/30 text-purple-300' : 'bg-purple-700 text-white hover:bg-purple-600'}`}
                                 >
                                     {isWaitingForCustomer ? (
                                         <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mb-1"></span> Menunggu...</>
@@ -410,7 +422,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                                     )}
                                 </Button>
                             ) : (
-                                <div className="flex flex-col items-center justify-center h-16 text-xs p-1 bg-slate-800 rounded text-slate-500 border border-slate-600">
+                                <div className={`${isCompactViewport ? 'h-14' : 'h-16'} flex flex-col items-center justify-center text-xs p-1 bg-slate-800 rounded-xl text-slate-500 border border-slate-600`}>
                                     <Icon name="cast" className="w-5 h-5 mb-1 opacity-50"/> 
                                     Offline
                                 </div>
@@ -426,22 +438,22 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                             type="text"
                             value={customerName}
                             onChange={e => setCustomerName(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white"
                             placeholder="Pelanggan Umum"
                         />
                     </div>
                 )}
 
                 {change >= 0 && (
-                    <div className="bg-slate-700 p-3 rounded-lg animate-fade-in">
+                    <div className={`bg-slate-700 rounded-xl animate-fade-in ${isCompactViewport ? 'p-2.5' : 'p-3'}`}>
                         <div className="flex justify-between items-center mb-1">
                             <span className="text-slate-300">Kembalian</span>
-                            <span className="text-xl font-bold text-yellow-400">{CURRENCY_FORMATTER.format(change)}</span>
+                            <span className={`${isCompactViewport ? 'text-lg' : 'text-xl'} font-bold text-yellow-400`}>{CURRENCY_FORMATTER.format(change)}</span>
                         </div>
                         
                         {paymentMethod === 'cash' && selectedCustomer && change > 0 && (
                             <div className="mt-2 pt-2 border-t border-slate-600">
-                                <label className="flex items-center space-x-2 cursor-pointer p-2 hover:bg-slate-600 rounded transition-colors">
+                                <label className="flex items-center space-x-2 cursor-pointer p-2 hover:bg-slate-600 rounded-xl transition-colors">
                                     <input 
                                         type="checkbox" 
                                         checked={depositChange}
@@ -459,7 +471,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onC
                 )}
 
                 {paymentMethod !== 'member-balance' && (
-                    <Button onClick={handleConfirm} disabled={!amountPaid} className="w-full py-3 text-lg">
+                    <Button onClick={handleConfirm} disabled={!amountPaid} className={`w-full ${isCompactViewport ? 'py-2.5 text-base' : 'py-3 text-lg'}`}>
                         {change >= 0 ? 'Selesaikan Transaksi' : 'Simpan Piutang'}
                     </Button>
                 )}

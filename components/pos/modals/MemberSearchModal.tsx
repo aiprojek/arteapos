@@ -41,8 +41,9 @@ export const MemberSearchModal: React.FC<MemberSearchModalProps> = ({ isOpen, on
             title="Cari Pelanggan Member"
             mobileLayout="fullscreen"
             size="lg"
+            bodyClassName="p-3 sm:p-6"
         >
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
                 <div className="flex gap-2">
                     <div className="relative flex-1">
                         <input 
@@ -50,28 +51,28 @@ export const MemberSearchModal: React.FC<MemberSearchModalProps> = ({ isOpen, on
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Cari Nama / HP / ID..."
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg pl-9 pr-3 py-2 text-white auto-focus"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-xl pl-9 pr-3 py-2.5 text-white auto-focus"
                             autoFocus
                         />
-                        <Icon name="search" className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                        <Icon name="search" className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
                     </div>
-                    <Button onClick={onScan} variant="secondary" className="px-3" title="Scan Kartu Member">
+                    <Button onClick={onScan} variant="operational" className="px-3 rounded-xl" title="Scan Kartu Member">
                         <Icon name="barcode" className="w-5 h-5"/>
                     </Button>
                 </div>
 
-                <div className="max-h-[60dvh] sm:max-h-60 overflow-y-auto space-y-2 bg-slate-900/50 p-1 rounded-lg">
+                <div className="max-h-[68dvh] sm:max-h-60 overflow-y-auto space-y-2 bg-slate-900/50 p-1 rounded-xl">
                     {filtered.map((c) => (
                         <button 
                             key={c.id}
                             onClick={() => { onSelect(c); onClose(); }}
-                            className="w-full flex justify-between items-center p-3 rounded bg-slate-800 hover:bg-slate-700 transition-colors border border-slate-700 hover:border-slate-500 text-left group"
+                            className="w-full flex justify-between items-center p-3 rounded-xl bg-slate-800 hover:bg-slate-700 transition-colors border border-slate-700 hover:border-slate-500 text-left group"
                         >
-                            <div>
-                                <p className="font-bold text-white group-hover:text-[#52a37c]">{c.name}</p>
+                            <div className="min-w-0 pr-3">
+                                <p className="font-bold text-white group-hover:text-[#52a37c] truncate">{c.name}</p>
                                 <p className="text-xs text-slate-400">{c.memberId} {c.contact ? `• ${c.contact}` : ''}</p>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right shrink-0">
                                 <span className="block text-xs text-yellow-400 font-bold">{c.points} Pts</span>
                                 {c.balance > 0 && <span className="block text-xs text-green-400">{CURRENCY_FORMATTER.format(c.balance)}</span>}
                             </div>
@@ -84,7 +85,7 @@ export const MemberSearchModal: React.FC<MemberSearchModalProps> = ({ isOpen, on
                     )}
                 </div>
 
-                <Button onClick={() => { onClose(); onAddNew(); }} className="w-full" variant="secondary">
+                <Button onClick={() => { onClose(); onAddNew(); }} className="w-full py-2.5 rounded-xl" variant="utility">
                     <Icon name="plus" className="w-4 h-4" /> Daftar Member Baru
                 </Button>
             </div>

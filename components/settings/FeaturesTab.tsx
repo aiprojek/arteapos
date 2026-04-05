@@ -20,12 +20,12 @@ interface FeaturesTabProps {
 }
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
-    <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
-        <div className="p-4 border-b border-slate-700 bg-slate-800">
+    <div className="mb-6 overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-800/85 shadow-[0_10px_35px_rgba(15,23,42,0.22)]">
+        <div className="border-b border-slate-700/80 bg-slate-800/90 p-4 sm:p-5">
             <h3 className="text-lg font-semibold text-white">{title}</h3>
-            {description && <p className="text-sm text-slate-400 mt-1">{description}</p>}
+            {description && <p className="mt-1 text-sm leading-relaxed text-slate-400">{description}</p>}
         </div>
-        <div className="p-4 space-y-4">
+        <div className="space-y-4 p-4 sm:p-5">
             {children}
         </div>
     </div>
@@ -244,7 +244,7 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
                             </button>
                         </div>
                     ))}
-                    <Button onClick={() => setDiscountModalOpen(true)} variant="secondary" size="sm" className="w-full">
+                    <Button onClick={() => setDiscountModalOpen(true)} variant="utility" size="sm" className="w-full">
                         <Icon name="plus" className="w-4 h-4"/> Tambah Diskon Baru
                     </Button>
                 </div>
@@ -287,7 +287,7 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
                                 </div>
                             ))}
                         </div>
-                        <Button onClick={() => setRuleModalOpen(true)} variant="secondary" size="sm" className="w-full">
+                        <Button onClick={() => setRuleModalOpen(true)} variant="utility" size="sm" className="w-full">
                             <Icon name="plus" className="w-4 h-4"/> Tambah Aturan Poin
                         </Button>
 
@@ -307,7 +307,7 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
                                 </div>
                             ))}
                         </div>
-                        <Button onClick={() => setRewardModalOpen(true)} variant="secondary" size="sm" className="w-full">
+                        <Button onClick={() => setRewardModalOpen(true)} variant="utility" size="sm" className="w-full">
                             <Icon name="plus" className="w-4 h-4"/> Tambah Reward Baru
                         </Button>
                     </div>
@@ -315,32 +315,32 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
             </SettingsCard>
 
             {/* Add Discount Modal */}
-            <Modal isOpen={isDiscountModalOpen} onClose={() => setDiscountModalOpen(false)} title="Tambah Diskon">
+            <Modal isOpen={isDiscountModalOpen} onClose={() => setDiscountModalOpen(false)} title="Tambah Diskon" size="md" mobileLayout="fullscreen">
                 <div className="space-y-4">
                     <input 
                         type="text" 
                         placeholder="Nama Promo (cth: Diskon Pelajar)" 
                         value={newDiscount.name}
                         onChange={e => setNewDiscount({...newDiscount, name: e.target.value})}
-                        className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                        className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white"
                     />
-                    <div className="flex bg-slate-700 p-1 rounded-lg">
-                        <button onClick={() => setNewDiscount({...newDiscount, type: 'percentage'})} className={`flex-1 py-1 text-sm rounded ${newDiscount.type === 'percentage' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Persentase (%)</button>
-                        <button onClick={() => setNewDiscount({...newDiscount, type: 'amount'})} className={`flex-1 py-1 text-sm rounded ${newDiscount.type === 'amount' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Nominal (Rp)</button>
+                    <div className="flex bg-slate-700 p-1 rounded-xl">
+                        <button onClick={() => setNewDiscount({...newDiscount, type: 'percentage'})} className={`flex-1 py-2 text-sm rounded-lg ${newDiscount.type === 'percentage' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Persentase (%)</button>
+                        <button onClick={() => setNewDiscount({...newDiscount, type: 'amount'})} className={`flex-1 py-2 text-sm rounded-lg ${newDiscount.type === 'amount' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Nominal (Rp)</button>
                     </div>
                     <input 
                         type="number" 
                         placeholder="Nilai Diskon" 
                         value={newDiscount.value}
                         onChange={e => setNewDiscount({...newDiscount, value: e.target.value})}
-                        className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                        className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white"
                     />
                     <Button onClick={handleAddDiscount} className="w-full">Simpan</Button>
                 </div>
             </Modal>
 
             {/* Add Point Rule Modal */}
-            <Modal isOpen={isRuleModalOpen} onClose={() => setRuleModalOpen(false)} title="Tambah Aturan Poin">
+            <Modal isOpen={isRuleModalOpen} onClose={() => setRuleModalOpen(false)} title="Tambah Aturan Poin" size="md" mobileLayout="fullscreen">
                 <div className="space-y-4">
                     <p className="text-sm text-slate-400">Aturan sederhana: Pelanggan dapat poin berdasarkan total belanja.</p>
                     <div>
@@ -349,7 +349,7 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
                             type="number" 
                             value={newRule.spendAmount}
                             onChange={e => setNewRule({...newRule, spendAmount: e.target.value})}
-                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white"
                         />
                     </div>
                     <div>
@@ -358,7 +358,7 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
                             type="number" 
                             value={newRule.pointsEarned}
                             onChange={e => setNewRule({...newRule, pointsEarned: e.target.value})}
-                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white"
                         />
                     </div>
                     <Button onClick={handleAddPointRule} className="w-full">Simpan Aturan</Button>
@@ -366,7 +366,7 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
             </Modal>
 
             {/* Add Reward Modal */}
-            <Modal isOpen={isRewardModalOpen} onClose={() => setRewardModalOpen(false)} title="Tambah Reward Baru">
+            <Modal isOpen={isRewardModalOpen} onClose={() => setRewardModalOpen(false)} title="Tambah Reward Baru" size="md" mobileLayout="fullscreen">
                 <div className="space-y-4">
                     <div>
                         <label className="text-xs text-slate-300">Nama Reward</label>
@@ -375,7 +375,7 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
                             placeholder="cth: Gratis Matcha Latte / Voucher 10rb" 
                             value={newReward.name}
                             onChange={e => setNewReward({...newReward, name: e.target.value})}
-                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white"
                         />
                     </div>
 
@@ -386,13 +386,13 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({
                             placeholder="cth: 50" 
                             value={newReward.pointsCost}
                             onChange={e => setNewReward({...newReward, pointsCost: e.target.value})}
-                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white"
                         />
                     </div>
 
                     <div>
                         <label className="text-xs text-slate-300">Tipe Reward</label>
-                        <div className="flex bg-slate-700 p-1 rounded-lg mt-1">
+                        <div className="flex bg-slate-700 p-1 rounded-xl mt-1">
                             <button 
                                 onClick={() => setNewReward({...newReward, type: 'discount_amount'})} 
                                 className={`flex-1 py-1 text-xs rounded transition-colors ${newReward.type === 'discount_amount' ? 'bg-[#347758] text-white shadow-sm' : 'text-slate-300'}`}

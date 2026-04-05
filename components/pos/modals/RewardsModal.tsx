@@ -102,7 +102,7 @@ export const RewardsModal: React.FC<{ isOpen: boolean, onClose: () => void, cust
                                         <Icon name="check-circle-fill" className="w-3 h-3"/> Terpasang
                                     </div>
                                 ) : (
-                                    <Button size="sm" onClick={() => handleRedeem(reward)} disabled={!canAfford} variant={canAfford ? 'primary' : 'secondary'}>
+                                    <Button size="sm" onClick={() => handleRedeem(reward)} disabled={!canAfford} variant={canAfford ? 'primary' : 'utility'}>
                                         Tukar
                                     </Button>
                                 )}
@@ -118,7 +118,7 @@ export const RewardsModal: React.FC<{ isOpen: boolean, onClose: () => void, cust
                 </div>
 
                 <div className="pt-2">
-                    <Button onClick={onClose} variant="secondary" className="w-full">Selesai</Button>
+                    <Button onClick={onClose} variant="utility" className="w-full">Selesai</Button>
                 </div>
             </div>
         </Modal>

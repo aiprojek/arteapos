@@ -89,17 +89,17 @@ const SessionToolbar: React.FC<{
     onOpenReport: () => void;
     onOpenEndSession: () => void;
 }> = ({ onOpenHistory, onOpenCashManagement, onOpenReport, onOpenEndSession }) => (
-    <div className="flex items-center gap-2 mb-4 bg-slate-800 p-2 rounded-lg border border-slate-700 overflow-x-auto">
-        <Button variant="secondary" size="sm" onClick={onOpenHistory} className="border-none bg-slate-700 hover:bg-slate-600 whitespace-nowrap">
+    <div className="mb-4 flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-700/80 bg-slate-800/85 p-2 shadow-[0_10px_25px_rgba(15,23,42,0.18)]">
+        <Button variant="utility" size="sm" onClick={onOpenHistory} className="whitespace-nowrap">
             <Icon name="book" className="w-4 h-4" /> <span className="hidden sm:inline">Riwayat</span>
         </Button>
-        <Button variant="secondary" size="sm" onClick={onOpenCashManagement} className="border-none bg-slate-700 hover:bg-slate-600 whitespace-nowrap">
+        <Button variant="utility" size="sm" onClick={onOpenCashManagement} className="whitespace-nowrap">
             <Icon name="finance" className="w-4 h-4" /> <span className="hidden sm:inline">Kas</span>
         </Button>
-        <Button variant="secondary" size="sm" onClick={onOpenReport} className="border-none bg-slate-700 hover:bg-slate-600 whitespace-nowrap">
+        <Button variant="operational" size="sm" onClick={onOpenReport} className="whitespace-nowrap">
             <Icon name="chat" className="w-4 h-4" /> <span className="hidden sm:inline">Laporan</span>
         </Button>
-        <Button variant="danger" size="sm" onClick={onOpenEndSession} className="border-none bg-red-900/30 hover:bg-red-900/50 text-red-300 ml-auto whitespace-nowrap">
+        <Button variant="danger" size="sm" onClick={onOpenEndSession} className="ml-auto whitespace-nowrap">
             <Icon name="logout" className="w-4 h-4" /> <span className="hidden sm:inline">Tutup</span>
         </Button>
     </div>
@@ -168,7 +168,7 @@ const POSView: React.FC = () => {
                         <SessionLockedState onStartSession={() => logic.setStartSessionModalOpen(true)} />
                     ) : (
                         <>
-                            {logic.receiptSettings.enableKitchenPrinter && logic.session && (
+                            {logic.session && (
                                 <SessionToolbar
                                     onOpenHistory={() => logic.setHistoryModalOpen(true)}
                                     onOpenCashManagement={() => logic.setCashMgmtOpen(true)}

@@ -43,10 +43,10 @@ const ScenariosTab: React.FC = () => {
                     color="sky-400"
                     desc="Sinkronisasi otomatis antar cabang menggunakan Dropbox."
                     steps={[
-                        "Admin (Pusat): Hubungkan akun Dropbox (Login Email/Pass) di menu Pengaturan &rarr; Data.",
-                        "Admin: Klik tombol <strong>'Bagikan Akses (Pairing)'</strong> untuk menampilkan QR atau Kode Teks.",
-                        "Cabang (Staff): Buka Pengaturan &rarr; Data. Pilih <strong>'Scan Akses Pusat'</strong> atau <strong>'Input Kode'</strong>.",
-                        "Cabang: Scan/Paste kode dari Admin. Selesai! Cabang terhubung tanpa login email."
+                        "Admin (Pusat): Buka Pengaturan &rarr; Data & Cloud, lalu hubungkan konfigurasi Dropbox terlebih dahulu.",
+                        "Admin: Klik tombol <strong>'Pairing'</strong> untuk menampilkan QR atau kode teks akses.",
+                        "Cabang: Buka Pengaturan &rarr; Data & Cloud, lalu pilih <strong>'Scan QR'</strong> atau <strong>'Input Kode'</strong>.",
+                        "Cabang: Scan atau tempel kode dari Admin. Setelah tersambung, cabang bisa menerima pembaruan tanpa harus login akun Dropbox sendiri."
                     ]}
                 />
                 <ScenarioCard 
@@ -80,10 +80,10 @@ const ScenariosTab: React.FC = () => {
                     desc="Menjaga performa aplikasi tetap cepat setelah penggunaan jangka panjang."
                     steps={[
                         "Jika muncul peringatan <strong>'Memori Penuh'</strong> atau aplikasi terasa lambat.",
-                        "Buka Pengaturan &rarr; Data & Cloud &rarr; Tombol <strong>'Buka Menu Pengarsipan'</strong>.",
+                        "Buka Pengaturan &rarr; Data & Cloud &rarr; tombol <strong>'Buka Menu Pengarsipan'</strong>.",
                         "Pilih rentang data lama (misal: > 6 Bulan).",
                         "<strong>Wajib:</strong> Unduh Arsip (Excel/PDF) terlebih dahulu.",
-                        "Klik 'Hapus Data Lama Permanen' untuk membersihkan database lokal."
+                        "Lanjutkan ke tombol <strong>'Hapus & Update Cloud'</strong> untuk membersihkan data lama dengan aman."
                     ]}
                 />
             </div>

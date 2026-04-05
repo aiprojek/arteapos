@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFinance } from '../context/FinanceContext';
 import { useProduct } from '../context/ProductContext';
@@ -7,17 +7,24 @@ import { CURRENCY_FORMATTER } from '../constants';
 import Icon from '../components/Icon';
 import Button from '../components/Button';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, Brush } from 'recharts';
-import type { Transaction } from '../types';
-import { dropboxService } from '../services/dropboxService';
-import { mockDataService } from '../services/mockData';
 import { useUIActions } from '../context/UIContext';
 import OverflowMenu from '../components/OverflowMenu';
+import { filterItemsByBranch, getAvailableBranchesFromItems, loadDashboardCloudSource } from '../services/cloudReadModel';
 
-const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'products' | 'reports' | 'finance'; iconClass: string; children?: React.ReactNode; tooltip?: string }> = ({ title, value, icon, iconClass, children, tooltip }) => (
+type DashboardInsightKey = 'profit' | 'sales' | 'stock' | 'branch';
+
+const DASHBOARD_INSIGHT_OPTIONS: Array<{ id: DashboardInsightKey; label: string }> = [
+    { id: 'profit', label: 'Analisis profitabilitas' },
+    { id: 'sales', label: 'Strategi meningkatkan omzet' },
+    { id: 'stock', label: 'Evaluasi stok & pengeluaran' },
+    { id: 'branch', label: 'Ringkasan performa cabang' },
+];
+
+const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'products' | 'reports' | 'finance'; iconClass: string; children?: React.ReactNode; tooltip?: string; className?: string }> = ({ title, value, icon, iconClass, children, tooltip, className = '' }) => (
     <motion.div 
         whileHover={{ y: -5, backgroundColor: 'rgba(30, 41, 59, 0.7)' }}
         transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-        className="bg-slate-900/40 backdrop-blur-md p-6 rounded-xl shadow-lg flex flex-col h-full border border-slate-700/50 relative group"
+        className={`bg-slate-900/40 backdrop-blur-md p-5 sm:p-6 rounded-2xl shadow-lg flex flex-col h-full border border-slate-700/50 relative group ${className}`}
     >
         <div className="flex justify-between items-start">
             <div>
@@ -37,6 +44,45 @@ const StatCard: React.FC<{ title: string; value: string; icon: 'cash' | 'product
     </motion.div>
 );
 
+const HeroStatCard: React.FC<{
+    title: string;
+    value: string;
+    subtitle: string;
+    icon: 'cash' | 'finance';
+    accentClass: string;
+    children?: React.ReactNode;
+}> = ({ title, value, subtitle, icon, accentClass, children }) => (
+    <motion.div
+        whileHover={{ y: -4 }}
+        transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+        className={`relative overflow-hidden rounded-2xl border p-6 sm:p-7 shadow-xl ${accentClass}`}
+    >
+        <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+        <div className="absolute inset-y-0 left-0 w-1 bg-emerald-400/80 pointer-events-none" />
+        <div className="relative z-10 flex items-start justify-between gap-4">
+            <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/70">{title}</p>
+                <p className="mt-3 text-3xl sm:text-4xl font-bold text-white break-words">{value}</p>
+                <p className="mt-2 text-sm text-white/80 max-w-md">{subtitle}</p>
+            </div>
+            <div className="shrink-0 rounded-2xl bg-white/10 p-3 border border-white/10">
+                <Icon name={icon} className="w-7 h-7 text-white" />
+            </div>
+        </div>
+        {children && <div className="relative z-10 mt-5 border-t border-white/10 pt-4">{children}</div>}
+    </motion.div>
+);
+
+const PanelCard: React.FC<{ title: string; icon: React.ReactNode; children: React.ReactNode; className?: string }> = ({ title, icon, children, className = '' }) => (
+    <div className={`bg-slate-800 p-4 sm:p-6 rounded-2xl shadow-lg border border-slate-700 ${className}`}>
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-white mb-4">
+            {icon}
+            {title}
+        </h3>
+        {children}
+    </div>
+);
+
 const DashboardView: React.FC = () => {
     const { transactions: localTransactions, importTransactions, expenses: localExpenses } = useFinance(); // ADD localExpenses
     const { products, inventorySettings, importStockAdjustments } = useProduct();
@@ -47,64 +93,49 @@ const DashboardView: React.FC = () => {
     const [cloudData, setCloudData] = useState<{ transactions: any[], inventory: any[], stockLogs: any[], expenses: any[] }>({ transactions: [], inventory: [], stockLogs: [], expenses: [] });
     const [isCloudLoading, setIsCloudLoading] = useState(false);
     const [selectedBranch, setSelectedBranch] = useState('ALL');
-    const [isDemoMode, setIsDemoMode] = useState(false);
+    const [isBranchMenuOpen, setBranchMenuOpen] = useState(false);
+    const [cloudMode, setCloudMode] = useState<'live' | 'demo' | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-    const [isLoadingAI, setIsLoadingAI] = useState(false);
     const [aiResponse, setAiResponse] = useState('');
-    const [aiError, setAiError] = useState('');
-    const [aiQuestion, setAiQuestion] = useState('');
+    const [selectedInsight, setSelectedInsight] = useState<DashboardInsightKey>('profit');
+    const [isCompactDashboard, setIsCompactDashboard] = useState(false);
+    const branchMenuRef = useRef<HTMLDivElement>(null);
+    const [isInsightVisible, setIsInsightVisible] = useState(true);
+
+    useEffect(() => {
+        const updateLayoutMode = () => {
+            if (typeof window === 'undefined') return;
+            setIsCompactDashboard(window.innerWidth < 768);
+        };
+
+        updateLayoutMode();
+        window.addEventListener('resize', updateLayoutMode);
+        return () => window.removeEventListener('resize', updateLayoutMode);
+    }, []);
+
+    useEffect(() => {
+        if (!isBranchMenuOpen) return;
+
+        const handleClickOutside = (event: MouseEvent) => {
+            if (branchMenuRef.current && !branchMenuRef.current.contains(event.target as Node)) {
+                setBranchMenuOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isBranchMenuOpen]);
 
     // Load Dropbox Data Logic (Aggregation)
     const loadDropboxData = async () => {
         setIsCloudLoading(true);
-        setIsDemoMode(false);
-
-        // --- DEMO MODE TRIGGER IF NO CREDENTIALS ---
-        if (!dropboxService.isConfigured()) {
-             const mock = mockDataService.getMockDashboardData();
-             setCloudData({ 
-                 transactions: mock.transactions, 
-                 inventory: mock.inventory,
-                 stockLogs: mock.stockAdjustments,
-                 expenses: mock.expenses
-             });
-             setIsDemoMode(true);
-             setLastUpdated(new Date());
-             setIsCloudLoading(false);
-             return;
-        }
 
         try {
-            const allBranchesData = await dropboxService.fetchAllBranchData();
-            
-            // Consolidate Data
-            let allTxns: any[] = [];
-            let allInv: any[] = [];
-            let allLogs: any[] = [];
-            let allExps: any[] = [];
-
-            allBranchesData.forEach(branch => {
-                if (branch.transactionRecords) {
-                    const txns = branch.transactionRecords.map((t: any) => ({ ...t, storeId: branch.storeId })); 
-                    allTxns = [...allTxns, ...txns];
-                }
-                if (branch.currentStock) {
-                    const inv = branch.currentStock.map((i: any) => ({ ...i, storeId: branch.storeId }));
-                    allInv = [...allInv, ...inv];
-                }
-                if (branch.stockAdjustments) {
-                    const logs = branch.stockAdjustments.map((s: any) => ({ ...s, storeId: branch.storeId }));
-                    allLogs = [...allLogs, ...logs];
-                }
-                if (branch.expenses) {
-                    const exps = branch.expenses.map((e: any) => ({ ...e, storeId: branch.storeId }));
-                    allExps = [...allExps, ...exps];
-                }
-            });
-
-            setCloudData({ transactions: allTxns, inventory: allInv, stockLogs: allLogs, expenses: allExps });
-            setLastUpdated(new Date());
+            const result = await loadDashboardCloudSource();
+            setCloudData(result.data);
+            setCloudMode(result.mode);
+            setLastUpdated(result.lastUpdated);
 
         } catch (error: any) {
             console.error(error);
@@ -151,17 +182,13 @@ const DashboardView: React.FC = () => {
     const handleSourceChange = (source: 'local' | 'dropbox') => {
         setDataSource(source);
         if (source === 'dropbox') loadDropboxData();
-        else setIsDemoMode(false);
+        else setCloudMode(null);
     };
 
     // Available Branches for Filter
     const availableBranches = useMemo(() => {
         if (dataSource === 'local') return [];
-        const branches = new Set<string>();
-        cloudData.transactions.forEach(t => {
-            if (t.storeId) branches.add(t.storeId);
-        });
-        return Array.from(branches).sort();
+        return getAvailableBranchesFromItems(cloudData.transactions, cloudData.inventory, cloudData.stockLogs, cloudData.expenses);
     }, [cloudData, dataSource]);
 
     // Derived Data Calculation
@@ -177,8 +204,8 @@ const DashboardView: React.FC = () => {
 
         // Apply Branch Filter
         if (dataSource !== 'local' && selectedBranch !== 'ALL') {
-            sourceTransactions = sourceTransactions.filter((t: any) => t.storeId === selectedBranch);
-            sourceExpenses = sourceExpenses.filter((e: any) => e.storeId === selectedBranch);
+            sourceTransactions = filterItemsByBranch(sourceTransactions as any[], selectedBranch);
+            sourceExpenses = filterItemsByBranch(sourceExpenses as any[], selectedBranch);
         }
 
         const now = new Date();
@@ -219,7 +246,7 @@ const DashboardView: React.FC = () => {
         } else {
             let sourceInventory = cloudData.inventory;
             if (selectedBranch !== 'ALL') {
-                sourceInventory = sourceInventory.filter((i: any) => i.storeId === selectedBranch);
+                sourceInventory = filterItemsByBranch(sourceInventory as any[], selectedBranch);
             }
             lowStockProducts = sourceInventory
                 .filter(i => i.stock <= 5)
@@ -289,74 +316,73 @@ const DashboardView: React.FC = () => {
         };
     }, [dataSource, localTransactions, localExpenses, cloudData, products, inventorySettings, selectedBranch]);
     
-    // ... AI Logic (getAIInsight) remains similar but uses new Profit Data ...
-    const getAIInsight = useCallback(async (question: string) => {
-        setIsLoadingAI(true);
-        setAiResponse('');
-        setAiError('');
+    const aiResponseText = useMemo(() => {
+        const topProduct = dashboardData.topProducts[0];
+        const weakStock = dashboardData.lowStockProducts[0];
+        const bestBranch = dashboardData.branchPerformance[0];
+        const latestTrend = dashboardData.salesTrend;
+        const firstDay = latestTrend[0]?.Penjualan ?? 0;
+        const lastDay = latestTrend[latestTrend.length - 1]?.Penjualan ?? 0;
+        const trendDirection = lastDay >= firstDay ? 'naik' : 'turun';
+        const trendDeltaText = CURRENCY_FORMATTER.format(Math.abs(lastDay - firstDay));
 
-        try {
-            if (!navigator.onLine) {
-                throw new Error("Tidak ada koneksi internet. Fitur AI membutuhkan akses internet.");
-            }
+        switch (selectedInsight) {
+            case 'profit':
+                return `
+### Ringkasan Profit Hari Ini
 
-            const salesContext = dashboardData.salesTrend;
-            const topProducts = dashboardData.topProducts;
-            const profitInfo = {
-                revenue: dashboardData.todaySales,
-                expenses: dashboardData.todayExpensesTotal,
-                netProfit: dashboardData.todayNetProfit
-            };
-            const branchInfo = dataSource !== 'local' ? dashboardData.branchPerformance.slice(0, 10) : "Data cabang tidak tersedia (Mode Lokal)";
-            
-            const systemInstruction = `You are "Artea AI", a smart business consultant. 
-            Analyze the provided sales summary data.
-            Answer in Bahasa Indonesia. Concise, practical, markdown format.`;
-            
-            const userContent = `
-            Context: ${dataSource} mode
-            Selected Branch Filter: ${selectedBranch}
-            Profitabilitas Hari Ini: ${JSON.stringify(profitInfo)}
-            Tren Penjualan 7 Hari: ${JSON.stringify(salesContext)}
-            Produk Terlaris: ${JSON.stringify(topProducts)}
-            Performa Cabang (Top 10): ${JSON.stringify(branchInfo)}
-            
-            Pertanyaan User: ${question}`;
-            
-            const response = await fetch('https://text.pollinations.ai/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    messages: [{ role: 'system', content: systemInstruction }, { role: 'user', content: userContent }],
-                    model: 'openai', 
-                    seed: Math.floor(Math.random() * 1000), 
-                    jsonMode: false
-                }),
-            });
+Omzet yang tercatat hari ini berada di **${CURRENCY_FORMATTER.format(dashboardData.todaySales)}**, dengan profit bersih sebesar **${CURRENCY_FORMATTER.format(dashboardData.todayNetProfit)}**. Di waktu yang sama, pengeluaran operasional yang sudah masuk ke sistem hari ini mencapai **${CURRENCY_FORMATTER.format(dashboardData.todayExpensesTotal)}**.
 
-            if (!response.ok) throw new Error(`Server AI merespon dengan status: ${response.status}`);
-            
-            const text = await response.text();
-            setAiResponse(text);
+${dashboardData.todayNetProfit >= 0
+    ? `Secara umum ini menunjukkan kondisi usaha masih berada di jalur yang sehat. Fokus utamanya sekarang adalah menjaga margin tetap stabil sambil memastikan pengeluaran tidak tumbuh lebih cepat daripada penjualan.`
+    : `Angka ini menunjukkan profit hari ini masih tertekan. Dalam situasi seperti ini, prioritas yang paling masuk akal adalah menahan pengeluaran yang tidak mendesak dan mendorong penjualan item dengan margin yang lebih baik.`}
 
-        } catch (err: any) {
-            console.error("AI Error:", err);
-            let msg = "Maaf, layanan AI sedang sibuk. Coba lagi nanti.";
-            if (err.message && (err.message.includes('NetworkError') || err.message.includes('Failed to fetch'))) {
-                msg = "Gagal terhubung ke server AI. Periksa koneksi internet Anda.";
-            } else if (err.message) {
-                msg = err.message;
-            }
-            setAiError(msg);
-        } finally {
-            setIsLoadingAI(false);
+Dengan melihat komposisi omzet, profit, dan pengeluaran secara bersamaan, keputusan terbaik untuk jangka pendek adalah menjaga ritme transaksi tetap aktif sambil lebih selektif terhadap biaya operasional harian.
+                `.trim();
+            case 'sales':
+                return `
+### Saran Meningkatkan Omzet
+
+${topProduct
+    ? `Produk yang paling menonjol saat ini adalah **${topProduct.name}**, dengan total **${topProduct.quantity}** terjual selama periode yang diamati. Produk seperti ini layak dijadikan titik dorong utama untuk promo, bundling, atau rekomendasi kasir.`
+    : `Belum terlihat produk yang benar-benar dominan minggu ini. Ini berarti peluang untuk menonjolkan 1 atau 2 produk unggulan masih sangat terbuka.`}
+
+Jika dibandingkan dengan awal periode, tren penjualan tujuh hari terakhir terlihat **${trendDirection}**. Selisih pergerakannya sekitar **${trendDeltaText}**, yang bisa menjadi sinyal apakah momentum penjualan sedang membaik atau justru perlu dijaga lebih serius.
+
+Langkah praktis yang paling masuk akal adalah menonjolkan produk yang cepat laku, mendorong upsell saat transaksi berlangsung, dan memastikan produk dengan performa terbaik selalu berada di area yang paling mudah terlihat pelanggan.
+                `.trim();
+            case 'stock':
+                return `
+### Evaluasi Stok dan Pengeluaran
+
+${weakStock
+    ? `Item yang paling perlu diperhatikan saat ini adalah **${weakStock.item_name || weakStock.name}**, dengan sisa stok **${weakStock.stock}**. Jika item ini termasuk yang cepat berputar, maka restock sebaiknya tidak ditunda terlalu lama.`
+    : `Untuk saat ini belum ada item yang masuk kategori stok kritis, sehingga operasional masih relatif aman dari sisi persediaan.`}
+
+Jumlah item yang sudah masuk daftar stok menipis saat ini adalah **${dashboardData.lowStockProducts.length}**. Sementara itu, total pengeluaran yang tercatat hari ini mencapai **${CURRENCY_FORMATTER.format(dashboardData.todayExpensesTotal)}**.
+
+Artinya, langkah paling aman adalah memprioritaskan pembelian ulang untuk item yang benar-benar menopang penjualan utama, bukan melakukan restock merata ke semua item sekaligus. Dengan begitu, kas tetap terjaga dan stok penting tidak sampai putus.
+                `.trim();
+            case 'branch':
+                return `
+### Ringkasan Performa Cabang
+
+${dataSource === 'local'
+    ? `Saat ini dashboard berjalan dalam mode lokal, jadi perbandingan antar cabang belum tersedia.`
+    : bestBranch
+        ? `Cabang dengan performa penjualan tertinggi saat ini adalah **${bestBranch.name}**, dengan total penjualan **${CURRENCY_FORMATTER.format(bestBranch.value)}**. Angka ini bisa dijadikan acuan awal untuk membaca standar performa terbaik.`
+        : `Belum ada data cabang yang cukup untuk dibandingkan secara meyakinkan.`}
+
+${dataSource !== 'local' && selectedBranch !== 'ALL'
+    ? `Saat ini tampilan sedang difokuskan pada cabang **${selectedBranch}**, sehingga pembacaan data dan insight juga mengikuti lokasi tersebut.`
+    : `Jika ingin membaca performa lebih tajam, gunakan filter cabang agar perbedaan ritme penjualan tiap lokasi lebih mudah terlihat.`}
+
+Langkah evaluasi berikutnya sebaiknya diarahkan ke tiga hal: melihat kesenjangan omzet antar cabang, mengecek apakah ada lokasi dengan stok kritis lebih banyak, dan memastikan transaksi harian setiap cabang tetap konsisten.
+                `.trim();
+            default:
+                return '';
         }
-    }, [dashboardData, dataSource, selectedBranch]);
-
-    const handleAIPrompt = (prompt: string) => {
-        setAiQuestion(prompt);
-        getAIInsight(prompt);
-    };
+    }, [dashboardData, dataSource, selectedBranch, selectedInsight]);
 
     const renderMarkdown = (text: string) => {
         const lines = text.split('\n');
@@ -399,221 +425,330 @@ const DashboardView: React.FC = () => {
             variants={containerVariants}
             className="space-y-6 max-w-7xl mx-auto pb-10"
         >
-            {/* Header & Controls */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div className="flex flex-col gap-1">
-                    <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-                    {dataSource === 'dropbox' && (
-                        <div className="inline-flex items-center gap-2 text-[10px] text-blue-200 bg-blue-900/30 border border-blue-800 px-2 py-1 rounded-full w-fit">
-                            <Icon name="cloud" className="w-3 h-3" />
-                            Mode Cloud Aktif
+            <div className="rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-4 sm:p-6 shadow-2xl">
+                <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
+                    <div className="space-y-3 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-300">
+                                <Icon name="reports" className="w-3.5 h-3.5" />
+                                Ringkasan Bisnis
+                            </span>
+                            {dataSource === 'dropbox' && (
+                                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] ${cloudMode === 'demo' ? 'border-yellow-700 bg-yellow-900/20 text-yellow-200' : 'border-blue-800 bg-blue-900/20 text-blue-200'}`}>
+                                    <Icon name={cloudMode === 'demo' ? 'warning' : 'cloud'} className="w-3.5 h-3.5" />
+                                    {cloudMode === 'demo' ? 'Mode Demo' : 'Mode Cloud'}
+                                </span>
+                            )}
+                            {lastUpdated && (
+                                <span className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-[11px] text-slate-400">
+                                    <Icon name="clock-history" className="w-3.5 h-3.5" />
+                                    Update {lastUpdated.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            )}
                         </div>
-                    )}
-                </div>
-                
-                <div className="flex flex-wrap gap-2 items-center">
-                    {/* Data Source Toggle */}
-                    <div className="bg-slate-800 p-1 rounded-lg flex items-center border border-slate-700">
-                        <button
-                            onClick={() => handleSourceChange('local')}
-                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                        >
-                            <span className="flex items-center gap-2"><Icon name="database" className="w-4 h-4" /> Lokal</span>
-                        </button>
-                        <button
-                            onClick={() => handleSourceChange('dropbox')}
-                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                        >
-                            <span className="flex items-center gap-2"><Icon name="share" className="w-4 h-4" /> Cloud (Dropbox)</span>
-                        </button>
+                        <div>
+                            <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">Dashboard</h1>
+                            <p className="mt-2 text-sm sm:text-base text-slate-400 max-w-2xl">
+                                Pantau penjualan, profit, stok menipis, dan aktivitas terbaru dari satu layar ringkas.
+                            </p>
+                        </div>
                     </div>
 
-                    <OverflowMenu
-                        buttonClassName="text-sm"
-                        items={[
-                            ...(dataSource === 'dropbox' ? [
-                                {
-                                    id: 'refresh',
-                                    label: isCloudLoading ? 'Syncing...' : 'Refresh Data',
-                                    onClick: () => { void loadDropboxData(); },
-                                    icon: 'reset' as const,
-                                    disabled: isCloudLoading
-                                },
-                                {
-                                    id: 'merge',
-                                    label: 'Simpan ke Lokal',
-                                    onClick: handleMergeToLocal,
-                                    icon: 'download' as const
-                                }
-                            ] : [])
-                        ]}
-                    />
+                    <div className="w-full xl:w-auto space-y-3">
+                        <div className="rounded-2xl border border-slate-700 bg-slate-800/80 p-1 flex gap-1">
+                            <button
+                                onClick={() => handleSourceChange('local')}
+                                className={`min-w-0 flex-1 px-3 py-2 text-xs sm:text-sm font-medium rounded-xl transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-700/80'}`}
+                            >
+                                <span className="flex items-center justify-center gap-2"><Icon name="database" className="w-4 h-4" /> Lokal</span>
+                            </button>
+                            <button
+                                onClick={() => handleSourceChange('dropbox')}
+                                className={`min-w-0 flex-1 px-3 py-2 text-xs sm:text-sm font-medium rounded-xl transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-700/80'}`}
+                            >
+                                <span className="flex items-center justify-center gap-2"><Icon name="share" className="w-4 h-4" /> Cloud</span>
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-[7fr_3fr] gap-2 xl:justify-end">
+                            {dataSource !== 'local' && availableBranches.length > 0 && (
+                                <div className="min-w-0 relative" ref={branchMenuRef}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setBranchMenuOpen(prev => !prev)}
+                                        className="w-full h-11 rounded-2xl border border-blue-800 bg-blue-900/20 px-4 text-sm text-blue-100 shadow-sm flex items-center justify-between gap-2 hover:bg-blue-900/30 transition-colors"
+                                    >
+                                        <span className="truncate">{selectedBranch === 'ALL' ? 'Semua Cabang' : selectedBranch}</span>
+                                        <Icon name="chevron-down" className={`w-4 h-4 text-blue-300 transition-transform ${isBranchMenuOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {isBranchMenuOpen && (
+                                        <div className="absolute top-full left-0 mt-2 w-full rounded-2xl border border-blue-900 bg-slate-800 shadow-xl z-50 overflow-hidden">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedBranch('ALL');
+                                                    setBranchMenuOpen(false);
+                                                }}
+                                                className={`w-full px-4 py-3 text-left text-sm transition-colors ${
+                                                    selectedBranch === 'ALL'
+                                                        ? 'bg-blue-900/30 text-blue-100'
+                                                        : 'text-slate-200 hover:bg-slate-700'
+                                                }`}
+                                            >
+                                                Semua Cabang
+                                            </button>
+                                            {availableBranches.map((branch) => (
+                                                <button
+                                                    key={branch}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedBranch(branch);
+                                                        setBranchMenuOpen(false);
+                                                    }}
+                                                    className={`w-full px-4 py-3 text-left text-sm transition-colors ${
+                                                        selectedBranch === branch
+                                                            ? 'bg-blue-900/30 text-blue-100'
+                                                            : 'text-slate-200 hover:bg-slate-700'
+                                                    }`}
+                                                >
+                                                    {branch}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <OverflowMenu
+                                buttonClassName="text-sm h-11 w-full justify-between px-3"
+                                variant="utility"
+                                showLabelOnMobile={true}
+                                matchTriggerWidth={true}
+                                items={[
+                                    ...(dataSource === 'dropbox' ? [
+                                        {
+                                            id: 'refresh',
+                                            label: isCloudLoading ? 'Syncing...' : 'Refresh Data',
+                                            onClick: () => { void loadDropboxData(); },
+                                            icon: 'reset' as const,
+                                            disabled: isCloudLoading
+                                        },
+                                        {
+                                            id: 'merge',
+                                            label: 'Simpan ke Lokal',
+                                            onClick: handleMergeToLocal,
+                                            icon: 'download' as const
+                                        }
+                                    ] : [])
+                                ]}
+                            />
+                        </div>
+                    </div>
                 </div>
+
+                {dataSource !== 'local' && (
+                    <div className={`mt-5 rounded-2xl p-4 flex items-start gap-3 text-sm animate-fade-in ${cloudMode === 'demo' ? 'bg-yellow-900/20 border border-yellow-700/60 text-yellow-200' : 'bg-blue-900/20 border border-blue-800/60 text-blue-200'}`}>
+                        <Icon name={cloudMode === 'demo' ? "warning" : "info-circle"} className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <p className="font-bold">{cloudMode === 'demo' ? "Mode Demo (Data Dummy)" : "Mode Laporan Terpusat (Dropbox)"}</p>
+                            <p className="opacity-80 leading-relaxed">
+                                {cloudMode === 'demo'
+                                    ? "Dropbox belum dikonfigurasi. Data simulasi ditampilkan agar Anda bisa melihat gambaran dashboard multi-cabang."
+                                    : (selectedBranch === 'ALL'
+                                        ? 'Menampilkan data gabungan dari semua cabang yang terhubung.'
+                                        : `Menampilkan data spesifik untuk cabang: ${selectedBranch}`)}
+                            </p>
+                        </div>
+                    </div>
+                )}
             </div>
-            {/* Branch Selector */}
-            {dataSource !== 'local' && availableBranches.length > 0 && (
-                <div className="bg-slate-800 p-1 rounded-lg border border-slate-700 w-fit">
-                    <select 
-                        value={selectedBranch} 
-                        onChange={(e) => setSelectedBranch(e.target.value)}
-                        className="bg-transparent text-sm text-white px-3 py-1.5 outline-none cursor-pointer"
-                    >
-                        <option value="ALL" className="bg-slate-800">Semua Cabang</option>
-                        {availableBranches.map(b => (
-                            <option key={b} value={b} className="bg-slate-800">{b}</option>
-                        ))}
-                    </select>
-                </div>
-            )}
-
-            {/* Info Banner for Cloud Mode */}
-            {dataSource !== 'local' && (
-                <div className={`p-3 rounded-lg flex items-center gap-3 text-sm animate-fade-in ${isDemoMode ? 'bg-yellow-900/30 border border-yellow-700 text-yellow-200' : 'bg-blue-900/30 border border-blue-800 text-blue-200'}`}>
-                    <Icon name={isDemoMode ? "warning" : "info-circle"} className="w-5 h-5 flex-shrink-0" />
-                    <div className="flex-1">
-                        <p className="font-bold">{isDemoMode ? "Mode Demo (Data Dummy)" : "Mode Laporan Terpusat (Dropbox)"}</p>
-                        <p className="opacity-80">
-                            {isDemoMode 
-                                ? "Dropbox belum dikonfigurasi. Menampilkan data simulasi agar Anda bisa melihat potensi fitur Multi-Cabang." 
-                                : (selectedBranch === 'ALL' 
-                                    ? 'Menampilkan data gabungan dari semua cabang.' 
-                                    : `Menampilkan data spesifik untuk cabang: ${selectedBranch}`)}
-                        </p>
-                    </div>
-                </div>
-            )}
 
             {/* Top Stats Cards */}
-            <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Penjualan Hari Ini" value={CURRENCY_FORMATTER.format(dashboardData.todaySales)} icon="cash" iconClass="bg-green-500" />
-                <StatCard title="Net Profit Hari Ini" value={CURRENCY_FORMATTER.format(dashboardData.todayNetProfit)} icon="finance" iconClass="bg-emerald-600" tooltip="Omzet - Modal Barang (HPP) - Pengeluaran Operasional Hari Ini">
-                    <div className="text-[10px] text-slate-400 mt-1">
-                         Pengeluaran: {CURRENCY_FORMATTER.format(dashboardData.todayExpensesTotal)}
-                    </div>
-                </StatCard>
-                <StatCard title="Transaksi Hari Ini" value={dashboardData.transactionCount.toString()} icon="reports" iconClass="bg-sky-500" />
-                <StatCard title="Stok Menipis" value={dashboardData.lowStockProducts.length.toString()} icon="products" iconClass="bg-red-500">
-                    {dashboardData.lowStockProducts.length > 0 && (
-                        <div className="text-xs text-slate-400 space-y-1 overflow-y-auto max-h-20 pr-2 mt-2">
-                            {dashboardData.lowStockProducts.map((p, i) => (
-                                <p key={i} className="truncate flex justify-between">
-                                    <span>{p.item_name || p.name}</span>
-                                    <span className="text-red-300 font-bold">{p.stock}</span>
-                                    {dataSource !== 'local' && <span className="text-[10px] bg-slate-700 px-1 rounded">{p.storeId}</span>}
-                                </p>
-                            ))}
+            <motion.div variants={itemVariants} className="grid grid-cols-1 gap-6">
+                <div>
+                    <HeroStatCard
+                        title="Penjualan Hari Ini"
+                        value={CURRENCY_FORMATTER.format(dashboardData.todaySales)}
+                        subtitle={dataSource === 'local' ? 'Ringkasan omzet hari ini dari perangkat ini.' : `Ringkasan omzet ${selectedBranch === 'ALL' ? 'gabungan semua cabang' : `cabang ${selectedBranch}`}.`}
+                        icon="cash"
+                        accentClass="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 border-emerald-700/50"
+                    >
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                            <div className="rounded-xl bg-white/10 px-4 py-3 border border-white/10">
+                                <p className="text-white/70 text-xs uppercase tracking-[0.16em]">Transaksi</p>
+                                <p className="mt-1 text-xl font-bold text-white">{dashboardData.transactionCount}</p>
+                            </div>
+                            <div className="rounded-xl bg-white/10 px-4 py-3 border border-white/10">
+                                <p className="text-white/70 text-xs uppercase tracking-[0.16em]">Pengeluaran Hari Ini</p>
+                                <p className="mt-1 text-xl font-bold text-white">{CURRENCY_FORMATTER.format(dashboardData.todayExpensesTotal)}</p>
+                            </div>
                         </div>
-                    )}
-                </StatCard>
+                    </HeroStatCard>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <StatCard title="Net Profit Hari Ini" value={CURRENCY_FORMATTER.format(dashboardData.todayNetProfit)} icon="finance" iconClass="bg-emerald-600">
+                        <div className="space-y-2 min-h-[96px]">
+                            <div className="flex items-center justify-between text-xs text-slate-400">
+                                <span>Pengeluaran</span>
+                                <span className="font-semibold text-slate-200">{CURRENCY_FORMATTER.format(dashboardData.todayExpensesTotal)}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 leading-relaxed">
+                                Menunjukkan keuntungan bersih setelah HPP dan pengeluaran operasional hari ini.
+                            </div>
+                        </div>
+                    </StatCard>
+
+                    <StatCard title="Stok Menipis" value={dashboardData.lowStockProducts.length.toString()} icon="products" iconClass="bg-red-500">
+                        {dashboardData.lowStockProducts.length > 0 ? (
+                            <div className="space-y-2 overflow-y-auto max-h-28 pr-2 min-h-[96px]">
+                                {dashboardData.lowStockProducts.slice(0, 5).map((p, i) => (
+                                    <div key={i} className="flex items-center justify-between gap-2 text-xs">
+                                        <span className="truncate text-slate-300">{p.item_name || p.name}</span>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <span className="text-red-300 font-bold">{p.stock}</span>
+                                            {dataSource !== 'local' && <span className="rounded bg-slate-700 px-1.5 py-0.5 text-[10px] text-slate-300">{p.storeId}</span>}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="min-h-[96px] flex items-start">
+                                <p className="text-xs text-slate-500">Tidak ada stok kritis saat ini.</p>
+                            </div>
+                        )}
+                    </StatCard>
+
+                    <StatCard title="Produk Terlaris" value={dashboardData.topProducts.length.toString()} icon="reports" iconClass="bg-amber-500">
+                        {dashboardData.topProducts.length > 0 ? (
+                            <div className="space-y-2 overflow-y-auto max-h-28 pr-2 min-h-[96px]">
+                                {dashboardData.topProducts.slice(0, 5).map((p, index) => (
+                                    <div key={index} className="flex items-center justify-between gap-2 text-xs">
+                                        <span className="truncate text-slate-300">{p.name}</span>
+                                        <span className="rounded bg-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-100 shrink-0">{p.quantity}x</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="min-h-[96px] flex items-start">
+                                <p className="text-xs text-slate-500">Belum ada data produk terlaris minggu ini.</p>
+                            </div>
+                        )}
+                    </StatCard>
+                </div>
             </motion.div>
             
             {/* Main Charts Area */}
-            <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left Column: Charts */}
-                <div className="lg:col-span-2 space-y-6">
-                    {/* Branch Performance */}
-                    {dataSource !== 'local' && selectedBranch === 'ALL' && dashboardData.branchPerformance.length > 0 && (
-                        <div className="bg-slate-800 p-4 sm:p-6 rounded-xl shadow-lg border border-slate-700">
-                            <h3 className="flex items-center gap-2 text-lg font-semibold text-white mb-4">
-                                <Icon name="share" className="w-5 h-5 text-sky-400"/>
-                                Performa Cabang (Total Penjualan)
-                            </h3>
-                            <ResponsiveContainer width="100%" height={250}>
-                                <BarChart data={dashboardData.branchPerformance} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" horizontal={false} />
-                                    <XAxis type="number" stroke="#9ca3af" fontSize={12} tickFormatter={(val) => `Rp${val/1000}k`} />
-                                    <YAxis type="category" dataKey="name" stroke="#ffffff" fontSize={12} width={100} />
-                                    <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', color:'#fff' }} formatter={(val: number) => CURRENCY_FORMATTER.format(val)} />
-                                    <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={30} />
+            <motion.div variants={itemVariants} className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
+                    <div className="lg:col-span-7 space-y-6">
+                        {dataSource !== 'local' && selectedBranch === 'ALL' && dashboardData.branchPerformance.length > 0 && (
+                            <PanelCard title="Performa Cabang (Total Penjualan)" icon={<Icon name="share" className="w-5 h-5 text-sky-400"/>}>
+                                <ResponsiveContainer width="100%" height={isCompactDashboard ? 220 : 250}>
+                                    <BarChart data={dashboardData.branchPerformance} layout="vertical" margin={{ top: 5, right: isCompactDashboard ? 10 : 30, left: isCompactDashboard ? 0 : 20, bottom: 5 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" horizontal={false} />
+                                        <XAxis type="number" stroke="#9ca3af" fontSize={11} tickFormatter={(val) => `Rp${val/1000}k`} />
+                                        <YAxis type="category" dataKey="name" stroke="#ffffff" fontSize={11} width={isCompactDashboard ? 72 : 100} tick={{ width: 72 }} />
+                                        <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', color:'#fff' }} formatter={(val: number) => CURRENCY_FORMATTER.format(val)} />
+                                        <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={isCompactDashboard ? 22 : 30} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </PanelCard>
+                        )}
+
+                        <PanelCard
+                            title="Tren Penjualan (7 Hari Terakhir)"
+                            icon={<Icon name="trending-up" className="w-5 h-5 text-green-400"/>}
+                            className={dataSource === 'local' ? 'h-full' : ''}
+                        >
+                            <ResponsiveContainer width="100%" height={isCompactDashboard ? 220 : 250}>
+                                <BarChart data={dashboardData.salesTrend} margin={{ top: 5, right: isCompactDashboard ? 8 : 20, left: isCompactDashboard ? -24 : -10, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                                    <XAxis dataKey="name" stroke="#9ca3af" fontSize={11} />
+                                    <YAxis stroke="#9ca3af" fontSize={11} tickFormatter={(value) => `Rp${Number(value) / 1000}k`} width={isCompactDashboard ? 40 : 60} />
+                                    <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '0.5rem' }} formatter={(value: number) => [CURRENCY_FORMATTER.format(value), 'Penjualan']} />
+                                    <Bar dataKey="Penjualan" fill="#347758" radius={[4, 4, 0, 0]} />
+                                    {!isCompactDashboard && <Brush dataKey="name" height={20} stroke="#52a37c" fill="#1e293b" />}
                                 </BarChart>
                             </ResponsiveContainer>
-                        </div>
-                    )}
-
-                    <div className="bg-slate-800 p-4 sm:p-6 rounded-xl shadow-lg border border-slate-700">
-                        <h3 className="flex items-center gap-2 text-lg font-semibold text-white mb-4">
-                            <Icon name="trending-up" className="w-5 h-5 text-green-400"/>
-                            Tren Penjualan (7 Hari Terakhir)
-                        </h3>
-                        <ResponsiveContainer width="100%" height={250}>
-                            <BarChart data={dashboardData.salesTrend} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
-                                <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
-                                <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `Rp${Number(value) / 1000}k`} />
-                                <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '0.5rem' }} formatter={(value: number) => [CURRENCY_FORMATTER.format(value), 'Penjualan']} />
-                                <Bar dataKey="Penjualan" fill="#347758" radius={[4, 4, 0, 0]} />
-                                <Brush dataKey="name" height={20} stroke="#52a37c" fill="#1e293b" />
-                            </BarChart>
-                        </ResponsiveContainer>
+                        </PanelCard>
                     </div>
 
-                    {/* AI Assistant */}
-                    <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-4 sm:p-6 rounded-xl shadow-lg border border-slate-700">
-                        <h3 className="flex items-center gap-2 text-lg font-semibold text-white mb-4">
-                             <Icon name="chat" className="w-5 h-5 text-purple-400"/>
-                             Artea AI - Analisis Bisnis
-                        </h3>
-                        <div className="space-y-3">
-                             <div className="flex flex-wrap gap-2">
-                                {["Analisis profitabilitas.", "Strategi meningkatkan omzet.", "Evaluasi stok & pengeluaran."].map(q => (
-                                    <button key={q} onClick={() => handleAIPrompt(q)} className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-full transition-colors border border-slate-600 text-slate-300">{q}</button>
+                    <div className="lg:col-span-3 flex">
+                        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-4 sm:p-6 rounded-2xl shadow-lg border border-slate-700 flex-1 lg:h-full">
+                            <h3 className="flex items-center gap-2 text-lg font-semibold text-white mb-4">
+                                <Icon name="clock-history" className="w-5 h-5 text-sky-400" />
+                                Transaksi Terakhir
+                            </h3>
+                            <p className="text-sm text-slate-400 mb-4">Pantau transaksi terbaru untuk melihat ritme operasional terbaru.</p>
+                            <div className="space-y-3">
+                                {dashboardData.recentTransactions.map((t: any) => (
+                                    <div key={t.id} className="flex justify-between items-center gap-3 text-sm rounded-xl border border-slate-700/70 bg-slate-900/50 px-3 py-3">
+                                        <div className="min-w-0">
+                                            <div className="font-medium text-white">{CURRENCY_FORMATTER.format(t.total)}</div>
+                                            <div className="text-xs text-slate-400 truncate">
+                                                {new Date(t.createdAt).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})} • {t.storeId || 'Local'}
+                                            </div>
+                                        </div>
+                                        <span className={`text-[10px] px-2.5 py-1 rounded-full shrink-0 font-semibold uppercase tracking-wide ${t.paymentStatus === 'paid' || t.payment_status === 'paid' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
+                                            {(t.paymentStatus || t.payment_status) === 'paid' ? 'Lunas' : (t.paymentStatus || t.payment_status)}
+                                        </span>
+                                    </div>
                                 ))}
+                                {dashboardData.recentTransactions.length === 0 && (
+                                    <div className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-4 text-xs text-slate-500">
+                                        Belum ada transaksi terbaru yang bisa ditampilkan.
+                                    </div>
+                                )}
                             </div>
-                            <div className="flex gap-2">
-                                <input type="text" value={aiQuestion} onChange={(e) => setAiQuestion(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAIPrompt(aiQuestion)} placeholder="Tanya saran bisnis..." className="flex-1 w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:ring-1 focus:ring-[#347758]" />
-                                <Button onClick={() => handleAIPrompt(aiQuestion)} disabled={isLoadingAI || !aiQuestion}>
-                                    {isLoadingAI ? <span className="animate-spin">↻</span> : <Icon name="chat" className="w-4 h-4" />}
-                                </Button>
-                            </div>
-                            {aiError && (
-                                <div className="p-3 bg-red-900/30 border border-red-800 rounded text-red-300 text-sm">
-                                    <p className="font-bold flex items-center gap-2"><Icon name="warning" className="w-4 h-4"/> Error:</p>
-                                    <p>{aiError}</p>
-                                </div>
-                            )}
-                            {aiResponse && (
-                                <div 
-                                    className="prose prose-sm prose-invert max-w-none bg-slate-900/50 p-4 rounded-lg border border-slate-700 text-slate-300 max-h-60 overflow-y-auto" 
-                                    dangerouslySetInnerHTML={renderMarkdown(aiResponse)}
-                                />
-                            )}
                         </div>
                     </div>
                 </div>
 
-                {/* Right Column: Lists */}
-                <div className="space-y-6">
-                    <div className="bg-slate-800 p-4 sm:p-6 rounded-xl shadow-lg border border-slate-700">
-                        <h3 className="text-lg font-semibold text-white mb-4">Produk Terlaris (Minggu Ini)</h3>
-                        <div className="space-y-3">
-                            {dashboardData.topProducts.map((p, index) => (
-                                <div key={index} className="flex justify-between items-center text-sm">
-                                    <span className="text-slate-300 truncate pr-2">{p.name}</span>
-                                    <span className="font-semibold text-white bg-slate-700 px-2 py-0.5 rounded">{p.quantity} terjual</span>
-                                </div>
-                            ))}
-                            {dashboardData.topProducts.length === 0 && <p className="text-xs text-slate-500">Belum ada data penjualan.</p>}
+                <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-4 sm:p-6 rounded-2xl shadow-lg border border-slate-700">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+                        <div>
+                            <h3 className="flex items-center gap-2 text-lg font-semibold text-white mb-1">
+                                     <Icon name="chat" className="w-5 h-5 text-purple-400"/>
+                                     Ringkasan Bisnis Cerdas
+                                </h3>
+                            <p className="text-sm text-slate-400">Pilih topik untuk melihat ringkasan dan saran singkat berdasarkan kondisi bisnis yang sedang tampil di dashboard.</p>
                         </div>
                     </div>
-
-                    <div className="bg-slate-800 p-4 sm:p-6 rounded-xl shadow-lg border border-slate-700">
-                        <h3 className="text-lg font-semibold text-white mb-4">Transaksi Terakhir</h3>
-                        <div className="space-y-3">
-                            {dashboardData.recentTransactions.map((t: any) => (
-                                <div key={t.id} className="flex justify-between items-center text-sm border-b border-slate-700 pb-2 last:border-0 last:pb-0">
-                                    <div>
-                                        <div className="font-medium text-white">{CURRENCY_FORMATTER.format(t.total)}</div>
-                                        <div className="text-xs text-slate-400">
-                                            {new Date(t.createdAt).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})} • {t.storeId || 'Local'}
-                                        </div>
-                                    </div>
-                                    <span className={`text-[10px] px-2 py-1 rounded-full ${t.paymentStatus === 'paid' || t.payment_status === 'paid' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
-                                        {t.paymentStatus || t.payment_status}
-                                    </span>
-                                </div>
+                    <div className="space-y-4">
+                         <div className="flex flex-wrap gap-2">
+                            {DASHBOARD_INSIGHT_OPTIONS.map(option => (
+                                <button
+                                    key={option.id}
+                                    onClick={() => {
+                                        if (selectedInsight === option.id && isInsightVisible) {
+                                            setIsInsightVisible(false);
+                                            return;
+                                        }
+                                        setSelectedInsight(option.id);
+                                        setAiResponse(aiResponseText);
+                                        setIsInsightVisible(true);
+                                    }}
+                                    className={`text-xs px-3 py-1.5 rounded-full transition-colors border ${
+                                        selectedInsight === option.id && isInsightVisible
+                                            ? 'bg-[#347758] border-[#4d9a74] text-white'
+                                            : 'bg-slate-700 hover:bg-slate-600 border-slate-600 text-slate-300'
+                                    }`}
+                                >
+                                    {option.label}
+                                </button>
                             ))}
-                            {dashboardData.recentTransactions.length === 0 && <p className="text-xs text-slate-500">Belum ada transaksi.</p>}
                         </div>
+                        {isInsightVisible && aiResponseText ? (
+                            <div 
+                                className="prose prose-sm prose-invert max-w-none bg-slate-900/50 p-4 rounded-lg border border-slate-700 text-slate-300 max-h-80 overflow-y-auto" 
+                                dangerouslySetInnerHTML={renderMarkdown(aiResponseText)}
+                            />
+                        ) : (
+                            <div className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-3 text-sm text-slate-400">
+                                Klik topik yang ingin Anda lihat. Klik topik yang sama lagi untuk menyembunyikan hasilnya.
+                            </div>
+                        )}
                     </div>
                 </div>
             </motion.div>

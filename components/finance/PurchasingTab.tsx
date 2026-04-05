@@ -25,6 +25,7 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
     const { products, rawMaterials } = useProduct(); 
     const { showAlert } = useUIActions();
     const [view, setView] = useState<'purchases' | 'suppliers'>('purchases');
+    const [searchTerm, setSearchTerm] = useState('');
     
     const activePurchases = dataSource === 'local' ? localPurchases : cloudData;
 
@@ -61,6 +62,36 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
     const [isCameraOpen, setCameraOpen] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const filteredPurchases = useMemo(() => {
+        const keyword = searchTerm.trim().toLowerCase();
+        if (!keyword) return activePurchases;
+        return activePurchases.filter((purchase) => {
+            const supplier = purchase.supplierName?.toLowerCase() || '';
+            const status = purchase.status?.toLowerCase() || '';
+            const dateLabel = new Date(purchase.date).toLocaleDateString('id-ID').toLowerCase();
+            return supplier.includes(keyword) || status.includes(keyword) || dateLabel.includes(keyword);
+        });
+    }, [activePurchases, searchTerm]);
+
+    const filteredSuppliers = useMemo(() => {
+        const keyword = searchTerm.trim().toLowerCase();
+        if (!keyword) return suppliers;
+        return suppliers.filter((supplier) =>
+            supplier.name.toLowerCase().includes(keyword) ||
+            (supplier.contact || '').toLowerCase().includes(keyword)
+        );
+    }, [suppliers, searchTerm]);
+
+    const totalPurchases = useMemo(
+        () => activePurchases.reduce((sum, purchase) => sum + purchase.totalAmount, 0),
+        [activePurchases]
+    );
+    const outstandingPurchases = useMemo(
+        () => activePurchases.filter((purchase) => purchase.status !== 'lunas').length,
+        [activePurchases]
+    );
+    const purchaseResultsCount = view === 'purchases' ? filteredPurchases.length : filteredSuppliers.length;
 
     // --- Handlers ---
 
@@ -226,7 +257,7 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                         <Icon name="camera" className="w-4 h-4"/>
                     </button>
                 )}
-                <span>{p.supplierName}</span>
+                <span className="truncate">{p.supplierName}</span>
             </div>
         ) },
         { label: 'Total', width: '1fr', render: (p: Purchase) => CURRENCY_FORMATTER.format(p.totalAmount) },
@@ -250,7 +281,7 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
         { label: 'Kontak', width: '2fr', render: (s: Supplier) => s.contact || '-' },
         { label: 'Aksi', width: '80px', render: (s: Supplier) => (
             <div className="flex gap-2">
-                {dataSource === 'local' ? 
+                {dataSource === 'local' ?
                     <button onClick={() => deleteSupplier(s.id)} className="text-red-400 hover:text-white"><Icon name="trash" className="w-4 h-4"/></button>
                 : <span className="text-xs text-slate-500">Read-only</span>}
             </div>
@@ -264,33 +295,212 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
 
     return (
         <div className="space-y-4">
-            <div className="flex justify-between items-center flex-wrap gap-2">
-                <div className="flex bg-slate-700 p-1 rounded-lg w-fit overflow-x-auto scrollbar-hide">
-                    <button onClick={() => setView('purchases')} className={`px-4 py-2 text-xs sm:text-sm rounded transition-colors whitespace-nowrap ${view === 'purchases' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Riwayat Pembelian</button>
-                    <button onClick={() => setView('suppliers')} className={`px-4 py-2 text-xs sm:text-sm rounded transition-colors whitespace-nowrap ${view === 'suppliers' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Daftar Supplier</button>
+            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Total Pembelian</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{CURRENCY_FORMATTER.format(totalPurchases)}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Akumulasi nilai pembelian dari sumber data yang sedang aktif.</p>
                 </div>
-                {dataSource === 'local' && view === 'purchases' && (
-                    <Button onClick={() => setPurchaseModalOpen(true)} className="w-full sm:w-auto whitespace-nowrap">
-                        <Icon name="plus" className="w-4 h-4" /> Catat Pembelian
-                    </Button>
-                )}
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Supplier Aktif</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{suppliers.length}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Jumlah supplier yang siap dipakai saat mencatat pembelian.</p>
+                </div>
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm sm:col-span-2 xl:col-span-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Belum Lunas</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{outstandingPurchases}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Pembelian yang masih perlu ditindaklanjuti pembayarannya.</p>
+                </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-3 sm:p-4">
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex bg-slate-800 p-1 rounded-xl w-full lg:w-fit overflow-x-auto scrollbar-hide">
+                            <button onClick={() => setView('purchases')} className={`flex-1 px-4 py-2 text-xs sm:text-sm rounded-lg transition-colors whitespace-nowrap ${view === 'purchases' ? 'bg-[#347758] text-white shadow-sm' : 'text-slate-300 hover:bg-slate-700/70'}`}>Riwayat Pembelian</button>
+                            <button onClick={() => setView('suppliers')} className={`flex-1 px-4 py-2 text-xs sm:text-sm rounded-lg transition-colors whitespace-nowrap ${view === 'suppliers' ? 'bg-[#347758] text-white shadow-sm' : 'text-slate-300 hover:bg-slate-700/70'}`}>Daftar Supplier</button>
+                        </div>
+                        {dataSource === 'local' && (
+                            view === 'purchases' ? (
+                                <Button onClick={() => setPurchaseModalOpen(true)} className="h-11 w-full lg:w-auto whitespace-nowrap">
+                                    <Icon name="plus" className="w-4 h-4" /> Catat Pembelian
+                                </Button>
+                            ) : (
+                                <Button onClick={() => setSupplierModalOpen(true)} className="h-11 w-full lg:w-auto whitespace-nowrap">
+                                    <Icon name="plus" className="w-4 h-4" /> Tambah Supplier
+                                </Button>
+                            )
+                        )}
+                    </div>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <div className="relative flex-1">
+                            <input
+                                type="text"
+                                placeholder={view === 'purchases' ? 'Cari supplier, status, atau tanggal...' : 'Cari nama supplier atau kontak...'}
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="h-11 w-full rounded-xl border border-slate-700 bg-slate-800 pl-11 pr-12 text-white focus:border-[#347758] focus:ring-[#347758]"
+                            />
+                            <Icon name="search" className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                            {searchTerm && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
+                                    title="Bersihkan pencarian"
+                                >
+                                    <Icon name="close" className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                        <div className="rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-2 text-center sm:min-w-[150px]">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Hasil Tampil</p>
+                            <p className="mt-1 text-lg font-bold text-white">{purchaseResultsCount}</p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {view === 'purchases' ? (
-                <div className="h-[500px]">
-                    <VirtualizedTable data={activePurchases} columns={purchaseColumns} rowHeight={50} minWidth={dataSource !== 'local' ? 900 : 800} />
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/50 overflow-hidden">
+                    {filteredPurchases.length > 0 ? (
+                        <>
+                            <div className="md:hidden">
+                                <div className="space-y-2 p-2">
+                                    {filteredPurchases.map((purchase) => (
+                                        <div key={purchase.id} className="rounded-xl border border-slate-700/80 bg-slate-800/70 p-3 shadow-sm">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <p className="truncate pr-1 text-[12px] font-bold leading-tight text-white">{purchase.supplierName}</p>
+                                                        <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${purchase.status === 'lunas' ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border border-amber-500/30 bg-amber-500/10 text-amber-300'}`}>
+                                                            {purchase.status === 'lunas' ? 'Lunas' : 'Belum Lunas'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-0.5 text-[10px] text-slate-400">
+                                                        {new Date(purchase.date).toLocaleDateString('id-ID')} • {purchase.items?.length || 0} item
+                                                    </p>
+                                                    <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
+                                                        <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-blue-300">
+                                                            {CURRENCY_FORMATTER.format(purchase.totalAmount)}
+                                                        </span>
+                                                        {purchase.evidenceImageUrl && (
+                                                            <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-1.5 py-0.5 text-sky-300">
+                                                                Ada nota
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {purchase.evidenceImageUrl && (
+                                                <div className="mt-2">
+                                                    <Button
+                                                        type="button"
+                                                        variant="operational"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            const safeSupp = purchase.supplierName.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
+                                                            setViewEvidence({
+                                                                url: purchase.evidenceImageUrl!,
+                                                                filename: `Bukti_Beli_${safeSupp}_${purchase.date.slice(0,10)}.jpg`
+                                                            });
+                                                            setZoomLevel(1);
+                                                        }}
+                                                        className="h-8 w-full gap-1 px-2 text-[11px] sm:text-sm"
+                                                    >
+                                                        <Icon name="camera" className="w-4 h-4" />
+                                                        <span>Lihat Bukti</span>
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="hidden md:block h-[500px]">
+                                <VirtualizedTable data={filteredPurchases} columns={purchaseColumns} rowHeight={50} minWidth={dataSource !== 'local' ? 900 : 800} />
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex min-h-[280px] flex-col items-center justify-center px-6 text-center">
+                            <div className="rounded-2xl border border-slate-700 bg-slate-800/80 p-4">
+                                <Icon name="cart" className="mx-auto h-10 w-10 text-slate-500" />
+                            </div>
+                            <h3 className="mt-4 text-lg font-semibold text-white">
+                                {searchTerm ? 'Pembelian tidak ditemukan.' : 'Belum ada pembelian tercatat.'}
+                            </h3>
+                            <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-400">
+                                {searchTerm
+                                    ? 'Coba ubah kata kunci pencarian atau periksa kembali supplier dan tanggal yang Anda cari.'
+                                    : 'Catat pembelian pertama agar riwayat restock dan tagihan supplier mulai terdokumentasi dengan rapi.'}
+                            </p>
+                            {dataSource === 'local' && !searchTerm && (
+                                <Button onClick={() => setPurchaseModalOpen(true)} className="mt-4">
+                                    <Icon name="plus" className="w-4 h-4" /> Catat Pembelian Pertama
+                                </Button>
+                            )}
+                        </div>
+                    )}
                 </div>
             ) : (
-                <div className="space-y-4">
-                    {dataSource === 'local' && <Button onClick={() => setSupplierModalOpen(true)} className="w-full sm:w-auto whitespace-nowrap">+ Tambah Supplier</Button>}
-                    <div className="h-[450px]">
-                        <VirtualizedTable data={suppliers} columns={supplierColumns} rowHeight={50} />
-                    </div>
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/50 overflow-hidden">
+                    {filteredSuppliers.length > 0 ? (
+                        <>
+                            <div className="md:hidden">
+                                <div className="space-y-2 p-2">
+                                    {filteredSuppliers.map((supplier) => (
+                                        <div key={supplier.id} className="rounded-xl border border-slate-700/80 bg-slate-800/70 p-3 shadow-sm">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate text-[12px] font-bold leading-tight text-white">{supplier.name}</p>
+                                                    <p className="mt-1 text-[10px] leading-relaxed text-slate-400">{supplier.contact || 'Belum ada kontak tersimpan.'}</p>
+                                                </div>
+                                                {dataSource === 'local' && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="danger"
+                                                        size="sm"
+                                                        onClick={() => deleteSupplier(supplier.id)}
+                                                        className="h-8 gap-1 px-2 text-[11px] sm:text-sm"
+                                                    >
+                                                        <Icon name="trash" className="w-4 h-4" />
+                                                        <span className="hidden min-[380px]:inline">Hapus</span>
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="hidden md:block h-[450px]">
+                                <VirtualizedTable data={filteredSuppliers} columns={supplierColumns} rowHeight={50} minWidth={760} />
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex min-h-[260px] flex-col items-center justify-center px-6 text-center">
+                            <div className="rounded-2xl border border-slate-700 bg-slate-800/80 p-4">
+                                <Icon name="users" className="mx-auto h-10 w-10 text-slate-500" />
+                            </div>
+                            <h3 className="mt-4 text-lg font-semibold text-white">
+                                {searchTerm ? 'Supplier tidak ditemukan.' : 'Belum ada supplier tersimpan.'}
+                            </h3>
+                            <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-400">
+                                {searchTerm
+                                    ? 'Coba ubah kata kunci pencarian atau periksa kembali nama supplier yang Anda cari.'
+                                    : 'Tambahkan supplier agar pencatatan pembelian berikutnya lebih cepat dan lebih rapi.'}
+                            </p>
+                            {dataSource === 'local' && !searchTerm && (
+                                <Button onClick={() => setSupplierModalOpen(true)} className="mt-4">
+                                    <Icon name="plus" className="w-4 h-4" /> Tambah Supplier Pertama
+                                </Button>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 
             {/* Supplier Modal */}
-            <Modal isOpen={isSupplierModalOpen} onClose={() => setSupplierModalOpen(false)} title="Tambah Supplier">
+            <Modal isOpen={isSupplierModalOpen} onClose={() => setSupplierModalOpen(false)} title="Tambah Supplier" size="xl" mobileLayout="fullscreen">
                 <div className="space-y-4">
                     <input type="text" placeholder="Nama Supplier (PT/Toko)" value={supplierForm.name} onChange={e => setSupplierForm({...supplierForm, name: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white" />
                     <input type="text" placeholder="Kontak / Alamat / Telp" value={supplierForm.contact} onChange={e => setSupplierForm({...supplierForm, contact: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white" />
@@ -299,7 +509,7 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
             </Modal>
 
             {/* Purchase Form Modal */}
-            <Modal isOpen={isPurchaseModalOpen} onClose={() => setPurchaseModalOpen(false)} title="Catat Pembelian & Restock">
+            <Modal isOpen={isPurchaseModalOpen} onClose={() => setPurchaseModalOpen(false)} title="Catat Pembelian & Restock" size="xl" mobileLayout="fullscreen">
                 <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
                     
                     {/* ENHANCED Evidence & Date */}
@@ -321,7 +531,7 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                             {!purchaseForm.evidenceImageUrl && (
                                 <div className="grid grid-cols-2 gap-3 w-full">
                                     <Button 
-                                        variant="secondary" 
+                                        variant="operational" 
                                         onClick={() => setCameraOpen(true)}
                                         className="flex flex-col items-center justify-center h-20 text-xs gap-1"
                                     >
@@ -331,7 +541,7 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                                     <div className="relative">
                                          <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
                                          <Button 
-                                            variant="secondary" 
+                                            variant="utility" 
                                             onClick={() => fileInputRef.current?.click()}
                                             className="w-full flex flex-col items-center justify-center h-20 text-xs gap-1"
                                         >
@@ -345,10 +555,10 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                             {purchaseForm.evidenceImageUrl && (
                                 <div className="flex gap-2 w-full mt-1">
                                     <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-                                    <Button size="sm" variant="secondary" onClick={() => setCameraOpen(true)} className="flex-1">
+                                    <Button size="sm" variant="utility" onClick={() => setCameraOpen(true)} className="flex-1">
                                         Ganti Foto
                                     </Button>
-                                    <Button size="sm" variant="secondary" onClick={handleScanOCR} disabled={isScanning} className="flex-1 bg-blue-900/30 text-blue-300 border-blue-800">
+                                    <Button size="sm" variant="operational" onClick={handleScanOCR} disabled={isScanning} className="flex-1">
                                         {isScanning ? 'Scanning...' : <><Icon name="eye" className="w-4 h-4" /> Scan Tgl/Total</>}
                                     </Button>
                                 </div>
@@ -565,7 +775,7 @@ const PurchasingTab: React.FC<PurchasingTabProps> = ({ dataSource = 'local', clo
                         <Button onClick={handleDownloadEvidence} className="bg-blue-600 hover:bg-blue-500 border-none">
                             <Icon name="download" className="w-4 h-4"/> Unduh
                         </Button>
-                        <Button variant="secondary" onClick={() => setViewEvidence(null)}>Tutup</Button>
+                        <Button variant="utility" onClick={() => setViewEvidence(null)}>Tutup</Button>
                     </div>
                     {viewEvidence && <div className="text-[10px] text-slate-500 font-mono text-center w-full">{viewEvidence.filename}</div>}
                 </div>

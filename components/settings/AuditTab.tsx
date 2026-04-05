@@ -1,20 +1,21 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { AuditLog } from '../../types';
 import Icon from '../Icon';
 import VirtualizedTable from '../VirtualizedTable';
 import { useAudit } from '../../context/AuditContext'; 
-import { dropboxService } from '../../services/dropboxService';
 import { useUIActions } from '../../context/UIContext';
 import Modal from '../Modal'; // Import Modal
+import { dropboxService } from '../../services/dropboxService';
+import { loadAuditCloudSource } from '../../services/cloudReadModel';
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
-    <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
-        <div className="p-4 border-b border-slate-700 bg-slate-800">
+    <div className="mb-6 overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-800/85 shadow-[0_10px_35px_rgba(15,23,42,0.22)]">
+        <div className="border-b border-slate-700/80 bg-slate-800/90 p-4 sm:p-5">
             <h3 className="text-lg font-semibold text-white">{title}</h3>
-            {description && <p className="text-sm text-slate-400 mt-1">{description}</p>}
+            {description && <p className="mt-1 text-sm leading-relaxed text-slate-400">{description}</p>}
         </div>
-        <div className="p-4 space-y-4">
+        <div className="space-y-4 p-4 sm:p-5">
             {children}
         </div>
     </div>
@@ -26,6 +27,8 @@ const AuditTab: React.FC = () => {
     const [dataSource, setDataSource] = useState<'local' | 'dropbox'>('local');
     const [cloudLogs, setCloudLogs] = useState<AuditLog[]>([]);
     const [isCloudLoading, setIsCloudLoading] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
     
     // View Image State
     const [viewImage, setViewImage] = useState<string | null>(null);
@@ -47,16 +50,9 @@ const AuditTab: React.FC = () => {
 
             try {
                 if (dataSource === 'dropbox') {
-                    const allBranches = await dropboxService.fetchAllBranchData();
-                    let aggregatedLogs: any[] = [];
-                    allBranches.forEach(branch => {
-                        if (branch.auditLogs) {
-                            const logsWithStore = branch.auditLogs.map((l: any) => ({...l, storeId: branch.storeId}));
-                            aggregatedLogs = [...aggregatedLogs, ...logsWithStore];
-                        }
-                    });
-                    aggregatedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-                    setCloudLogs(aggregatedLogs);
+                    const result = await loadAuditCloudSource();
+                    setCloudLogs(result.logs);
+                    setLastUpdated(result.lastUpdated);
                 }
             } catch (e: any) {
                 console.error("Failed to load audit logs", e);
@@ -72,6 +68,19 @@ const AuditTab: React.FC = () => {
 
     const activeLogs = dataSource === 'local' ? localLogs : cloudLogs;
     const isLoading = dataSource === 'local' ? isLoadingLogs : isCloudLoading;
+    const filteredLogs = useMemo(() => {
+        const keyword = searchTerm.trim().toLowerCase();
+        if (!keyword) return activeLogs;
+        return activeLogs.filter((log) =>
+            log.userName.toLowerCase().includes(keyword) ||
+            log.action.toLowerCase().includes(keyword) ||
+            log.details.toLowerCase().includes(keyword) ||
+            new Date(log.timestamp).toLocaleString('id-ID').toLowerCase().includes(keyword) ||
+            ((log as any).storeId || '').toLowerCase().includes(keyword)
+        );
+    }, [activeLogs, searchTerm]);
+    const loginCount = filteredLogs.filter((log) => log.action === 'LOGIN').length;
+    const evidenceCount = filteredLogs.filter((log) => !!log.evidenceImageUrl).length;
 
     const columns = [
         { label: 'Waktu', width: '1.2fr', render: (l: AuditLog) => <span className="text-slate-400 text-xs">{new Date(l.timestamp).toLocaleString()}</span> },
@@ -101,51 +110,136 @@ const AuditTab: React.FC = () => {
     ];
 
     return (
-        <div className="animate-fade-in space-y-6">
-            <SettingsCard title="Audit Log (Riwayat Aktivitas Sensitif)" description="Memantau aktivitas penting seperti penghapusan produk, perubahan harga, refund, dan stock opname.">
-                
-                <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-                    <div className="bg-slate-700 p-1 rounded-lg flex items-center border border-slate-600">
-                        <button
-                            onClick={() => setDataSource('local')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                        >
-                            Lokal
-                        </button>
-                        <button
-                            onClick={() => setDataSource('dropbox')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                        >
-                            Dropbox
-                        </button>
-                    </div>
-                    {isLoading && <span className="text-xs text-slate-400 animate-pulse">Sedang memuat data...</span>}
+        <div className="animate-fade-in space-y-4">
+            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Log Tampil</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{filteredLogs.length}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Jumlah aktivitas sensitif yang sedang tampil pada sumber data aktif.</p>
                 </div>
-
-                <div className="bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r mb-4">
-                    <h4 className="font-bold text-red-300 text-sm mb-1 flex items-center gap-2">
-                        <Icon name="warning" className="w-4 h-4"/> Sistem Pencatatan Aktif (Anti-Fraud)
-                    </h4>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                        Setiap tindakan sensitif (Login, Hapus produk, Ubah harga, Refund) akan <strong>terekam permanen</strong>.
-                        <br/>
-                        <span className="text-yellow-400 font-bold">*Fitur Baru:</span> Klik ikon <Icon name="eye" className="w-3 h-3 inline"/> pada kolom User untuk melihat <strong>Foto Wajah</strong> saat login dilakukan. Ini mencegah penggunaan akun oleh orang lain.
-                    </p>
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Login Tercatat</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{loginCount}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Jumlah aktivitas login yang terdeteksi pada daftar yang sedang tampil.</p>
                 </div>
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm sm:col-span-2 xl:col-span-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Foto Bukti</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{evidenceCount}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Log yang menyimpan bukti foto, misalnya saat login dengan verifikasi wajah.</p>
+                </div>
+            </div>
 
-                <div className="h-96 bg-slate-900 rounded-lg border border-slate-700">
-                    {activeLogs.length > 0 ? (
-                        <VirtualizedTable data={activeLogs} columns={columns} rowHeight={50} minWidth={dataSource === 'local' ? 600 : 700} />
-                    ) : (
-                        <div className="flex items-center justify-center h-full text-slate-500">
-                            {isLoading ? 'Memuat...' : 'Belum ada log audit.'}
+            <SettingsCard title="Audit Log" description="Riwayat aktivitas sensitif seperti login, perubahan data, refund, dan tindakan yang perlu bisa ditelusuri kembali.">
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="bg-slate-700 p-1 rounded-xl flex items-center border border-slate-600 w-full lg:w-fit">
+                            <button
+                                onClick={() => setDataSource('local')}
+                                className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg transition-all ${dataSource === 'local' ? 'bg-[#347758] text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                Lokal
+                            </button>
+                            <button
+                                onClick={() => setDataSource('dropbox')}
+                                className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg transition-all ${dataSource === 'dropbox' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                Dropbox
+                            </button>
                         </div>
-                    )}
+                        {isLoading && <span className="text-xs text-slate-400 animate-pulse">Sedang memuat data...</span>}
+                        {!isLoading && dataSource === 'dropbox' && lastUpdated && (
+                            <span className="text-xs text-slate-500">Update {lastUpdated.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <div className="relative flex-1">
+                            <input
+                                type="text"
+                                placeholder="Cari user, aksi, detail, waktu, atau cabang..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="h-11 w-full rounded-xl border border-slate-700 bg-slate-800 pl-11 pr-12 text-white focus:border-[#347758] focus:ring-[#347758]"
+                            />
+                            <Icon name="search" className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                            {searchTerm && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
+                                    title="Bersihkan pencarian"
+                                >
+                                    <Icon name="close" className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                        <div className="rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-2 text-center sm:min-w-[150px]">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Hasil Tampil</p>
+                            <p className="mt-1 text-lg font-bold text-white">{filteredLogs.length}</p>
+                        </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-red-900/40 bg-red-950/10 p-4">
+                        <h4 className="font-bold text-red-300 text-sm mb-1 flex items-center gap-2">
+                            <Icon name="warning" className="w-4 h-4"/> Pencatatan Sensitif Aktif
+                        </h4>
+                        <p className="text-xs leading-relaxed text-slate-300">
+                            Semua tindakan penting seperti login, penghapusan data, perubahan harga, refund, dan aktivitas sensitif lain akan tetap tercatat agar mudah ditelusuri kembali.
+                            Jika ada ikon <Icon name="eye" className="w-3 h-3 inline"/> pada baris log, Anda bisa membuka foto bukti yang ikut tersimpan bersama aktivitas tersebut.
+                        </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-700 bg-slate-900 overflow-hidden">
+                        {filteredLogs.length > 0 ? (
+                            <>
+                                <div className="md:hidden">
+                                    <div className="space-y-2 p-2">
+                                        {filteredLogs.map((log) => (
+                                            <div key={log.id} className="rounded-xl border border-slate-700/80 bg-slate-800/70 p-3 shadow-sm">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <p className="truncate pr-1 text-[12px] font-bold leading-tight text-white">{log.userName}</p>
+                                                            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${log.action === 'LOGIN' ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border border-amber-500/30 bg-amber-500/10 text-amber-300'}`}>
+                                                                {log.action.replace(/_/g, ' ')}
+                                                            </span>
+                                                        </div>
+                                                        <p className="mt-0.5 text-[10px] text-slate-400">
+                                                            {new Date(log.timestamp).toLocaleString('id-ID')}{dataSource !== 'local' ? ` • ${(log as any).storeId || '-'}` : ''}
+                                                        </p>
+                                                        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">{log.details}</p>
+                                                    </div>
+                                                </div>
+                                                {log.evidenceImageUrl && (
+                                                    <div className="mt-2">
+                                                        <button
+                                                            onClick={() => setViewImage(log.evidenceImageUrl || null)}
+                                                            className="flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 text-[11px] text-sky-300 transition-colors hover:bg-sky-500/20"
+                                                        >
+                                                            <Icon name="eye" className="w-4 h-4" />
+                                                            Lihat Bukti
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="hidden md:block h-96">
+                                    <VirtualizedTable data={filteredLogs} columns={columns} rowHeight={50} minWidth={dataSource === 'local' ? 600 : 700} />
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex min-h-[320px] items-center justify-center px-6 text-center text-slate-500">
+                                {isLoading ? 'Memuat...' : 'Belum ada log audit yang sesuai dengan filter saat ini.'}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </SettingsCard>
 
             {/* Modal View Image */}
-            <Modal isOpen={!!viewImage} onClose={() => setViewImage(null)} title="Bukti Foto Login">
+            <Modal isOpen={!!viewImage} onClose={() => setViewImage(null)} title="Bukti Foto Login" size="xl" mobileLayout="fullscreen">
                 <div className="flex justify-center p-4 bg-slate-900 rounded-lg">
                     {viewImage ? (
                         <img src={viewImage} alt="Bukti Login" className="rounded-lg shadow-lg border border-slate-700 max-h-[60vh] object-contain" />

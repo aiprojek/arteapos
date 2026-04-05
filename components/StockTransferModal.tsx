@@ -120,8 +120,14 @@ const StockTransferModal: React.FC<StockTransferModalProps> = ({ isOpen, onClose
     if (!isOpen) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Transfer Stok ke Cabang (Gudang)">
-            <div className="space-y-4 max-h-[75vh] flex flex-col">
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Transfer Stok ke Cabang (Gudang)"
+            size="lg"
+            mobileLayout="fullscreen"
+        >
+            <div className="space-y-4 max-h-[80dvh] sm:max-h-[75vh] flex flex-col">
                 
                 {/* Target Selection */}
                 <div>
@@ -129,7 +135,7 @@ const StockTransferModal: React.FC<StockTransferModalProps> = ({ isOpen, onClose
                     <select 
                         value={targetStoreId} 
                         onChange={(e) => setTargetStoreId(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-bold"
+                        className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white font-bold"
                     >
                         <option value="">-- Pilih Cabang --</option>
                         {availableBranches.map(b => (
@@ -147,13 +153,13 @@ const StockTransferModal: React.FC<StockTransferModalProps> = ({ isOpen, onClose
                         type="text" 
                         value={searchTerm} 
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-600 rounded-lg pl-9 pr-3 py-2 text-white"
+                        className="w-full bg-slate-800 border border-slate-600 rounded-xl pl-9 pr-3 py-2.5 text-white"
                         placeholder="Cari barang untuk dikirim..."
                     />
-                    <Icon name="search" className="absolute left-3 top-2.5 w-4 h-4 text-slate-500"/>
+                    <Icon name="search" className="absolute left-3 top-3 w-4 h-4 text-slate-500"/>
                     
                     {searchTerm && (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 border border-slate-600 rounded-lg max-h-40 overflow-y-auto z-10 shadow-xl">
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 border border-slate-600 rounded-xl max-h-40 overflow-y-auto z-10 shadow-xl">
                             {filteredOptions.map(opt => (
                                 <button 
                                     key={opt.id} 
@@ -169,12 +175,12 @@ const StockTransferModal: React.FC<StockTransferModalProps> = ({ isOpen, onClose
                 </div>
 
                 {/* Selected List */}
-                <div className="flex-1 overflow-y-auto bg-slate-900/50 rounded-lg border border-slate-700 p-2 space-y-2 min-h-[200px]">
+                <div className="flex-1 overflow-y-auto bg-slate-900/50 rounded-xl border border-slate-700 p-2 space-y-2 min-h-[220px]">
                     {selectedItems.length === 0 ? (
                         <p className="text-center text-slate-500 text-sm py-8">Belum ada barang dipilih.</p>
                     ) : (
                         selectedItems.map(item => (
-                            <div key={item.id} className="bg-slate-800 p-2 rounded flex justify-between items-center border border-slate-700">
+                            <div key={item.id} className="bg-slate-800 p-3 rounded-xl flex justify-between items-center border border-slate-700 gap-3">
                                 <div className="flex-1">
                                     <p className="font-bold text-white text-sm">{item.name}</p>
                                     <p className="text-[10px] text-slate-400">
@@ -187,7 +193,7 @@ const StockTransferModal: React.FC<StockTransferModalProps> = ({ isOpen, onClose
                                         min="0" 
                                         value={item.qty}
                                         onChange={(e) => handleQtyChange(item.id, e.target.value)}
-                                        className="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-center text-white font-bold"
+                                        className="w-20 bg-slate-900 border border-slate-600 rounded-lg px-2 py-1.5 text-center text-white font-bold"
                                         placeholder="Qty"
                                     />
                                     <button onClick={() => handleRemoveItem(item.id)} className="text-red-400 p-1 hover:bg-slate-700 rounded">
@@ -206,7 +212,7 @@ const StockTransferModal: React.FC<StockTransferModalProps> = ({ isOpen, onClose
                         value={notes} 
                         onChange={(e) => setNotes(e.target.value)}
                         placeholder="No. SJ / Supir / Plat No..."
-                        className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm"
+                        className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white text-sm"
                     />
                 </div>
 

@@ -28,6 +28,14 @@ export const deleteProductFromData = (prevData: AppData, productId: string): App
   products: prevData.products.filter(product => product.id !== productId),
 });
 
+export const deleteProductsFromData = (prevData: AppData, productIds: string[]): AppData => {
+  const idSet = new Set(productIds);
+  return {
+    ...prevData,
+    products: prevData.products.filter(product => !idSet.has(product.id)),
+  };
+};
+
 export const addCategoryToData = (prevData: AppData, category: string): AppData => {
   const lowerCaseCategories = prevData.categories.map(entry => entry.toLowerCase());
   if (lowerCaseCategories.includes(category.toLowerCase())) {

@@ -114,7 +114,14 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isRefundView ? "Konfirmasi Refund" : "Struk Transaksi"}>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isRefundView ? "Konfirmasi Refund" : "Struk Transaksi"}
+      size="lg"
+      mobileLayout="fullscreen"
+      bodyClassName="p-3 sm:p-6"
+    >
       
       {isRefundView ? (
           <div className="space-y-4">
@@ -135,41 +142,41 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
                       value={refundReason}
                       onChange={(e) => setRefundReason(e.target.value)}
                       placeholder="Contoh: Salah input menu, Pelanggan cancel..."
-                      className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                      className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white"
                       autoFocus
                   />
               </div>
 
               <div className="flex gap-3 pt-2">
-                  <Button variant="secondary" onClick={() => setIsRefundView(false)} className="flex-1">Batal</Button>
+                  <Button variant="utility" onClick={() => setIsRefundView(false)} className="flex-1">Batal</Button>
                   <Button variant="danger" onClick={handleConfirmRefund} disabled={!refundReason} className="flex-1">Proses Refund</Button>
               </div>
           </div>
       ) : (
           <>
-            <div className="bg-slate-700 p-2 sm:p-4 rounded-lg overflow-y-auto max-h-[50vh]">
+            <div className="bg-slate-700 p-2 sm:p-4 rounded-xl overflow-y-auto max-h-[68dvh] sm:max-h-[50vh]">
                 <div className="max-w-xs mx-auto">
                     <Receipt ref={receiptRef} transaction={transaction} settings={receiptSettings} />
                 </div>
             </div>
             
-            <div className="flex flex-col gap-3 pt-6">
+            <div className="flex flex-col gap-3 pt-4 sm:pt-6">
                 
                 <Button variant="primary" onClick={handleBluetoothPrint} className="w-full bg-blue-600 border-none whitespace-nowrap">
                     <Icon name="bluetooth" className="w-5 h-5"/> <span>Cetak BT</span>
                 </Button>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <Button variant="secondary" onClick={handleShare} disabled={isProcessing} className="whitespace-nowrap">
+                    <Button variant="utility" onClick={handleShare} disabled={isProcessing} className="whitespace-nowrap">
                         <Icon name="share" className="w-5 h-5"/> <span>Bagikan</span>
                     </Button>
-                    <Button variant="secondary" onClick={() => window.print()} className="whitespace-nowrap">
+                    <Button variant="utility" onClick={() => window.print()} className="whitespace-nowrap">
                         <Icon name="printer" className="w-5 h-5"/> <span>Cetak</span>
                     </Button>
                 </div>
                 
                 {transaction.paymentStatus !== 'refunded' && (
-                    <Button variant="danger" onClick={() => setIsRefundView(true)} className="w-full mt-2 whitespace-nowrap">
+                    <Button variant="danger" onClick={() => setIsRefundView(true)} className="w-full mt-1 sm:mt-2 whitespace-nowrap">
                         <span className="hidden sm:inline">Refund Transaksi</span>
                         <span className="sm:hidden">Refund</span>
                     </Button>

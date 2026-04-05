@@ -44,25 +44,49 @@ export const DualScreenModal: React.FC<DualScreenModalProps> = ({ isOpen, onClos
     if (!isOpen) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Koneksi Layar Tambahan">
-            <div className="space-y-4">
-                <div className="flex bg-slate-700 p-1 rounded-lg">
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Koneksi Layar Tambahan"
+            size="lg"
+            mobileLayout="fullscreen"
+        >
+            <div className="space-y-5">
+                <div className="flex gap-1 rounded-2xl border border-slate-700 bg-slate-900/70 p-1">
                     <button 
                         onClick={() => { setActiveTab('customer'); setDisplayIdInput(''); }} 
-                        className={`flex-1 py-2 text-sm rounded transition-colors flex items-center justify-center gap-2 ${activeTab === 'customer' ? 'bg-[#347758] text-white font-bold' : 'text-slate-300'}`}
+                        className={`flex-1 min-w-0 px-3 py-3 text-sm rounded-xl transition-all flex items-center justify-center gap-2 border ${
+                            activeTab === 'customer'
+                                ? 'bg-[#347758] text-white font-bold border-[#4d9a74] shadow-sm shadow-[#347758]/20'
+                                : 'bg-transparent text-slate-300 border-transparent hover:bg-slate-800/80 hover:text-white'
+                        }`}
                     >
-                        <Icon name="users" className="w-4 h-4"/> Pelanggan
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                            activeTab === 'customer' ? 'bg-white/15' : 'bg-slate-800 text-slate-400'
+                        }`}>
+                            <Icon name="users" className="w-4 h-4"/>
+                        </span>
+                        <span className="truncate">Pelanggan</span>
                     </button>
                     <button 
                         onClick={() => { setActiveTab('kitchen'); setDisplayIdInput(''); }} 
-                        className={`flex-1 py-2 text-sm rounded transition-colors flex items-center justify-center gap-2 ${activeTab === 'kitchen' ? 'bg-orange-600 text-white font-bold' : 'text-slate-300'}`}
+                        className={`flex-1 min-w-0 px-3 py-3 text-sm rounded-xl transition-all flex items-center justify-center gap-2 border ${
+                            activeTab === 'kitchen'
+                                ? 'bg-orange-600 text-white font-bold border-orange-500 shadow-sm shadow-orange-500/20'
+                                : 'bg-transparent text-slate-300 border-transparent hover:bg-slate-800/80 hover:text-white'
+                        }`}
                     >
-                        <Icon name="tools" className="w-4 h-4"/> Dapur (KDS)
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                            activeTab === 'kitchen' ? 'bg-white/15' : 'bg-slate-800 text-slate-400'
+                        }`}>
+                            <Icon name="tools" className="w-4 h-4"/>
+                        </span>
+                        <span className="truncate">Dapur (KDS)</span>
                     </button>
                 </div>
 
                 {isConnected ? (
-                    <div className={`border p-4 rounded-lg text-center ${activeTab === 'customer' ? 'bg-green-900/20 border-green-800' : 'bg-orange-900/20 border-orange-800'}`}>
+                    <div className={`border p-5 rounded-2xl text-center ${activeTab === 'customer' ? 'bg-green-900/20 border-green-800' : 'bg-orange-900/20 border-orange-800'}`}>
                         <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${activeTab === 'customer' ? 'bg-green-500/20' : 'bg-orange-500/20'}`}>
                             <Icon name="check-circle-fill" className={`w-8 h-8 ${activeTab === 'customer' ? 'text-green-400' : 'text-orange-400'}`} />
                         </div>
@@ -78,9 +102,24 @@ export const DualScreenModal: React.FC<DualScreenModalProps> = ({ isOpen, onClos
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        <div className="bg-slate-800 p-3 rounded text-sm text-slate-300">
-                            <p className="mb-2"><strong>Cara Penggunaan:</strong></p>
-                            <ol className="list-decimal pl-5 space-y-1">
+                        <div className="bg-slate-900/70 border border-slate-700 p-4 rounded-2xl text-sm text-slate-300">
+                            <div className="flex items-center gap-2 mb-3">
+                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${activeTab === 'customer' ? 'bg-[#347758]/20 text-[#8fd3b2]' : 'bg-orange-500/20 text-orange-300'}`}>
+                                    <Icon name={activeTab === 'customer' ? 'users' : 'tools'} className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <p className="font-bold text-white">
+                                        {activeTab === 'customer' ? 'Sambungkan layar pelanggan' : 'Sambungkan layar dapur'}
+                                    </p>
+                                    <p className="text-xs text-slate-400">
+                                        {activeTab === 'customer'
+                                            ? 'Tampilkan ringkasan keranjang ke layar kedua.'
+                                            : 'Kirim pesanan masuk langsung ke tampilan dapur.'}
+                                    </p>
+                                </div>
+                            </div>
+                            <p className="mb-2 font-semibold text-slate-200">Cara Penggunaan:</p>
+                            <ol className="list-decimal pl-5 space-y-1.5 leading-relaxed">
                                 <li>Siapkan perangkat kedua (Tablet/HP).</li>
                                 <li>Buka Artea POS di perangkat tersebut.</li>
                                 <li>
@@ -93,7 +132,7 @@ export const DualScreenModal: React.FC<DualScreenModalProps> = ({ isOpen, onClos
                         </div>
 
                         <div className="flex flex-col gap-3">
-                            <Button onClick={() => setIsScanning(true)} className="w-full py-3 text-lg">
+                            <Button onClick={() => setIsScanning(true)} variant="operational" className="w-full h-12 text-base">
                                 <Icon name="camera" className="w-5 h-5" /> Scan QR Code
                             </Button>
                             
@@ -109,10 +148,10 @@ export const DualScreenModal: React.FC<DualScreenModalProps> = ({ isOpen, onClos
                                     value={displayIdInput}
                                     onChange={(e) => setDisplayIdInput(e.target.value)}
                                     placeholder="Masukkan ID Perangkat..."
-                                    className="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                                    className="flex-1 bg-slate-900 border border-slate-600 rounded-xl px-3 py-3 text-white"
                                 />
-                                <Button onClick={() => handleConnect(displayIdInput)} disabled={!displayIdInput || isConnecting}>
-                                    {isConnecting ? '...' : 'Hubungkan'}
+                                <Button onClick={() => handleConnect(displayIdInput)} disabled={!displayIdInput || isConnecting} className="sm:min-w-[140px]">
+                                    {isConnecting ? 'Menghubungkan...' : 'Hubungkan'}
                                 </Button>
                             </div>
                         </div>

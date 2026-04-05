@@ -39,19 +39,19 @@ export const DiscountModal: React.FC<DiscountModalProps> = ({ isOpen, onClose, t
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={title}>
+        <Modal isOpen={isOpen} onClose={onClose} title={title} size="md" mobileLayout="fullscreen">
             <div className="space-y-4">
-                <div className="flex bg-slate-700 p-1 rounded-lg">
-                    <button onClick={() => setType('percentage')} className={`flex-1 py-2 text-sm rounded transition-colors ${type === 'percentage' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Persen (%)</button>
-                    <button onClick={() => setType('amount')} className={`flex-1 py-2 text-sm rounded transition-colors ${type === 'amount' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Nominal (Rp)</button>
+                <div className="flex bg-slate-700 p-1 rounded-xl">
+                    <button onClick={() => setType('percentage')} className={`flex-1 py-2.5 text-sm rounded-lg transition-colors ${type === 'percentage' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Persen (%)</button>
+                    <button onClick={() => setType('amount')} className={`flex-1 py-2.5 text-sm rounded-lg transition-colors ${type === 'amount' ? 'bg-[#347758] text-white' : 'text-slate-300'}`}>Nominal (Rp)</button>
                 </div>
                 <div>
                     <label className="block text-sm text-slate-300 mb-1">Nilai Diskon</label>
-                    <input type="number" value={value} onChange={e => setValue(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" autoFocus placeholder="0" />
+                    <input type="number" value={value} onChange={e => setValue(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white" autoFocus placeholder="0" />
                 </div>
                 <div>
                     <label className="block text-sm text-slate-300 mb-1">Keterangan (Opsional)</label>
-                    <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white" placeholder="cth: Promo Member" />
+                    <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white" placeholder="cth: Promo Member" />
                 </div>
                 <div className="flex gap-3 pt-2">
                     {initialDiscount && <Button onClick={() => { onRemove(); onClose(); }} variant="danger" className="flex-1">Hapus</Button>}

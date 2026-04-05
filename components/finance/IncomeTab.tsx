@@ -49,6 +49,9 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
     const filteredIncomes = useMemo(() => 
         activeIncomes.filter(i => i.description.toLowerCase().includes(searchTerm.toLowerCase())),
     [activeIncomes, searchTerm]);
+    const totalIncomes = activeIncomes.reduce((sum, income) => sum + income.amount, 0);
+    const withEvidenceCount = activeIncomes.filter(income => !!income.evidenceImageUrl).length;
+    const recentIncomesCount = filteredIncomes.length;
 
     const handleSubmit = () => {
         if (!formData.description || !formData.amount) return;
@@ -195,27 +198,149 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
 
     return (
         <div className="space-y-4">
-             {/* Responsive Header: Stack on Mobile, Row on Sm */}
-            <div className="flex flex-col sm:flex-row justify-between gap-2">
-                <input 
-                    type="text" 
-                    placeholder="Cari pemasukan..." 
-                    value={searchTerm} 
-                    onChange={e => setSearchTerm(e.target.value)} 
-                    className="w-full sm:w-auto flex-grow bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:ring-[#347758] focus:border-[#347758]" 
-                />
-                {dataSource === 'local' && (
-                    <Button onClick={() => setModalOpen(true)} className="w-full sm:w-auto whitespace-nowrap">
-                        <Icon name="plus" className="w-4 h-4" /> Catat Pemasukan
-                    </Button>
-                )}
-            </div>
-            
-            <div className="h-[500px]">
-                <VirtualizedTable data={filteredIncomes} columns={columns} rowHeight={50} minWidth={dataSource !== 'local' ? 900 : 800}/>
+            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Total Pemasukan</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{CURRENCY_FORMATTER.format(totalIncomes)}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Akumulasi pemasukan lain dari sumber data yang sedang aktif.</p>
+                </div>
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Bukti Tersimpan</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{withEvidenceCount}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Jumlah catatan pemasukan yang sudah memiliki foto bukti.</p>
+                </div>
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm sm:col-span-2 xl:col-span-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Hasil Tampil</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{recentIncomesCount}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Jumlah pemasukan yang sesuai dengan filter pencarian saat ini.</p>
+                </div>
             </div>
 
-            <Modal isOpen={isModalOpen} onClose={closeModal} title={editingId ? "Edit Pemasukan" : "Catat Pemasukan Lain"}>
+            <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-3 sm:p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="relative flex-1">
+                        <input 
+                            type="text" 
+                            placeholder="Cari pemasukan..." 
+                            value={searchTerm} 
+                            onChange={e => setSearchTerm(e.target.value)} 
+                            className="h-11 w-full rounded-xl border border-slate-700 bg-slate-800 pl-11 pr-12 text-white focus:ring-[#347758] focus:border-[#347758]" 
+                        />
+                        <Icon name="search" className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
+                                title="Bersihkan pencarian"
+                            >
+                                <Icon name="close" className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                    {dataSource === 'local' && (
+                        <Button onClick={() => setModalOpen(true)} className="h-11 w-full sm:w-auto whitespace-nowrap">
+                            <Icon name="plus" className="w-4 h-4" /> Catat Pemasukan
+                        </Button>
+                    )}
+                </div>
+            </div>
+            
+            <div className="rounded-2xl border border-slate-700 bg-slate-900/50 overflow-hidden">
+                {filteredIncomes.length > 0 ? (
+                    <>
+                        <div className="md:hidden">
+                            <div className="space-y-2 p-2">
+                                {filteredIncomes.map(income => (
+                                    <div key={income.id} className="rounded-xl border border-slate-700/80 bg-slate-800/70 p-3 shadow-sm">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <p className="truncate pr-1 text-[12px] font-bold leading-tight text-white">{income.description}</p>
+                                                    <span className="rounded-full border border-slate-600 bg-slate-900/80 px-1.5 py-0.5 text-[9px] text-slate-300">{income.category}</span>
+                                                </div>
+                                                <p className="mt-0.5 text-[10px] text-slate-400">
+                                                    {new Date(income.date).toLocaleDateString('id-ID')} • {income.paymentMethod === 'cash' ? 'Tunai' : 'Non-tunai'}
+                                                </p>
+                                                <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
+                                                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-300">
+                                                        {CURRENCY_FORMATTER.format(income.amount)}
+                                                    </span>
+                                                    {income.evidenceImageUrl && (
+                                                        <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-blue-300">
+                                                            Ada bukti
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-2 grid grid-cols-2 gap-1.5">
+                                            <Button
+                                                type="button"
+                                                variant="utility"
+                                                size="sm"
+                                                onClick={() => handleEdit(income)}
+                                                disabled={dataSource !== 'local'}
+                                                className="h-8 gap-1 px-2 text-[11px] sm:text-sm"
+                                            >
+                                                <Icon name="edit" className="w-4 h-4" />
+                                                <span className="hidden min-[380px]:inline">Edit</span>
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant={income.evidenceImageUrl ? 'operational' : 'danger'}
+                                                size="sm"
+                                                onClick={() => {
+                                                    if (income.evidenceImageUrl) {
+                                                        const safeDesc = income.description.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
+                                                        setViewEvidence({
+                                                            url: income.evidenceImageUrl,
+                                                            filename: `Bukti_Masuk_${safeDesc}_${income.date.slice(0,10)}.jpg`
+                                                        });
+                                                        setZoomLevel(1);
+                                                        return;
+                                                    }
+                                                    if (dataSource === 'local') deleteOtherIncome(income.id);
+                                                }}
+                                                disabled={dataSource !== 'local' && !income.evidenceImageUrl}
+                                                className="h-8 gap-1 px-2 text-[11px] sm:text-sm"
+                                            >
+                                                <Icon name={income.evidenceImageUrl ? 'camera' : 'trash'} className="w-4 h-4" />
+                                                <span className="hidden min-[380px]:inline">{income.evidenceImageUrl ? 'Bukti' : 'Hapus'}</span>
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="hidden md:block h-[500px]">
+                            <VirtualizedTable data={filteredIncomes} columns={columns} rowHeight={50} minWidth={dataSource !== 'local' ? 900 : 800}/>
+                        </div>
+                    </>
+                ) : (
+                    <div className="flex min-h-[280px] flex-col items-center justify-center px-6 text-center">
+                        <div className="rounded-2xl border border-slate-700 bg-slate-800/80 p-4">
+                            <Icon name="money" className="mx-auto h-10 w-10 text-slate-500" />
+                        </div>
+                        <h3 className="mt-4 text-lg font-semibold text-white">
+                            {searchTerm ? 'Pemasukan tidak ditemukan.' : 'Belum ada pemasukan lain tercatat.'}
+                        </h3>
+                        <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-400">
+                            {searchTerm
+                                ? 'Coba ubah kata kunci pencarian atau periksa kembali keterangan yang Anda cari.'
+                                : 'Catat pemasukan pertama agar arus kas masuk di luar penjualan mulai terdokumentasi dengan rapi.'}
+                        </p>
+                        {dataSource === 'local' && !searchTerm && (
+                            <Button onClick={() => setModalOpen(true)} className="mt-4">
+                                <Icon name="plus" className="w-4 h-4" /> Catat Pemasukan Pertama
+                            </Button>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            <Modal isOpen={isModalOpen} onClose={closeModal} title={editingId ? "Edit Pemasukan" : "Catat Pemasukan Lain"} size="xl" mobileLayout="fullscreen">
                 <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
                     {/* ... (Modal content unchanged) ... */}
                     <div>
@@ -236,7 +361,7 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
                             {!formData.evidenceImageUrl && (
                                 <div className="grid grid-cols-2 gap-3 w-full">
                                     <Button 
-                                        variant="secondary" 
+                                        variant="operational" 
                                         onClick={() => setCameraOpen(true)}
                                         className="flex flex-col items-center justify-center h-20 text-xs gap-1"
                                     >
@@ -246,7 +371,7 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
                                     <div className="relative">
                                          <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
                                          <Button 
-                                            variant="secondary" 
+                                            variant="utility" 
                                             onClick={() => fileInputRef.current?.click()}
                                             className="w-full flex flex-col items-center justify-center h-20 text-xs gap-1"
                                         >
@@ -260,10 +385,10 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
                             {formData.evidenceImageUrl && (
                                 <div className="flex gap-2 w-full mt-1">
                                     <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-                                    <Button size="sm" variant="secondary" onClick={() => setCameraOpen(true)} className="flex-1">
+                                    <Button size="sm" variant="utility" onClick={() => setCameraOpen(true)} className="flex-1">
                                         Ganti Foto
                                     </Button>
-                                    <Button size="sm" variant="secondary" onClick={handleScanOCR} disabled={isScanning} className="flex-1 bg-blue-900/30 text-blue-300 border-blue-800">
+                                    <Button size="sm" variant="operational" onClick={handleScanOCR} disabled={isScanning} className="flex-1">
                                         {isScanning ? 'Scanning...' : <><Icon name="eye" className="w-4 h-4" /> Scan (AI)</>}
                                     </Button>
                                 </div>
@@ -374,7 +499,7 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ dataSource = 'local', cloudData =
                         <Button onClick={handleDownloadEvidence} className="bg-blue-600 hover:bg-blue-500 border-none">
                             <Icon name="download" className="w-4 h-4"/> Unduh
                         </Button>
-                        <Button variant="secondary" onClick={() => setViewEvidence(null)}>Tutup</Button>
+                        <Button variant="utility" onClick={() => setViewEvidence(null)}>Tutup</Button>
                     </div>
                     {viewEvidence && <div className="text-[10px] text-slate-500 font-mono text-center w-full">{viewEvidence.filename}</div>}
                 </div>

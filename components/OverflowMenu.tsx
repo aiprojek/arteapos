@@ -15,8 +15,10 @@ interface OverflowMenuProps {
   label?: string;
   align?: 'left' | 'right';
   size?: 'sm' | 'md' | 'lg';
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | 'utility' | 'operational';
   buttonClassName?: string;
+  showLabelOnMobile?: boolean;
+  matchTriggerWidth?: boolean;
 }
 
 const OverflowMenu: React.FC<OverflowMenuProps> = ({
@@ -25,13 +27,16 @@ const OverflowMenu: React.FC<OverflowMenuProps> = ({
   align = 'right',
   size = 'md',
   variant = 'secondary',
-  buttonClassName
+  buttonClassName,
+  showLabelOnMobile = false,
+  matchTriggerWidth = false,
 }) => {
   const [open, setOpen] = useState(false);
   const [menuStyles, setMenuStyles] = useState<React.CSSProperties>({});
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLDivElement>(null);
   const menuBoxRef = useRef<HTMLDivElement>(null);
+  const isFullWidthTrigger = !!buttonClassName?.split(' ').some(token => token === 'w-full');
 
   useEffect(() => {
     if (!open) return;
@@ -54,8 +59,9 @@ const OverflowMenu: React.FC<OverflowMenuProps> = ({
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
       const maxWidth = Math.max(0, viewportWidth - 16);
-      const width = Math.min(240, maxWidth);
-      const minWidth = Math.min(180, maxWidth);
+      const triggerWidth = rect.width;
+      const width = matchTriggerWidth ? Math.min(Math.max(triggerWidth, 180), maxWidth) : Math.min(240, maxWidth);
+      const minWidth = matchTriggerWidth ? Math.min(triggerWidth, maxWidth) : Math.min(180, maxWidth);
 
       let left = align === 'right' ? rect.right - width : rect.left;
       left = Math.min(Math.max(8, left), viewportWidth - width - 8);
@@ -84,8 +90,8 @@ const OverflowMenu: React.FC<OverflowMenuProps> = ({
   const iconSize = size === 'sm' ? 'w-4 h-4' : 'w-5 h-5';
 
   return (
-    <div className="relative" ref={menuRef}>
-      <div className="inline-flex" ref={buttonRef}>
+    <div className={isFullWidthTrigger ? 'relative w-full' : 'relative'} ref={menuRef}>
+      <div className={isFullWidthTrigger ? 'flex w-full' : 'inline-flex'} ref={buttonRef}>
         <Button
           variant={variant}
           size={size}
@@ -93,7 +99,7 @@ const OverflowMenu: React.FC<OverflowMenuProps> = ({
           className={`whitespace-nowrap flex-shrink-0 ${buttonClassName || ''}`}
         >
           <Icon name="menu" className={iconSize} />
-          <span className="hidden sm:inline">{label}</span>
+          <span className={showLabelOnMobile ? 'inline' : 'hidden sm:inline'}>{label}</span>
         </Button>
       </div>
       {open && (

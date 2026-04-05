@@ -1,5 +1,6 @@
 
 import React, { ReactNode, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from './Icon';
 
 interface ModalProps {
@@ -58,7 +59,7 @@ const Modal: React.FC<ModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  const modalContent = (
     <div className={`fixed inset-0 bg-black/70 flex justify-center z-[1000] p-0 sm:p-4 ${getOverlayAlignment(mobileLayout)}`}>
       <div className={`bg-slate-800 shadow-2xl w-full flex flex-col overflow-hidden ${sizeClassMap[size]} ${mobileLayoutClassMap[mobileLayout]} ${panelClassName}`}>
         <div className="flex justify-between items-center p-4 border-b border-slate-700 shrink-0">
@@ -73,6 +74,8 @@ const Modal: React.FC<ModalProps> = ({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
 
 export default Modal;

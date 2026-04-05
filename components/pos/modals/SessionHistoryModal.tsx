@@ -25,18 +25,18 @@ export const SessionHistoryModal: React.FC<SessionHistoryModalProps> = ({ isOpen
     }, [session, transactions]);
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Riwayat Transaksi Sesi Ini">
-            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+        <Modal isOpen={isOpen} onClose={onClose} title="Riwayat Transaksi Sesi Ini" size="lg" mobileLayout="fullscreen">
+            <div className="space-y-2 max-h-[68dvh] sm:max-h-[60vh] overflow-y-auto pr-1">
                 {sessionTransactions.length === 0 ? (
                     <p className="text-center text-slate-500 py-4">Belum ada transaksi.</p>
                 ) : (
                     sessionTransactions.map(t => (
-                        <div key={t.id} className="bg-slate-900 p-3 rounded-lg border border-slate-700 flex justify-between items-center">
-                            <div>
-                                <p className="font-bold text-white text-sm">{t.customerName || 'Umum'} <span className="text-slate-500 font-normal">#{t.id.slice(-4)}</span></p>
+                        <div key={t.id} className="bg-slate-900 p-3 rounded-xl border border-slate-700 flex justify-between items-center gap-3">
+                            <div className="min-w-0">
+                                <p className="font-bold text-white text-sm truncate">{t.customerName || 'Umum'} <span className="text-slate-500 font-normal">#{t.id.slice(-4)}</span></p>
                                 <p className="text-xs text-slate-400">{new Date(t.createdAt).toLocaleTimeString()} - {t.paymentStatus === 'refunded' ? 'Refunded' : 'Lunas'}</p>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right shrink-0">
                                 <p className={`font-bold ${t.paymentStatus === 'refunded' ? 'text-slate-500 line-through' : 'text-white'}`}>{CURRENCY_FORMATTER.format(t.total)}</p>
                                 <div className="flex gap-2 justify-end mt-1">
                                     <button onClick={() => onViewReceipt(t)} className="text-xs text-sky-400 hover:underline">Struk</button>
@@ -50,7 +50,7 @@ export const SessionHistoryModal: React.FC<SessionHistoryModalProps> = ({ isOpen
                 )}
             </div>
             <div className="mt-4 pt-4 border-t border-slate-700">
-                <Button onClick={onClose} variant="secondary" className="w-full">Tutup</Button>
+                <Button onClick={onClose} variant="utility" className="w-full">Tutup</Button>
             </div>
         </Modal>
     );

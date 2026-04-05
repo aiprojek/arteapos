@@ -5,8 +5,6 @@ import { useProduct } from '../context/ProductContext';
 import { useSettings } from '../context/SettingsContext';
 import { useUIActions } from '../context/UIContext';
 import { useAuthState } from '../context/AuthContext';
-import { dropboxService } from '../services/dropboxService';
-import { mockDataService } from '../services/mockData';
 import { CURRENCY_FORMATTER } from '../constants';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
@@ -20,8 +18,38 @@ import type { Transaction, StockAdjustment, Expense } from '../types';
 import { Capacitor } from '@capacitor/core';
 import { saveBinaryFileNative } from '../utils/nativeHelper';
 import OverflowMenu from '../components/OverflowMenu';
+import { filterItemsByBranch, getAvailableBranchesFromItems, loadReportsCloudSource } from '../services/cloudReadModel';
 
 type TimeFilter = 'today' | 'week' | 'month' | 'all' | 'custom';
+
+const ReportsStatCard: React.FC<{
+    label: string;
+    value: string | number;
+    hint: string;
+    icon: React.ComponentProps<typeof Icon>['name'];
+    tone?: 'neutral' | 'success' | 'warning';
+}> = ({ label, value, hint, icon, tone = 'neutral' }) => {
+    const toneClasses = {
+        neutral: 'border-slate-700/80 bg-slate-850/70',
+        success: 'border-emerald-900/50 bg-emerald-950/10',
+        warning: 'border-amber-900/50 bg-amber-950/10',
+    };
+
+    return (
+        <div className={`rounded-2xl border p-4 shadow-sm ${toneClasses[tone]}`}>
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{value}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">{hint}</p>
+                </div>
+                <div className="rounded-xl border border-white/5 bg-black/15 p-2">
+                    <Icon name={icon} className="h-4.5 w-4.5 text-slate-400" />
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const ReportsView: React.FC = () => {
     const { transactions: localTransactions, refundTransaction, expenses: localExpenses } = useFinance(); 
@@ -40,17 +68,15 @@ const ReportsView: React.FC = () => {
     // Dropdown States
     const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
     const filterDropdownRef = useRef<HTMLDivElement>(null);
-    const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
-    const exportDropdownRef = useRef<HTMLDivElement>(null);
-    const exportButtonRef = useRef<HTMLDivElement>(null);
-    const exportMenuRef = useRef<HTMLDivElement>(null);
-    const [exportMenuStyles, setExportMenuStyles] = useState<React.CSSProperties>({});
-
+    const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
+    const branchDropdownRef = useRef<HTMLDivElement>(null);
     // BRANCH FILTER
     const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
 
     const [cloudData, setCloudData] = useState<{ transactions: Transaction[], stockAdjustments: StockAdjustment[], inventory: any[], expenses: Expense[] }>({ transactions: [], stockAdjustments: [], inventory: [], expenses: [] });
     const [isLoading, setIsLoading] = useState(false);
+    const [cloudMode, setCloudMode] = useState<'live' | 'demo' | null>(null);
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [activeTab, setActiveTab] = useState<'transactions' | 'products' | 'stock' | 'inventory'>('transactions');
     
     // Receipt & Evidence State
@@ -69,79 +95,24 @@ const ReportsView: React.FC = () => {
             if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
                 setIsFilterDropdownOpen(false);
             }
-            if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
-                setIsExportDropdownOpen(false);
+            if (branchDropdownRef.current && !branchDropdownRef.current.contains(event.target as Node)) {
+                setIsBranchDropdownOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    useEffect(() => {
-        if (!isExportDropdownOpen) return;
-
-        const updatePosition = () => {
-            const button = exportButtonRef.current;
-            if (!button) return;
-            const rect = button.getBoundingClientRect();
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-            const maxWidth = Math.max(0, viewportWidth - 16);
-            const width = Math.min(220, maxWidth);
-            const minWidth = Math.min(160, maxWidth);
-
-            let left = rect.right - width;
-            left = Math.min(Math.max(8, left), viewportWidth - width - 8);
-
-            const menuHeight = exportMenuRef.current?.getBoundingClientRect().height ?? 0;
-            let top = rect.bottom + 8;
-            if (menuHeight && top + menuHeight > viewportHeight - 8) {
-                top = Math.max(8, rect.top - menuHeight - 8);
-            }
-
-            setExportMenuStyles({ left, top, width, maxWidth, minWidth });
-        };
-
-        const frame = window.requestAnimationFrame(updatePosition);
-        window.addEventListener('resize', updatePosition);
-        window.addEventListener('scroll', updatePosition, true);
-        return () => {
-            window.cancelAnimationFrame(frame);
-            window.removeEventListener('resize', updatePosition);
-            window.removeEventListener('scroll', updatePosition, true);
-        };
-    }, [isExportDropdownOpen]);
-
     const loadCloudData = async () => {
         if (isStaff) return; 
 
         setIsLoading(true);
-        if (!dropboxService.isConfigured()) {
-             const mock = mockDataService.getMockDashboardData();
-             setCloudData({
-                 transactions: mock.transactions,
-                 stockAdjustments: mock.stockAdjustments,
-                 inventory: mock.inventory,
-                 expenses: mock.expenses
-             });
-             setIsLoading(false);
-             return;
-        }
 
         try {
-            const allBranches = await dropboxService.fetchAllBranchData();
-            let txns: any[] = [];
-            let adjs: any[] = [];
-            let invs: any[] = [];
-            let exps: any[] = [];
-
-            allBranches.forEach(branch => {
-                if (branch.transactionRecords) txns.push(...branch.transactionRecords.map((t:any) => ({...t, storeId: branch.storeId})));
-                if (branch.stockAdjustments) adjs.push(...branch.stockAdjustments.map((a:any) => ({...a, storeId: branch.storeId})));
-                if (branch.currentStock) invs.push(...branch.currentStock.map((i:any) => ({...i, storeId: branch.storeId})));
-                if (branch.expenses) exps.push(...branch.expenses.map((e:any) => ({...e, storeId: branch.storeId})));
-            });
-            setCloudData({ transactions: txns, stockAdjustments: adjs, inventory: invs, expenses: exps });
+            const result = await loadReportsCloudSource();
+            setCloudData(result.data);
+            setCloudMode(result.mode);
+            setLastUpdated(result.lastUpdated);
         } catch (e: any) {
             showAlert({ type: 'alert', title: 'Gagal', message: e.message });
             setDataSource('local');
@@ -177,17 +148,7 @@ const ReportsView: React.FC = () => {
     // CALCULATE AVAILABLE BRANCHES
     const availableBranches = useMemo(() => {
         if (dataSource === 'local') return [];
-        const branches = new Set<string>();
-        cloudData.transactions.forEach(t => {
-            if (t.storeId) branches.add(t.storeId);
-        });
-        cloudData.stockAdjustments.forEach(s => {
-            if ((s as any).storeId) branches.add((s as any).storeId);
-        });
-        cloudData.inventory.forEach(i => {
-             if (i.storeId) branches.add(i.storeId);
-        });
-        return Array.from(branches).sort();
+        return getAvailableBranchesFromItems(cloudData.transactions, cloudData.stockAdjustments as any[], cloudData.inventory, cloudData.expenses);
     }, [cloudData, dataSource]);
 
     const filteredData = useMemo(() => {
@@ -197,13 +158,7 @@ const ReportsView: React.FC = () => {
         weekStart.setDate(weekStart.getDate() - 6);
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
-        const filterFn = (dateStr: string, itemStoreId?: string) => {
-            // 1. Branch Filter
-            if (dataSource !== 'local' && selectedBranch !== 'ALL') {
-                if (itemStoreId !== selectedBranch) return false;
-            }
-
-            // 2. Date Filter
+        const filterFn = (dateStr: string) => {
             const time = new Date(dateStr).getTime();
             if (filter === 'today') return time >= todayStart;
             if (filter === 'week') return time >= weekStart.getTime();
@@ -219,17 +174,19 @@ const ReportsView: React.FC = () => {
             return true;
         };
 
-        const txns = activeTransactions.filter(t => filterFn(t.createdAt, t.storeId)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        const stock = activeStockAdjustments.filter(s => filterFn(s.createdAt, (s as any).storeId)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        const exps = activeExpenses.filter(e => filterFn(e.date, (e as any).storeId));
-        
+        let txns = activeTransactions.filter(t => filterFn(t.createdAt)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        let stock = activeStockAdjustments.filter(s => filterFn(s.createdAt)).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        let exps = activeExpenses.filter(e => filterFn(e.date));
+
         // Inventory Filter (No Date, Only Branch)
-        const inventory = activeInventory.filter(i => {
-             if (dataSource !== 'local' && selectedBranch !== 'ALL') {
-                return i.storeId === selectedBranch;
-            }
-            return true;
-        }).sort((a,b) => a.stock - b.stock); 
+        let inventory = activeInventory.sort((a,b) => a.stock - b.stock);
+
+        if (dataSource !== 'local' && selectedBranch !== 'ALL') {
+            txns = filterItemsByBranch(txns as any[], selectedBranch);
+            stock = filterItemsByBranch(stock as any[], selectedBranch);
+            exps = filterItemsByBranch(exps as any[], selectedBranch);
+            inventory = filterItemsByBranch(inventory as any[], selectedBranch);
+        }
 
         return { txns, stock, inventory, exps };
     }, [filter, activeTransactions, activeStockAdjustments, activeInventory, activeExpenses, selectedBranch, dataSource, customStartDate, customEndDate]);
@@ -334,7 +291,6 @@ const ReportsView: React.FC = () => {
                     totalProfit: summary.totalProfit,
                     totalTransactions: summary.transactionCount 
                 });
-                setIsExportDropdownOpen(false);
                 return;
             } else {
                 // Spreadsheet Layout
@@ -367,7 +323,6 @@ const ReportsView: React.FC = () => {
 
         if (rows.length === 0) {
             showAlert({ type: 'alert', title: 'Data Kosong', message: 'Tidak ada data untuk diexport.' });
-            setIsExportDropdownOpen(false);
             return;
         }
 
@@ -378,7 +333,6 @@ const ReportsView: React.FC = () => {
             dataService.exportToSpreadsheet(headers, rows, `Laporan_${activeTab}_${timestamp}`, format);
         }
         
-        setIsExportDropdownOpen(false);
     };
 
     const initiateRefund = (t: Transaction) => {
@@ -422,39 +376,44 @@ const ReportsView: React.FC = () => {
     const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.5, 1));
     const handleResetZoom = () => setZoomLevel(1);
 
+    const openEvidenceViewer = (transaction: Transaction) => {
+        const payments = transaction.payments || [];
+        const img = payments.find(p => p.evidenceImageUrl)?.evidenceImageUrl;
+        if (!img) return;
+        const safeId = transaction.id.replace(/[^a-z0-9]/gi, '-');
+        const dateStr = new Date(transaction.createdAt).toISOString().slice(0, 10);
+        setEvidenceData({ url: img, filename: `Bukti_Trx_${safeId}_${dateStr}.jpg` });
+        setZoomLevel(1);
+    };
+
     // --- COLUMNS ---
     const transactionColumns = [
         { label: 'Waktu', width: '120px', render: (t: Transaction) => <span className="text-slate-400 text-xs">{new Date(t.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</span> },
-        { label: 'ID', width: '80px', render: (t: Transaction) => <span className="font-mono text-xs text-slate-500">#{t.id.slice(-4)}</span> },
-        ...(dataSource !== 'local' ? [{ label: 'Cabang', width: '100px', render: (t: any) => <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{t.storeId || '-'}</span> }] : []),
-        { label: 'Pelanggan', width: '120px', render: (t: Transaction) => <span className="text-xs text-white">{t.customerName || 'Umum'}</span> },
+        { label: 'ID', width: '90px', render: (t: Transaction) => <span className="inline-flex rounded-full border border-slate-600 bg-slate-900/80 px-2 py-1 font-mono text-[11px] text-slate-300">#{t.id.slice(-4)}</span> },
+        ...(dataSource !== 'local' ? [{ label: 'Cabang', width: '100px', render: (t: any) => <span className="inline-flex rounded-full border border-slate-600 bg-slate-900/80 px-2 py-1 text-[10px] text-slate-300 font-mono">{t.storeId || '-'}</span> }] : []),
+        { label: 'Pelanggan', width: '140px', render: (t: Transaction) => <span className="text-sm font-semibold text-white">{t.customerName || 'Umum'}</span> },
         { label: 'Item', width: '2fr', render: (t: Transaction) => (
-            <span className="text-xs text-slate-300 block truncate" title={(t.items || []).map(i => i.name).join(', ')}>
+            <span className="block truncate text-xs text-slate-300" title={(t.items || []).map(i => i.name).join(', ')}>
                 {(t.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ')}
             </span>
         )},
-        { label: 'Total', width: '100px', render: (t: Transaction) => <span className="font-bold text-white text-sm">{CURRENCY_FORMATTER.format(t.total)}</span> },
+        { label: 'Total', width: '110px', render: (t: Transaction) => <span className="inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-300">{CURRENCY_FORMATTER.format(t.total)}</span> },
         { label: 'Status', width: '100px', render: (t: Transaction) => {
-             const color = t.paymentStatus === 'paid' ? 'text-green-400' : t.paymentStatus === 'refunded' ? 'text-red-400' : 'text-yellow-400';
-             return <span className={`text-xs font-bold uppercase ${color}`}>{t.paymentStatus}</span>
+             const style = t.paymentStatus === 'paid'
+                ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                : t.paymentStatus === 'refunded'
+                    ? 'border border-red-500/30 bg-red-500/10 text-red-300'
+                    : 'border border-amber-500/30 bg-amber-500/10 text-amber-300';
+             return <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${style}`}>{t.paymentStatus}</span>
         }},
         { label: 'Bukti', width: '60px', render: (t: Transaction) => {
              const payments = t.payments || [];
              const hasEvidence = payments.some(p => p.evidenceImageUrl);
              if (hasEvidence) {
                  return (
-                    <button 
-                        onClick={(e) => { 
-                            e.stopPropagation(); 
-                            const img = payments.find(p => p.evidenceImageUrl)?.evidenceImageUrl;
-                            if (img) {
-                                const safeId = t.id.replace(/[^a-z0-9]/gi, '-');
-                                const dateStr = new Date(t.createdAt).toISOString().slice(0, 10);
-                                setEvidenceData({ url: img, filename: `Bukti_Trx_${safeId}_${dateStr}.jpg` });
-                                setZoomLevel(1); 
-                            }
-                        }}
-                        className="text-blue-400 hover:text-blue-300 p-1"
+                    <button
+                        onClick={(e) => { e.stopPropagation(); openEvidenceViewer(t); }}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-300 transition-colors hover:bg-sky-500/20"
                         title="Lihat Bukti Pembayaran"
                     >
                         <Icon name="camera" className="w-4 h-4"/>
@@ -463,11 +422,11 @@ const ReportsView: React.FC = () => {
              }
              return null;
         }},
-        { label: 'Aksi', width: '140px', render: (t: Transaction) => (
-            <div className="flex gap-2">
-                <button onClick={() => setReceiptTransaction(t)} className="text-sky-400 hover:text-white bg-slate-700/50 p-1.5 rounded" title="Lihat Struk"><Icon name="printer" className="w-4 h-4"/></button>
+        { label: 'Aksi', width: '120px', className: 'overflow-visible', render: (t: Transaction) => (
+            <div className="flex gap-1">
+                <Button type="button" variant="operational" size="sm" onClick={() => setReceiptTransaction(t)} className="h-8 w-8 p-0" title="Lihat Struk"><Icon name="printer" className="w-4 h-4"/></Button>
                 {dataSource === 'local' && t.paymentStatus !== 'refunded' && (
-                    <button onClick={() => initiateRefund(t)} className="text-red-400 hover:text-white bg-slate-700/50 p-1.5 rounded" title="Refund"><Icon name="reset" className="w-4 h-4"/></button>
+                    <Button type="button" variant="danger" size="sm" onClick={() => initiateRefund(t)} className="h-8 w-8 p-0" title="Refund"><Icon name="reset" className="w-4 h-4"/></Button>
                 )}
             </div>
         )}
@@ -475,7 +434,7 @@ const ReportsView: React.FC = () => {
 
     const stockColumns = useMemo(() => [
         { label: 'Waktu', width: '1.2fr', render: (s: StockAdjustment) => <span className="text-slate-400 whitespace-nowrap text-xs">{new Date(s.createdAt).toLocaleString('id-ID')}</span> },
-        ...(dataSource !== 'local' ? [{ label: 'Cabang', width: '0.8fr', render: (s: any) => <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300 font-mono">{s.storeId || '-'}</span> }] : []),
+        ...(dataSource !== 'local' ? [{ label: 'Cabang', width: '0.9fr', render: (s: any) => <span className="inline-flex rounded-full border border-slate-600 bg-slate-900/80 px-2 py-1 text-[10px] text-slate-300 font-mono">{s.storeId || '-'}</span> }] : []),
         { label: 'Produk', width: '2fr', render: (s: StockAdjustment) => <span className="font-semibold text-white text-sm">{s.productName}</span> },
         { label: 'Tipe', width: '1fr', render: (s: StockAdjustment) => {
             const isOpname = s.notes?.toLowerCase().includes('opname');
@@ -489,10 +448,10 @@ const ReportsView: React.FC = () => {
             else if (s.change > 0) { badgeClass = 'bg-green-500/20 text-green-400'; label = 'MASUK'; } 
             else if (isWaste) { badgeClass = 'bg-red-500/20 text-red-400'; label = 'KELUAR'; }
             
-            return <span className={`px-2 py-1 text-[10px] font-bold rounded ${badgeClass}`}>{label}</span>;
+            return <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold ${badgeClass}`}>{label}</span>;
         } },
-        { label: 'Jml', width: '0.8fr', render: (s: StockAdjustment) => <span className={`font-mono font-bold text-sm ${s.change > 0 ? 'text-green-400' : 'text-red-400'}`}>{s.change > 0 ? '+' : ''}{s.change}</span> },
-        { label: 'Sisa', width: '0.8fr', render: (s: StockAdjustment) => <span className="text-slate-300 text-sm">{s.newStock}</span> },
+        { label: 'Jml', width: '0.9fr', render: (s: StockAdjustment) => <span className={`inline-flex rounded-full px-2 py-1 font-mono text-[11px] font-bold ${s.change > 0 ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border border-red-500/30 bg-red-500/10 text-red-300'}`}>{s.change > 0 ? '+' : ''}{s.change}</span> },
+        { label: 'Sisa', width: '0.9fr', render: (s: StockAdjustment) => <span className="inline-flex rounded-full border border-slate-600 bg-slate-900/80 px-2 py-1 text-[11px] text-slate-300">{s.newStock}</span> },
         { label: 'Catatan', width: '2.5fr', render: (s: StockAdjustment) => <span className="text-xs text-slate-400 italic">{s.notes || '-'}</span> },
     ], [dataSource]);
 
@@ -509,6 +468,12 @@ const ReportsView: React.FC = () => {
     ];
 
     const filterLabels: Record<TimeFilter, string> = { today: 'Hari Ini', week: 'Minggu Ini', month: 'Bulan Ini', all: 'Semua', custom: 'Kustom' };
+    const exportMenuItems = [
+        { id: 'pdf', label: 'PDF Document', onClick: () => handleExportSpreadsheet('pdf'), icon: 'printer' as const },
+        { id: 'xlsx', label: 'Excel (.xlsx)', onClick: () => handleExportSpreadsheet('xlsx'), icon: 'boxes' as const },
+        { id: 'csv', label: 'CSV', onClick: () => handleExportSpreadsheet('csv'), icon: 'tag' as const },
+        { id: 'ods', label: 'ODS (OpenDoc)', onClick: () => handleExportSpreadsheet('ods'), icon: 'file-lock' as const },
+    ];
 
     return (
         <div className="space-y-6 pb-20">
@@ -516,53 +481,212 @@ const ReportsView: React.FC = () => {
                 <div className="flex flex-col gap-1">
                     <h1 className="text-2xl font-bold text-white">Laporan</h1>
                     {dataSource === 'dropbox' && (
-                        <div className="inline-flex items-center gap-2 text-[10px] text-blue-200 bg-blue-900/30 border border-blue-800 px-2 py-1 rounded-full w-fit">
-                            <Icon name="cloud" className="w-3 h-3" />
-                            Mode Cloud Aktif
+                        <div className={`inline-flex w-fit items-center gap-2 rounded-full border px-2 py-1 text-[10px] ${cloudMode === 'demo' ? 'border-yellow-700 bg-yellow-900/30 text-yellow-200' : 'border-blue-800 bg-blue-900/30 text-blue-200'}`}>
+                            <Icon name={cloudMode === 'demo' ? 'warning' : 'cloud'} className="w-3 h-3" />
+                            {cloudMode === 'demo' ? 'Mode Demo' : 'Mode Cloud Aktif'}
                         </div>
                     )}
                 </div>
                 
-                <div className="flex flex-wrap gap-2 items-center w-full md:w-auto justify-start md:justify-end">
-                    {/* Data Source Toggle */}
-                    {!isStaff && (
-                        <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700">
-                            <button onClick={() => setDataSource('local')} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'local' ? 'bg-[#347758] text-white' : 'text-slate-400'}`}>Lokal</button>
-                            <button onClick={() => setDataSource('dropbox')} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'dropbox' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Cloud</button>
-                        </div>
-                    )}
-
-                    {/* Time Filter Dropdown */}
-                    {activeTab !== 'inventory' && (
-                        <div className="relative" ref={filterDropdownRef}>
-                            <Button 
-                                variant="secondary" 
-                                size="sm" 
-                                onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
-                                className="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100"
-                            >
-                                Filter: {filterLabels[filter]} <Icon name="chevron-down" className="w-3 h-3 ml-1" />
-                            </Button>
-                            {isFilterDropdownOpen && (
-                                <div className="absolute top-full right-0 mt-2 w-40 bg-slate-800 rounded-lg shadow-xl z-50 border border-slate-600 overflow-hidden">
-                                    {(['today', 'week', 'month', 'custom', 'all'] as const).map(f => (
-                                        <button 
-                                            key={f} 
-                                            onClick={() => { setFilter(f); setIsFilterDropdownOpen(false); }} 
-                                            className={`w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 transition-colors ${filter === f ? 'bg-[#347758]' : ''}`}
-                                        >
-                                            {filterLabels[f]}
-                                        </button>
-                                    ))}
+                <div className="w-full lg:w-auto">
+                    <div className="grid gap-2 lg:hidden">
+                        <div className="grid grid-cols-2 gap-2">
+                            {!isStaff && (
+                                <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700 h-10 w-full">
+                                    <button onClick={() => { setDataSource('local'); setCloudMode(null); }} className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'local' ? 'bg-[#347758] text-white' : 'text-slate-400'}`}>Lokal</button>
+                                    <button onClick={() => setDataSource('dropbox')} className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'dropbox' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Cloud</button>
+                                </div>
+                            )}
+                            {activeTab !== 'inventory' && (
+                                <div className="relative w-full" ref={filterDropdownRef}>
+                                    <Button 
+                                        variant="utility" 
+                                        size="sm" 
+                                        onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+                                        className="h-10 w-full justify-between bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100"
+                                    >
+                                        Filter: {filterLabels[filter]} <Icon name="chevron-down" className="w-3 h-3 ml-1" />
+                                    </Button>
+                                    {isFilterDropdownOpen && (
+                                        <div className="absolute top-full right-0 mt-2 w-full rounded-2xl border border-slate-600 bg-slate-800 shadow-xl z-50 overflow-hidden">
+                                            {(['today', 'week', 'month', 'custom', 'all'] as const).map(f => (
+                                                <button 
+                                                    key={f} 
+                                                    onClick={() => { setFilter(f); setIsFilterDropdownOpen(false); }} 
+                                                    className={`w-full text-left px-4 py-3 text-sm text-white hover:bg-slate-700 transition-colors ${filter === f ? 'bg-[#347758]' : ''}`}
+                                                >
+                                                    {filterLabels[f]}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
-                    )}
 
+                        {(dataSource !== 'local' && availableBranches.length > 0 || activeTab !== 'inventory') && (
+                            <div className="grid grid-cols-2 gap-2">
+                                {dataSource !== 'local' && availableBranches.length > 0 && (
+                                    <div className="relative w-full" ref={branchDropdownRef}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsBranchDropdownOpen(prev => !prev)}
+                                            className="h-10 w-full rounded-xl border border-blue-800 bg-blue-900/20 px-4 text-sm text-blue-100 shadow-sm flex items-center justify-between gap-2 hover:bg-blue-900/30 transition-colors"
+                                        >
+                                            <span className="truncate">{selectedBranch === 'ALL' ? 'Semua Cabang' : selectedBranch}</span>
+                                            <Icon name="chevron-down" className={`w-4 h-4 text-blue-300 transition-transform ${isBranchDropdownOpen ? 'rotate-180' : ''}`} />
+                                        </button>
+                                        {isBranchDropdownOpen && (
+                                            <div className="absolute top-full left-0 mt-2 w-full rounded-2xl border border-blue-900 bg-slate-800 shadow-xl z-50 overflow-hidden">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedBranch('ALL');
+                                                        setIsBranchDropdownOpen(false);
+                                                    }}
+                                                    className={`w-full px-4 py-3 text-left text-sm transition-colors ${
+                                                        selectedBranch === 'ALL'
+                                                            ? 'bg-blue-900/30 text-blue-100'
+                                                            : 'text-slate-200 hover:bg-slate-700'
+                                                    }`}
+                                                >
+                                                    Semua Cabang
+                                                </button>
+                                                {availableBranches.map((branch) => (
+                                                    <button
+                                                        key={branch}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedBranch(branch);
+                                                            setIsBranchDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full px-4 py-3 text-left text-sm transition-colors ${
+                                                            selectedBranch === branch
+                                                                ? 'bg-blue-900/30 text-blue-100'
+                                                                : 'text-slate-200 hover:bg-slate-700'
+                                                        }`}
+                                                    >
+                                                        {branch}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {activeTab !== 'inventory' && (
+                                    <OverflowMenu
+                                        size="sm"
+                                        label="Export"
+                                        variant="utility"
+                                        showLabelOnMobile
+                                        matchTriggerWidth
+                                        buttonClassName="h-10 w-full justify-between"
+                                        items={exportMenuItems}
+                                    />
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="hidden lg:flex lg:flex-nowrap lg:items-center lg:justify-end lg:gap-2">
+                        {!isStaff && (
+                            <div className="bg-slate-800 p-1 rounded-lg flex border border-slate-700 h-10 shrink-0">
+                                <button onClick={() => { setDataSource('local'); setCloudMode(null); }} className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'local' ? 'bg-[#347758] text-white' : 'text-slate-400'}`}>Lokal</button>
+                                <button onClick={() => setDataSource('dropbox')} className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${dataSource === 'dropbox' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Cloud</button>
+                            </div>
+                        )}
+
+                        {activeTab !== 'inventory' && (
+                            <div className="relative shrink-0" ref={filterDropdownRef}>
+                                <Button 
+                                    variant="utility" 
+                                    size="sm" 
+                                    onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+                                    className="h-10 min-w-[180px] justify-between bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100"
+                                >
+                                    Filter: {filterLabels[filter]} <Icon name="chevron-down" className="w-3 h-3 ml-1" />
+                                </Button>
+                                {isFilterDropdownOpen && (
+                                    <div className="absolute top-full right-0 mt-2 w-44 rounded-2xl border border-slate-600 bg-slate-800 shadow-xl z-50 overflow-hidden">
+                                        {(['today', 'week', 'month', 'custom', 'all'] as const).map(f => (
+                                            <button 
+                                                key={f} 
+                                                onClick={() => { setFilter(f); setIsFilterDropdownOpen(false); }} 
+                                                className={`w-full text-left px-4 py-3 text-sm text-white hover:bg-slate-700 transition-colors ${filter === f ? 'bg-[#347758]' : ''}`}
+                                            >
+                                                {filterLabels[f]}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {dataSource !== 'local' && availableBranches.length > 0 && (
+                            <div className="relative min-w-[220px] shrink-0" ref={branchDropdownRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsBranchDropdownOpen(prev => !prev)}
+                                    className="h-10 w-full rounded-xl border border-blue-800 bg-blue-900/20 px-4 text-sm text-blue-100 shadow-sm flex items-center justify-between gap-2 hover:bg-blue-900/30 transition-colors"
+                                >
+                                    <span className="truncate">{selectedBranch === 'ALL' ? 'Semua Cabang' : selectedBranch}</span>
+                                    <Icon name="chevron-down" className={`w-4 h-4 text-blue-300 transition-transform ${isBranchDropdownOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                {isBranchDropdownOpen && (
+                                    <div className="absolute top-full left-0 mt-2 w-full rounded-2xl border border-blue-900 bg-slate-800 shadow-xl z-50 overflow-hidden">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedBranch('ALL');
+                                                setIsBranchDropdownOpen(false);
+                                            }}
+                                            className={`w-full px-4 py-3 text-left text-sm transition-colors ${
+                                                selectedBranch === 'ALL'
+                                                    ? 'bg-blue-900/30 text-blue-100'
+                                                    : 'text-slate-200 hover:bg-slate-700'
+                                            }`}
+                                        >
+                                            Semua Cabang
+                                        </button>
+                                        {availableBranches.map((branch) => (
+                                            <button
+                                                key={branch}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedBranch(branch);
+                                                    setIsBranchDropdownOpen(false);
+                                                }}
+                                                className={`w-full px-4 py-3 text-left text-sm transition-colors ${
+                                                    selectedBranch === branch
+                                                        ? 'bg-blue-900/30 text-blue-100'
+                                                        : 'text-slate-200 hover:bg-slate-700'
+                                                }`}
+                                            >
+                                                {branch}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab !== 'inventory' && (
+                            <OverflowMenu
+                                size="sm"
+                                label="Export"
+                                variant="utility"
+                                showLabelOnMobile
+                                matchTriggerWidth
+                                buttonClassName="h-10 shrink-0 min-w-[140px] justify-center"
+                                items={exportMenuItems}
+                            />
+                        )}
+                    </div>
 
                     {/* Custom Date UI */}
                     {filter === 'custom' && activeTab !== 'inventory' && (
-                        <div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-slate-700">
+                        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 p-1">
                             <input 
                                 type="date" 
                                 value={customStartDate} 
@@ -578,97 +702,51 @@ const ReportsView: React.FC = () => {
                             />
                         </div>
                     )}
-
-                    {/* Export Dropdown */}
-                    {activeTab !== 'inventory' && (
-                        <div className="relative" ref={exportDropdownRef}>
-                            <div className="inline-flex" ref={exportButtonRef}>
-                                <Button 
-                                    variant="secondary" 
-                                    size="sm" 
-                                    onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-                                    className="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-100"
-                                >
-                                    <Icon name="download" className="w-4 h-4" /> Export
-                                </Button>
-                            </div>
-                            {isExportDropdownOpen && (
-                                <div
-                                    ref={exportMenuRef}
-                                    style={exportMenuStyles}
-                                    className="fixed max-h-[70vh] bg-slate-800 rounded-lg shadow-xl z-50 border border-slate-600 overflow-hidden overflow-y-auto animate-fade-in"
-                                >
-                                    <button onClick={() => handleExportSpreadsheet('pdf')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
-                                        <Icon name="printer" className="w-3 h-3 text-red-400"/> PDF Document
-                                    </button>
-                                    <button onClick={() => handleExportSpreadsheet('xlsx')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
-                                        <Icon name="boxes" className="w-3 h-3 text-green-400"/> Excel (.xlsx)
-                                    </button>
-                                    <button onClick={() => handleExportSpreadsheet('csv')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
-                                        <Icon name="tag" className="w-3 h-3 text-blue-400"/> CSV
-                                    </button>
-                                    <button onClick={() => handleExportSpreadsheet('ods')} className="w-full text-left px-4 py-2 text-xs text-white hover:bg-slate-700 flex items-center gap-2">
-                                        <Icon name="file-lock" className="w-3 h-3 text-yellow-400"/> ODS (OpenDoc)
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
                 </div>
             </div>
-            {/* Branch Selector Row (Only if Cloud) */}
-            {dataSource !== 'local' && availableBranches.length > 0 && (
-                <div className="bg-slate-800 p-1 rounded-lg border border-slate-700 w-fit">
-                    <select 
-                        value={selectedBranch} 
-                        onChange={(e) => setSelectedBranch(e.target.value)}
-                        className="bg-transparent text-sm text-white px-3 py-1.5 outline-none cursor-pointer"
-                    >
-                        <option value="ALL" className="bg-slate-800">Semua Cabang</option>
-                        {availableBranches.map(b => (
-                            <option key={b} value={b} className="bg-slate-800">{b}</option>
-                        ))}
-                    </select>
-                </div>
-            )}
 
             {/* Summary Cards */}
-            {activeTab === 'transactions' && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-[#347758] shadow-md">
-                        <p className="text-slate-400 text-sm uppercase">Total Omzet</p>
-                        <p className="text-2xl font-bold text-white">{CURRENCY_FORMATTER.format(summary.totalSales)}</p>
-                    </div>
-                    <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-blue-500 shadow-md">
-                        <p className="text-slate-400 text-sm uppercase">Total Transaksi</p>
-                        <p className="text-2xl font-bold text-white">{summary.transactionCount}</p>
-                    </div>
-                    <div className="bg-slate-800 p-4 rounded-lg border-l-4 border-emerald-600 shadow-md">
-                        <div className="flex justify-between items-center">
-                            <p className="text-slate-400 text-sm uppercase">Net Profit (Est.)</p>
-                            <span className="text-[10px] text-slate-500 bg-slate-900 rounded-full w-4 h-4 inline-flex items-center justify-center cursor-help" title="Omzet - Modal Barang (HPP) - Pengeluaran Operasional">?</span>
-                        </div>
-                        <p className="text-2xl font-bold text-white">{CURRENCY_FORMATTER.format(summary.totalProfit)}</p>
-                         <p className="text-[10px] text-slate-400 mt-1">Dikurangi Pengeluaran: {CURRENCY_FORMATTER.format(summary.totalOpEx)}</p>
+            {dataSource === 'dropbox' && (
+                <div className={`rounded-2xl border p-3 text-xs ${cloudMode === 'demo' ? 'border-yellow-700/60 bg-yellow-900/20 text-yellow-200' : 'border-blue-800/60 bg-blue-900/20 text-blue-200'}`}>
+                    <div className="flex items-start gap-2">
+                        <Icon name={cloudMode === 'demo' ? 'warning' : 'info-circle'} className="mt-0.5 h-4 w-4 shrink-0" />
+                        <p className="leading-relaxed">
+                            {cloudMode === 'demo'
+                                ? 'Dropbox belum dikonfigurasi. Data simulasi ditampilkan agar layout laporan tetap bisa dipreview.'
+                                : `Menampilkan laporan gabungan dari cloud${lastUpdated ? `, diperbarui ${lastUpdated.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : ''}.`}
+                        </p>
                     </div>
                 </div>
             )}
 
-            {/* Charts - Visible Always except Inventory */}
-            {activeTab !== 'inventory' && (
-                <ReportCharts 
-                    hourlyChartData={chartData.hourly}
-                    salesOverTimeData={chartData.trend}
-                    categorySalesData={chartData.category}
-                    bestSellingProducts={chartData.products}
-                    filter={filter}
-                    showSessionView={false}
-                />
+            {activeTab === 'transactions' && (
+                <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                    <ReportsStatCard
+                        label="Total Omzet"
+                        value={CURRENCY_FORMATTER.format(summary.totalSales)}
+                        hint="Akumulasi penjualan valid untuk periode dan cabang yang sedang aktif."
+                        icon="cash"
+                        tone="success"
+                    />
+                    <ReportsStatCard
+                        label="Total Transaksi"
+                        value={summary.transactionCount}
+                        hint="Jumlah transaksi non-refund yang ikut dihitung dalam laporan aktif."
+                        icon="printer"
+                    />
+                    <ReportsStatCard
+                        label="Net Profit (Est.)"
+                        value={CURRENCY_FORMATTER.format(summary.totalProfit)}
+                        hint={`Omzet dikurangi HPP dan pengeluaran operasional ${CURRENCY_FORMATTER.format(summary.totalOpEx)}.`}
+                        icon="trending-up"
+                        tone={summary.totalProfit >= 0 ? 'success' : 'warning'}
+                    />
+                </div>
             )}
 
-            {/* Main Tabs */}
-            <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 flex flex-col h-[600px]">
-                <div className="flex border-b border-slate-700 overflow-x-auto">
+            <div className="rounded-3xl border border-slate-800 bg-slate-800/95 shadow-xl overflow-hidden">
+                <div className="border-b border-slate-700/80 px-4 pt-3">
+                    <div className="flex overflow-x-auto hide-scrollbar">
                     <button onClick={() => setActiveTab('transactions')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'transactions' ? 'border-[#347758] text-[#52a37c]' : 'border-transparent text-slate-400 hover:text-white'}`}>
                         Riwayat Penjualan
                     </button>
@@ -681,47 +759,231 @@ const ReportsView: React.FC = () => {
                     <button onClick={() => setActiveTab('stock')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'stock' ? 'border-[#347758] text-[#52a37c]' : 'border-transparent text-slate-400 hover:text-white'}`}>
                         Log Mutasi
                     </button>
+                    </div>
                 </div>
-                
-                <div className="flex-1 p-4 overflow-hidden relative">
+
+                <div className="border-b border-slate-700/60 px-4 py-3">
+                    <h3 className="text-lg font-bold text-white">
+                        {activeTab === 'transactions' && 'Riwayat Penjualan'}
+                        {activeTab === 'products' && 'Rekap Produk'}
+                        {activeTab === 'inventory' && 'Monitoring Stok'}
+                        {activeTab === 'stock' && 'Log Mutasi'}
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-400">
+                        {activeTab === 'transactions' && 'Lihat transaksi, struk, bukti pembayaran, dan akses refund untuk data lokal.'}
+                        {activeTab === 'products' && 'Pantau produk terlaris berdasarkan kuantitas dan total omzet.'}
+                        {activeTab === 'inventory' && 'Lihat item dengan stok paling sedikit agar replenishment lebih cepat diprioritaskan.'}
+                        {activeTab === 'stock' && 'Telusuri perubahan stok dari opname, transfer, pembelian, dan penyesuaian lain.'}
+                    </p>
+                </div>
+
+                <div className="p-4">
+                    {activeTab !== 'inventory' && (
+                        <div className="mb-5">
+                            <ReportCharts 
+                                hourlyChartData={chartData.hourly}
+                                salesOverTimeData={chartData.trend}
+                                categorySalesData={chartData.category}
+                                bestSellingProducts={chartData.products}
+                                filter={filter}
+                                showSessionView={false}
+                            />
+                        </div>
+                    )}
+
+                    <div className="h-[600px] overflow-hidden relative rounded-2xl border border-slate-700 bg-slate-900/50">
                     {isLoading ? (
                         <div className="h-full flex items-center justify-center text-slate-500 animate-pulse">Memuat data...</div>
                     ) : (
                         <>
                             {activeTab === 'transactions' && (
-                                <VirtualizedTable 
-                                    data={filteredData.txns} 
-                                    columns={transactionColumns} 
-                                    rowHeight={50} 
-                                    minWidth={dataSource === 'dropbox' ? 1000 : 900} 
-                                />
+                                <>
+                                    <div className="md:hidden h-full overflow-y-auto p-2">
+                                        <div className="space-y-2">
+                                            {filteredData.txns.length > 0 ? filteredData.txns.map((transaction) => {
+                                                const hasEvidence = (transaction.payments || []).some((p) => p.evidenceImageUrl);
+                                                return (
+                                                    <div key={transaction.id} className="rounded-xl border border-slate-700/80 bg-slate-800/70 p-3 shadow-sm">
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="flex items-start justify-between gap-2">
+                                                                    <div className="min-w-0">
+                                                                        <p className="truncate text-[12px] font-bold leading-tight text-white">{transaction.customerName || 'Umum'}</p>
+                                                                        <p className="mt-0.5 text-[10px] text-slate-400">
+                                                                            {new Date(transaction.createdAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })} • #{transaction.id.slice(-4)}
+                                                                        </p>
+                                                                    </div>
+                                                                    <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase ${transaction.paymentStatus === 'paid' ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : transaction.paymentStatus === 'refunded' ? 'border border-red-500/30 bg-red-500/10 text-red-300' : 'border border-amber-500/30 bg-amber-500/10 text-amber-300'}`}>
+                                                                        {transaction.paymentStatus}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-slate-300">
+                                                                    {(transaction.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ')}
+                                                                </p>
+                                                                <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
+                                                                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-300">
+                                                                        {CURRENCY_FORMATTER.format(transaction.total)}
+                                                                    </span>
+                                                                    {dataSource !== 'local' && (
+                                                                        <span className="rounded-full border border-slate-600 bg-slate-900/80 px-1.5 py-0.5 text-slate-300">
+                                                                            {(transaction as any).storeId || '-'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className={`mt-2 grid gap-1.5 ${hasEvidence && dataSource === 'local' && transaction.paymentStatus !== 'refunded' ? 'grid-cols-3' : hasEvidence || (dataSource === 'local' && transaction.paymentStatus !== 'refunded') ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                                            <Button type="button" variant="operational" size="sm" onClick={() => setReceiptTransaction(transaction)} className="h-8 gap-1 px-2 text-[11px]">
+                                                                <Icon name="printer" className="w-4 h-4" />
+                                                                <span className="hidden min-[390px]:inline">Struk</span>
+                                                            </Button>
+                                                            {hasEvidence && (
+                                                                <Button type="button" variant="utility" size="sm" onClick={() => openEvidenceViewer(transaction)} className="h-8 gap-1 px-2 text-[11px]">
+                                                                    <Icon name="camera" className="w-4 h-4" />
+                                                                    <span className="hidden min-[390px]:inline">Bukti</span>
+                                                                </Button>
+                                                            )}
+                                                            {dataSource === 'local' && transaction.paymentStatus !== 'refunded' && (
+                                                                <Button type="button" variant="danger" size="sm" onClick={() => initiateRefund(transaction)} className="h-8 gap-1 px-2 text-[11px]">
+                                                                    <Icon name="reset" className="w-4 h-4" />
+                                                                    <span className="hidden min-[390px]:inline">Refund</span>
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }) : (
+                                                <div className="flex h-full min-h-[280px] items-center justify-center text-center text-sm text-slate-500">
+                                                    Tidak ada transaksi untuk ditampilkan.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="hidden h-full md:block">
+                                        <VirtualizedTable 
+                                            data={filteredData.txns} 
+                                            columns={transactionColumns} 
+                                            rowHeight={56} 
+                                            minWidth={dataSource === 'dropbox' ? 1000 : 900} 
+                                        />
+                                    </div>
+                                </>
                             )}
                             {activeTab === 'products' && (
-                                <VirtualizedTable 
-                                    data={productRecap} 
-                                    columns={productColumns} 
-                                    rowHeight={50} 
-                                    minWidth={500} 
-                                />
+                                <>
+                                    <div className="md:hidden h-full overflow-y-auto p-2">
+                                        <div className="space-y-2">
+                                            {productRecap.length > 0 ? productRecap.map((product, index) => (
+                                                <div key={`${product.name}-${index}`} className="rounded-xl border border-slate-700/80 bg-slate-800/70 p-3 shadow-sm">
+                                                    <p className="text-[12px] font-bold text-white">{product.name}</p>
+                                                    <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
+                                                        <span className="rounded-full border border-slate-600 bg-slate-900/80 px-1.5 py-0.5 text-slate-300">{product.quantity} terjual</span>
+                                                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-300">{CURRENCY_FORMATTER.format(product.total)}</span>
+                                                    </div>
+                                                </div>
+                                            )) : (
+                                                <div className="flex h-full min-h-[280px] items-center justify-center text-center text-sm text-slate-500">
+                                                    Tidak ada produk yang bisa ditampilkan.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="hidden h-full md:block">
+                                        <VirtualizedTable 
+                                            data={productRecap} 
+                                            columns={productColumns} 
+                                            rowHeight={52} 
+                                            minWidth={500} 
+                                        />
+                                    </div>
+                                </>
                             )}
                             {activeTab === 'inventory' && (
-                                <VirtualizedTable 
-                                    data={filteredData.inventory} 
-                                    columns={inventoryColumns} 
-                                    rowHeight={50} 
-                                    minWidth={500} 
-                                />
+                                <>
+                                    <div className="md:hidden h-full overflow-y-auto p-2">
+                                        <div className="space-y-2">
+                                            {filteredData.inventory.length > 0 ? filteredData.inventory.map((item: any, index: number) => (
+                                                <div key={`${item.id || item.name}-${index}`} className="rounded-xl border border-slate-700/80 bg-slate-800/70 p-3 shadow-sm">
+                                                    <p className="text-[12px] font-bold text-white">{item.name}</p>
+                                                    <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
+                                                        <span className={`rounded-full px-1.5 py-0.5 ${item.stock <= 5 ? 'border border-red-500/30 bg-red-500/10 text-red-300' : 'border border-slate-600 bg-slate-900/80 text-slate-300'}`}>
+                                                            Sisa {item.stock}
+                                                        </span>
+                                                        {dataSource !== 'local' && (
+                                                            <span className="rounded-full border border-slate-600 bg-slate-900/80 px-1.5 py-0.5 text-slate-300">{item.storeId || '-'}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )) : (
+                                                <div className="flex h-full min-h-[280px] items-center justify-center text-center text-sm text-slate-500">
+                                                    Tidak ada stok yang bisa ditampilkan.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="hidden h-full md:block">
+                                        <VirtualizedTable 
+                                            data={filteredData.inventory} 
+                                            columns={inventoryColumns} 
+                                            rowHeight={52} 
+                                            minWidth={500} 
+                                        />
+                                    </div>
+                                </>
                             )}
                             {activeTab === 'stock' && (
-                                <VirtualizedTable 
-                                    data={filteredData.stock} 
-                                    columns={stockColumns} 
-                                    rowHeight={50} 
-                                    minWidth={dataSource === 'dropbox' ? 1000 : 800} 
-                                />
+                                <>
+                                    <div className="md:hidden h-full overflow-y-auto p-2">
+                                        <div className="space-y-2">
+                                            {filteredData.stock.length > 0 ? filteredData.stock.map((stock) => {
+                                                const isOpname = stock.notes?.toLowerCase().includes('opname');
+                                                const isTransfer = stock.notes?.toLowerCase().includes('transfer');
+                                                const isWaste = stock.change < 0 && !isTransfer;
+                                                const label = isOpname ? 'OPNAME' : isTransfer ? 'TRANSFER' : stock.change > 0 ? 'MASUK' : isWaste ? 'KELUAR' : 'UPDATE';
+                                                const tone = isOpname ? 'border border-blue-500/30 bg-blue-500/10 text-blue-300' : isTransfer ? 'border border-purple-500/30 bg-purple-500/10 text-purple-300' : stock.change > 0 ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border border-red-500/30 bg-red-500/10 text-red-300';
+                                                return (
+                                                    <div key={stock.id} className="rounded-xl border border-slate-700/80 bg-slate-800/70 p-3 shadow-sm">
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="flex items-start justify-between gap-2">
+                                                                    <p className="truncate text-[12px] font-bold text-white">{stock.productName}</p>
+                                                                    <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${tone}`}>{label}</span>
+                                                                </div>
+                                                                <p className="mt-0.5 text-[10px] text-slate-400">{new Date(stock.createdAt).toLocaleString('id-ID')}</p>
+                                                                <p className="mt-1.5 text-[11px] leading-relaxed text-slate-300">{stock.notes || 'Tanpa catatan tambahan.'}</p>
+                                                                <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
+                                                                    <span className={`rounded-full px-1.5 py-0.5 ${stock.change > 0 ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border border-red-500/30 bg-red-500/10 text-red-300'}`}>
+                                                                        {stock.change > 0 ? '+' : ''}{stock.change}
+                                                                    </span>
+                                                                    <span className="rounded-full border border-slate-600 bg-slate-900/80 px-1.5 py-0.5 text-slate-300">Sisa {stock.newStock}</span>
+                                                                    {dataSource !== 'local' && (
+                                                                        <span className="rounded-full border border-slate-600 bg-slate-900/80 px-1.5 py-0.5 text-slate-300">{(stock as any).storeId || '-'}</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }) : (
+                                                <div className="flex h-full min-h-[280px] items-center justify-center text-center text-sm text-slate-500">
+                                                    Tidak ada mutasi stok untuk ditampilkan.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="hidden h-full md:block">
+                                        <VirtualizedTable 
+                                            data={filteredData.stock} 
+                                            columns={stockColumns} 
+                                            rowHeight={56} 
+                                            minWidth={dataSource === 'dropbox' ? 1000 : 800} 
+                                        />
+                                    </div>
+                                </>
                             )}
                         </>
                     )}
+                    </div>
                 </div>
             </div>
 

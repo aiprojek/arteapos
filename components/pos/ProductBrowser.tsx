@@ -102,6 +102,7 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
             <div className={`${isUltraCompactViewport ? 'mb-2 space-y-1.5' : 'mb-3 space-y-2'}`}>
                 <div className="flex items-center gap-2">
                     <div className="relative flex-1 min-w-0">
+                        <div className={`absolute inset-0 rounded-2xl border border-slate-700 bg-slate-800/95 shadow-sm ${isSessionLocked ? 'opacity-60' : ''}`} />
                         <input
                             ref={searchInputRef}
                             type="text"
@@ -109,58 +110,66 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                             disabled={isSessionLocked}
-                            className={`w-full bg-slate-800 border border-slate-700 rounded-lg ${isUltraCompactViewport ? 'pl-8 pr-2.5 py-1.5 text-[13px]' : isCompactViewport ? 'pl-9 pr-3 py-2 text-sm' : 'pl-9 pr-3 py-2.5 sm:py-2 text-sm'} text-white focus:ring-[#347758] focus:border-[#347758] ${isSessionLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`relative w-full rounded-2xl bg-transparent text-white transition-colors focus:border-[#347758] focus:outline-none focus:ring-2 focus:ring-[#347758] focus:ring-offset-2 focus:ring-offset-slate-900 ${isUltraCompactViewport ? 'h-9 pl-9 pr-9 text-[13px]' : isCompactViewport ? 'h-10 pl-10 pr-10 text-sm' : 'h-11 pl-11 pr-11 text-sm'} ${isSessionLocked ? 'cursor-not-allowed opacity-60' : ''}`}
                         />
-                        <Icon name="search" className={`absolute top-1/2 -translate-y-1/2 text-slate-400 ${isUltraCompactViewport ? 'left-2.5 w-3.5 h-3.5' : 'left-3 w-4 h-4 sm:w-5 sm:h-5'}`} />
+                        <Icon name="search" className={`absolute top-1/2 -translate-y-1/2 text-slate-400 ${isUltraCompactViewport ? 'left-3 w-3.5 h-3.5' : isCompactViewport ? 'left-3.5 w-4 h-4' : 'left-4 w-4.5 h-4.5'}`} />
+                        {searchTerm && !isSessionLocked && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm('')}
+                                className={`absolute top-1/2 -translate-y-1/2 rounded-full text-slate-400 transition-colors hover:bg-slate-700 hover:text-white ${isUltraCompactViewport ? 'right-2 flex h-5 w-5 items-center justify-center' : 'right-2.5 flex h-6 w-6 items-center justify-center'}`}
+                                title="Bersihkan pencarian"
+                            >
+                                <Icon name="close" className={isUltraCompactViewport ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+                            </button>
+                        )}
                     </div>
 
-                    <div className="hidden sm:flex items-center gap-2 overflow-x-auto scrollbar-hide">
+                    <div className="hidden sm:flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
                         {inventorySettings.enabled && (
-                            <div className={`flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-900/40 ${isCompactViewport ? 'p-0.5' : 'p-1'}`}>
+                            <>
                                 <Button
-                                    variant="secondary"
+                                    variant="operational"
                                     onClick={onOpenRestock}
                                     disabled={isSessionLocked}
                                     title="Terima Barang / Lapor Waste"
-                                    className={`${isUltraCompactViewport ? 'px-2 py-1.5' : isCompactViewport ? 'px-2.5 py-1.5' : 'px-3'} bg-slate-800 border border-slate-700`}
+                                    className={`${isUltraCompactViewport ? 'px-2 h-[34px]' : isCompactViewport ? 'px-2.5 h-[40px]' : 'px-3 h-[42px]'}`}
                                 >
                                     <Icon name="tag" className="w-5 h-5" />
                                     {!isCompactViewport && <span className="text-xs">Terima</span>}
                                 </Button>
                                 <Button
-                                    variant="secondary"
+                                    variant="operational"
                                     onClick={onOpenOpname}
                                     disabled={isSessionLocked}
                                     title="Stock Opname (Audit Stok)"
-                                    className={`${isUltraCompactViewport ? 'px-2 py-1.5' : isCompactViewport ? 'px-2.5 py-1.5' : 'px-3'} bg-slate-800 border border-slate-700`}
+                                    className={`${isUltraCompactViewport ? 'px-2 h-[34px]' : isCompactViewport ? 'px-2.5 h-[40px]' : 'px-3 h-[42px]'}`}
                                 >
                                     <Icon name="boxes" className="w-5 h-5" />
                                     {!isCompactViewport && <span className="text-xs">Opname</span>}
                                 </Button>
-                            </div>
+                            </>
                         )}
-                        <div className={`flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-900/40 ${isCompactViewport ? 'p-0.5' : 'p-1'}`}>
-                            <Button
-                                variant="secondary"
-                                onClick={onOpenScanner}
-                                disabled={isSessionLocked}
-                                title="Pindai Barcode Produk"
-                                className={`${isUltraCompactViewport ? 'px-2 py-1.5' : isCompactViewport ? 'px-2.5 py-1.5' : 'px-3'} bg-slate-800 border border-slate-700`}
-                            >
-                                <Icon name="barcode" className="w-5 h-5" />
-                                {!isCompactViewport && <span className="text-xs">Scan</span>}
-                            </Button>
-                            <Button
-                                variant="secondary"
-                                onClick={onOpenChannelSales}
-                                disabled={isSessionLocked}
-                                title="Catat Penjualan Channel Online"
-                                className={`${isUltraCompactViewport ? 'px-2 py-1.5' : isCompactViewport ? 'px-2.5 py-1.5' : 'px-3'} bg-slate-800 border border-slate-700`}
-                            >
-                                <Icon name="cloud" className="w-5 h-5" />
-                                {!isCompactViewport && <span className="text-xs">Channel</span>}
-                            </Button>
-                        </div>
+                        <Button
+                            variant="operational"
+                            onClick={onOpenScanner}
+                            disabled={isSessionLocked}
+                            title="Pindai Barcode Produk"
+                            className={`${isUltraCompactViewport ? 'px-2 h-[34px]' : isCompactViewport ? 'px-2.5 h-[40px]' : 'px-3 h-[42px]'}`}
+                        >
+                            <Icon name="barcode" className="w-5 h-5" />
+                            {!isCompactViewport && <span className="text-xs">Scan</span>}
+                        </Button>
+                        <Button
+                            variant="operational"
+                            onClick={onOpenChannelSales}
+                            disabled={isSessionLocked}
+                            title="Catat Penjualan Channel Online"
+                            className={`${isUltraCompactViewport ? 'px-2 h-[34px]' : isCompactViewport ? 'px-2.5 h-[40px]' : 'px-3 h-[42px]'}`}
+                        >
+                            <Icon name="cloud" className="w-5 h-5" />
+                            {!isCompactViewport && <span className="text-xs">Channel</span>}
+                        </Button>
                     </div>
                 </div>
 
@@ -172,7 +181,7 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
                                 onClick={onOpenRestock}
                                 disabled={isSessionLocked}
                                 title="Terima Barang / Lapor Waste"
-                                className={`flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 disabled:opacity-50 ${isUltraCompactViewport ? 'gap-0.5 px-1.5 py-1.5 text-[10px]' : 'gap-1 px-2 py-2 text-[11px]'}`}
+                                className={`flex flex-col items-center justify-center rounded-xl border border-slate-700/70 bg-slate-800/80 text-slate-100 hover:bg-slate-700 disabled:opacity-50 ${isUltraCompactViewport ? 'gap-0.5 px-1.5 py-1.5 text-[10px]' : 'gap-1 px-2 py-2 text-[11px]'}`}
                             >
                                 <Icon name="tag" className={`${isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
                                 <span className="leading-none">Terima</span>
@@ -182,7 +191,7 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
                                 onClick={onOpenOpname}
                                 disabled={isSessionLocked}
                                 title="Stock Opname (Audit Stok)"
-                                className={`flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 disabled:opacity-50 ${isUltraCompactViewport ? 'gap-0.5 px-1.5 py-1.5 text-[10px]' : 'gap-1 px-2 py-2 text-[11px]'}`}
+                                className={`flex flex-col items-center justify-center rounded-xl border border-slate-700/70 bg-slate-800/80 text-slate-100 hover:bg-slate-700 disabled:opacity-50 ${isUltraCompactViewport ? 'gap-0.5 px-1.5 py-1.5 text-[10px]' : 'gap-1 px-2 py-2 text-[11px]'}`}
                             >
                                 <Icon name="boxes" className={`${isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
                                 <span className="leading-none">Opname</span>
@@ -194,7 +203,7 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
                         onClick={onOpenScanner}
                         disabled={isSessionLocked}
                         title="Pindai Barcode Produk"
-                        className={`flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 disabled:opacity-50 ${isUltraCompactViewport ? 'gap-0.5 px-1.5 py-1.5 text-[10px]' : 'gap-1 px-2 py-2 text-[11px]'}`}
+                        className={`flex flex-col items-center justify-center rounded-xl border border-slate-700/70 bg-slate-800/80 text-slate-100 hover:bg-slate-700 disabled:opacity-50 ${isUltraCompactViewport ? 'gap-0.5 px-1.5 py-1.5 text-[10px]' : 'gap-1 px-2 py-2 text-[11px]'}`}
                     >
                         <Icon name="barcode" className={`${isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
                         <span className="leading-none">Scan</span>
@@ -204,7 +213,7 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
                         onClick={onOpenChannelSales}
                         disabled={isSessionLocked}
                         title="Catat Penjualan Channel Online"
-                        className={`flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 disabled:opacity-50 ${isUltraCompactViewport ? 'gap-0.5 px-1.5 py-1.5 text-[10px]' : 'gap-1 px-2 py-2 text-[11px]'}`}
+                        className={`flex flex-col items-center justify-center rounded-xl border border-slate-700/70 bg-slate-800/80 text-slate-100 hover:bg-slate-700 disabled:opacity-50 ${isUltraCompactViewport ? 'gap-0.5 px-1.5 py-1.5 text-[10px]' : 'gap-1 px-2 py-2 text-[11px]'}`}
                     >
                         <Icon name="cloud" className={`${isUltraCompactViewport ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
                         <span className="leading-none">Channel</span>

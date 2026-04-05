@@ -17,21 +17,24 @@ import type { Customer, OrderType } from '../../types';
 const HeldCartsTabs: React.FC<{
     onSwitch: (cartId: string | null) => void;
     enableCartHolding: boolean;
-}> = ({ onSwitch, enableCartHolding }) => {
+    compact?: boolean;
+    ultraCompact?: boolean;
+}> = ({ onSwitch, enableCartHolding, compact = false, ultraCompact = false }) => {
     const { heldCarts, activeHeldCartId } = useCart();
     return (
-        <div className="mb-4 -mx-4 px-2">
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide px-2">
+        <div className={`${ultraCompact ? 'mb-2 -mx-3 px-1.5' : 'mb-4 -mx-4 px-2'}`}>
+            <div className={`flex items-center overflow-x-auto scrollbar-hide ${ultraCompact ? 'gap-1.5 pb-1.5 px-1.5' : compact ? 'gap-1.5 pb-2 px-2' : 'gap-2 pb-2 px-2'}`}>
                  {enableCartHolding && (
                      <button 
                         onClick={() => onSwitch(null)} 
-                        className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors border
+                        className={`flex-shrink-0 flex items-center gap-1.5 rounded-lg transition-colors border
+                            ${ultraCompact ? 'px-2 py-1 text-[11px]' : compact ? 'px-2.5 py-1.5 text-[13px]' : 'px-3 py-1.5 text-sm'}
                             ${activeHeldCartId === null 
                                 ? 'bg-[#347758] text-white font-semibold border-[#347758]' 
                                 : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500'}`
                         }
                     >
-                        <Icon name="plus" className="w-4 h-4" />
+                        <Icon name="plus" className={ultraCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
                         Baru
                     </button>
                  )}
@@ -39,11 +42,13 @@ const HeldCartsTabs: React.FC<{
                     <button 
                         key={cart.id} 
                         onClick={() => onSwitch(cart.id)}
-                        className={`flex-shrink-0 px-3 py-1.5 text-sm rounded-lg transition-colors border
+                        className={`flex-shrink-0 rounded-lg transition-colors border truncate max-w-[160px]
+                             ${ultraCompact ? 'px-2 py-1 text-[11px]' : compact ? 'px-2.5 py-1.5 text-[13px]' : 'px-3 py-1.5 text-sm'}
                              ${activeHeldCartId === cart.id 
                                 ? 'bg-[#347758] text-white font-semibold border-[#347758]' 
                                 : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500'}`
                         }
+                        title={cart.name}
                     >
                         {cart.name}
                     </button>
@@ -62,7 +67,20 @@ const CustomerSelection: React.FC<{
     onSelectOrderType: (type: OrderType) => void;
     onTopUpClick: () => void;
     orderType: OrderType;
-}> = ({ selectedCustomer, onSelectCustomer, onOpenAddModal, onOpenSearchModal, onOpenScanner, onSelectOrderType, onTopUpClick, orderType }) => {
+    compact?: boolean;
+    ultraCompact?: boolean;
+}> = ({
+    selectedCustomer,
+    onSelectCustomer,
+    onOpenAddModal,
+    onOpenSearchModal,
+    onOpenScanner,
+    onSelectOrderType,
+    onTopUpClick,
+    orderType,
+    compact = false,
+    ultraCompact = false,
+}) => {
     const { membershipSettings } = useCustomer();
     const { receiptSettings } = useSettings();
     const { sessionSettings } = useSession(); // Access Session Settings for Toggle
@@ -75,15 +93,15 @@ const CustomerSelection: React.FC<{
     const isDineIn = orderType.toLowerCase().includes('makan') || orderType.toLowerCase().includes('dine') || orderType.toLowerCase().includes('meja');
 
     return (
-        <div className="space-y-2">
-            <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Jenis Pesanan</p>
-                <div className="flex-1 min-w-0 bg-slate-700/80 rounded-lg p-1 border border-slate-600/50 flex items-center overflow-x-auto scrollbar-hide">
+        <div className={`${ultraCompact ? 'space-y-1.5' : 'space-y-2'}`}>
+            <div className={`rounded-xl border border-slate-700 bg-slate-900/40 ${ultraCompact ? 'p-1.5' : 'p-2'}`}>
+                <p className={`font-semibold uppercase tracking-wide text-slate-500 ${ultraCompact ? 'text-[10px] mb-1.5' : 'text-[11px] mb-2'}`}>Jenis Pesanan</p>
+                <div className={`flex-1 min-w-0 bg-slate-700/80 rounded-lg border border-slate-600/50 flex items-center overflow-x-auto scrollbar-hide ${ultraCompact ? 'p-0.5' : 'p-1'}`}>
                     {availableOrderTypes.map(type => (
                         <button 
                             key={type}
                             onClick={() => onSelectOrderType(type)} 
-                            className={`flex-1 min-w-max px-3 py-2 text-[11px] leading-tight rounded-md transition-colors truncate ${orderType === type ? 'bg-[#347758] text-white font-bold shadow-sm' : 'text-slate-400 hover:text-slate-300'}`}
+                            className={`flex-1 min-w-max leading-tight rounded-md transition-colors truncate ${ultraCompact ? 'px-2 py-1.5 text-[10px]' : 'px-3 py-2 text-[11px]'} ${orderType === type ? 'bg-[#347758] text-white font-bold shadow-sm' : 'text-slate-400 hover:text-slate-300'}`}
                             title={type}
                         >
                             {type}
@@ -92,42 +110,42 @@ const CustomerSelection: React.FC<{
                 </div>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div className={`flex flex-col ${ultraCompact ? 'gap-1.5' : 'gap-2'}`}>
                 {sessionSettings.enableTableManagement && isDineIn && (
-                    <div className="flex gap-2 bg-slate-700/80 rounded-xl p-2 border border-slate-600/50 flex-shrink-0 animate-fade-in sm:w-auto">
-                        <div className="flex bg-slate-800 rounded-lg px-2 items-center min-w-[84px]">
-                            <span className="text-slate-500 font-bold text-[10px] mr-2">MEJA</span>
+                    <div className={`grid grid-cols-2 max-w-full bg-slate-700/80 rounded-xl border border-slate-600/50 animate-fade-in ${ultraCompact ? 'gap-1.5 p-1.5' : 'gap-2 p-2'} w-full`}>
+                        <div className={`flex min-w-0 bg-slate-800 rounded-lg items-center ${ultraCompact ? 'px-1.5' : 'px-2'}`}>
+                            <span className={`text-slate-500 font-bold ${ultraCompact ? 'text-[9px] mr-1.5' : 'text-[10px] mr-2'}`}>MEJA</span>
                             <input 
                                 type="text" 
                                 value={tableNumber} 
                                 onChange={(e) => setTableNumber(e.target.value)} 
                                 placeholder="-"
-                                className="w-full bg-transparent text-white text-sm font-bold outline-none text-center"
+                                className={`w-full min-w-0 bg-transparent text-white font-bold outline-none text-center ${ultraCompact ? 'text-[13px]' : 'text-sm'}`}
                             />
                         </div>
-                        <div className="flex bg-slate-800 rounded-lg px-2 items-center min-w-[72px]">
-                            <span className="text-slate-500 font-bold text-[10px] mr-2">PAX</span>
+                        <div className={`flex min-w-0 bg-slate-800 rounded-lg items-center ${ultraCompact ? 'px-1.5' : 'px-2'}`}>
+                            <span className={`text-slate-500 font-bold ${ultraCompact ? 'text-[9px] mr-1.5' : 'text-[10px] mr-2'}`}>PAX</span>
                             <input 
                                 type="number" 
                                 min="1"
                                 value={paxCount || ''} 
                                 onChange={(e) => setPaxCount(parseInt(e.target.value) || 0)} 
                                 placeholder="-"
-                                className="w-full bg-transparent text-white text-sm font-bold outline-none text-center"
+                                className={`w-full min-w-0 bg-transparent text-white font-bold outline-none text-center ${ultraCompact ? 'text-[13px]' : 'text-sm'}`}
                             />
                         </div>
                     </div>
                 )}
 
                 {membershipSettings.enabled && (
-                    <div className={`flex-1 flex items-center justify-between p-2 rounded-xl border min-h-[54px] ${selectedCustomer ? 'bg-[#347758]/20 border-[#347758]/30' : 'bg-slate-700/80 border-slate-600/50'}`}>
+                    <div className={`min-w-0 flex-1 flex items-center justify-between rounded-xl border ${ultraCompact ? 'p-1.5 min-h-[46px]' : compact ? 'p-2 min-h-[50px]' : 'p-2 min-h-[54px]'} ${selectedCustomer ? 'bg-[#347758]/20 border-[#347758]/30' : 'bg-slate-700/80 border-slate-600/50'}`}>
                         <div className="flex items-center gap-2 overflow-hidden pl-1 flex-1 cursor-pointer" onClick={() => !selectedCustomer && onOpenSearchModal()}>
-                            <Icon name="users" className={`w-4 h-4 flex-shrink-0 ${selectedCustomer ? 'text-[#52a37c]' : 'text-slate-400'}`} />
+                            <Icon name="users" className={`${ultraCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} flex-shrink-0 ${selectedCustomer ? 'text-[#52a37c]' : 'text-slate-400'}`} />
                             <div className="min-w-0">
-                                <p className={`font-bold text-xs leading-tight truncate ${selectedCustomer ? 'text-white' : 'text-slate-400'}`}>
+                                <p className={`font-bold leading-tight truncate ${ultraCompact ? 'text-[11px]' : 'text-xs'} ${selectedCustomer ? 'text-white' : 'text-slate-400'}`}>
                                     {selectedCustomer ? selectedCustomer.name : 'Pilih Member'}
                                 </p>
-                                <p className="text-[10px] text-slate-500 truncate">
+                                <p className={`${ultraCompact ? 'text-[9px]' : 'text-[10px]'} text-slate-500 truncate`}>
                                     {selectedCustomer ? 'Kelola saldo atau lepas member' : 'Cari member atau scan barcode'}
                                 </p>
                             </div>
@@ -135,20 +153,20 @@ const CustomerSelection: React.FC<{
                         
                         {selectedCustomer ? (
                             <div className="flex items-center gap-1 pl-1">
-                                <button onClick={onTopUpClick} className="text-[#52a37c] hover:bg-[#347758]/20 p-1.5 rounded-lg transition-colors" title="Saldo">
-                                    <Icon name="cash" className="w-4 h-4"/>
+                                <button onClick={onTopUpClick} className={`text-[#52a37c] hover:bg-[#347758]/20 rounded-lg transition-colors ${ultraCompact ? 'p-1' : 'p-1.5'}`} title="Saldo">
+                                    <Icon name="cash" className={ultraCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
                                 </button>
-                                <button onClick={() => onSelectCustomer(null)} className="text-slate-400 hover:text-red-400 p-1.5 rounded-lg">
-                                    <Icon name="close" className="w-4 h-4"/>
+                                <button onClick={() => onSelectCustomer(null)} className={`text-slate-400 hover:text-red-400 rounded-lg ${ultraCompact ? 'p-1' : 'p-1.5'}`}>
+                                    <Icon name="close" className={ultraCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
                                 </button>
                             </div>
                         ) : (
                             <div className="flex items-center gap-1 pl-1">
-                                <button onClick={onOpenAddModal} className="text-slate-400 hover:text-white p-1.5 rounded-lg" title="Tambah Member">
-                                    <Icon name="plus" className="w-4 h-4" />
+                                <button onClick={onOpenAddModal} className={`text-slate-400 hover:text-white rounded-lg ${ultraCompact ? 'p-1' : 'p-1.5'}`} title="Tambah Member">
+                                    <Icon name="plus" className={ultraCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
                                 </button>
-                                <button onClick={onOpenScanner} className="text-slate-400 hover:text-white p-1.5 rounded-lg" title="Scan Barcode">
-                                    <Icon name="barcode" className="w-4 h-4" />
+                                <button onClick={onOpenScanner} className={`text-slate-400 hover:text-white rounded-lg ${ultraCompact ? 'p-1' : 'p-1.5'}`} title="Scan Barcode">
+                                    <Icon name="barcode" className={ultraCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
                                 </button>
                             </div>
                         )}
@@ -266,7 +284,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
         if (activeHeldCartId === null) {
             return (
-                 <Button onClick={() => onOpenNameModal(null)} disabled={cart.length === 0} variant="secondary" className="flex-1 px-1 h-full flex flex-row items-center justify-center gap-1.5 text-[11px] font-bold" title="Simpan Pesanan">
+                 <Button onClick={() => onOpenNameModal(null)} disabled={cart.length === 0} variant="utility" className="flex-1 px-1 h-full flex flex-row items-center justify-center gap-1.5 text-[11px] font-bold" title="Simpan Pesanan">
                     <Icon name="save" className="w-4 h-4"/>
                     <span className="hidden sm:inline">Simpan</span>
                 </Button>
@@ -278,7 +296,7 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
 
         return (
             <>
-                <Button variant="secondary" className="flex-1 px-1 h-full flex flex-row items-center justify-center gap-1.5 text-[11px] font-bold" onClick={() => onOpenNameModal(currentCart)} title="Ganti Nama">
+                <Button variant="utility" className="flex-1 px-1 h-full flex flex-row items-center justify-center gap-1.5 text-[11px] font-bold" onClick={() => onOpenNameModal(currentCart)} title="Ganti Nama">
                     <Icon name="edit" className="w-3.5 h-3.5"/>
                     <span className="hidden sm:inline">Ganti</span>
                 </Button>
@@ -377,6 +395,8 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                             onSelectOrderType={setOrderType}
                             onTopUpClick={() => setIsTopUpOpen(true)}
                             orderType={orderType}
+                            compact={isCompactViewport}
+                            ultraCompact={isUltraCompactViewport}
                         />
                         
                         <div className={`grid ${isUltraCompactViewport ? 'gap-1.5' : 'gap-2'} ${onSplitBill ? 'grid-cols-3' : membershipSettings.enabled ? 'grid-cols-2' : 'grid-cols-1'}`}>
@@ -510,24 +530,31 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                     </div>
 
                     <div className="flex justify-end gap-3 pt-2">
-                        <Button variant="secondary" onClick={() => setIsTopUpOpen(false)}>Batal</Button>
+                        <Button variant="utility" onClick={() => setIsTopUpOpen(false)}>Batal</Button>
                         <Button onClick={handleConfirmTopUp} disabled={!topUpAmount || parseFloat(topUpAmount) <= 0}>Konfirmasi</Button>
                     </div>
                 </div>
             </Modal>
 
             {/* Saved Carts Modal */}
-            <Modal isOpen={isSavedCartsModalOpen} onClose={() => setIsSavedCartsModalOpen(false)} title="Pesanan Tersimpan">
+            <Modal
+                isOpen={isSavedCartsModalOpen}
+                onClose={() => setIsSavedCartsModalOpen(false)}
+                title="Pesanan Tersimpan"
+                size="lg"
+                mobileLayout="fullscreen"
+                bodyClassName="p-4 sm:p-6"
+            >
                 <div className="flex flex-col h-full">
                     <input 
                         type="text"
                         placeholder="Cari pesanan..."
                         value={savedCartSearchTerm}
                         onChange={(e) => {setSavedCartSearchTerm(e.target.value)}}
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white mb-4 flex-shrink-0"
+                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white mb-4 flex-shrink-0 text-sm sm:text-base"
                     />
 
-                    <div className="flex-grow overflow-y-auto space-y-2 pr-1 -mr-3">
+                    <div className="flex-grow overflow-y-auto space-y-2 pr-1 -mr-2 sm:-mr-3">
                         {filteredHeldCarts.length > 0 ? filteredHeldCarts.map(cart => (
                             <button 
                                 key={cart.id} 
@@ -535,10 +562,17 @@ const CartSidebar: React.FC<CartSidebarProps> = ({
                                     handleSwitchCart(cart.id);
                                     setIsSavedCartsModalOpen(false);
                                 }}
-                                className="w-full text-left p-3 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                                className="w-full text-left p-3 sm:p-3.5 bg-slate-700 hover:bg-slate-600 rounded-xl transition-colors border border-slate-600/50"
                             >
-                                <p className="font-semibold text-white">{cart.name}</p>
-                                <p className="text-xs text-slate-400">{cart.items.length} item &bull; {CURRENCY_FORMATTER.format(cart.items.reduce((acc, item) => acc + item.price * item.quantity, 0))}</p>
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="font-semibold text-white truncate">{cart.name}</p>
+                                        <p className="text-xs text-slate-400 mt-1">
+                                            {cart.items.length} item &bull; {CURRENCY_FORMATTER.format(cart.items.reduce((acc, item) => acc + item.price * item.quantity, 0))}
+                                        </p>
+                                    </div>
+                                    <Icon name="cart" className="w-4 h-4 text-slate-400 mt-0.5" />
+                                </div>
                             </button>
                         )) : (
                             <div className="text-center text-slate-500 py-8">

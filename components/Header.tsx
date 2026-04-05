@@ -451,8 +451,9 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
             <div className={`flex items-center min-w-0 ${isCompactViewport ? 'gap-1.5' : ''}`}>
                 <button
                     onClick={onMenuClick}
-                    className={`text-slate-300 hover:text-white md:hidden inline-flex items-center justify-center self-center rounded-xl border border-slate-700/70 bg-slate-800/60 shadow-sm ${isCompactViewport ? 'w-9 h-9' : 'w-10 h-10 mr-3'}`}
+                    className={`text-slate-100 md:hidden inline-flex items-center justify-center self-center rounded-xl border border-slate-600 bg-slate-700 hover:bg-slate-600 transition-colors ${isCompactViewport ? 'w-9 h-9' : 'w-10 h-10 mr-3'}`}
                     aria-label="Buka menu"
+                    title="Buka menu"
                 >
                     <Icon name="menu" className={`${isCompactViewport ? 'w-5 h-5' : 'w-6 h-6'} block`} />
                 </button>
@@ -472,9 +473,9 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
             <div className={`flex items-center shrink-0 ${isCompactViewport ? 'gap-2' : 'gap-3'}`}>
                  <Button
                     onClick={() => setDataModalOpen(true)}
-                    variant="secondary"
+                    variant="utility"
                     size="sm"
-                    className={`${isCompactViewport ? 'p-1.5' : 'p-2'} aspect-square bg-slate-700 border border-slate-600 hover:bg-slate-600`}
+                    className={`${isCompactViewport ? 'p-1.5' : 'p-2'} aspect-square`}
                     aria-label="Menu Data & Sync"
                     title="Menu Data & Sinkronisasi"
                 >
@@ -484,7 +485,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                  {activeView !== 'help' && (
                     <Button 
                         onClick={() => setActiveView('help')} 
-                        variant="secondary" 
+                        variant="utility" 
                         size="sm" 
                         className={`${isCompactViewport ? 'p-1.5' : 'p-2'} aspect-square`}
                         aria-label="Bantuan"
@@ -498,7 +499,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
                         <span className={`text-sm text-slate-300 ${isCompactViewport ? 'hidden lg:block' : 'hidden sm:block'}`}>
                             Login sebagai: <span className="font-bold text-white">{currentUser.name}</span>
                         </span>
-                        <Button onClick={logout} variant="secondary" size="sm" aria-label="Logout" className={isCompactViewport ? 'px-2 py-1.5' : ''}>
+                        <Button onClick={logout} variant="utility" size="sm" aria-label="Logout" className={isCompactViewport ? 'px-2 py-1.5' : ''}>
                             <Icon name="logout" className="w-4 h-4" />
                             <span className={isCompactViewport ? 'hidden lg:inline' : 'hidden sm:inline'}>Logout</span>
                         </Button>
@@ -508,77 +509,104 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
         </header>
 
         {/* Modal Manajemen Data */}
-        <Modal isOpen={isDataModalOpen} onClose={() => setDataModalOpen(false)} title="Menu Data & Sinkronisasi">
-            <div className="space-y-4 pr-1">
+        <Modal
+            isOpen={isDataModalOpen}
+            onClose={() => setDataModalOpen(false)}
+            title="Menu Data & Sinkronisasi"
+            size="full"
+            mobileLayout="fullscreen"
+            bodyClassName="p-4 sm:p-6"
+            panelClassName="sm:max-w-4xl"
+        >
+            <div className="space-y-5 pr-1">
                 
                 {/* SECTION: Cloud Sync (Dropbox) */}
-                <div className="bg-sky-900/20 border border-sky-800 p-3 rounded-lg space-y-3">
-                    <div className="flex items-center gap-2 mb-1">
-                        <Icon name="wifi" className="w-5 h-5 text-sky-400"/>
-                        <h4 className="font-bold text-white text-sm">Sinkronisasi Cloud (Dropbox)</h4>
+                <div className="bg-sky-950/40 border border-sky-900/70 p-4 sm:p-5 rounded-2xl space-y-4">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                            <Icon name="wifi" className="w-5 h-5 text-sky-400"/>
+                            <h4 className="font-bold text-white text-sm sm:text-base">Sinkronisasi Cloud (Dropbox)</h4>
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                            Gunakan menu ini untuk mengambil pembaruan dari pusat, mengirim data master, atau melakukan pemulihan data jika dibutuhkan.
+                        </p>
                     </div>
                     
-                    <div className="bg-slate-800/50 p-2 rounded border border-sky-900/30">
-                        <p className="text-[10px] text-sky-200 mb-1 font-bold">OPERASIONAL CABANG (HARIAN)</p>
-                        <Button onClick={handleCloudPull} disabled={isProcessing} className="w-full bg-sky-600 hover:bg-sky-500 text-white border-none text-xs h-9">
+                    <div className="bg-slate-900/70 p-4 rounded-2xl border border-sky-900/30 space-y-3">
+                        <div>
+                            <p className="text-[10px] text-sky-200 mb-1 font-bold tracking-wide">OPERASIONAL CABANG (HARIAN)</p>
+                            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+                                Cek harga, menu, dan stok terbaru dari pusat atau gudang.
+                            </p>
+                        </div>
+                        <Button onClick={handleCloudPull} disabled={isProcessing} className="w-full h-11 text-sm">
                             {isProcessing ? 'Memproses...' : '⬇️ Cek Update (Menu & Stok)'}
                         </Button>
-                        <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
-                            <span className="text-green-400 font-bold">Info:</span> Tombol ini untuk:
-                            <br/>1. Mengambil Harga/Menu terbaru.
-                            <br/>2. Menerima stok kiriman dari Gudang.
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                            Tombol ini dipakai untuk mengambil harga dan menu terbaru, sekaligus menerima stok kiriman dari gudang jika ada.
                         </p>
                     </div>
 
                     {/* ADMIN ONLY ACTIONS */}
                     {isAdmin && (
-                        <div className="border-t border-sky-800/50 pt-2">
-                            <p className="text-[10px] text-yellow-500 font-bold mb-2 uppercase">Panel Admin Pusat (Hati-hati)</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <div>
-                                    <Button onClick={() => handleCloudPush(false)} disabled={isProcessing} variant="secondary" className="w-full text-xs h-9 border-sky-700 text-sky-200 hover:bg-sky-900/50 whitespace-nowrap">
+                        <div className="border-t border-sky-800/50 pt-3 space-y-3">
+                            <p className="text-[10px] text-yellow-500 font-bold uppercase tracking-wide">Panel Admin Pusat</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3 space-y-2">
+                                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                                        Kirim data master terbaru ke cabang agar harga, menu, dan pengaturan utama ikut diperbarui.
+                                    </p>
+                                    <Button onClick={() => handleCloudPush(false)} disabled={isProcessing} variant="operational" className="w-full text-xs h-10 whitespace-nowrap">
                                         ⬆️ Kirim Master
                                     </Button>
-                                    <p className="text-[9px] text-slate-500 mt-1 leading-tight">Update data di cabang.</p>
                                 </div>
-                                <div>
-                                    <Button onClick={handleCloudRestoreFull} disabled={isProcessing} variant="secondary" className="w-full text-xs h-9 border-red-800 text-red-300 hover:bg-red-900/30 whitespace-nowrap">
+                                <div className="rounded-2xl border border-red-900/40 bg-red-950/20 p-3 space-y-2">
+                                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                                        Ganti data di perangkat ini dengan salinan dari cloud. Gunakan hanya saat memang perlu memulihkan data.
+                                    </p>
+                                    <Button onClick={handleCloudRestoreFull} disabled={isProcessing} variant="danger" className="w-full text-xs h-10 whitespace-nowrap">
                                         ⚠️ Restore Total
                                     </Button>
-                                    <p className="text-[9px] text-slate-500 mt-1 leading-tight">Ganti data lokal dengan Cloud.</p>
                                 </div>
                             </div>
                         </div>
                     )}
                 </div>
 
-                <div className="border-t border-slate-700 my-1"></div>
+                <div className="border-t border-slate-700/70 my-1"></div>
 
                 {/* SECTION: Local Backup/Restore */}
-                <div className="bg-slate-700/30 p-3 rounded-lg space-y-3">
-                    <div className="flex items-center gap-2 mb-1">
+                <div className="bg-slate-900/50 border border-slate-700 p-4 sm:p-5 rounded-2xl space-y-4">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2">
                         <Icon name="database" className="w-5 h-5 text-green-400"/>
-                        <h4 className="font-bold text-white text-sm">Backup & Restore Lokal</h4>
+                            <h4 className="font-bold text-white text-sm sm:text-base">Backup & Restore Lokal</h4>
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                            Simpan salinan data ke perangkat ini, atau pulihkan dari file cadangan bila diperlukan.
+                        </p>
                     </div>
                     
-                    <div>
-                        <Button onClick={handleLocalBackup} variant="secondary" className="w-full mb-1 text-xs">
+                    <div className="rounded-2xl border border-slate-700 bg-slate-950/50 p-3 space-y-2">
+                        <Button onClick={handleLocalBackup} variant="utility" className="w-full h-10 text-sm">
                             📥 Backup (.json)
                         </Button>
-                        <p className="text-[10px] text-slate-400">
+                        <p className="text-[11px] text-slate-400">
                             Simpan salinan data lengkap ke penyimpanan perangkat ini (Download).
                         </p>
                     </div>
 
                     {isAdmin && (
-                        <div className="border-t border-slate-600/50 pt-2">
-                            <p className="text-[10px] text-red-300 font-bold mb-1 uppercase">Zona Bahaya (Admin)</p>
-                            <Button onClick={handleLocalRestoreClick} variant="danger" className="w-full text-xs bg-slate-800 border-red-900/50 text-red-300 hover:bg-red-900/20">
+                        <div className="border-t border-slate-600/50 pt-2 space-y-2">
+                            <p className="text-[10px] text-red-300 font-bold uppercase">Zona Bahaya (Admin)</p>
+                            <div className="rounded-2xl border border-red-900/40 bg-red-950/20 p-3 space-y-2">
+                            <Button onClick={handleLocalRestoreClick} variant="danger" className="w-full text-xs h-10 bg-slate-800 border-red-900/50 text-red-300 hover:bg-red-900/20">
                                 ⚠️ Restore dari File
                             </Button>
-                            <p className="text-[9px] text-slate-500 mt-1 leading-tight">
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
                                 PERINGATAN: Tindakan ini akan <strong>menimpa/menghapus</strong> seluruh data saat ini dengan isi file backup yang dipilih.
                             </p>
+                            </div>
                             <input 
                                 type="file" 
                                 ref={fileInputRef} 
@@ -592,23 +620,21 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
 
                 {/* SECTION: Archiving (Admin Only) */}
                 {isAdmin && (
-                    <div className="bg-orange-900/10 border border-orange-800/50 p-3 rounded-lg mt-2 space-y-2">
-                        <div className="flex items-center gap-2">
+                    <div className="bg-orange-950/30 border border-orange-800/50 p-4 sm:p-5 rounded-2xl mt-2 space-y-3">
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-2">
                             <Icon name="boxes" className="w-5 h-5 text-orange-400"/>
-                            <h4 className="font-bold text-white text-sm">Perawatan Database</h4>
+                                <h4 className="font-bold text-white text-sm sm:text-base">Perawatan Database</h4>
+                            </div>
+                            <p className="text-xs text-slate-400 leading-relaxed">
+                                Jika aplikasi mulai terasa berat, buka menu ini untuk mengarsipkan data lama lebih dulu lalu membersihkannya dengan aman.
+                            </p>
                         </div>
-                        <p className="text-[10px] text-slate-400 leading-tight">
-                            Aplikasi melambat? Gunakan fitur ini untuk menghapus transaksi lama yang sudah tidak dibutuhkan agar aplikasi tetap ringan.
-                        </p>
-                        <Button onClick={() => { setDataModalOpen(false); setIsArchivingModalOpen(true); }} variant="secondary" className="w-full text-orange-300 border-orange-800/50 hover:bg-orange-900/30 text-xs">
+                        <Button onClick={() => { setDataModalOpen(false); setIsArchivingModalOpen(true); }} variant="utility" className="w-full h-11 text-sm">
                             🧹 Arsip & Bersihkan
                         </Button>
                     </div>
                 )}
-                
-                <div className="pt-2 text-center">
-                    <button onClick={() => setDataModalOpen(false)} className="text-slate-400 text-sm hover:text-white">Tutup</button>
-                </div>
             </div>
         </Modal>
 

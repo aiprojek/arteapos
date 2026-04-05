@@ -16,12 +16,12 @@ interface AuthTabProps {
 }
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
-    <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
-        <div className="p-4 border-b border-slate-700 bg-slate-800">
+    <div className="mb-6 overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-800/85 shadow-[0_10px_35px_rgba(15,23,42,0.22)]">
+        <div className="border-b border-slate-700/80 bg-slate-800/90 p-4 sm:p-5">
             <h3 className="text-lg font-semibold text-white">{title}</h3>
-            {description && <p className="text-sm text-slate-400 mt-1">{description}</p>}
+            {description && <p className="mt-1 text-sm leading-relaxed text-slate-400">{description}</p>}
         </div>
-        <div className="p-4 space-y-4">
+        <div className="space-y-4 p-4 sm:p-5">
             {children}
         </div>
     </div>
@@ -228,7 +228,7 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                         </div>
                         <div className="flex items-center justify-between gap-2 mb-2">
                             <p className="text-xs text-slate-500">Restore dari Dropbox (opsional)</p>
-                            <Button size="sm" variant="secondary" onClick={handleRestoreRecoveryCode}>
+                            <Button size="sm" variant="utility" onClick={handleRestoreRecoveryCode}>
                                 Restore
                             </Button>
                         </div>
@@ -282,7 +282,7 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                 </SettingsCard>
             )}
 
-            <Modal isOpen={isUserModalOpen} onClose={() => setUserModalOpen(false)} title={editingUser ? 'Edit Pengguna' : 'Tambah Pengguna'}>
+            <Modal isOpen={isUserModalOpen} onClose={() => setUserModalOpen(false)} title={editingUser ? 'Edit Pengguna' : 'Tambah Pengguna'} size="lg" mobileLayout="fullscreen">
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm text-slate-300 mb-1">Nama</label>
@@ -290,7 +290,7 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                             type="text" 
                             value={userForm.name} 
                             onChange={e => setUserForm({...userForm, name: e.target.value})} 
-                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white"
                         />
                     </div>
                     <div>
@@ -298,7 +298,7 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                         <select 
                             value={userForm.role}
                             onChange={e => setUserForm({...userForm, role: e.target.value as any})}
-                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white"
                         >
                             <option value="staff">Staf (Kasir & Stok)</option>
                             <option value="viewer">Viewer (Laporan & Dashboard Saja)</option>
@@ -317,7 +317,7 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                             <select 
                                 value={userForm.assignedBranch}
                                 onChange={e => setUserForm({...userForm, assignedBranch: e.target.value})}
-                                className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                                className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white"
                             >
                                 <option value="all">Semua Cabang / Pusat</option>
                                 {branches.map(b => (
@@ -335,7 +335,7 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                             maxLength={4}
                             value={userForm.pin} 
                             onChange={e => setUserForm({...userForm, pin: e.target.value})} 
-                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white font-mono text-center tracking-widest"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white font-mono text-center tracking-widest"
                             placeholder="****"
                         />
                     </div>
@@ -343,7 +343,7 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                 </div>
             </Modal>
 
-            <Modal isOpen={isTicketModalOpen} onClose={() => setTicketModalOpen(false)} title="Generate Tiket Reset PIN">
+            <Modal isOpen={isTicketModalOpen} onClose={() => setTicketModalOpen(false)} title="Generate Tiket Reset PIN" size="lg" mobileLayout="fullscreen">
                 <div className="space-y-4">
                     <div className="text-sm text-slate-300 bg-slate-900 border border-slate-700 rounded p-3">
                         Target User: <span className="font-bold text-white">{ticketTargetUser?.name || '-'}</span>
@@ -357,7 +357,7 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                             max={30}
                             value={ticketTtl}
                             onChange={(e) => setTicketTtl(Math.max(5, Math.min(30, parseInt(e.target.value || '10', 10))))}
-                            className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-white"
                         />
                         <p className="text-xs text-slate-500 mt-1">Range aman: 5-30 menit.</p>
                     </div>
@@ -373,13 +373,13 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                                 className="w-full h-24 bg-slate-950 border border-slate-700 rounded p-2 text-green-300 font-mono text-xs"
                             />
                             <p className="text-xs text-slate-400">Expired: {new Date(generatedTicketExpiry).toLocaleString('id-ID')}</p>
-                            <Button onClick={copyTicket} variant="secondary" className="w-full">Salin Kode</Button>
+                            <Button onClick={copyTicket} variant="utility" className="w-full">Salin Kode</Button>
                         </div>
                     )}
                 </div>
             </Modal>
 
-            <Modal isOpen={isRecoveryCodeModalOpen} onClose={() => setRecoveryCodeModalOpen(false)} title="Recovery Code Baru">
+            <Modal isOpen={isRecoveryCodeModalOpen} onClose={() => setRecoveryCodeModalOpen(false)} title="Recovery Code Baru" size="lg" mobileLayout="fullscreen">
                 <div className="space-y-4">
                     <div className="bg-red-900/20 border border-red-700 rounded p-3 text-xs text-red-200">
                         Simpan kode ini sekarang. Demi keamanan, kode tidak bisa ditampilkan lagi setelah modal ditutup.
@@ -399,7 +399,7 @@ const AuthTab: React.FC<AuthTabProps> = ({ form, onChange }) => {
                         } catch {
                             showAlert({ type: 'alert', title: 'Gagal', message: 'Tidak bisa menyalin recovery code.' });
                         }
-                    }} variant="secondary" className="w-full">
+                    }} variant="utility" className="w-full">
                         Salin Recovery Code
                     </Button>
                 </div>

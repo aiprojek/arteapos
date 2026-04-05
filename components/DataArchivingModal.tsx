@@ -155,79 +155,144 @@ const DataArchivingModal: React.FC<DataArchivingModalProps> = ({ isOpen, onClose
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Pengarsipan & Pembersihan Data">
-            <div className="space-y-6">
-                <div className="bg-yellow-900/20 border-l-4 border-yellow-500 p-4 rounded-r">
-                    <h4 className="font-bold text-yellow-300 text-sm mb-1 flex items-center gap-2">
-                        <Icon name="warning" className="w-4 h-4"/> Solusi Memori Penuh
-                    </h4>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                        Fitur ini akan menghapus data lama dari <strong>Perangkat ini</strong> dan memperbarui file backup di <strong>Dropbox</strong> agar keduanya menjadi ringan.
-                    </p>
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Pengarsipan & Pembersihan Data"
+            size="xl"
+            mobileLayout="fullscreen"
+            bodyClassName="p-4 sm:p-6"
+        >
+            <div className="space-y-5">
+                <div className="rounded-2xl border border-yellow-700/50 bg-yellow-950/20 p-4 sm:p-5">
+                    <div className="flex items-start gap-3">
+                        <div className="rounded-xl bg-yellow-500/10 p-2 shrink-0">
+                            <Icon name="warning" className="w-5 h-5 text-yellow-300" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <h4 className="font-bold text-yellow-200 text-sm sm:text-base">Solusi saat data lama mulai menumpuk</h4>
+                            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                                Fitur ini membantu menyimpan arsip lebih dulu, lalu membersihkan data lama dari perangkat agar aplikasi tetap ringan dipakai.
+                            </p>
+                            <p className="text-[11px] sm:text-xs text-slate-400 leading-relaxed">
+                                Langkah aman: unduh arsip terlebih dahulu, simpan file di tempat aman, lalu lanjutkan pembersihan.
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
-                <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Pilih Rentang Data Lama</label>
-                    <div className="flex bg-slate-700 p-1 rounded-lg">
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4 sm:p-5 space-y-3">
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-100 mb-2">Pilih usia data yang ingin dibersihkan</label>
+                        <p className="text-xs text-slate-400">Data yang lebih lama dari batas ini akan dihitung dan disiapkan untuk diarsipkan.</p>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {['1m', '3m', '6m', '1y'].map((opt) => (
                             <button
                                 key={opt}
                                 onClick={() => setRange(opt as any)}
-                                className={`flex-1 py-2 text-sm rounded-md transition-colors ${range === opt ? 'bg-[#347758] text-white font-bold shadow' : 'text-slate-400 hover:text-white'}`}
+                                className={`h-11 rounded-xl text-sm font-medium transition-colors ${
+                                    range === opt
+                                        ? 'bg-[#347758] text-white shadow'
+                                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                }`}
                             >
                                 {opt.replace('m', ' Bulan').replace('y', ' Tahun')}
                             </button>
                         ))}
                     </div>
-                    <p className="text-xs text-slate-500 mt-2 text-center">
-                        Data yang lebih TUA dari {range.replace('m', ' Bulan').replace('y', ' Tahun')} lalu akan diproses.
+                    <p className="text-xs text-slate-500">
+                        Data yang lebih tua dari {range.replace('m', ' bulan').replace('y', ' tahun')} akan diproses.
                     </p>
                 </div>
 
-                <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 text-center">
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4 sm:p-5">
                     {loading ? (
-                        <div className="flex flex-col items-center space-y-2">
+                        <div className="flex flex-col items-center space-y-3 py-3">
                             <Skeleton variant="text" width={120} height={32} className="bg-slate-600" />
-                            <div className="flex gap-4">
-                                <Skeleton variant="text" width={60} height={12} className="bg-slate-700" />
-                                <Skeleton variant="text" width={60} height={12} className="bg-slate-700" />
-                                <Skeleton variant="text" width={60} height={12} className="bg-slate-700" />
+                            <div className="flex flex-wrap justify-center gap-3">
+                                <Skeleton variant="text" width={72} height={12} className="bg-slate-700" />
+                                <Skeleton variant="text" width={72} height={12} className="bg-slate-700" />
+                                <Skeleton variant="text" width={72} height={12} className="bg-slate-700" />
                             </div>
                         </div>
                     ) : (
-                        <>
-                            <p className="text-slate-400 text-sm mb-1">Ditemukan Data Lama:</p>
-                            <p className="text-3xl font-bold text-white mb-2">{counts?.total || 0}</p>
-                            <div className="flex justify-center gap-4 text-xs text-slate-500">
-                                <span>🛒 {counts?.transactions} Transaksi</span>
-                                <span>📝 {counts?.logs} Log Audit</span>
-                                <span>📂 {counts?.others} Lainnya</span>
+                        <div className="space-y-4">
+                            <div className="text-center">
+                                <p className="text-slate-400 text-sm mb-1">Data lama yang ditemukan</p>
+                                <p className="text-3xl sm:text-4xl font-bold text-white">{counts?.total || 0}</p>
                             </div>
-                        </>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div className="rounded-xl bg-slate-800/80 border border-slate-700 px-3 py-2 text-center">
+                                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Transaksi</p>
+                                    <p className="text-sm font-semibold text-white">{counts?.transactions || 0}</p>
+                                </div>
+                                <div className="rounded-xl bg-slate-800/80 border border-slate-700 px-3 py-2 text-center">
+                                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Log Audit</p>
+                                    <p className="text-sm font-semibold text-white">{counts?.logs || 0}</p>
+                                </div>
+                                <div className="rounded-xl bg-slate-800/80 border border-slate-700 px-3 py-2 text-center">
+                                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Data Lainnya</p>
+                                    <p className="text-sm font-semibold text-white">{counts?.others || 0}</p>
+                                </div>
+                            </div>
+                        </div>
                     )}
                 </div>
 
-                <div className="space-y-3">
-                    <p className="text-sm font-bold text-white">Langkah 1: Unduh Arsip (Backup)</p>
-                    <div className="grid grid-cols-3 gap-2">
-                        <Button onClick={() => handleExport('pdf')} variant="secondary" size="sm" disabled={counts?.total === 0}>
-                            <Icon name="printer" className="w-4 h-4"/> PDF
+                <div className="rounded-2xl border border-emerald-900/60 bg-emerald-950/20 p-4 sm:p-5 space-y-4">
+                    <div className="space-y-1">
+                        <p className="text-sm font-bold text-white">Langkah 1: Unduh Arsip</p>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                            Simpan arsip terlebih dahulu sebelum menghapus data. Pilih format yang paling sesuai dengan kebutuhan Anda.
+                        </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <Button onClick={() => handleExport('pdf')} variant="utility" size="sm" disabled={counts?.total === 0} className="w-full h-10 sm:h-11 justify-center">
+                            <Icon name="printer" className="w-4 h-4" /> PDF
                         </Button>
-                        <Button onClick={() => handleExport('xlsx')} variant="secondary" size="sm" disabled={counts?.total === 0}>
-                            <Icon name="boxes" className="w-4 h-4"/> Excel
+                        <Button onClick={() => handleExport('xlsx')} variant="utility" size="sm" disabled={counts?.total === 0} className="w-full h-10 sm:h-11 justify-center">
+                            <Icon name="boxes" className="w-4 h-4" /> Excel
                         </Button>
-                        <Button onClick={() => handleExport('json')} variant="secondary" size="sm" disabled={counts?.total === 0} className="border border-green-500/50 text-green-400">
-                            <Icon name="database" className="w-4 h-4"/> JSON (Raw)
+                        <Button
+                            onClick={() => handleExport('json')}
+                            variant="operational"
+                            size="sm"
+                            disabled={counts?.total === 0}
+                            className="w-full h-10 sm:h-11 justify-center"
+                        >
+                            <Icon name="database" className="w-4 h-4" /> JSON
                         </Button>
                     </div>
+                    <p className="text-[11px] text-slate-400">
+                        Format JSON berisi salinan data paling lengkap. Excel dan PDF lebih nyaman untuk dibaca.
+                    </p>
                 </div>
 
-                <div className={`space-y-3 transition-opacity duration-300 ${hasExported ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                    <p className="text-sm font-bold text-white">Langkah 2: Hapus & Sync</p>
-                    <Button onClick={handlePurge} disabled={isPurging || !hasExported || counts?.total === 0} variant="danger" className="w-full">
-                        {isPurging ? 'Sedang Membersihkan & Sync...' : <><Icon name="trash" className="w-4 h-4"/> Hapus & Update Cloud</>}
+                <div className={`rounded-2xl border border-red-900/50 bg-red-950/20 p-4 sm:p-5 space-y-4 transition-opacity duration-300 ${hasExported ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className="space-y-1">
+                        <p className="text-sm font-bold text-white">Langkah 2: Bersihkan Data Lama</p>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                            Setelah arsip selesai diunduh, Anda bisa membersihkan data lama agar aplikasi tetap ringan dan sinkronisasi cloud ikut lebih rapi.
+                        </p>
+                    </div>
+                    <Button
+                        onClick={handlePurge}
+                        disabled={isPurging || !hasExported || counts?.total === 0}
+                        variant="danger"
+                        className="w-full h-11"
+                    >
+                        {isPurging ? 'Sedang membersihkan data...' : <><Icon name="trash" className="w-4 h-4" /> Hapus & Update Cloud</>}
                     </Button>
-                    {!hasExported && <p className="text-[10px] text-red-400 text-center">*Tombol ini aktif setelah Anda mengunduh arsip.</p>}
+                    {!hasExported ? (
+                        <p className="text-[11px] text-red-300">
+                            Tombol pembersihan akan aktif setelah Anda mengunduh arsip lebih dulu.
+                        </p>
+                    ) : (
+                        <p className="text-[11px] text-slate-400">
+                            Arsip sudah diunduh. Lanjutkan hanya jika file cadangan sudah tersimpan dengan aman.
+                        </p>
+                    )}
                 </div>
             </div>
         </Modal>

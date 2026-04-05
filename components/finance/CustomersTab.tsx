@@ -401,10 +401,10 @@ const MemberCardModal: React.FC<{
                 {/* --- CARD DESIGN END --- */}
 
                 <div className="grid grid-cols-3 gap-2 w-full">
-                    <Button variant="secondary" onClick={handleDownload} disabled={isLoading} className="text-xs px-2">
+                    <Button variant="utility" onClick={handleDownload} disabled={isLoading} className="text-xs px-2">
                         <Icon name="download" className="w-4 h-4"/> PNG
                     </Button>
-                    <Button variant="secondary" onClick={handleDownloadPDF} disabled={isLoading} className="text-xs px-2">
+                    <Button variant="utility" onClick={handleDownloadPDF} disabled={isLoading} className="text-xs px-2">
                         <Icon name="printer" className="w-4 h-4"/> PDF
                     </Button>
                     <Button onClick={handleShare} disabled={isLoading} className="text-xs px-2 bg-green-600 hover:bg-green-500 border-none">
@@ -534,7 +534,7 @@ const BulkCustomerModal: React.FC<{
                             </table>
                         </div>
                         <div className="flex gap-2">
-                            <Button size="sm" variant="secondary" onClick={addRow}><Icon name="plus" className="w-4 h-4" /> Baris</Button>
+                            <Button size="sm" variant="utility" onClick={addRow}><Icon name="plus" className="w-4 h-4" /> Baris</Button>
                             <div className="flex-1"></div>
                             <Button onClick={handleSaveManual}>Simpan Semua</Button>
                         </div>
@@ -551,7 +551,7 @@ const BulkCustomerModal: React.FC<{
                             </ol>
                         </div>
                         <div className="flex justify-center gap-4">
-                            <Button variant="secondary" onClick={handleDownloadTemplate}><Icon name="download" className="w-4 h-4"/> Unduh Template</Button>
+                            <Button variant="utility" onClick={handleDownloadTemplate}><Icon name="download" className="w-4 h-4"/> Unduh Template</Button>
                             <div className="relative">
                                 <Button variant="primary" onClick={() => fileInputRef.current?.click()}><Icon name="upload" className="w-4 h-4"/> Upload CSV</Button>
                                 <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleImportFile} />
@@ -589,6 +589,13 @@ const CustomersTab: React.FC = () => {
     const [isTopUpOpen, setIsTopUpOpen] = useState(false);
     const [topUpCustomer, setTopUpCustomer] = useState<Customer | null>(null);
     const [topUpAmount, setTopUpAmount] = useState('');
+
+    const totalBalance = useMemo(
+        () => customers.reduce((sum, customer) => sum + (customer.balance || 0), 0),
+        [customers]
+    );
+    const activeMembersCount = customers.filter((customer) => (customer.balance || 0) > 0).length;
+    const pointsHoldersCount = customers.filter((customer) => customer.points > 0).length;
 
     const filteredCustomers = useMemo(() => 
         customers.filter(c => 
@@ -657,82 +664,269 @@ const CustomersTab: React.FC = () => {
     };
 
     const columns = [
-        { label: 'ID Member', width: '1fr', render: (c: Customer) => <span className="font-mono text-slate-400">{c.memberId}</span> },
-        { label: 'Nama', width: '2fr', render: (c: Customer) => <span className="font-bold text-white">{c.name}</span> },
-        { label: 'Saldo', width: '1.5fr', render: (c: Customer) => <span className="text-green-400 font-bold">{CURRENCY_FORMATTER.format(c.balance || 0)}</span> },
-        { label: 'Poin', width: '1fr', render: (c: Customer) => <span className="text-yellow-400 font-bold">{c.points} pts</span> },
-        { label: 'Kontak / Info', width: '1.5fr', render: (c: Customer) => c.contact || '-' },
-        { label: 'Aksi', width: '260px', render: (c: Customer) => (
-            <div className="flex gap-2 items-center">
-                {/* TOMBOL RIWAYAT BELANJA / STRUK (NEW) */}
-                <button 
-                    onClick={() => handleShowTransactions(c)}
-                    className="p-1.5 rounded bg-blue-900/30 text-blue-300 hover:bg-blue-900/50 border border-blue-500/30"
-                    title="Riwayat Belanja & Struk"
-                >
-                    <Icon name="printer" className="w-4 h-4"/>
-                </button>
-
-                <button 
-                    onClick={() => handleShowHistory(c)}
-                    className="p-1.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white"
-                    title="Riwayat Saldo (Topup/Pakai)"
-                >
-                    <Icon name="clock-history" className="w-4 h-4"/>
-                </button>
-                <button 
-                    onClick={() => handleShowCard(c)}
-                    className="p-1.5 rounded bg-purple-900/30 text-purple-300 hover:bg-purple-900/50"
-                    title="Lihat Kartu Member Digital"
-                >
-                    <Icon name="pay" className="w-4 h-4"/>
-                </button>
-                <button 
-                    onClick={() => openTopUp(c)} 
-                    className="text-xs bg-[#347758] hover:bg-[#2a6046] text-white px-2 py-1 rounded flex items-center gap-1"
-                    title="Top Up Saldo"
-                >
-                    <Icon name="plus" className="w-3 h-3"/> Isi
-                </button>
-                <button onClick={() => handleEdit(c)} className="text-sky-400 hover:text-white"><Icon name="edit" className="w-4 h-4"/></button>
-                <button onClick={() => deleteCustomer(c.id)} className="text-red-400 hover:text-white"><Icon name="trash" className="w-4 h-4"/></button>
-            </div>
-        )}
+        {
+            label: 'ID Member',
+            width: '1.1fr',
+            render: (c: Customer) => (
+                <span className="inline-flex rounded-full border border-slate-600 bg-slate-900/80 px-2 py-1 font-mono text-[11px] text-slate-300">
+                    {c.memberId}
+                </span>
+            )
+        },
+        {
+            label: 'Nama',
+            width: '1.9fr',
+            className: 'overflow-hidden',
+            render: (c: Customer) => (
+                <div className="min-w-0">
+                    <div className="truncate font-semibold text-white">{c.name}</div>
+                    <div className="truncate text-[11px] text-slate-500">{c.contact || 'Tanpa kontak tersimpan'}</div>
+                </div>
+            )
+        },
+        {
+            label: 'Saldo',
+            width: '1.1fr',
+            render: (c: Customer) => (
+                <span className="inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-300">
+                    {CURRENCY_FORMATTER.format(c.balance || 0)}
+                </span>
+            )
+        },
+        {
+            label: 'Poin',
+            width: '0.9fr',
+            render: (c: Customer) => (
+                <span className="inline-flex rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-[11px] font-semibold text-yellow-300">
+                    {c.points} pts
+                </span>
+            )
+        },
+        {
+            label: 'Status',
+            width: '1fr',
+            render: (c: Customer) => (
+                <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${((c.balance || 0) > 0 || c.points > 0) ? 'border border-sky-500/30 bg-sky-500/10 text-sky-300' : 'border border-slate-600 bg-slate-900/80 text-slate-300'}`}>
+                    {((c.balance || 0) > 0 || c.points > 0) ? 'Aktif' : 'Umum'}
+                </span>
+            )
+        },
+        {
+            label: 'Aksi',
+            width: '300px',
+            className: 'overflow-visible',
+            render: (c: Customer) => (
+                <div className="flex items-center gap-1">
+                    <Button
+                        type="button"
+                        variant="operational"
+                        size="sm"
+                        onClick={() => handleShowTransactions(c)}
+                        title="Riwayat Belanja & Struk"
+                        className="h-8 w-8 p-0"
+                    >
+                        <Icon name="printer" className="w-4 h-4"/>
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="utility"
+                        size="sm"
+                        onClick={() => handleShowHistory(c)}
+                        title="Riwayat Saldo (Topup/Pakai)"
+                        className="h-8 w-8 p-0"
+                    >
+                        <Icon name="clock-history" className="w-4 h-4"/>
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="utility"
+                        size="sm"
+                        onClick={() => handleShowCard(c)}
+                        title="Kartu Member Digital"
+                        className="h-8 w-8 p-0"
+                    >
+                        <Icon name="pay" className="w-4 h-4"/>
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => openTopUp(c)}
+                        title="Top Up Saldo"
+                        className="h-8 w-8 p-0"
+                    >
+                        <Icon name="plus" className="w-4 h-4"/>
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="utility"
+                        size="sm"
+                        onClick={() => handleEdit(c)}
+                        title="Edit Pelanggan"
+                        className="h-8 w-8 p-0"
+                    >
+                        <Icon name="edit" className="w-4 h-4"/>
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        onClick={() => deleteCustomer(c.id)}
+                        title="Hapus Pelanggan"
+                        className="h-8 w-8 p-0"
+                    >
+                        <Icon name="trash" className="w-4 h-4"/>
+                    </Button>
+                </div>
+            )
+        }
     ];
 
     return (
         <div className="space-y-4">
-            <div className="flex justify-between items-center flex-wrap gap-2">
-                <div className="relative flex-grow max-w-md">
-                    <input 
-                        type="text" 
-                        placeholder="Cari nama, HP, atau ID member..." 
-                        value={searchTerm} 
-                        onChange={e => setSearchTerm(e.target.value)} 
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white" 
-                    />
-                    <Icon name="search" className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Total Member</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{customers.length}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Jumlah pelanggan yang tersimpan dan bisa dipakai untuk transaksi.</p>
                 </div>
-                <div className="flex gap-2">
-                    {/* NEW EXPORT BUTTON */}
-                    <Button variant="secondary" onClick={handleExport} className="flex-shrink-0" title="Export CSV">
-                        <Icon name="download" className="w-5 h-5"/>
-                        <span className="hidden sm:inline">Export</span>
-                    </Button>
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Total Saldo Member</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{CURRENCY_FORMATTER.format(totalBalance)}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Akumulasi saldo yang tersimpan di seluruh akun pelanggan.</p>
+                </div>
+                <div className="rounded-2xl border border-slate-700/80 bg-slate-850/70 p-4 shadow-sm sm:col-span-2 xl:col-span-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Poin & Saldo Aktif</p>
+                    <p className="mt-1.5 text-xl font-bold text-white sm:text-2xl">{activeMembersCount} / {pointsHoldersCount}</p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 sm:text-xs">Member dengan saldo aktif dibanding jumlah member yang sudah mengumpulkan poin.</p>
+                </div>
+            </div>
 
-                    <Button variant="secondary" onClick={() => setBulkModalOpen(true)} className="flex-shrink-0" title="Import / Tambah Massal">
-                        <Icon name="boxes" className="w-5 h-5"/>
-                        <span className="hidden sm:inline">Massal</span>
-                    </Button>
-                    <Button onClick={() => { setEditingCustomer(null); setModalOpen(true); }} className="flex-shrink-0" title="Tambah Pelanggan Baru">
-                        <Icon name="plus" className="w-5 h-5" />
-                        <span className="hidden sm:inline">Tambah</span>
-                    </Button>
+            <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-3 sm:p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                    <div className="relative flex-1">
+                        <input 
+                            type="text" 
+                            placeholder="Cari nama, kontak, atau ID member..." 
+                            value={searchTerm} 
+                            onChange={e => setSearchTerm(e.target.value)} 
+                            className="h-11 w-full rounded-xl border border-slate-700 bg-slate-800 pl-11 pr-12 text-white focus:border-[#347758] focus:ring-[#347758]" 
+                        />
+                        <Icon name="search" className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
+                                title="Bersihkan pencarian"
+                            >
+                                <Icon name="close" className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 lg:flex lg:flex-none">
+                        <Button variant="utility" onClick={handleExport} className="h-11 w-full gap-1 px-2 sm:px-3" title="Export CSV">
+                            <Icon name="download" className="w-4 h-4"/>
+                            <span className="hidden sm:inline">Export</span>
+                        </Button>
+                        <Button variant="utility" onClick={() => setBulkModalOpen(true)} className="h-11 w-full gap-1 px-2 sm:px-3" title="Import / Tambah Massal">
+                            <Icon name="boxes" className="w-4 h-4"/>
+                            <span className="hidden sm:inline">Massal</span>
+                        </Button>
+                        <Button onClick={() => { setEditingCustomer(null); setModalOpen(true); }} className="h-11 w-full gap-1 px-2 sm:px-3" title="Tambah Pelanggan Baru">
+                            <Icon name="plus" className="w-4 h-4" />
+                            <span className="hidden sm:inline">Tambah</span>
+                        </Button>
+                    </div>
                 </div>
             </div>
             
-            <div className="bg-slate-800 rounded-lg shadow-md h-[500px] border border-slate-700">
-                <VirtualizedTable data={filteredCustomers} columns={columns} rowHeight={50} />
+            <div className="rounded-2xl border border-slate-700 bg-slate-900/50 overflow-hidden">
+                {filteredCustomers.length > 0 ? (
+                    <>
+                        <div className="md:hidden">
+                            <div className="space-y-2 p-2">
+                                {filteredCustomers.map((customer) => (
+                                    <div key={customer.id} className="rounded-xl border border-slate-700/80 bg-slate-800/70 p-3 shadow-sm">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <p className="truncate pr-1 text-[12px] font-bold leading-tight text-white">{customer.name}</p>
+                                                        <p className="mt-0.5 truncate text-[10px] text-slate-400">{customer.memberId} • {customer.contact || 'Tanpa kontak'}</p>
+                                                    </div>
+                                                    <span className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-1.5 py-0.5 text-[9px] text-yellow-300">
+                                                        {customer.points} pts
+                                                    </span>
+                                                </div>
+                                                <div className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
+                                                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-300">
+                                                        Saldo {CURRENCY_FORMATTER.format(customer.balance || 0)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-2 grid grid-cols-3 gap-1.5">
+                                            <Button type="button" variant="operational" size="sm" onClick={() => handleShowTransactions(customer)} className="h-8 gap-1 px-2 text-[11px] sm:text-sm">
+                                                <Icon name="printer" className="w-4 h-4" />
+                                                <span className="hidden min-[390px]:inline">Struk</span>
+                                            </Button>
+                                            <Button type="button" variant="utility" size="sm" onClick={() => handleShowHistory(customer)} className="h-8 gap-1 px-2 text-[11px] sm:text-sm">
+                                                <Icon name="clock-history" className="w-4 h-4" />
+                                                <span className="hidden min-[390px]:inline">Riwayat</span>
+                                            </Button>
+                                            <Button type="button" variant="utility" size="sm" onClick={() => handleShowCard(customer)} className="h-8 gap-1 px-2 text-[11px] sm:text-sm">
+                                                <Icon name="pay" className="w-4 h-4" />
+                                                <span className="hidden min-[390px]:inline">Kartu</span>
+                                            </Button>
+                                        </div>
+                                        <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                                            <Button type="button" size="sm" onClick={() => openTopUp(customer)} className="h-8 gap-1 px-2 text-[11px] sm:text-sm">
+                                                <Icon name="plus" className="w-4 h-4" />
+                                                <span className="hidden min-[390px]:inline">Isi</span>
+                                            </Button>
+                                            <Button type="button" variant="utility" size="sm" onClick={() => handleEdit(customer)} className="h-8 gap-1 px-2 text-[11px] sm:text-sm">
+                                                <Icon name="edit" className="w-4 h-4" />
+                                                <span className="hidden min-[390px]:inline">Edit</span>
+                                            </Button>
+                                            <Button type="button" variant="danger" size="sm" onClick={() => deleteCustomer(customer.id)} className="h-8 gap-1 px-2 text-[11px] sm:text-sm">
+                                                <Icon name="trash" className="w-4 h-4" />
+                                                <span className="hidden min-[390px]:inline">Hapus</span>
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="hidden md:block">
+                            <div className="border-b border-slate-700/70 px-4 py-3">
+                                <h3 className="text-lg font-bold text-white">Daftar Pelanggan</h3>
+                                <p className="mt-1 text-sm text-slate-400">Pantau member, saldo, poin, dan akses cepat ke riwayat atau kartu digital.</p>
+                            </div>
+                            <div className="h-[520px] p-3">
+                                <VirtualizedTable data={filteredCustomers} columns={columns} rowHeight={64} minWidth={1080} />
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <div className="flex min-h-[280px] flex-col items-center justify-center px-6 text-center">
+                        <div className="rounded-2xl border border-slate-700 bg-slate-800/80 p-4">
+                            <Icon name="users" className="mx-auto h-10 w-10 text-slate-500" />
+                        </div>
+                        <h3 className="mt-4 text-lg font-semibold text-white">
+                            {searchTerm ? 'Pelanggan tidak ditemukan.' : 'Belum ada pelanggan tersimpan.'}
+                        </h3>
+                        <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-400">
+                            {searchTerm
+                                ? 'Coba ubah kata kunci pencarian atau periksa kembali nama, kontak, dan ID member yang Anda cari.'
+                                : 'Tambahkan pelanggan pertama agar membership, saldo, dan riwayat belanja mulai tercatat dengan rapi.'}
+                        </p>
+                        {!searchTerm && (
+                            <Button onClick={() => { setEditingCustomer(null); setModalOpen(true); }} className="mt-4">
+                                <Icon name="plus" className="w-4 h-4" /> Tambah Pelanggan Pertama
+                            </Button>
+                        )}
+                    </div>
+                )}
             </div>
 
             <CustomerFormModal 
@@ -768,7 +962,7 @@ const CustomersTab: React.FC = () => {
             />
 
             {/* Top Up Modal */}
-            <Modal isOpen={isTopUpOpen} onClose={() => setIsTopUpOpen(false)} title="Top Up Saldo Member" mobileLayout="sheet">
+            <Modal isOpen={isTopUpOpen} onClose={() => setIsTopUpOpen(false)} title="Top Up Saldo Member" mobileLayout="fullscreen" size="xl">
                 <div className="space-y-4">
                     {topUpCustomer && (
                         <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
@@ -808,7 +1002,7 @@ const CustomersTab: React.FC = () => {
                     </div>
 
                     <div className="flex justify-end gap-3 pt-2">
-                        <Button variant="secondary" onClick={() => setIsTopUpOpen(false)}>Batal</Button>
+                        <Button variant="utility" onClick={() => setIsTopUpOpen(false)}>Batal</Button>
                         <Button onClick={handleConfirmTopUp} disabled={!topUpAmount || parseFloat(topUpAmount) <= 0}>Konfirmasi</Button>
                     </div>
                 </div>

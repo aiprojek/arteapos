@@ -19,12 +19,12 @@ import { CURRENCY_FORMATTER } from '../../constants';
 import { Capacitor } from '@capacitor/core'; // Import Capacitor
 
 const SettingsCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
-    <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 mb-6">
-        <div className="p-4 border-b border-slate-700 bg-slate-800 rounded-t-lg">
+    <div className="mb-6 overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-800/85 shadow-[0_10px_35px_rgba(15,23,42,0.22)]">
+        <div className="border-b border-slate-700/80 bg-slate-800/90 p-4 sm:p-5">
             <h3 className="text-lg font-semibold text-white">{title}</h3>
-            {description && <p className="text-sm text-slate-400 mt-1">{description}</p>}
+            {description && <p className="mt-1 text-sm leading-relaxed text-slate-400">{description}</p>}
         </div>
-        <div className="p-4 space-y-4">
+        <div className="space-y-4 p-4 sm:p-5">
             {children}
         </div>
     </div>
@@ -783,7 +783,7 @@ const DataTab: React.FC = () => {
                         </div>
                     </div>
                 </div>
-                <Button onClick={() => setIsArchivingModalOpen(true)} className="w-full sm:w-auto" variant="secondary">
+                <Button onClick={() => setIsArchivingModalOpen(true)} className="w-full sm:w-auto" variant="utility">
                     <Icon name="database" className="w-4 h-4"/> Buka Menu Pengarsipan
                 </Button>
             </SettingsCard>
@@ -831,31 +831,39 @@ const DataTab: React.FC = () => {
                     </div>
                 </div>
 
+                <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-3 sm:p-4 space-y-3">
+                    <div className="space-y-1">
+                        <p className="text-sm font-semibold text-white">Arsip & pembersihan cloud</p>
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                            Simpan arsip data cabang terlebih dahulu, lalu hapus laporan lama jika penyimpanan Dropbox mulai penuh.
+                        </p>
+                    </div>
+
                 <div className="flex flex-col sm:flex-row gap-3">
                     <div className="relative flex-1" ref={cloudArchiveDropdownRef}>
                         <Button 
                             onClick={() => setCloudArchiveDropdownOpen(!isCloudArchiveDropdownOpen)} 
                             disabled={isArchivingCloud || !isConfigured} 
-                            variant="secondary" 
-                            className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-900/30 whitespace-nowrap"
+                            variant="utility" 
+                            className="w-full h-11 whitespace-nowrap justify-between"
                         >
                             {isArchivingCloud ? 'Mengunduh...' : <><Icon name="download" className="w-4 h-4"/> Unduh Arsip</>}
-                            <Icon name="chevron-down" className="w-3 h-3 ml-1"/>
+                            <Icon name="chevron-down" className="w-3 h-3 ml-1 shrink-0"/>
                         </Button>
                         {isCloudArchiveDropdownOpen && (
-                            <div className="absolute top-full left-0 mt-2 w-full sm:w-48 bg-slate-700 rounded-lg shadow-xl z-20 border border-slate-600 overflow-hidden">
-                                <button onClick={() => handleCloudArchive('json')} className="w-full text-left px-4 py-3 hover:bg-slate-600 text-white text-xs flex items-center gap-2">
-                                    <Icon name="database" className="w-4 h-4 text-green-400"/> JSON (Backup Full)
+                            <div className="absolute top-full left-0 mt-2 w-full sm:w-64 bg-slate-800 rounded-2xl shadow-xl z-20 border border-slate-600 overflow-hidden">
+                                <button onClick={() => handleCloudArchive('json')} className="w-full text-left px-4 py-3 hover:bg-slate-700 text-white text-xs sm:text-sm flex items-center gap-2">
+                                    <Icon name="database" className="w-4 h-4 text-green-400"/> JSON (Backup Lengkap)
                                 </button>
                                 <div className="border-t border-slate-600 my-1"></div>
                                 <p className="px-4 py-1 text-[10px] text-slate-400 uppercase font-bold">Laporan Terbaca</p>
-                                <button onClick={() => handleCloudArchive('xlsx')} className="w-full text-left px-4 py-2 hover:bg-slate-600 text-white text-xs flex items-center gap-2">
+                                <button onClick={() => handleCloudArchive('xlsx')} className="w-full text-left px-4 py-3 hover:bg-slate-700 text-white text-xs sm:text-sm flex items-center gap-2">
                                     <Icon name="boxes" className="w-4 h-4"/> Excel (.xlsx)
                                 </button>
-                                <button onClick={() => handleCloudArchive('csv')} className="w-full text-left px-4 py-2 hover:bg-slate-600 text-white text-xs flex items-center gap-2">
+                                <button onClick={() => handleCloudArchive('csv')} className="w-full text-left px-4 py-3 hover:bg-slate-700 text-white text-xs sm:text-sm flex items-center gap-2">
                                     <Icon name="tag" className="w-4 h-4"/> CSV
                                 </button>
-                                <button onClick={() => handleCloudArchive('pdf')} className="w-full text-left px-4 py-2 hover:bg-slate-600 text-white text-xs flex items-center gap-2">
+                                <button onClick={() => handleCloudArchive('pdf')} className="w-full text-left px-4 py-3 hover:bg-slate-700 text-white text-xs sm:text-sm flex items-center gap-2">
                                     <Icon name="printer" className="w-4 h-4"/> PDF
                                 </button>
                             </div>
@@ -866,7 +874,7 @@ const DataTab: React.FC = () => {
                         onClick={handleCloudPurge} 
                         disabled={isCleaning || !isConfigured} 
                         variant="danger" 
-                        className="flex-1 whitespace-nowrap"
+                        className="flex-1 h-11 whitespace-nowrap"
                     >
                         {isCleaning ? 'Memproses...' : <><Icon name="trash" className="w-4 h-4"/> Hapus Laporan</>}
                     </Button>
@@ -874,12 +882,13 @@ const DataTab: React.FC = () => {
                 <p className="text-[10px] text-slate-500 mt-2 text-center">
                     Gunakan "Unduh Arsip" untuk menyimpan data cabang ke file sebelum Anda menghapusnya dari Dropbox.
                 </p>
+                </div>
             </SettingsCard>
 
             {/* ... (Backup Restore Card - Unchanged) ... */}
             <SettingsCard title="Backup & Restore Lokal" description="Unduh file database (.json) ke perangkat ini atau pulihkan data dari file cadangan.">
                 <div className="flex flex-wrap gap-3">
-                    <Button onClick={dataService.exportData} variant="secondary" className="whitespace-nowrap">
+                    <Button onClick={dataService.exportData} variant="utility" className="whitespace-nowrap">
                         <Icon name="download" className="w-4 h-4"/> Backup (JSON)
                     </Button>
                     
@@ -896,7 +905,7 @@ const DataTab: React.FC = () => {
                     <div className="flex flex-col gap-2">
                         <label className="text-sm text-slate-300 font-bold">Import File CSV</label>
                         <p className="text-xs text-slate-400">Gabungkan riwayat transaksi dari file CSV (hasil export perangkat lain).</p>
-                        <Button onClick={() => csvInputRef.current?.click()} variant="secondary" className="w-fit">
+                        <Button onClick={() => csvInputRef.current?.click()} variant="utility" className="w-fit">
                             <Icon name="upload" className="w-4 h-4"/> Pilih File CSV
                         </Button>
                         <input type="file" ref={csvInputRef} onChange={handleCSVImport} className="hidden" accept=".csv" />
@@ -964,26 +973,26 @@ const DataTab: React.FC = () => {
                                 className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-500"
                             />
                             {isConfigured ? (
-                                <div className="space-y-2">
-                                    <div className="flex items-center gap-2 text-green-400 bg-green-900/20 p-2 rounded border border-green-800">
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2 text-green-400 bg-green-900/20 p-3 rounded-xl border border-green-800">
                                         <Icon name="check-circle-fill" className="w-4 h-4"/>
                                         <span className="text-xs font-bold">Terhubung (Token Terenkripsi)</span>
                                         <button onClick={handleDisconnect} className="ml-auto text-xs text-red-400 underline">Putuskan</button>
                                     </div>
-                                    <Button onClick={handleOpenPairingGenerator} className="w-full bg-blue-700 hover:bg-blue-600 text-white">
+                                    <Button onClick={handleOpenPairingGenerator} variant="operational" className="w-full h-11">
                                         <Icon name="share" className="w-4 h-4" /> Pairing
                                     </Button>
                                 </div>
                             ) : (
-                                <div className="space-y-2">
-                                    <div className="text-xs text-yellow-500 bg-yellow-900/10 p-2 rounded border border-yellow-800">
+                                <div className="space-y-3">
+                                    <div className="text-xs text-yellow-500 bg-yellow-900/10 p-3 rounded-xl border border-yellow-800">
                                         Belum Terhubung. Klik "Bantuan & Koneksi" atau "Input Kode".
                                     </div>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                        <Button onClick={() => setIsScanningPairing(true)} variant="secondary" className="flex-1 border-dashed border-2 border-slate-500 whitespace-nowrap">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <Button onClick={() => setIsScanningPairing(true)} variant="operational" className="w-full h-11 border-dashed border-2 border-slate-500 whitespace-nowrap">
                             <Icon name="camera" className="w-4 h-4" /> <span className="sm:inline">Scan QR</span>
                         </Button>
-                        <Button onClick={handleInputCodeInit} variant="secondary" className="flex-1 border-dashed border-2 border-slate-500 whitespace-nowrap">
+                        <Button onClick={handleInputCodeInit} variant="operational" className="w-full h-11 border-dashed border-2 border-slate-500 whitespace-nowrap">
                             <Icon name="keyboard" className="w-4 h-4" /> <span className="sm:inline">Input Kode</span>
                         </Button>
                     </div>
@@ -998,7 +1007,7 @@ const DataTab: React.FC = () => {
                 </div>
             </SettingsCard>
 
-            <Modal isOpen={showPairingModal} onClose={() => setShowPairingModal(false)} title={pairingMode === 'generate' ? "Bagikan Akses Dropbox" : "Hubungkan ke Pusat"}>
+            <Modal isOpen={showPairingModal} onClose={() => setShowPairingModal(false)} title={pairingMode === 'generate' ? "Bagikan Akses Dropbox" : "Hubungkan ke Pusat"} size="lg" mobileLayout="fullscreen">
                 {pairingMode === 'generate' ? (
                     <div className="flex flex-col items-center justify-center space-y-4 p-2 text-center">
                         {pairingStep === 'pin_input' ? (
@@ -1012,7 +1021,7 @@ const DataTab: React.FC = () => {
                                     placeholder="PIN (cth: 1234)" 
                                     value={pairingPin}
                                     onChange={e => setPairingPin(e.target.value.replace(/[^0-9]/g, ''))}
-                                    className="w-full bg-slate-900 border border-slate-600 rounded p-3 text-center text-xl text-white font-mono tracking-widest"
+                                    className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-center text-xl text-white font-mono tracking-widest"
                                     autoFocus
                                 />
                                 <p className="text-xs text-yellow-500">
@@ -1048,12 +1057,12 @@ const DataTab: React.FC = () => {
                                     <textarea 
                                         readOnly
                                         value={pairingTextCode}
-                                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-xs text-slate-300 font-mono h-24 break-all"
+                                        className="w-full bg-slate-900 border border-slate-600 rounded-xl p-2 text-xs text-slate-300 font-mono h-24 break-all"
                                         onClick={(e) => e.currentTarget.select()}
                                     />
                                     <Button 
                                         onClick={() => copyToClipboard(pairingTextCode)}
-                                        variant="secondary"
+                                        variant="utility"
                                         className="w-full mt-2 whitespace-nowrap text-xs"
                                         size="sm"
                                     >
@@ -1086,7 +1095,7 @@ const DataTab: React.FC = () => {
                                         placeholder="PIN"
                                         value={pairingPin}
                                         onChange={e => setPairingPin(e.target.value.replace(/[^0-9]/g, ''))}
-                                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white font-mono text-center tracking-widest"
+                                        className="w-full bg-slate-900 border border-slate-600 rounded-xl p-2 text-white font-mono text-center tracking-widest"
                                     />
                                 </div>
                                 <Button onClick={executeDecryption} disabled={!inputPairingCode || !pairingPin} className="w-full">
@@ -1104,7 +1113,7 @@ const DataTab: React.FC = () => {
                 onScan={(code) => processPairingCode(code)}
             />
 
-            <Modal isOpen={showDbxHelpModal} onClose={() => setShowDbxHelpModal(false)} title="Hubungkan Dropbox">
+            <Modal isOpen={showDbxHelpModal} onClose={() => setShowDbxHelpModal(false)} title="Hubungkan Dropbox" size="lg" mobileLayout="fullscreen">
                 <div className="space-y-5">
                     <div className="space-y-2">
                         <h4 className="font-bold text-white text-sm">Langkah 1: Buat App</h4>
@@ -1129,7 +1138,7 @@ const DataTab: React.FC = () => {
                         <p className="text-xs text-slate-400">
                             Pastikan Anda sudah mengisi App Key & Secret di form utama, lalu klik tombol di bawah. Jendela baru akan terbuka, klik "Allow/Izinkan", lalu Anda akan mendapatkan kode.
                         </p>
-                        <Button onClick={handleDbxConnect} variant="secondary" className="w-full bg-blue-600 hover:bg-blue-500 text-white border-none">
+                        <Button onClick={handleDbxConnect} variant="operational" className="w-full">
                             <Icon name="share" className="w-4 h-4"/> Buka Halaman Izin Dropbox
                         </Button>
                         

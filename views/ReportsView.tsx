@@ -474,6 +474,16 @@ const ReportsView: React.FC = () => {
         { id: 'csv', label: 'CSV', onClick: () => handleExportSpreadsheet('csv'), icon: 'tag' as const },
         { id: 'ods', label: 'ODS (OpenDoc)', onClick: () => handleExportSpreadsheet('ods'), icon: 'file-lock' as const },
     ];
+    const actionMenuItems = [
+        ...(dataSource === 'dropbox' ? [{
+            id: 'refresh',
+            label: isLoading ? 'Memuat...' : 'Refresh Cloud',
+            onClick: () => { void loadCloudData(); },
+            icon: 'reset' as const,
+            disabled: isLoading,
+        }] : []),
+        ...exportMenuItems,
+    ];
 
     return (
         <div className="space-y-6 pb-20">
@@ -577,12 +587,13 @@ const ReportsView: React.FC = () => {
                                 {activeTab !== 'inventory' && (
                                     <OverflowMenu
                                         size="sm"
-                                        label="Export"
+                                        label="Aksi"
+                                        triggerIcon="menu"
                                         variant="utility"
                                         showLabelOnMobile
                                         matchTriggerWidth
-                                        buttonClassName="h-10 w-full justify-between"
-                                        items={exportMenuItems}
+                                        buttonClassName="h-10 w-full justify-center"
+                                        items={actionMenuItems}
                                     />
                                 )}
                             </div>
@@ -674,12 +685,13 @@ const ReportsView: React.FC = () => {
                         {activeTab !== 'inventory' && (
                             <OverflowMenu
                                 size="sm"
-                                label="Export"
+                                label="Aksi"
+                                triggerIcon="menu"
                                 variant="utility"
                                 showLabelOnMobile
                                 matchTriggerWidth
                                 buttonClassName="h-10 shrink-0 min-w-[140px] justify-center"
-                                items={exportMenuItems}
+                                items={actionMenuItems}
                             />
                         )}
                     </div>
@@ -745,6 +757,19 @@ const ReportsView: React.FC = () => {
             )}
 
             <div className="rounded-3xl border border-slate-800 bg-slate-800/95 shadow-xl overflow-hidden">
+                {activeTab !== 'inventory' && (
+                    <div className="border-b border-slate-700/60 p-4">
+                        <ReportCharts 
+                            hourlyChartData={chartData.hourly}
+                            salesOverTimeData={chartData.trend}
+                            categorySalesData={chartData.category}
+                            bestSellingProducts={chartData.products}
+                            filter={filter}
+                            showSessionView={false}
+                        />
+                    </div>
+                )}
+
                 <div className="border-b border-slate-700/80 px-4 pt-3">
                     <div className="flex overflow-x-auto hide-scrollbar">
                     <button onClick={() => setActiveTab('transactions')} className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'transactions' ? 'border-[#347758] text-[#52a37c]' : 'border-transparent text-slate-400 hover:text-white'}`}>
@@ -778,19 +803,6 @@ const ReportsView: React.FC = () => {
                 </div>
 
                 <div className="p-4">
-                    {activeTab !== 'inventory' && (
-                        <div className="mb-5">
-                            <ReportCharts 
-                                hourlyChartData={chartData.hourly}
-                                salesOverTimeData={chartData.trend}
-                                categorySalesData={chartData.category}
-                                bestSellingProducts={chartData.products}
-                                filter={filter}
-                                showSessionView={false}
-                            />
-                        </div>
-                    )}
-
                     <div className="h-[600px] overflow-hidden relative rounded-2xl border border-slate-700 bg-slate-900/50">
                     {isLoading ? (
                         <div className="h-full flex items-center justify-center text-slate-500 animate-pulse">Memuat data...</div>

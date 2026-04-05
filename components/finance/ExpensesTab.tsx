@@ -226,7 +226,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ dataSource = 'local', cloudDa
                             placeholder="Cari pengeluaran..." 
                             value={searchTerm} 
                             onChange={e => setSearchTerm(e.target.value)} 
-                            className="h-11 w-full rounded-xl border border-slate-700 bg-slate-800 pl-11 pr-12 text-white focus:ring-[#347758] focus:border-[#347758]" 
+                            className="h-11 w-full rounded-xl border border-slate-700 bg-slate-900/70 pl-11 pr-12 text-white focus:border-[#347758] focus:outline-none focus:ring-2 focus:ring-[#347758]/30" 
                         />
                         <Icon name="search" className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
                         {searchTerm && (
@@ -321,7 +321,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ dataSource = 'local', cloudDa
                         </div>
                     </>
                 ) : (
-                    <div className="flex min-h-[280px] flex-col items-center justify-center px-6 text-center">
+                    <div className="flex min-h-[280px] flex-col items-center justify-center px-6 py-8 text-center sm:py-10">
                         <div className="rounded-2xl border border-slate-700 bg-slate-800/80 p-4">
                             <Icon name="finance" className="mx-auto h-10 w-10 text-slate-500" />
                         </div>
@@ -334,8 +334,8 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ dataSource = 'local', cloudDa
                                 : 'Catat pengeluaran pertama agar arus kas dan laporan keuangan mulai terbentuk dengan rapi.'}
                         </p>
                         {dataSource === 'local' && !searchTerm && (
-                            <Button onClick={() => setModalOpen(true)} className="mt-4">
-                                <Icon name="plus" className="w-4 h-4" /> Catat Pengeluaran Pertama
+                            <Button onClick={() => setModalOpen(true)} variant="utility" size="sm" className="mt-4 h-10 px-4">
+                                <Icon name="plus" className="w-4 h-4" /> Catat Sekarang
                             </Button>
                         )}
                     </div>

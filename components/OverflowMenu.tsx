@@ -13,6 +13,7 @@ interface OverflowMenuItem {
 interface OverflowMenuProps {
   items: OverflowMenuItem[];
   label?: string;
+  triggerIcon?: IconName;
   align?: 'left' | 'right';
   size?: 'sm' | 'md' | 'lg';
   variant?: 'primary' | 'secondary' | 'danger' | 'utility' | 'operational';
@@ -24,6 +25,7 @@ interface OverflowMenuProps {
 const OverflowMenu: React.FC<OverflowMenuProps> = ({
   items,
   label = 'Lainnya',
+  triggerIcon = 'menu',
   align = 'right',
   size = 'md',
   variant = 'secondary',
@@ -98,7 +100,7 @@ const OverflowMenu: React.FC<OverflowMenuProps> = ({
           onClick={() => setOpen((prev) => !prev)}
           className={`whitespace-nowrap flex-shrink-0 ${buttonClassName || ''}`}
         >
-          <Icon name="menu" className={iconSize} />
+          <Icon name={triggerIcon} className={iconSize} />
           <span className={showLabelOnMobile ? 'inline' : 'hidden sm:inline'}>{label}</span>
         </Button>
       </div>

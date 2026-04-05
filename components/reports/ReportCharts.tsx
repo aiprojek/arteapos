@@ -34,7 +34,7 @@ const ReportCharts: React.FC<ReportChartsProps> = ({
                     <h3 className="mb-2 flex items-center gap-2 font-semibold text-white">
                         <Icon name="clock-history" className="w-5 h-5 text-[#52a37c]"/> Penjualan per Jam (Hari Ini)
                     </h3>
-                    <p className="mb-4 text-sm leading-relaxed text-slate-400">Pola jam penjualan untuk hari aktif, cocok dipakai melihat periode ramai dan sepi.</p>
+                    <p className="mb-4 text-sm leading-relaxed text-slate-400">Pola jam penjualan untuk hari aktif.</p>
                     <ResponsiveContainer width="100%" height={280}>
                         <BarChart data={hourlyChartData} margin={{ top: 5, right: 12, left: -18, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />

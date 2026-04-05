@@ -451,11 +451,11 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onMenuClick 
             <div className={`flex items-center min-w-0 ${isCompactViewport ? 'gap-1.5' : ''}`}>
                 <button
                     onClick={onMenuClick}
-                    className={`text-slate-100 md:hidden inline-flex items-center justify-center self-center rounded-xl border border-slate-600 bg-slate-700 hover:bg-slate-600 transition-colors ${isCompactViewport ? 'w-9 h-9' : 'w-10 h-10 mr-3'}`}
+                    className={`text-slate-100 md:hidden inline-flex items-center justify-center self-center rounded-xl border border-slate-600 bg-slate-700 hover:bg-slate-600 transition-colors ${isCompactViewport ? 'h-9 w-9' : 'h-10 w-10 mr-3'}`}
                     aria-label="Buka menu"
                     title="Buka menu"
                 >
-                    <Icon name="menu" className={`${isCompactViewport ? 'w-5 h-5' : 'w-6 h-6'} block`} />
+                    <Icon name="menu" className="w-5 h-5 block" />
                 </button>
                 <div className={`flex min-w-0 ${isCompactViewport ? 'items-center gap-2 min-h-[36px]' : 'flex-col sm:flex-row sm:items-center sm:gap-3'}`}>
                     <h1 className={`font-semibold text-white truncate ${isCompactViewport ? 'text-[15px] leading-tight max-w-[42vw] sm:max-w-[52vw]' : 'text-lg leading-tight max-w-[55vw] sm:max-w-none'}`}>{viewTitles[activeView]}</h1>

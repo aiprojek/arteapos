@@ -102,7 +102,6 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
             <div className={`${isUltraCompactViewport ? 'mb-2 space-y-1.5' : 'mb-3 space-y-2'}`}>
                 <div className="flex items-center gap-2">
                     <div className="relative flex-1 min-w-0">
-                        <div className={`absolute inset-0 rounded-2xl border border-slate-700 bg-slate-800/95 shadow-sm ${isSessionLocked ? 'opacity-60' : ''}`} />
                         <input
                             ref={searchInputRef}
                             type="text"
@@ -110,14 +109,14 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                             disabled={isSessionLocked}
-                            className={`relative w-full rounded-2xl bg-transparent text-white transition-colors focus:border-[#347758] focus:outline-none focus:ring-2 focus:ring-[#347758] focus:ring-offset-2 focus:ring-offset-slate-900 ${isUltraCompactViewport ? 'h-9 pl-9 pr-9 text-[13px]' : isCompactViewport ? 'h-10 pl-10 pr-10 text-sm' : 'h-11 pl-11 pr-11 text-sm'} ${isSessionLocked ? 'cursor-not-allowed opacity-60' : ''}`}
+                            className={`w-full rounded-xl border border-slate-700 bg-slate-900/70 text-white transition-colors focus:border-[#347758] focus:outline-none focus:ring-2 focus:ring-[#347758]/30 ${isUltraCompactViewport ? 'h-9 pl-9 pr-9 text-[13px]' : isCompactViewport ? 'h-10 pl-10 pr-10 text-sm' : 'h-11 pl-11 pr-12 text-sm'} ${isSessionLocked ? 'cursor-not-allowed opacity-60' : ''}`}
                         />
-                        <Icon name="search" className={`absolute top-1/2 -translate-y-1/2 text-slate-400 ${isUltraCompactViewport ? 'left-3 w-3.5 h-3.5' : isCompactViewport ? 'left-3.5 w-4 h-4' : 'left-4 w-4.5 h-4.5'}`} />
+                        <Icon name="search" className={`absolute top-1/2 -translate-y-1/2 text-slate-400 ${isUltraCompactViewport ? 'left-3 w-3.5 h-3.5' : isCompactViewport ? 'left-3.5 w-4 h-4' : 'left-4 w-5 h-5'}`} />
                         {searchTerm && !isSessionLocked && (
                             <button
                                 type="button"
                                 onClick={() => setSearchTerm('')}
-                                className={`absolute top-1/2 -translate-y-1/2 rounded-full text-slate-400 transition-colors hover:bg-slate-700 hover:text-white ${isUltraCompactViewport ? 'right-2 flex h-5 w-5 items-center justify-center' : 'right-2.5 flex h-6 w-6 items-center justify-center'}`}
+                                className={`absolute top-1/2 -translate-y-1/2 rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white ${isUltraCompactViewport ? 'right-2 flex h-5 w-5 items-center justify-center' : 'right-3 flex h-7 w-7 items-center justify-center'}`}
                                 title="Bersihkan pencarian"
                             >
                                 <Icon name="close" className={isUltraCompactViewport ? 'h-3.5 w-3.5' : 'h-4 w-4'} />

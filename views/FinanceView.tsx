@@ -282,7 +282,7 @@ const FinanceView: React.FC = () => {
                         )}
                     </div>
 
-                    <div className="flex flex-col gap-2 lg:grid lg:grid-cols-[minmax(0,1.6fr)_auto_auto] lg:items-center">
+                    <div className={`flex flex-col gap-2 ${dataSource === 'dropbox' ? 'lg:grid lg:grid-cols-[minmax(0,1.6fr)_repeat(2,minmax(0,0.72fr))] lg:items-center' : 'lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,0.72fr)] lg:items-center'}`}>
                         {!isStaff && (
                             <div className="flex rounded-xl border border-slate-700 bg-slate-900/60 p-1">
                                 <button
@@ -306,30 +306,26 @@ const FinanceView: React.FC = () => {
                         <OverflowMenu
                             size="sm"
                             label="Export"
+                            triggerIcon="download"
                             variant="utility"
                             showLabelOnMobile
                             matchTriggerWidth
-                            buttonClassName="h-11 w-full sm:w-auto"
+                            buttonClassName="h-11 w-full justify-center"
                             items={exportMenuItems}
                         />
 
-                        <OverflowMenu
-                            size="sm"
-                            label="Aksi"
-                            variant="utility"
-                            showLabelOnMobile={false}
-                            matchTriggerWidth
-                            buttonClassName="h-11 w-full sm:w-auto"
-                            items={[
-                                ...(dataSource === 'dropbox' ? [{
-                                    id: 'refresh',
-                                    label: isLoadingCloud ? 'Memuat...' : 'Refresh Cloud',
-                                    onClick: () => { void loadCloudData(); },
-                                    icon: 'reset' as const,
-                                    disabled: isLoadingCloud
-                                }] : [])
-                            ]}
-                        />
+                        {dataSource === 'dropbox' && (
+                            <Button
+                                variant="utility"
+                                size="sm"
+                                onClick={() => { void loadCloudData(); }}
+                                disabled={isLoadingCloud}
+                                className="h-11 w-full justify-center"
+                            >
+                                <Icon name="reset" className="w-4 h-4" />
+                                <span>{isLoadingCloud ? 'Memuat...' : 'Refresh'}</span>
+                            </Button>
+                        )}
                     </div>
 
                     <div className="flex overflow-x-auto space-x-2 border-t border-slate-700/60 pt-2 hide-scrollbar">

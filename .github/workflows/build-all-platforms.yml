@@ -236,4 +236,5 @@ jobs:
           tag_name: v${{ needs.prepare-version.outputs.version }}
           name: v${{ needs.prepare-version.outputs.version }}
           draft: true
+          overwrite_files: true
           files: release-assets/**
